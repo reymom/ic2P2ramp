@@ -1,77 +1,50 @@
 import { useState } from 'react';
-import './App.scss';
-import rustLogo from './assets/rust.svg';
-import reactLogo from './assets/react.svg';
-import ethLogo from './assets/eth.svg';
-import { backend } from './declarations/backend';
-import { Block } from './declarations/backend/backend.did';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import '@rainbow-me/rainbowkit/styles.css';
+
+import logo from './assets/p2ploan.webp';
+import CreateOrder from './components/CreateOrder';
+import ViewOrders from './components/ViewOrders';
 
 // JSON viewer component
-import { JsonView, allExpanded, defaultStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 
 function App() {
-  const [loading, setLoading] = useState(false);
-  const [block, setBlock] = useState<Block | undefined>();
-  const [error, setError] = useState<string | undefined>();
+    const [loading, setLoading] = useState(false);
+    const [currentTab, setCurrentTab] = useState<'create' | 'view'>('create');
 
-  const fetchBlock = async () => {
-    try {
-      setLoading(true);
-      setError(undefined);
-      const block = await backend.get_latest_ethereum_block();
-      setBlock(block);
-    } catch (err) {
-      console.error(err);
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+    return (
+        <div className="min-h-screen bg-gray-100">
+            <nav className="bg-white p-4 shadow-md flex justify-between items-center">
+                <div className="flex items-center">
+                    <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="zk2ramp logo" />
+                    <h1 className="text-xl font-bold">zk2ramp</h1>
+                </div>
+                <ConnectButton />
+            </nav>
 
-  return (
-    <div className="App">
-      <div>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-        <a
-          href="https://github.com/internet-computer-protocol/evm-rpc-canister#readme"
-          target="_blank"
-        >
-          <img src={ethLogo} className="logo ethereum" alt="Ethereum logo" />
-        </a>
-        <a
-          href="https://internetcomputer.org/docs/current/developer-docs/backend/rust/"
-          target="_blank"
-        >
-          <span className="logo-stack">
-            <img src={rustLogo} className="logo rust" alt="Rust logo" />
-          </span>
-        </a>
-      </div>
-      <h1 style={{ paddingLeft: 36 }}>React + EVM RPC + Rust</h1>
-      <div className="card" style={{ opacity: loading ? 0.5 : 1 }}>
-        <button onClick={fetchBlock}>Get latest block</button>
-        {!!block && (
-          <pre className="json-view">
-            <JsonView
-              data={block}
-              shouldExpandNode={allExpanded}
-              style={{ ...defaultStyles, container: '' }}
-            />
-          </pre>
-        )}
-        {!!error && (
-          <pre style={{ textAlign: 'left', color: 'grey' }}>{error}</pre>
-        )}
-        {!!loading && !block && !error && <div className="loader" />}
-      </div>
-      <p className="read-the-docs">
-        Click on the React, Ethereum, and Rust logos to learn more
-      </p>
-    </div>
-  );
+            <div className="flex flex-col items-center mt-8">
+                <div className="flex justify-center mb-4">
+                    <button
+                        onClick={() => setCurrentTab('create')}
+                        className={`px-4 py-2 mx-2 rounded ${currentTab === 'create' ? 'bg-blue-500 text-white' : 'bg-white text-blue-500'}`}
+                    >
+                        Create Order
+                    </button>
+                    <button
+                        onClick={() => setCurrentTab('view')}
+                        className={`px-4 py-2 mx-2 rounded ${currentTab === 'view' ? 'bg-blue-500 text-white' : 'bg-white text-blue-500'}`}
+                    >
+                        View Orders
+                    </button>
+                </div>
+                <div className="bg-white p-4 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-1/3" style={{ opacity: loading ? 0.5 : 1 }}>
+                    {currentTab === 'create' && <CreateOrder />}
+                    {currentTab === 'view' && <ViewOrders />}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default App;
