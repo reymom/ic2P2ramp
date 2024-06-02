@@ -10,7 +10,7 @@
 
 IC2P2Ramp is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. The protocol utilizes multiple canisters for various functionalities, including HTTPS outcalls, EVM RPC communication, and exchange rate retrieval. It features a backend and a frontend for interacting with the protocol.
 
-This project was created for ETH Prague 2024. The repository https://github.com/reymom/ic2P2ramp-circuits is part of the same project, where the evm smart contracts used in the frontend and backend canisters are defined.
+This project was created for [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30). The repository [iC2P2Ramp-circuits](https://github.com/reymom/ic2P2ramp-circuits) is part of the same project, where the evm smart contracts used in the frontend and backend canisters are defined.
 
 ## Deployments
 
