@@ -6,7 +6,7 @@ use std::{borrow::Cow, cell::RefCell};
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 const MAX_USER_SIZE: u32 = 100;
-const MAX_ORDER_SIZE: u32 = 300;
+const MAX_ORDER_SIZE: u32 = 500;
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct User {

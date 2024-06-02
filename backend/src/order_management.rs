@@ -1,4 +1,4 @@
-use crate::{storage, verifier};
+use crate::storage;
 
 pub async fn create_order(
     fiat_amount: u64,

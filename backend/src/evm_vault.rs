@@ -10,7 +10,7 @@ use crate::state::mutate_state;
 use crate::RpcApi;
 use crate::RpcServices;
 
-pub const VAULT_MANAGER_ADDRESS: &str = "0x0123140C6eaf01c1A7BD9Fb16714090C1A22A4BE";
+pub const VAULT_MANAGER_ADDRESS: &str = "0x8B1b90637F188541401DeeA100718ca618927E52";
 pub const USDT_ADDRESS: &str = "0x0468880bE4970DBab8c9aBE52D9063050652b8db";
 pub const RCP_SEPOLIA_MANTLE: &str = "https://rpc.sepolia.mantle.xyz";
 
@@ -102,7 +102,7 @@ pub async fn release_base_currency(order_id: String) -> Result<(), String> {
             ],
             "name": "releaseBaseCurrency",
             "outputs": [],
-            "stateMutability": "nonpayable",
+            "stateMutability": "payable",
             "type": "function"
         }
     ]
@@ -124,10 +124,10 @@ pub async fn release_base_currency(order_id: String) -> Result<(), String> {
         ])
         .unwrap();
 
-    let value = U256::from(0);
+    let value = U256::from(amount);
     let request = create_sign_request(
         value,
-        Some(VAULT_MANAGER_ADDRESS.to_string()), // Replace with actual address
+        Some(VAULT_MANAGER_ADDRESS.to_string()),
         None,
         gas,
         Some(data),

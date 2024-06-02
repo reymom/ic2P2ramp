@@ -103,7 +103,7 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
     };
 
     let cycles: u128 = 10_000_000_000;
-    // let order = order_management::get_order_by_id(order_id.clone()).await?;
+    let order = order_management::get_order_by_id(order_id.clone()).await?;
     match http_request(request, cycles).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
@@ -113,20 +113,24 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
             let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
             ic_cdk::println!("capture_details = {:?}", capture_details);
-            // Verify the captured payment details
-            // if capture_details.status == "COMPLETED"
-            //     && capture_details.amount.value == order.fiat_amount.to_string()
-            //     && capture_details.amount.currency_code == "USD".to_string()
-            // {
-            //     // Update the order status in your storage
-            //     // storage::update_order_status(details.order_id.clone(), "verified");
 
-            //     Ok("Payment verified successfully".to_string())
-            // } else {
-            //     Err("Payment verification failed".to_string())
-            // }
-            evm_vault::release_base_currency(order_id).await?;
-            Ok("".to_string())
+            // Verify the captured payment details
+            let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
+            let received_amount: f64 = capture_details
+                .amount
+                .value
+                .parse()
+                .map_err(|e| format!("Failed to parse amount: {}", e))?;
+            if capture_details.status == "COMPLETED"
+                && (received_amount - expected_fiat_amount).abs() < f64::EPSILON
+            {
+                // Update the order status in your storage
+                order_management::mark_order_as_paid(order.id).await?;
+                evm_vault::release_base_currency(order_id).await?;
+                Ok("Payment verified successfully".to_string())
+            } else {
+                Err("Payment verification failed".to_string())
+            }
         }
         Err((r, m)) => {
             let message =
