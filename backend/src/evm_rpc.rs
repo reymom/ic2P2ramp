@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 
-use candid::{self, CandidType, Deserialize, Principal};
+use candid::{self, CandidType, Principal};
 use ic_cdk::{self, api::call::CallResult};
+use serde::{Deserialize, Serialize};
 
 pub const CANISTER_ID: Principal =
     Principal::from_slice(b"\x00\x00\x00\x00\x02\x30\x00\xCC\x01\x01"); // 7hfb6-caaaa-aaaar-qadga-cai
@@ -14,7 +15,7 @@ pub enum Auth {
     Manage,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub enum EthSepoliaService {
     Alchemy,
     BlockPi,
@@ -22,19 +23,19 @@ pub enum EthSepoliaService {
     Ankr,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct HttpHeader {
     pub value: String,
     pub name: String,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct RpcApi {
     pub url: String,
     pub headers: Option<Vec<HttpHeader>>,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub enum EthMainnetService {
     Alchemy,
     BlockPi,
@@ -43,7 +44,7 @@ pub enum EthMainnetService {
     Ankr,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub enum RpcServices {
     EthSepolia(Option<Vec<EthSepoliaService>>),
     Custom { chainId: u64, services: Vec<RpcApi> },
@@ -55,7 +56,7 @@ pub struct RpcConfig {
     pub responseSizeEstimate: Option<u64>,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub enum BlockTag {
     Earliest,
     Safe,
@@ -63,6 +64,20 @@ pub enum BlockTag {
     Latest,
     Number(u128),
     Pending,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EthCallParams {
+    pub to: String,
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JsonRpcRequest {
+    pub id: u64,
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: (EthCallParams, String),
 }
 
 #[derive(CandidType, Deserialize)]
@@ -80,10 +95,16 @@ pub struct FeeHistory {
     pub baseFeePerGas: Vec<u128>,
 }
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Debug, Deserialize)]
+pub struct JsonRpcResult {
+    result: Option<String>,
+    error: Option<JsonRpcError>,
+}
+
+#[derive(CandidType, Debug, Deserialize)]
 pub struct JsonRpcError {
-    pub code: i64,
-    pub message: String,
+    code: isize,
+    message: String,
 }
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -142,7 +163,7 @@ pub enum FeeHistoryResult {
     Err(RpcError),
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub enum RpcService {
     EthSepolia(EthSepoliaService),
     Custom(RpcApi),
@@ -276,7 +297,7 @@ pub enum MultiGetTransactionReceiptResult {
 
 #[derive(CandidType, Deserialize)]
 pub enum SendRawTransactionStatus {
-    Ok,
+    Ok(Option<String>),
     NonceTooLow,
     NonceTooHigh,
     InsufficientFunds,
@@ -373,4 +394,379 @@ impl EvmRpcCanister {
         )
         .await
     }
+
+    pub async fn create_loan(
+        services: RpcServices,
+        contract_address: String,
+        loan_terms_factory_data: Vec<u8>,
+        signature: Vec<u8>,
+        loan_asset_permit: Vec<u8>,
+        collateral_permit: Vec<u8>,
+        cycles: u128,
+    ) -> CallResult<(String,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "loanTermsFactoryContract", "type": "address"},
+                        {"name": "loanTermsFactoryData", "type": "bytes"},
+                        {"name": "signature", "type": "bytes"},
+                        {"name": "loanAssetPermit", "type": "bytes"},
+                        {"name": "collateralPermit", "type": "bytes"}
+                    ],
+                    "name": "createLOAN",
+                    "outputs": [{"name": "loanId", "type": "uint256"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("createLOAN").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(contract_address.parse().unwrap()),
+                ethers_core::abi::Token::Bytes(loan_terms_factory_data),
+                ethers_core::abi::Token::Bytes(signature),
+                ethers_core::abi::Token::Bytes(loan_asset_permit),
+                ethers_core::abi::Token::Bytes(collateral_permit),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
+            .await
+    }
+
+    // EVM RPC functions remain mostly unchanged, except for PayPal proof verification
+    pub async fn verify_payment_proof_on_evm(
+        services: RpcServices,
+        proof: Vec<u8>,
+        contract_address: String,
+        cycles: u128,
+    ) -> CallResult<(bool,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": true,
+                    "inputs": [{"name": "proof", "type": "bytes"}],
+                    "name": "verifyPaymentProof",
+                    "outputs": [{"name": "valid", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("verifyPaymentProof").unwrap();
+
+        let data = function
+            .encode_input(&[ethers_core::abi::Token::Bytes(proof)])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
+            .await
+    }
+
+    pub async fn deposit(
+        services: RpcServices,
+        contract_address: String,
+        token_address: String,
+        amount: u64,
+        cycles: u128,
+    ) -> CallResult<()> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "token", "type": "address"},
+                        {"name": "amount", "type": "uint256"}
+                    ],
+                    "name": "deposit",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("deposit").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        let max_response_bytes = 2048;
+        ic_cdk::api::call::call_with_payment128(
+            CANISTER_ID,
+            "eth_sendRawTransaction",
+            (services, payload, max_response_bytes),
+            cycles,
+        )
+        .await
+    }
+
+    pub async fn withdraw(
+        services: RpcServices,
+        contract_address: String,
+        token_address: String,
+        amount: u64,
+        cycles: u128,
+    ) -> CallResult<(String,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "token", "type": "address"},
+                        {"name": "amount", "type": "uint256"}
+                    ],
+                    "name": "withdraw",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("withdraw").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_sendTransaction".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
+            .await
+    }
+
+    pub async fn commit_order(
+        services: RpcServices,
+        contract_address: String,
+        offramper: String,
+        token_address: String,
+        amount: u64,
+        cycles: u128,
+    ) -> CallResult<(String,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "offramper", "type": "address"},
+                        {"name": "token", "type": "address"},
+                        {"name": "amount", "type": "uint256"}
+                    ],
+                    "name": "commitDeposit",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("commitDeposit").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(offramper.parse().unwrap()),
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_sendTransaction".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
+            .await
+    }
+
+    pub async fn uncommit_order(
+        services: RpcServices,
+        contract_address: String,
+        offramper: String,
+        token_address: String,
+        amount: u64,
+        cycles: u128,
+    ) -> CallResult<(String,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "offramper", "type": "address"},
+                        {"name": "token", "type": "address"},
+                        {"name": "amount", "type": "uint256"}
+                    ],
+                    "name": "uncommitDeposit",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("uncommitDeposit").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(offramper.parse().unwrap()),
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_sendTransaction".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
+            .await
+    }
+
+    pub async fn release_funds(
+        services: RpcServices,
+        contract_address: String,
+        onramper: String,
+        token_address: String,
+        amount: u64,
+        cycles: u128,
+    ) -> CallResult<(String,)> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "onramper", "type": "address"},
+                        {"name": "token", "type": "address"},
+                        {"name": "amount", "type": "uint256"}
+                    ],
+                    "name": "releaseFunds",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("releaseFunds").unwrap();
+
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(onramper.parse().unwrap()),
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        let payload = serde_json::to_string(&JsonRpcRequest {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: (
+                EthCallParams {
+                    to: contract_address,
+                    data: to_hex(&data),
+                },
+                "latest".to_string(),
+            ),
+        })
+        .unwrap();
+
+        ic_cdk::api::call::call_with_payment128(
+            CANISTER_ID,
+            "eth_sendRawTransaction",
+            (services, payload),
+            cycles,
+        )
+        .await
+    }
+}
+
+fn to_hex(data: &[u8]) -> String {
+    format!("0x{}", hex::encode(data))
 }

@@ -36,5 +36,6 @@ dist-ssr
 .env.development
 .env.test
 .env.production
+.public.env
 
 target

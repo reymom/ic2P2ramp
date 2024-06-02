@@ -1,60 +1,230 @@
 mod evm_rpc;
-use evm_rpc::{
-    Block, BlockTag, EthMainnetService, EvmRpcCanister, GetBlockByNumberResult,
-    MultiGetBlockByNumberResult, RpcServices,
+mod evm_signer;
+mod evm_vault;
+mod order_management;
+mod paypal_auth;
+mod state;
+mod storage;
+mod verifier;
+mod xrc_rates;
+
+use evm_rpc::{RpcApi, RpcServices};
+use ic_cdk::api::management_canister::http_request::{
+    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
-use ic_cdk::api::management_canister::ecdsa::{
-    ecdsa_public_key, sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgument,
-    EcdsaPublicKeyResponse, SignWithEcdsaArgument, SignWithEcdsaResponse,
-};
+use serde::{Deserialize, Serialize};
+use state::{initialize_state, mutate_state, read_state, InitArg};
+use std::time::Duration;
+use storage::Order;
+
+pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
+
+fn setup_timers() {
+    ic_cdk_timers::set_timer(Duration::ZERO, || {
+        ic_cdk::spawn(async {
+            let public_key = evm_signer::get_public_key().await;
+            let evm_address = evm_signer::pubkey_bytes_to_address(&public_key);
+            mutate_state(|s| {
+                s.ecdsa_pub_key = Some(public_key);
+                s.evm_address = Some(evm_address);
+            });
+        })
+    });
+}
+
+#[ic_cdk::init]
+fn init(arg: InitArg) {
+    println!("[init]: initialized minter with arg: {:?}", arg);
+    initialize_state(state::State::try_from(arg).expect("BUG: failed to initialize minter"));
+    setup_timers();
+}
+
+#[ic_cdk::query]
+fn get_evm_address() -> String {
+    read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
+}
+
+// ---------
+// XRC Rate
+// ---------
 
 #[ic_cdk::update]
-async fn get_latest_ethereum_block() -> Block {
-    let rpc_providers = RpcServices::EthMainnet(Some(vec![EthMainnetService::Cloudflare]));
+async fn get_usd_exchange_rate(base_symbol: String) -> Result<String, String> {
+    match xrc_rates::get_exchange_rate(base_symbol.as_str()).await {
+        Ok(rate) => Ok(rate.to_string()),
+        Err(err) => Err(err),
+    }
+}
 
-    let cycles = 10_000_000_000;
-    let (result,) =
-        EvmRpcCanister::eth_get_block_by_number(rpc_providers, None, BlockTag::Latest, cycles)
-            .await
-            .expect("Call failed");
+// ---------------
+// Paypal Payment
+// ---------------
 
-    match result {
-        MultiGetBlockByNumberResult::Consistent(r) => match r {
-            GetBlockByNumberResult::Ok(block) => block,
-            GetBlockByNumberResult::Err(err) => panic!("{err:?}"),
+#[derive(Serialize, Deserialize, Debug)]
+struct PayPalCaptureDetails {
+    id: String,
+    status: String,
+    amount: Amount,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Amount {
+    currency_code: String,
+    value: String,
+}
+
+#[ic_cdk::update]
+async fn verify_transaction(order_id: String, transaction_id: String) -> Result<String, String> {
+    let access_token = paypal_auth::get_paypal_access_token().await?;
+
+    let url = format!(
+        "https://api-m.sandbox.paypal.com/v2/payments/captures/{}",
+        transaction_id
+    );
+
+    let request_headers = vec![
+        HttpHeader {
+            name: "Content-Type".to_string(),
+            value: "application/json".to_string(),
         },
-        MultiGetBlockByNumberResult::Inconsistent(_) => {
-            panic!("RPC providers gave inconsistent results")
+        HttpHeader {
+            name: "Authorization".to_string(),
+            value: format!("Bearer {}", access_token),
+        },
+    ];
+
+    let request = CanisterHttpRequestArgument {
+        url,
+        method: HttpMethod::GET,
+        body: None,
+        max_response_bytes: None,
+        transform: None,
+        headers: request_headers,
+    };
+
+    let cycles: u128 = 10_000_000_000;
+    // let order = order_management::get_order_by_id(order_id.clone()).await?;
+    match http_request(request, cycles).await {
+        Ok((response,)) => {
+            let str_body = String::from_utf8(response.body)
+                .expect("Transformed response is not UTF-8 encoded.");
+            ic_cdk::println!("str_body = {:?}", str_body);
+
+            let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
+                .map_err(|e| format!("Failed to parse response: {}", e))?;
+            ic_cdk::println!("capture_details = {:?}", capture_details);
+            // Verify the captured payment details
+            // if capture_details.status == "COMPLETED"
+            //     && capture_details.amount.value == order.fiat_amount.to_string()
+            //     && capture_details.amount.currency_code == "USD".to_string()
+            // {
+            //     // Update the order status in your storage
+            //     // storage::update_order_status(details.order_id.clone(), "verified");
+
+            //     Ok("Payment verified successfully".to_string())
+            // } else {
+            //     Err("Payment verification failed".to_string())
+            // }
+            evm_vault::release_base_currency(order_id).await?;
+            Ok("".to_string())
+        }
+        Err((r, m)) => {
+            let message =
+                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
+            Err(message)
         }
     }
 }
 
-#[ic_cdk::update]
-async fn get_ecdsa_public_key() -> EcdsaPublicKeyResponse {
-    let (pub_key,) = ecdsa_public_key(EcdsaPublicKeyArgument {
-        key_id: key_id(),
-        ..Default::default()
-    })
-    .await
-    .expect("Failed to get public key");
-    pub_key
+// ------------------
+// ICP Offramp Orders
+// ------------------
+
+#[ic_cdk::query]
+fn get_orders() -> Vec<Order> {
+    order_management::get_orders()
 }
 
 #[ic_cdk::update]
-async fn sign_hash_with_ecdsa(message_hash: Vec<u8>) -> SignWithEcdsaResponse {
-    let (signature,) = sign_with_ecdsa(SignWithEcdsaArgument {
-        message_hash,
-        key_id: key_id(),
-        ..Default::default()
-    })
+async fn create_order(
+    fiat_amount: u64,
+    crypto_amount: u64,
+    paypal_id: String,
+    address: String,
+    chain_id: u64,
+    token_type: String,
+) -> Result<String, String> {
+    // evm_vault::deposit_funds(chain_id, crypto_amount, token_type.clone()).await?;
+
+    order_management::create_order(
+        fiat_amount,
+        crypto_amount,
+        paypal_id,
+        address,
+        chain_id,
+        token_type,
+    )
     .await
-    .expect("Failed to sign");
-    signature
 }
 
-fn key_id() -> EcdsaKeyId {
-    EcdsaKeyId {
-        curve: EcdsaCurve::Secp256k1,
-        name: "dfx_test_key".to_string(), // use EcdsaKeyId::default() for mainnet
+#[ic_cdk::update]
+async fn lock_order(
+    order_id: String,
+    onramper_paypal_id: String,
+    onramper_address: String,
+) -> Result<String, String> {
+    // let order = order_management::get_order_by_id(order_id.clone()).await?;
+    // evm_vault::commit_order(order.chain_id, order.offramper_address, order.crypto_amount).await?;
+
+    order_management::lock_order(order_id, onramper_paypal_id, onramper_address).await
+}
+
+#[ic_cdk::update]
+async fn remove_order(order_id: String) -> Result<String, String> {
+    // let order = order_management::get_order_by_id(order_id.clone()).await?;
+
+    // evm_vault::withdraw(order.chain_id, order.crypto_amount).await?;
+
+    order_management::remove_order(order_id).await
+}
+
+#[ic_cdk::update]
+async fn submit_payment_proof(
+    order_id: String,
+    proof: Vec<u8>,
+    chain_id: u64,
+) -> Result<String, String> {
+    let is_valid_proof = verifier::verify_payment_proof(order_id.clone(), proof, chain_id).await;
+
+    if is_valid_proof {
+        let order = order_management::get_order_by_id(order_id.clone()).await?;
+        let result = evm_vault::release_funds(
+            chain_id,
+            order
+                .onramper_address
+                .expect("onramper address not specified"),
+            order.crypto_amount,
+        )
+        .await;
+
+        match result {
+            Ok(_) => storage::ORDERS.with(|orders| {
+                let mut orders = orders.borrow_mut();
+                if let Some(mut order) = orders.remove(&order_id) {
+                    order.proof_submitted = true;
+                    order.payment_done = true;
+                    order.removed = true;
+                    orders.insert(order_id.clone(), order);
+                    Ok("Payment proof verified and funds released".to_string())
+                } else {
+                    Err("Order not found".to_string())
+                }
+            }),
+            Err(err) => Err(err),
+        }
+    } else {
+        Err("Invalid payment proof".to_string())
     }
 }
+
+ic_cdk::export_candid!();
