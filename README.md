@@ -1,29 +1,64 @@
-# Vite + React + Rust + EVM RPC
+# IC2P2Ramp
 
-This template gives you everything you need to build a full-stack Web3 application on the [Internet Computer](https://internetcomputer.org/).
-It includes a frontend built with Vite and React, a backend written in Rust, and the EVM RPC canister to directly connect to Ethereum or other EVM-based blockchains.
+IC2P2Ramp is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. The protocol utilizes multiple canisters for various functionalities, including HTTPS outcalls, EVM RPC communication, and exchange rate retrieval. It features a backend and a frontend for interacting with the protocol.
 
-## Get started with one click:
-### In your browser:
+## Deployments
 
-In Gitpod 
+### Canisters on ICP
 
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/fxgst/evm-rpc-rust/)
+- **HTTPS Outcalls Canister**: Facilitates secure HTTP(S) requests from ICP canisters.
+- **EVM RPC Canister**: An ICP canister smart contract for communicating with Ethereum and other EVM blockchains using an on-chain API.
+- **Exchange Rate Canister**: Retrieves and provides exchange rates for various assets.
+- **Backend Canister**: Handles business logic, including order management and communication with other canisters.
+- **Frontend Canister**: Provides the user interface for interacting with the IC2P2Ramp protocol.
 
-or GitHub Codespaces
+## Canisters
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/fxgst/evm-rpc-rust/?quickstart=1)
+### HTTPS Outcalls Canister
 
+The HTTPS Outcalls Canister enables secure HTTP(S) requests from ICP canisters, allowing for external data fetching and API interactions.
+
+### EVM RPC Canister
+
+The EVM RPC Canister is a smart contract on the ICP that communicates with Ethereum and other EVM blockchains. It provides an on-chain API for interacting with smart contracts and retrieving blockchain data.
+
+### Exchange Rate Canister
+
+The Exchange Rate Canister retrieves and provides exchange rates for various assets. It uses an external API to fetch real-time exchange rates and serves this data to other canisters within the protocol.
+
+### Backend Canister
+
+The Backend Canister handles the core business logic of the IC2P2Ramp protocol. It manages orders, communicates with the EVM RPC canister for blockchain interactions, and verifies payments using the HTTPS Outcalls canister.
+
+### Frontend Canister
+
+The Frontend Canister provides a user-friendly interface for interacting with the IC2P2Ramp protocol. Users can create and manage orders, view exchange rates, and perform onramping and offramping operations.
+
+## Usage
+
+### Build
+
+To build the canisters, use the following command:
+
+```shell
+dfx build
+```
+
+## Interact
+
+- Call the `get_usd_exchange_rate` method to retrieve the exchange rate for a given asset:
+
+```shell
+dfx canister call backend get_usd_exchange_rate '( "ETH" )'
+```
+
+- Retrieve and verify a paypal order using the backend canister:
+
+```sh
+dfx canister call backend verify_transaction '( "0", transaction_id = "4UC03319AV493141A" )'
+```
 
 ### Locally:
-
-Make sure you have you have Docker and VS Code installed and running, then click the button below
-
-[![Open locally in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/fxgst/evm-rpc-rust)
-
-### Or do the manual setup:
-
-Make sure that [Node.js](https://nodejs.org/en/) `>= 21` and [`dfx`](https://internetcomputer.org/docs/current/developer-docs/build/install-upgrade-remove) `>= 0.18` are installed on your system.
 
 Run the following commands in a new, empty project directory:
 
@@ -39,7 +74,7 @@ npm start # Start the development server
 
 ## 🚀 Develop
 
-The frontend will update automatically as you save changes. 
+The frontend will update automatically as you save changes.
 For the backend, run `dfx deploy backend` to redeploy.
 To redeploy all canisters (front- and backend), run `dfx deploy`.
 
@@ -66,11 +101,3 @@ When ready, run `dfx deploy --network ic` to deploy your application to the ICP 
 - [Rust developer docs](https://internetcomputer.org/docs/current/developer-docs/backend/rust/)
 - [EVM RPC developer docs](https://internetcomputer.org/docs/current/developer-docs/integrations/ethereum/evm-rpc/)
 - [Developer Experience Feedback Board](https://dx.internetcomputer.org/)
-
-
-## 💡 Tips and Tricks
-
-- If the links printed by dfx do not work in Codespaces, run `./canister_urls.py` and click the links shown there.
-- If you get an error `The wasm of 7hfb6-caaaa-aaaar-qadga-cai in pulled cache ...` run `rm -rf ~/.cache/dfinity/pulled/7hfb6-caaaa-aaaar-qadga-cai`
-- Customize your project's code style by editing the `.prettierrc` file and then running `npm run format`.
-- Split your frontend and backend console output by running `npm run frontend` and `npm run backend` in separate terminals.
