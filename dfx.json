@@ -4,6 +4,10 @@
       "type": "pull",
       "id": "7hfb6-caaaa-aaaar-qadga-cai"
     },
+    "xrc": {
+      "type": "pull",
+      "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
+    },
     "backend": {
       "dependencies": ["evm_rpc"],
       "candid": "backend/backend.did",

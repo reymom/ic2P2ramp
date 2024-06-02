@@ -1,42 +1,66 @@
-type Block = record {
-  baseFeePerGas : nat;
-  difficulty : nat;
-  extraData : text;
-  gasLimit : nat;
-  gasUsed : nat;
-  hash : text;
-  logsBloom : text;
-  miner : text;
-  mixHash : text;
-  nonce : nat;
-  number : nat;
-  parentHash : text;
-  receiptsRoot : text;
-  sha3Uncles : text;
-  size : nat;
-  stateRoot : text;
-  timestamp : nat;
-  totalDifficulty : nat;
-  transactions : vec text;
-  transactionsRoot : opt text;
-  uncles : vec text;
+type BlockTag = variant {
+  Earliest;
+  Safe;
+  Finalized;
+  Latest;
+  Number : nat;
+  Pending;
 };
-
-type EcdsaPublicKeyResponse = record {
-  /// An ECDSA public key encoded in SEC1 compressed form.
-  public_key : blob;
-  /// Can be used to deterministically derive child keys of the public_key.
-  chain_code : blob;
+type EcdsaCurve = variant { secp256k1 };
+type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
+type EthMainnetService = variant {
+  Alchemy;
+  BlockPi;
+  Cloudflare;
+  PublicNode;
+  Ankr;
 };
-
-type SignWithEcdsaResponse = record {
-  /// Encoded as the concatenation of the SEC1 encodings of the two values r and s.
-  signature : blob;
+type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type HttpHeader = record { value : text; name : text };
+type InitArg = record {
+  ecdsa_key_id : EcdsaKeyId;
+  rpc_services : RpcServices;
+  rpc_service : RpcService;
+  block_tag : BlockTag;
+  client_id : text;
+  client_secret : text;
 };
-
-service : {
-  /// Retrieve the latest block on the Ethereum blockchain.
-  get_latest_ethereum_block : () -> (Block);
-  get_ecdsa_public_key : () -> (EcdsaPublicKeyResponse);
-  sign_hash_with_ecdsa : (blob) -> (SignWithEcdsaResponse);
+type Order = record {
+  id : text;
+  onramper_paypal_id : opt text;
+  payment_done : bool;
+  originator : principal;
+  fiat_amount : nat64;
+  locked : bool;
+  offramper_paypal_id : text;
+  proof_submitted : bool;
+  onramper_address : opt text;
+  chain_id : nat64;
+  offramper_address : text;
+  token_type : text;
+  crypto_amount : nat64;
+  removed : bool;
 };
+type Result = variant { Ok : text; Err : text };
+type RpcApi = record { url : text; headers : opt vec HttpHeader };
+type RpcService = variant {
+  EthSepolia : EthSepoliaService;
+  Custom : RpcApi;
+  EthMainnet : EthMainnetService;
+  Chain : nat64;
+  Provider : nat64;
+};
+type RpcServices = variant {
+  EthSepolia : opt vec EthSepoliaService;
+  Custom : record { chainId : nat64; services : vec RpcApi };
+  EthMainnet : opt vec EthMainnetService;
+};
+service : (InitArg) -> {
+  create_order : (nat64, nat64, text, text, nat64, text) -> (Result);
+  get_evm_address : () -> (text) query;
+  get_orders : () -> (vec Order) query;
+  lock_order : (text, text, text) -> (Result);
+  remove_order : (text) -> (Result);
+  submit_payment_proof : (text, vec nat8, nat64) -> (Result);
+  verify_transaction : (text, text) -> (Result);
+}
