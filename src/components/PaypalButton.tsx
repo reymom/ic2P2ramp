@@ -30,11 +30,13 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, paypalId, onSuccess
                 onApprove: async (data: any, actions: any) => {
                     const details = await actions.order.capture();
                     console.log("details = ", details);
-                    const transactionId = details.id;
-                    onSuccess(transactionId);
+
+                    // const transactionId = details.id;
+                    // onSuccess(transactionId);
 
                     const captureId = details.purchase_units[0].payments.captures[0].id;
                     console.log("captureId = ", captureId);
+                    onSuccess(captureId)
                 },
                 onError: (err: any) => {
                     console.error('PayPal Checkout onError', err);

@@ -159,10 +159,10 @@ function ViewOrders() {
         try {
             setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}`);
             // Send transaction ID to backend to verify payment
-            const response = await backend.verify_transaction({
-                order_id: orderId,
-                transaction_id: transactionId,
-            });
+            const response = await backend.verify_transaction(
+                orderId,
+                transactionId,
+            );
             console.log('Backend response:', response);
 
             fetchOrders();
