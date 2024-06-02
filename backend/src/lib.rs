@@ -5,7 +5,6 @@ mod order_management;
 mod paypal_auth;
 mod state;
 mod storage;
-mod verifier;
 mod xrc_rates;
 
 use evm_rpc::{RpcApi, RpcServices};
@@ -121,6 +120,8 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
                 .value
                 .parse()
                 .map_err(|e| format!("Failed to parse amount: {}", e))?;
+
+            ic_cdk::println!("received_amount = {}", received_amount);
             if capture_details.status == "COMPLETED"
                 && (received_amount - expected_fiat_amount).abs() < f64::EPSILON
             {
@@ -192,43 +193,43 @@ async fn remove_order(order_id: String) -> Result<String, String> {
     order_management::remove_order(order_id).await
 }
 
-#[ic_cdk::update]
-async fn submit_payment_proof(
-    order_id: String,
-    proof: Vec<u8>,
-    chain_id: u64,
-) -> Result<String, String> {
-    let is_valid_proof = verifier::verify_payment_proof(order_id.clone(), proof, chain_id).await;
+// #[ic_cdk::update]
+// async fn submit_payment_proof(
+//     order_id: String,
+//     proof: Vec<u8>,
+//     chain_id: u64,
+// ) -> Result<String, String> {
+//     let is_valid_proof = verifier::verify_payment_proof(order_id.clone(), proof, chain_id).await;
 
-    if is_valid_proof {
-        let order = order_management::get_order_by_id(order_id.clone()).await?;
-        let result = evm_vault::release_funds(
-            chain_id,
-            order
-                .onramper_address
-                .expect("onramper address not specified"),
-            order.crypto_amount,
-        )
-        .await;
+//     if is_valid_proof {
+//         let order = order_management::get_order_by_id(order_id.clone()).await?;
+//         let result = evm_vault::release_funds(
+//             chain_id,
+//             order
+//                 .onramper_address
+//                 .expect("onramper address not specified"),
+//             order.crypto_amount,
+//         )
+//         .await;
 
-        match result {
-            Ok(_) => storage::ORDERS.with(|orders| {
-                let mut orders = orders.borrow_mut();
-                if let Some(mut order) = orders.remove(&order_id) {
-                    order.proof_submitted = true;
-                    order.payment_done = true;
-                    order.removed = true;
-                    orders.insert(order_id.clone(), order);
-                    Ok("Payment proof verified and funds released".to_string())
-                } else {
-                    Err("Order not found".to_string())
-                }
-            }),
-            Err(err) => Err(err),
-        }
-    } else {
-        Err("Invalid payment proof".to_string())
-    }
-}
+//         match result {
+//             Ok(_) => storage::ORDERS.with(|orders| {
+//                 let mut orders = orders.borrow_mut();
+//                 if let Some(mut order) = orders.remove(&order_id) {
+//                     order.proof_submitted = true;
+//                     order.payment_done = true;
+//                     order.removed = true;
+//                     orders.insert(order_id.clone(), order);
+//                     Ok("Payment proof verified and funds released".to_string())
+//                 } else {
+//                     Err("Order not found".to_string())
+//                 }
+//             }),
+//             Err(err) => Err(err),
+//         }
+//     } else {
+//         Err("Invalid payment proof".to_string())
+//     }
+// }
 
 ic_cdk::export_candid!();

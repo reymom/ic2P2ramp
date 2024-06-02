@@ -22,13 +22,13 @@ dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 
 cargo build --release --target wasm32-unknown-unknown --package backend
 
 # Create the canister with specified cycles
-dfx canister create --with-cycles 10_000_000_000_000 backend
+dfx canister create --with-cycles 5_000_000_000_000 backend
 
 # Install the canister with initial state arguments
-dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --argument '(
+dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument '(
   record {
     ecdsa_key_id = record {
-      name = "dfx_test_key";
+      name = "test_key_1";
       curve = variant { secp256k1 };
     };
     rpc_services = variant {
