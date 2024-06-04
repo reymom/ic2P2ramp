@@ -11,6 +11,14 @@ else
     sleep 3
 fi
 
+DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
+
+# shellcheck source=../.env
+source "$DIR/.env" || {
+  echo "error while sourcing env file"
+  exit
+}
+
 # Start the local replica in the background
 dfx start --clean --background
 
@@ -25,7 +33,7 @@ cargo build --release --target wasm32-unknown-unknown --package backend
 dfx canister create --with-cycles 5_000_000_000_000 backend
 
 # Install the canister with initial state arguments
-dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument '(
+dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --network ic --argument '(
   record {
     ecdsa_key_id = record {
       name = "test_key_1";
@@ -44,8 +52,8 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
       }
     };
     block_tag = variant { Latest = null };
-    client_id = "Ab_E80t7BM4rNxj7trOAlRz_UmpEqPHANABmFUzD-7Zj-iiUI9nhkRilop_2lWKoWTE_bfEFiXV33mHb";
-    client_secret = "EPLGQdKtjDZ3-42STiwCVUaoEz0-9r_Wc2R8PUJFlMiXMSiwot8vb1FGYPGEhaYhmB7wVio1DApKdGvW";
+    client_id = \"${CLIENT_ID}\";
+    client_secret = \"${CLIENT_SECRET}\";
   },
 )'
 
