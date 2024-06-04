@@ -8,25 +8,33 @@
 
 #
 
-IC2P2Ramp is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. The protocol utilizes multiple canisters for various functionalities, including HTTPS outcalls, EVM RPC communication, and exchange rate retrieval. It features a backend and a frontend for interacting with the protocol.
+IC2P2Ramp is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. This protocol simplifies onramping and offramping digital assets with a secure, user-friendly platform, eliminating the need for centralized exchanges and reducing trust issues.
 
-This project was created for [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30). The repository [iC2P2Ramp-circuits](https://github.com/reymom/ic2P2ramp-circuits) is part of the same project, where the evm smart contracts used in the frontend and backend canisters are defined.
+Created for [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30), this project leverages multiple ICP canisters for enhanced functionality, including HTTPS outcalls, EVM RPC communication, and real-time exchange rate retrieval. For the associated EVM smart contracts used in the frontend and backend canisters, visit the [iC2P2Ramp-circuits](https://github.com/reymom/ic2P2ramp-circuits) repository.
 
-## Deployments
+## Use Cases
 
-### Canisters on ICP
+### Onramping Fiat to Crypto
 
-- **HTTPS Outcalls Canister**: Facilitates secure HTTP(S) requests from ICP canisters.
-- **EVM RPC Canister**: An ICP canister smart contract for communicating with Ethereum and other EVM blockchains using an on-chain API.
-- **Exchange Rate Canister**: Retrieves and provides exchange rates for different cryptos to USD.
-- **Backend Canister**: Handles business logic, including order management and communication with other canisters.
-- **Frontend Canister**: Provides the user interface for interacting with the IC2P2Ramp protocol.
+Users can convert their fiat currency (e.g., USD) into cryptocurrency directly from their bank accounts or payment processors like PayPal. This process involves verifying the payment and then executing a transaction on an EVM blockchain (e.g., Ethereum, MANTLE) to provide the user with the equivalent amount of cryptocurrency.
+
+### Offramping Crypto to Fiat
+
+Users can convert their cryptocurrency back into fiat currency. This involves locking the crypto in an escrow smart contract and verifying the equivalent fiat payment via payment processors. Once verified, the crypto is released to the onramper.
+
+### Secure Cross-Chain Transactions
+
+The protocol supports secure transactions across multiple EVM blockchains. This includes utilizing secure HTTPS outcalls for fetching external data, real-time exchange rate retrieval for accurate conversions, and EVM RPC for executing transactions on various blockchains.
+
+### Real-Time Exchange Rate Retrieval
+
+Using the Exchange Rate Canister, IC2P2Ramp provides users with real-time exchange rates for various cryptocurrencies. This ensures users get the best market rates for their transactions, enhancing the efficiency and transparency of the protocol.
+
+## Canisters
 
 <p align="center" style="margin-top:25px">
 <img src="assets/canister_flow_diagram.png" style="border-radius:10px">
 </p>
-
-## 🚀 Canisters
 
 ### HTTPS Outcalls Canister
 
