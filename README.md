@@ -93,10 +93,10 @@ dfx canister call backend verify_transaction '( "0", transaction_id = "4UC03319A
 Run the following commands in a new, empty project directory:
 
 ```sh
-git clone https://github.com/fxgst/evm-rpc-rust.git # Download this starter project
-cd evm-rpc-rust # Navigate to the project directory
-dfx start --clean --background # Run dfx in the background
-npm install # Install project dependencies
+git clone https://github.com/reymom/ic2P2ramp.git
+cd ic2P2ramp
+dfx start --clean --background
+npm install
 npm run setup # Install packages, deploy canisters, and generate type bindings
 
 npm start # Start the development server
