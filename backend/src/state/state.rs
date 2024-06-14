@@ -1,9 +1,9 @@
-use crate::evm_rpc::{BlockTag, RpcService, RpcServices};
-
 use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::cell::RefCell;
+
+use crate::evm::rpc::{BlockTag, RpcService, RpcServices};
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();

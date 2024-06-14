@@ -1,14 +1,10 @@
 use ethers_core::types::U256;
 
-use crate::evm_rpc::EvmRpcCanister;
-use crate::evm_rpc::SendRawTransactionStatus;
-use crate::evm_signer;
-use crate::evm_signer::create_sign_request;
-use crate::evm_signer::send_raw_transaction;
-use crate::order_management;
+use crate::evm::rpc::{EvmRpcCanister, SendRawTransactionStatus};
+use crate::evm::signer;
+use crate::order::management;
 use crate::state::mutate_state;
-use crate::RpcApi;
-use crate::RpcServices;
+use crate::{RpcApi, RpcServices};
 
 pub const VAULT_MANAGER_ADDRESS: &str = "0x8B1b90637F188541401DeeA100718ca618927E52";
 pub const USDT_ADDRESS: &str = "0x0468880bE4970DBab8c9aBE52D9063050652b8db";
@@ -16,7 +12,7 @@ pub const RCP_SEPOLIA_MANTLE: &str = "https://rpc.sepolia.mantle.xyz";
 
 pub async fn deposit_funds(chain_id: u64, amount: u64, token_type: String) -> Result<(), String> {
     let gas = U256::from(200_000);
-    let fee_estimates = evm_signer::get_fee_estimates();
+    let fee_estimates = signer::get_fee_estimates();
 
     let abi = r#"
             [
@@ -47,7 +43,7 @@ pub async fn deposit_funds(chain_id: u64, amount: u64, token_type: String) -> Re
         .unwrap();
 
     let value = U256::from(0);
-    let request = create_sign_request(
+    let request = signer::create_sign_request(
         value,
         Some(VAULT_MANAGER_ADDRESS.to_string()),
         None,
@@ -61,9 +57,9 @@ pub async fn deposit_funds(chain_id: u64, amount: u64, token_type: String) -> Re
         "after request in [deposit_funds] request = {:?}",
         request.gas
     );
-    let tx = evm_signer::sign_transaction(request).await;
+    let tx = signer::sign_transaction(request).await;
     ic_cdk::println!("after sign_transaction in [deposit_funds]");
-    let status = send_raw_transaction(tx.clone()).await;
+    let status = signer::send_raw_transaction(tx.clone()).await;
 
     println!("Transaction sent: {:?}", tx);
 
@@ -90,7 +86,7 @@ pub async fn deposit_funds(chain_id: u64, amount: u64, token_type: String) -> Re
 
 pub async fn release_base_currency(order_id: String) -> Result<(), String> {
     let gas = U256::from(60_000);
-    let fee_estimates = evm_signer::get_fee_estimates();
+    let fee_estimates = signer::get_fee_estimates();
 
     let abi = r#"
     [
@@ -111,7 +107,7 @@ pub async fn release_base_currency(order_id: String) -> Result<(), String> {
     let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
     let function = contract.function("releaseBaseCurrency").unwrap();
 
-    let order = order_management::get_order_by_id(order_id.clone()).await?;
+    let order = management::get_order_by_id(order_id.clone()).await?;
     let onramper_address = order
         .onramper_address
         .expect("onramper address should be setup");
@@ -125,7 +121,7 @@ pub async fn release_base_currency(order_id: String) -> Result<(), String> {
         .unwrap();
 
     let value = U256::from(amount);
-    let request = create_sign_request(
+    let request = signer::create_sign_request(
         value,
         Some(VAULT_MANAGER_ADDRESS.to_string()),
         None,
@@ -135,9 +131,9 @@ pub async fn release_base_currency(order_id: String) -> Result<(), String> {
     )
     .await;
 
-    let tx = evm_signer::sign_transaction(request).await;
+    let tx = signer::sign_transaction(request).await;
     ic_cdk::println!("after sign_transaction in [release funds]");
-    let status = send_raw_transaction(tx.clone()).await;
+    let status = signer::send_raw_transaction(tx.clone()).await;
 
     match status {
         SendRawTransactionStatus::Ok(transaction_hash) => {

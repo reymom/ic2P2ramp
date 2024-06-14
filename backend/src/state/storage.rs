@@ -1,6 +1,6 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
-use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use ic_stable_structures::{storable::Bound, DefaultMemoryImpl, StableBTreeMap, Storable};
+use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
 use std::{borrow::Cow, cell::RefCell};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;

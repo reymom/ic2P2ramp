@@ -8,7 +8,7 @@ use ic_cdk::api::management_canister::ecdsa::{
 };
 use std::str::FromStr;
 
-use crate::evm_rpc::{
+use crate::evm::rpc::{
     MultiSendRawTransactionResult, RpcConfig, RpcServices, SendRawTransactionResult,
     SendRawTransactionStatus, CANISTER_ID,
 };
@@ -221,3 +221,4 @@ pub fn pubkey_bytes_to_address(pubkey_bytes: &[u8]) -> String {
 
     ethers_core::utils::to_checksum(&Address::from_slice(&hash[12..32]), None)
 }
+

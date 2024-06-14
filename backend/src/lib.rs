@@ -1,28 +1,27 @@
-mod evm_rpc;
-mod evm_signer;
-mod evm_vault;
-mod order_management;
-mod paypal_auth;
+mod evm;
+mod order;
+mod outcalls;
 mod state;
-mod storage;
-mod xrc_rates;
 
-use evm_rpc::{RpcApi, RpcServices};
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
-use serde::{Deserialize, Serialize};
+
+use order::management;
+use outcalls::{paypal_auth, xrc_rates};
+use state::storage::Order;
 use state::{initialize_state, mutate_state, read_state, InitArg};
-use std::time::Duration;
-use storage::Order;
+use evm::rpc::{RpcApi, RpcServices};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
 fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::ZERO, || {
         ic_cdk::spawn(async {
-            let public_key = evm_signer::get_public_key().await;
-            let evm_address = evm_signer::pubkey_bytes_to_address(&public_key);
+            let public_key = evm::signer::get_public_key().await;
+            let evm_address = evm::signer::pubkey_bytes_to_address(&public_key);
             mutate_state(|s| {
                 s.ecdsa_pub_key = Some(public_key);
                 s.evm_address = Some(evm_address);
@@ -102,7 +101,7 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
     };
 
     let cycles: u128 = 10_000_000_000;
-    let order = order_management::get_order_by_id(order_id.clone()).await?;
+    let order = management::get_order_by_id(order_id.clone()).await?;
     match http_request(request, cycles).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
@@ -126,8 +125,8 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
                 && (received_amount - expected_fiat_amount).abs() < f64::EPSILON
             {
                 // Update the order status in your storage
-                order_management::mark_order_as_paid(order.id).await?;
-                evm_vault::release_base_currency(order_id).await?;
+                management::mark_order_as_paid(order.id).await?;
+                evm::vault::release_base_currency(order_id).await?;
                 Ok("Payment verified successfully".to_string())
             } else {
                 Err("Payment verification failed".to_string())
@@ -147,7 +146,7 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
 
 #[ic_cdk::query]
 fn get_orders() -> Vec<Order> {
-    order_management::get_orders()
+    management::get_orders()
 }
 
 #[ic_cdk::update]
@@ -159,9 +158,9 @@ async fn create_order(
     chain_id: u64,
     token_type: String,
 ) -> Result<String, String> {
-    // evm_vault::deposit_funds(chain_id, crypto_amount, token_type.clone()).await?;
+    // evm::vault::deposit_funds(chain_id, crypto_amount, token_type.clone()).await?;
 
-    order_management::create_order(
+    management::create_order(
         fiat_amount,
         crypto_amount,
         paypal_id,
@@ -178,19 +177,19 @@ async fn lock_order(
     onramper_paypal_id: String,
     onramper_address: String,
 ) -> Result<String, String> {
-    // let order = order_management::get_order_by_id(order_id.clone()).await?;
-    // evm_vault::commit_order(order.chain_id, order.offramper_address, order.crypto_amount).await?;
+    // let order = management::get_order_by_id(order_id.clone()).await?;
+    // evm::vault::commit_order(order.chain_id, order.offramper_address, order.crypto_amount).await?;
 
-    order_management::lock_order(order_id, onramper_paypal_id, onramper_address).await
+    management::lock_order(order_id, onramper_paypal_id, onramper_address).await
 }
 
 #[ic_cdk::update]
 async fn remove_order(order_id: String) -> Result<String, String> {
-    // let order = order_management::get_order_by_id(order_id.clone()).await?;
+    // let order = management::get_order_by_id(order_id.clone()).await?;
 
-    // evm_vault::withdraw(order.chain_id, order.crypto_amount).await?;
+    // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
 
-    order_management::remove_order(order_id).await
+    management::remove_order(order_id).await
 }
 
 // #[ic_cdk::update]
@@ -202,8 +201,8 @@ async fn remove_order(order_id: String) -> Result<String, String> {
 //     let is_valid_proof = verifier::verify_payment_proof(order_id.clone(), proof, chain_id).await;
 
 //     if is_valid_proof {
-//         let order = order_management::get_order_by_id(order_id.clone()).await?;
-//         let result = evm_vault::release_funds(
+//         let order = management::get_order_by_id(order_id.clone()).await?;
+//         let result = evm::vault::release_funds(
 //             chain_id,
 //             order
 //                 .onramper_address
