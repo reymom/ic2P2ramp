@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { backend } from '../declarations/backend';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
-import { ZK2RampABI } from '../abis/zk2ramp';
-import addresses from '../abis/addresses';
+import { icP2PrampABI } from '../constants/ic2P2ramp';
+import addresses from '../constants/addresses';
 
 import {
     MantleSepoliaTokens,
@@ -57,9 +57,9 @@ const CreateOrder: React.FC = () => {
                 throw new Error('Unsupported network');
             }
 
-            const { ZK2Ramp, USDT } = networkAddresses;
+            const { native, usdt } = networkAddresses;
 
-            const vaultContract = new ethers.Contract(ZK2Ramp, ZK2RampABI, signer);
+            const vaultContract = new ethers.Contract(native, icP2PrampABI, signer);
 
             const cryptoAmountInWei = ethers.parseEther(cryptoAmount.toString());
             const gasEstimate = await vaultContract.depositBaseCurrency.estimateGas(

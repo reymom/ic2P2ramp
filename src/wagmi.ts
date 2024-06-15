@@ -9,7 +9,7 @@ import {
 const walletConnectProjectId = '31b7a6907dcc1be39c4d4ca7e4ed20b1';
 
 export const config = getDefaultConfig({
-  appName: 'p2Ploan',
+  appName: 'ic2P2ramp',
   projectId: walletConnectProjectId,
   chains: [polygonZkEvmTestnet, optimismSepolia, mantleSepoliaTestnet, sepolia],
 });
