@@ -1,4 +1,4 @@
-export const ZK2RampABI = [
+export const icP2PrampABI = [
   {
     inputs: [{ internalType: 'address', name: '_owner', type: 'address' }],
     stateMutability: 'nonpayable',
