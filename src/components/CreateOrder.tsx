@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { backend } from '../declarations/backend';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
@@ -13,13 +13,18 @@ import {
     NetworkIds
 } from '../tokens';
 
-const CreateOrder: React.FC = () => {
-    const [fiatAmount, setFiatAmount] = useState(1);
-    const [cryptoAmount, setCryptoAmount] = useState(1);
+interface CreateOrderProps {
+    selectedCurrency: string;
+}
+
+const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
+    const [fiatAmount, setFiatAmount] = useState<number>();
+    const [cryptoAmount, setCryptoAmount] = useState(0);
     const [paypalId, setPaypalId] = useState('');
     const [selectedToken, setSelectedToken] = useState('');
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
     const { address, chain, chainId } = useAccount();
 
@@ -37,6 +42,35 @@ const CreateOrder: React.FC = () => {
                 return [];
         }
     };
+
+    const getExchangeRateFromXRC = async (token: string) => {
+        try {
+            const result = await backend.get_usd_exchange_rate(selectedCurrency, token);
+            console.log("result = ", result);
+            if ('Ok' in result) {
+                const rate = parseFloat(result.Ok);
+                setExchangeRate(rate);
+            } else {
+                console.error(result.Err);
+                setExchangeRate(null);
+            }
+        } catch (error) {
+            console.error(error);
+            setExchangeRate(null);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedToken) {
+            getExchangeRateFromXRC(selectedToken);
+        }
+    }, [selectedToken]);
+
+    useEffect(() => {
+        if (exchangeRate !== null) {
+            setFiatAmount(cryptoAmount * exchangeRate);
+        }
+    }, [cryptoAmount, exchangeRate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,13 +117,14 @@ const CreateOrder: React.FC = () => {
             }
 
             const result = await backend.create_order(
-                BigInt(fiatAmount),
+                BigInt(Math.ceil(fiatAmount! * 100)),
                 cryptoAmountInWei,
                 paypalId,
                 address as string,
                 BigInt(chainId!),
                 selectedToken
             );
+            console.log("result(backend.create_order) = ", result);
 
             setMessage("order created successfully!");
         } catch (error) {
@@ -107,10 +142,10 @@ const CreateOrder: React.FC = () => {
                     <label className="block text-gray-700 w-24">Fiat Amount:</label>
                     <input
                         type="number"
-                        value={fiatAmount}
-                        onChange={(e) => setFiatAmount(Number(e.target.value))}
+                        value={fiatAmount?.toFixed(2)}
                         className="flex-grow px-3 py-2 border rounded"
                         required
+                        disabled
                     />
                 </div>
                 <div className="flex items-center mb-4">

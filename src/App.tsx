@@ -12,6 +12,11 @@ import 'react-json-view-lite/dist/index.css';
 function App() {
     const [loading, setLoading] = useState(false);
     const [currentTab, setCurrentTab] = useState<'create' | 'view'>('create');
+    const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
+
+    const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedCurrency(event.target.value);
+    };
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -20,7 +25,20 @@ function App() {
                     <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="zk2ramp logo" />
                     <h1 className="text-xl font-bold">zk2ramp</h1>
                 </div>
-                <ConnectButton />
+                <div className="flex items-center">
+                    <select
+                        value={selectedCurrency}
+                        onChange={handleCurrencyChange}
+                        className="px-4 py-2 border rounded mr-4"
+                    >
+                        <option value="USD">$</option>
+                        <option value="EUR">€</option>
+                        <option value="GBP">£</option>
+                        <option value="JPY">¥</option>
+                        <option value="SGD">S$</option>
+                    </select>
+                    <ConnectButton />
+                </div>
             </nav>
 
             <div className="flex flex-col items-center mt-8">
@@ -39,7 +57,7 @@ function App() {
                     </button>
                 </div>
                 <div className="bg-white p-4 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-1/3" style={{ opacity: loading ? 0.5 : 1 }}>
-                    {currentTab === 'create' && <CreateOrder />}
+                    {currentTab === 'create' && <CreateOrder selectedCurrency={selectedCurrency} />}
                     {currentTab === 'view' && <ViewOrders />}
                 </div>
             </div>
