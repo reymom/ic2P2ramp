@@ -59,8 +59,8 @@ service : (InitArg) -> {
   create_order : (nat64, nat64, text, text, nat64, text) -> (Result);
   get_evm_address : () -> (text) query;
   get_orders : () -> (vec Order) query;
+  get_usd_exchange_rate : (text, text) -> (Result);
   lock_order : (text, text, text) -> (Result);
   remove_order : (text) -> (Result);
-  submit_payment_proof : (text, vec nat8, nat64) -> (Result);
   verify_transaction : (text, text) -> (Result);
 }

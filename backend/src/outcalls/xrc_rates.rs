@@ -1,9 +1,8 @@
-use candid::{CandidType, Deserialize, Nat, Principal};
+use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::call::call_with_payment128;
-use serde::Serialize;
 
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
-const CYCLES_AMOUNT: u64 = 10_000_000_000;
+// const CYCLES_AMOUNT: u64 = 10_000_000_000;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 enum AssetClass {
@@ -70,15 +69,15 @@ enum GetExchangeRateResult {
     Err(ExchangeRateError),
 }
 
-pub async fn get_exchange_rate(symbol: &str) -> Result<f64, String> {
+pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result<f64, String> {
     let request = GetExchangeRateRequest {
         base_asset: Asset {
             class: AssetClass::Cryptocurrency,
-            symbol: symbol.to_string(),
+            symbol: crypto_symbol.to_string(),
         },
         quote_asset: Asset {
             class: AssetClass::FiatCurrency,
-            symbol: "USD".to_string(),
+            symbol: fiat_symbol.to_string(),
         },
         timestamp: None,
     };

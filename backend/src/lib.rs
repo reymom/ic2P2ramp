@@ -3,17 +3,17 @@ mod order;
 mod outcalls;
 mod state;
 
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
+use evm::rpc::{RpcApi, RpcServices};
 use order::management;
 use outcalls::{paypal_auth, xrc_rates};
 use state::storage::Order;
 use state::{initialize_state, mutate_state, read_state, InitArg};
-use evm::rpc::{RpcApi, RpcServices};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
@@ -47,8 +47,11 @@ fn get_evm_address() -> String {
 // ---------
 
 #[ic_cdk::update]
-async fn get_usd_exchange_rate(base_symbol: String) -> Result<String, String> {
-    match xrc_rates::get_exchange_rate(base_symbol.as_str()).await {
+async fn get_usd_exchange_rate(
+    fiat_symbol: String,
+    crypto_symbol: String,
+) -> Result<String, String> {
+    match xrc_rates::get_exchange_rate(&fiat_symbol, &crypto_symbol).await {
         Ok(rate) => Ok(rate.to_string()),
         Err(err) => Err(err),
     }
