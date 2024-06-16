@@ -14,7 +14,7 @@ fi
 DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
 
 # shellcheck source=../.env
-source "$DIR/.env" || {
+source "$DIR/../.env" || {
   echo "error while sourcing env file"
   exit
 }
@@ -33,7 +33,7 @@ cargo build --release --target wasm32-unknown-unknown --package backend
 dfx canister create --with-cycles 5_000_000_000_000 backend
 
 # Install the canister with initial state arguments
-dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --network ic --argument '(
+dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument '(
   record {
     ecdsa_key_id = record {
       name = "test_key_1";
@@ -52,8 +52,8 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
       }
     };
     block_tag = variant { Latest = null };
-    client_id = \"${CLIENT_ID}\";
-    client_secret = \"${CLIENT_SECRET}\";
+    client_id = "${CLIENT_ID}";
+    client_secret = "${CLIENT_SECRET}";
   },
 )'
 
