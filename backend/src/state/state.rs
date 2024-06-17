@@ -1,7 +1,7 @@
 use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 use crate::evm::rpc::{BlockTag, RpcService, RpcServices};
 
@@ -11,8 +11,9 @@ thread_local! {
 
 #[derive(Clone, Debug)]
 pub struct State {
-    pub rpc_services: RpcServices,
-    pub rpc_service: RpcService,
+    // pub rpc_services: RpcServices,
+    pub rpc_services: HashMap<u64, RpcServices>,
+    // pub rpc_service: RpcService,
     pub ecdsa_pub_key: Option<Vec<u8>>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub evm_address: Option<String>,
@@ -46,10 +47,16 @@ pub fn initialize_state(state: State) {
     STATE.set(Some(state));
 }
 
+#[derive(CandidType, Deserialize, Debug, Clone)]
+pub struct RpcServiceConfig {
+    pub chain_id: u64,
+    pub services: RpcServices,
+}
+
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
-    pub rpc_services: RpcServices,
-    pub rpc_service: RpcService,
+    // pub rpc_services: RpcServices,
+    pub rpc_services: Vec<RpcServiceConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub block_tag: BlockTag,
     pub client_id: String,
@@ -62,16 +69,19 @@ impl TryFrom<InitArg> for State {
     fn try_from(
         InitArg {
             rpc_services,
-            rpc_service,
             ecdsa_key_id,
             block_tag,
             client_id,
             client_secret,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
+        let mut rpc_services_map = HashMap::new();
+        for config in rpc_services {
+            rpc_services_map.insert(config.chain_id, config.services);
+        }
+
         let state = Self {
-            rpc_services,
-            rpc_service,
+            rpc_services: rpc_services_map,
             ecdsa_pub_key: None,
             ecdsa_key_id,
             evm_address: None,

@@ -19,8 +19,7 @@ type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
 type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
-  rpc_services : RpcServices;
-  rpc_service : RpcService;
+  rpc_services : vec RpcServiceConfig;
   block_tag : BlockTag;
   client_id : text;
   client_secret : text;
@@ -32,6 +31,7 @@ type Order = record {
   originator : principal;
   fiat_amount : nat64;
   locked : bool;
+  currency_symbol : text;
   offramper_paypal_id : text;
   proof_submitted : bool;
   onramper_address : opt text;
@@ -43,24 +43,19 @@ type Order = record {
 };
 type Result = variant { Ok : text; Err : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
-type RpcService = variant {
-  EthSepolia : EthSepoliaService;
-  Custom : RpcApi;
-  EthMainnet : EthMainnetService;
-  Chain : nat64;
-  Provider : nat64;
-};
+type RpcServiceConfig = record { chain_id : nat64; services : RpcServices };
 type RpcServices = variant {
   EthSepolia : opt vec EthSepoliaService;
   Custom : record { chainId : nat64; services : vec RpcApi };
   EthMainnet : opt vec EthMainnetService;
 };
 service : (InitArg) -> {
-  create_order : (nat64, nat64, text, text, nat64, text) -> (Result);
+  create_order : (nat64, text, nat64, text, text, nat64, text) -> (Result);
   get_evm_address : () -> (text) query;
   get_orders : () -> (vec Order) query;
   get_usd_exchange_rate : (text, text) -> (Result);
   lock_order : (text, text, text) -> (Result);
   remove_order : (text) -> (Result);
-  verify_transaction : (text, text) -> (Result);
+  test_deposit_funds : (nat64, nat64, opt text) -> (Result);
+  verify_transaction : (text, nat64, text) -> (Result);
 }
