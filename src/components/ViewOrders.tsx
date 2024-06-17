@@ -200,6 +200,10 @@ function ViewOrders() {
         }
     };
 
+    const formatFiatAmount = (fiatAmount: bigint) => {
+        return (Number(fiatAmount) / 100).toFixed(2);
+    };
+
     return (
         <div>
             <h2 className="text-lg font-bold mb-4">View Orders</h2>
@@ -222,8 +226,7 @@ function ViewOrders() {
                     {filteredOrders.map((order) => (
                         <li key={order.id} className="p-4 border rounded shadow-md bg-white">
                             <div className="flex flex-col space-y-2">
-                                <div><strong>ID:</strong> {order.id}</div>
-                                <div><strong>Fiat Amount:</strong> {order.fiat_amount.toString()}</div>
+                                <div><strong>Fiat Amount:</strong> {formatFiatAmount(order.fiat_amount)}</div>
                                 <div>
                                     <strong>Crypto Amount:</strong> {ethers.formatEther(order.crypto_amount.toString())} {getTokenSymbol(order.token_type, Number(order.chain_id))}
                                 </div>
@@ -234,23 +237,25 @@ function ViewOrders() {
                                 <div><strong>Locked:</strong> {order.locked ? 'Yes' : 'No'}</div>
                                 <div><strong>Payment Done:</strong> {order.payment_done ? 'Yes' : 'No'}</div>
                             </div>
-                            <div className="flex items-center mb-4 mt-4">
-                                <label className="block text-gray-700 w-36">Your PayPal ID:</label>
-                                <input
-                                    type="text"
-                                    value={paypalId}
-                                    onChange={(e) => setPaypalId(e.target.value)}
-                                    className="flex-grow px-3 py-2 border rounded"
-                                    required
-                                />
-                            </div>
                             {order.locked && !order.payment_done ? (
-                                <PayPalButton
-                                    amount={order.fiat_amount}
-                                    paypalId={paypalId}
-                                    onSuccess={(transactionId) => handlePayPalSuccess(transactionId, order.id)}
-                                    currency="USD"
-                                />
+                                <div>
+                                    <div className="flex items-center mb-4 mt-4">
+                                        <label className="block text-gray-700 w-36">Your PayPal ID:</label>
+                                        <input
+                                            type="text"
+                                            value={paypalId}
+                                            onChange={(e) => setPaypalId(e.target.value)}
+                                            className="flex-grow px-3 py-2 border rounded"
+                                            required
+                                        />
+                                    </div>
+                                    <PayPalButton
+                                        amount={order.fiat_amount}
+                                        paypalId={paypalId}
+                                        onSuccess={(transactionId) => handlePayPalSuccess(transactionId, order.id)}
+                                        currency="USD"
+                                    />
+                                </div>
                             ) : (
                                 <>
                                     <button
