@@ -43,6 +43,7 @@ pub fn get_fee_estimates() -> FeeEstimates {
 
 pub async fn create_sign_request(
     value: U256,
+    chain_id: U64,
     to: Option<String>,
     from: Option<String>,
     gas: U256,
@@ -54,14 +55,10 @@ pub async fn create_sign_request(
         max_priority_fee_per_gas,
     } = fee_estimates;
     let nonce = read_state(|s| s.nonce);
-    let rpc_providers = read_state(|s| s.rpc_services.clone());
+    // let rpc_providers = read_state(|s| s.rpc_services.clone());
 
-    ic_cdk::println!(
-        "[create_sign_request] rpc_providers.chain_id()) = {}",
-        rpc_providers.chain_id()
-    );
     SignRequest {
-        chain_id: Some(rpc_providers.chain_id()),
+        chain_id: Some(chain_id),
         to,
         from,
         gas,
@@ -151,8 +148,15 @@ fn y_parity(prehash: &[u8], sig: &[u8], pubkey: &[u8]) -> u64 {
     )
 }
 
-pub async fn send_raw_transaction(tx: String) -> SendRawTransactionStatus {
-    let rpc_providers = read_state(|s| s.rpc_services.clone());
+pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
+    //let rpc_providers = read_state(|s| s.rpc_services.clone());
+    let rpc_providers = read_state(|s| {
+        s.rpc_services
+            .get(&chain_id)
+            .cloned()
+            .ok_or("Unsupported chain ID")
+    })
+    .unwrap();
     let cycles = 10_000_000_000;
 
     ic_cdk::println!("[send_raw_transaction] rpc_providers = {:?}", rpc_providers);
@@ -221,4 +225,3 @@ pub fn pubkey_bytes_to_address(pubkey_bytes: &[u8]) -> String {
 
     ethers_core::utils::to_checksum(&Address::from_slice(&hash[12..32]), None)
 }
-
