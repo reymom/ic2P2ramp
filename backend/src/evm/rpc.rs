@@ -395,64 +395,6 @@ impl EvmRpcCanister {
         .await
     }
 
-    pub async fn create_loan(
-        services: RpcServices,
-        contract_address: String,
-        loan_terms_factory_data: Vec<u8>,
-        signature: Vec<u8>,
-        loan_asset_permit: Vec<u8>,
-        collateral_permit: Vec<u8>,
-        cycles: u128,
-    ) -> CallResult<(String,)> {
-        let abi = r#"
-            [
-                {
-                    "constant": false,
-                    "inputs": [
-                        {"name": "loanTermsFactoryContract", "type": "address"},
-                        {"name": "loanTermsFactoryData", "type": "bytes"},
-                        {"name": "signature", "type": "bytes"},
-                        {"name": "loanAssetPermit", "type": "bytes"},
-                        {"name": "collateralPermit", "type": "bytes"}
-                    ],
-                    "name": "createLOAN",
-                    "outputs": [{"name": "loanId", "type": "uint256"}],
-                    "type": "function"
-                }
-            ]
-        "#;
-
-        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
-        let function = contract.function("createLOAN").unwrap();
-
-        let data = function
-            .encode_input(&[
-                ethers_core::abi::Token::Address(contract_address.parse().unwrap()),
-                ethers_core::abi::Token::Bytes(loan_terms_factory_data),
-                ethers_core::abi::Token::Bytes(signature),
-                ethers_core::abi::Token::Bytes(loan_asset_permit),
-                ethers_core::abi::Token::Bytes(collateral_permit),
-            ])
-            .unwrap();
-
-        let payload = serde_json::to_string(&JsonRpcRequest {
-            id: 1,
-            jsonrpc: "2.0".to_string(),
-            method: "eth_call".to_string(),
-            params: (
-                EthCallParams {
-                    to: contract_address,
-                    data: to_hex(&data),
-                },
-                "latest".to_string(),
-            ),
-        })
-        .unwrap();
-
-        ic_cdk::api::call::call_with_payment128(CANISTER_ID, "request", (services, payload), cycles)
-            .await
-    }
-
     // EVM RPC functions remain mostly unchanged, except for PayPal proof verification
     pub async fn verify_payment_proof_on_evm(
         services: RpcServices,
@@ -770,4 +712,3 @@ impl EvmRpcCanister {
 fn to_hex(data: &[u8]) -> String {
     format!("0x{}", hex::encode(data))
 }
-
