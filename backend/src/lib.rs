@@ -38,6 +38,18 @@ fn get_evm_address() -> String {
     read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
 }
 
+#[ic_cdk::update]
+async fn test_deposit_funds(
+    chain_id: u64,
+    amount: u64,
+    token_address: Option<String>,
+) -> Result<String, String> {
+    match evm::vault::deposit_funds(chain_id, amount, token_address).await {
+        Ok(_) => Ok("Funds deposited successfully".to_string()),
+        Err(err) => Err(format!("Failed to deposit funds: {}", err)),
+    }
+}
+
 // ---------
 // XRC Rate
 // ---------
@@ -58,7 +70,11 @@ async fn get_usd_exchange_rate(
 // ---------------
 
 #[ic_cdk::update]
-async fn verify_transaction(order_id: String, transaction_id: String) -> Result<String, String> {
+async fn verify_transaction(
+    order_id: String,
+    chain_id: u64,
+    transaction_id: String,
+) -> Result<String, String> {
     let access_token = paypal_auth::get_paypal_access_token().await?;
     let cycles: u128 = 10_000_000_000;
     let order = management::get_order_by_id(order_id.clone()).await?;
@@ -90,7 +106,7 @@ async fn verify_transaction(order_id: String, transaction_id: String) -> Result<
     {
         // Update the order status in your storage
         management::mark_order_as_paid(order.id).await?;
-        evm::vault::release_base_currency(order_id).await?;
+        evm::vault::release_base_currency(chain_id.into(), order_id).await?;
         Ok("Payment verified successfully".to_string())
     } else {
         Err("Payment verification failed".to_string())
