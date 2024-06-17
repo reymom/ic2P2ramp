@@ -3,15 +3,11 @@ mod order;
 mod outcalls;
 mod state;
 
-use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
-};
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use evm::rpc::{RpcApi, RpcServices};
 use order::management;
-use outcalls::{paypal_auth, xrc_rates};
+use outcalls::{paypal_auth, paypal_capture, xrc_rates};
 use state::storage::Order;
 use state::{initialize_state, mutate_state, read_state, InitArg};
 
@@ -61,85 +57,43 @@ async fn get_usd_exchange_rate(
 // Paypal Payment
 // ---------------
 
-#[derive(Serialize, Deserialize, Debug)]
-struct PayPalCaptureDetails {
-    id: String,
-    status: String,
-    amount: Amount,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Amount {
-    currency_code: String,
-    value: String,
-}
-
 #[ic_cdk::update]
 async fn verify_transaction(order_id: String, transaction_id: String) -> Result<String, String> {
     let access_token = paypal_auth::get_paypal_access_token().await?;
-
-    let url = format!(
-        "https://api-m.sandbox.paypal.com/v2/payments/captures/{}",
-        transaction_id
-    );
-
-    let request_headers = vec![
-        HttpHeader {
-            name: "Content-Type".to_string(),
-            value: "application/json".to_string(),
-        },
-        HttpHeader {
-            name: "Authorization".to_string(),
-            value: format!("Bearer {}", access_token),
-        },
-    ];
-
-    let request = CanisterHttpRequestArgument {
-        url,
-        method: HttpMethod::GET,
-        body: None,
-        max_response_bytes: None,
-        transform: None,
-        headers: request_headers,
-    };
-
     let cycles: u128 = 10_000_000_000;
     let order = management::get_order_by_id(order_id.clone()).await?;
-    match http_request(request, cycles).await {
-        Ok((response,)) => {
-            let str_body = String::from_utf8(response.body)
-                .expect("Transformed response is not UTF-8 encoded.");
-            ic_cdk::println!("str_body = {:?}", str_body);
 
-            let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
-            ic_cdk::println!("capture_details = {:?}", capture_details);
+    let capture_details =
+        paypal_capture::fetch_paypal_capture_details(&access_token, &transaction_id, cycles)
+            .await?;
 
-            // Verify the captured payment details
-            let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
-            let received_amount: f64 = capture_details
-                .amount
-                .value
-                .parse()
-                .map_err(|e| format!("Failed to parse amount: {}", e))?;
+    // Verify the captured payment details
+    let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
+    let received_amount: f64 = capture_details
+        .amount
+        .value
+        .parse()
+        .map_err(|e| format!("Failed to parse amount: {}", e))?;
+    ic_cdk::println!("received_amount = {}", received_amount);
 
-            ic_cdk::println!("received_amount = {}", received_amount);
-            if capture_details.status == "COMPLETED"
-                && (received_amount - expected_fiat_amount).abs() < f64::EPSILON
-            {
-                // Update the order status in your storage
-                management::mark_order_as_paid(order.id).await?;
-                evm::vault::release_base_currency(order_id).await?;
-                Ok("Payment verified successfully".to_string())
-            } else {
-                Err("Payment verification failed".to_string())
-            }
-        }
-        Err((r, m)) => {
-            let message =
-                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
-            Err(message)
-        }
+    let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
+    let currency_matches = capture_details.amount.currency_code == order.currency_symbol;
+    let offramper_matches = capture_details.payee.email_address == order.offramper_paypal_id;
+    // let onramper_matches = order.onramper_paypal_id.as_deref()
+    //     == Some(&capture_details.supplementary_data.related_ids.order_id);
+
+    if capture_details.status == "COMPLETED"
+        && amount_matches
+        && currency_matches
+        && offramper_matches
+    // && onramper_matches
+    {
+        // Update the order status in your storage
+        management::mark_order_as_paid(order.id).await?;
+        evm::vault::release_base_currency(order_id).await?;
+        Ok("Payment verified successfully".to_string())
+    } else {
+        Err("Payment verification failed".to_string())
     }
 }
 
@@ -155,6 +109,7 @@ fn get_orders() -> Vec<Order> {
 #[ic_cdk::update]
 async fn create_order(
     fiat_amount: u64,
+    fiat_symbol: String,
     crypto_amount: u64,
     paypal_id: String,
     address: String,
@@ -165,6 +120,7 @@ async fn create_order(
 
     management::create_order(
         fiat_amount,
+        fiat_symbol,
         crypto_amount,
         paypal_id,
         address,
@@ -194,44 +150,5 @@ async fn remove_order(order_id: String) -> Result<String, String> {
 
     management::remove_order(order_id).await
 }
-
-// #[ic_cdk::update]
-// async fn submit_payment_proof(
-//     order_id: String,
-//     proof: Vec<u8>,
-//     chain_id: u64,
-// ) -> Result<String, String> {
-//     let is_valid_proof = verifier::verify_payment_proof(order_id.clone(), proof, chain_id).await;
-
-//     if is_valid_proof {
-//         let order = management::get_order_by_id(order_id.clone()).await?;
-//         let result = evm::vault::release_funds(
-//             chain_id,
-//             order
-//                 .onramper_address
-//                 .expect("onramper address not specified"),
-//             order.crypto_amount,
-//         )
-//         .await;
-
-//         match result {
-//             Ok(_) => storage::ORDERS.with(|orders| {
-//                 let mut orders = orders.borrow_mut();
-//                 if let Some(mut order) = orders.remove(&order_id) {
-//                     order.proof_submitted = true;
-//                     order.payment_done = true;
-//                     order.removed = true;
-//                     orders.insert(order_id.clone(), order);
-//                     Ok("Payment proof verified and funds released".to_string())
-//                 } else {
-//                     Err("Order not found".to_string())
-//                 }
-//             }),
-//             Err(err) => Err(err),
-//         }
-//     } else {
-//         Err("Invalid payment proof".to_string())
-//     }
-// }
 
 ic_cdk::export_candid!();

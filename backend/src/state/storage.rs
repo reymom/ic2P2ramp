@@ -1,6 +1,6 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
-use ic_stable_structures::{storable::Bound, DefaultMemoryImpl, StableBTreeMap, Storable};
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
+use ic_stable_structures::{storable::Bound, DefaultMemoryImpl, StableBTreeMap, Storable};
 use std::{borrow::Cow, cell::RefCell};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
@@ -34,6 +34,7 @@ pub struct Order {
     pub id: String,
     pub originator: Principal,
     pub fiat_amount: u64,
+    pub currency_symbol: String,
     pub crypto_amount: u64,
     pub offramper_paypal_id: String,
     pub onramper_paypal_id: Option<String>,

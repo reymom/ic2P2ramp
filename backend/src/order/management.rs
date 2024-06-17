@@ -2,6 +2,7 @@ use crate::state::storage;
 
 pub async fn create_order(
     fiat_amount: u64,
+    currency_symbol: String,
     crypto_amount: u64,
     offramper_paypal_id: String,
     offramper_address: String,
@@ -13,6 +14,7 @@ pub async fn create_order(
         id: order_id.clone(),
         originator: ic_cdk::caller(),
         fiat_amount,
+        currency_symbol,
         crypto_amount,
         offramper_paypal_id,
         onramper_paypal_id: None,
@@ -68,6 +70,7 @@ pub async fn lock_order(
 }
 
 pub async fn mark_order_as_paid(order_id: String) -> Result<(), String> {
+    println!("[mark_order_as_paid");
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
         if let Some(mut order) = orders.remove(&order_id) {
