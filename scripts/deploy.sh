@@ -39,16 +39,23 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
       name = "test_key_1";
       curve = variant { secp256k1 };
     };
-    rpc_services = variant {
-      Custom = record {
-        chainId = 5003 : nat64;
-        services = vec { record { url = "https://rpc.sepolia.mantle.xyz"; headers = null } };
-      }
-    };
-    rpc_service = variant {
-      Custom = record {
-        url = "https://rpc.sepolia.mantle.xyz";
-        headers = null;
+    rpc_services = vec {
+      record {
+        chain_id = 5003 : nat64;
+        service = variant {
+          Custom = record {
+            chainId = 5003 : nat64;
+            services = vec { record { url = "https://rpc.sepolia.mantle.xyz"; headers = null } };
+          }
+        }
+      },
+      record {
+        chain_id = 11155111 : nat64;
+        service = variant {
+          EthSepolia = opt vec {
+            variant { Alchemy }
+          }
+        }
       }
     };
     block_tag = variant { Latest = null };
