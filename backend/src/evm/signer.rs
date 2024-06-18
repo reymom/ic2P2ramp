@@ -8,6 +8,8 @@ use ic_cdk::api::management_canister::ecdsa::{
 };
 use std::str::FromStr;
 
+use super::fees::FeeEstimates;
+
 use crate::evm::rpc::{
     MultiSendRawTransactionResult, RpcConfig, RpcServices, SendRawTransactionResult,
     SendRawTransactionStatus, CANISTER_ID,
@@ -24,21 +26,6 @@ pub struct SignRequest {
     pub value: Option<U256>,
     pub nonce: Option<U256>,
     pub data: Option<Vec<u8>>,
-}
-
-pub struct FeeEstimates {
-    pub max_fee_per_gas: U256,
-    pub max_priority_fee_per_gas: U256,
-}
-
-pub fn get_fee_estimates() -> FeeEstimates {
-    let max_fee_per_gas = U256::from(100_000_000_000u64);
-    let max_priority_fee_per_gas = U256::from(2_000_000_000);
-
-    FeeEstimates {
-        max_fee_per_gas,
-        max_priority_fee_per_gas,
-    }
 }
 
 pub async fn create_sign_request(
