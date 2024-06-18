@@ -45,8 +45,9 @@ async fn test_deposit_funds(
     chain_id: u64,
     amount: u64,
     token_address: Option<String>,
+    gas: Option<String>,
 ) -> Result<String, String> {
-    match Ic2P2ramp::deposit_funds(chain_id, amount, token_address).await {
+    match Ic2P2ramp::deposit_funds(chain_id, amount, token_address, gas).await {
         Ok(_) => Ok("Funds deposited successfully".to_string()),
         Err(err) => Err(format!("Failed to deposit funds: {}", err)),
     }

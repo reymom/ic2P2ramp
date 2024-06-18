@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ethers_core::types::U256;
 
 use super::fees::{self, FeeEstimates};
@@ -22,9 +24,12 @@ impl Ic2P2ramp {
         chain_id: u64,
         amount: u64,
         token_address: Option<String>,
+        gas: Option<String>,
     ) -> Result<(), String> {
-        let gas = U256::from(200_000);
-        let fee_estimates = fees::get_fee_estimates();
+        let gas = U256::from_str(gas.unwrap_or("21000".to_string()).as_str())
+            .unwrap_or(U256::from(21_000));
+
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         println!(
             "gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas, fee_estimates.max_fee_per_gas, fee_estimates.max_priority_fee_per_gas
@@ -166,7 +171,7 @@ impl Ic2P2ramp {
 
     pub async fn release_base_currency(chain_id: u64, order_id: String) -> Result<(), String> {
         let gas = U256::from(60_000);
-        let fee_estimates = fees::get_fee_estimates();
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
 
         let abi = r#"
             [

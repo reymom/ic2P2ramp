@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use candid::{self, CandidType, Principal};
+use ic_cdk::api::call::CallResult as Result;
 use serde::{Deserialize, Serialize};
 
 pub const CANISTER_ID: Principal =
@@ -81,17 +82,17 @@ pub struct JsonRpcRequest {
 
 #[derive(CandidType, Deserialize)]
 pub struct FeeHistoryArgs {
-    pub blockCount: u128,
+    pub blockCount: candid::Nat,
     pub newestBlock: BlockTag,
     pub rewardPercentiles: Option<serde_bytes::ByteBuf>,
 }
 
 #[derive(CandidType, Deserialize)]
 pub struct FeeHistory {
-    pub reward: Vec<Vec<u128>>,
+    pub reward: Vec<Vec<candid::Nat>>,
     pub gasUsedRatio: Vec<f64>,
-    pub oldestBlock: u128,
-    pub baseFeePerGas: Vec<u128>,
+    pub oldestBlock: candid::Nat,
+    pub baseFeePerGas: Vec<candid::Nat>,
 }
 
 #[derive(CandidType, Debug, Deserialize)]
@@ -376,3 +377,24 @@ pub struct UpdateProviderArgs {
     pub cyclesPerMessageByte: Option<u64>,
     pub providerId: u64,
 }
+
+pub struct Service(pub Principal);
+impl Service {
+    pub async fn eth_fee_history(
+        &self,
+        arg0: RpcServices,
+        arg1: Option<RpcConfig>,
+        arg2: FeeHistoryArgs,
+        cycles: u128,
+    ) -> Result<(MultiFeeHistoryResult,)> {
+        ic_cdk::api::call::call_with_payment128(
+            self.0,
+            "eth_feeHistory",
+            (arg0, arg1, arg2),
+            cycles,
+        )
+        .await
+    }
+}
+
+pub const EVM_RPC: Service = Service(CANISTER_ID);

@@ -42,7 +42,6 @@ pub async fn create_sign_request(
         max_priority_fee_per_gas,
     } = fee_estimates;
     let nonce = read_state(|s| s.nonce);
-    // let rpc_providers = read_state(|s| s.rpc_services.clone());
 
     SignRequest {
         chain_id: Some(chain_id),
@@ -136,7 +135,6 @@ fn y_parity(prehash: &[u8], sig: &[u8], pubkey: &[u8]) -> u64 {
 }
 
 pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
-    //let rpc_providers = read_state(|s| s.rpc_services.clone());
     let rpc_providers = read_state(|s| {
         s.rpc_services
             .get(&chain_id)
