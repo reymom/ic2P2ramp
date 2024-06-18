@@ -3,7 +3,7 @@ use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::evm::rpc::{BlockTag, RpcServices};
+use crate::evm::rpc::RpcServices;
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();
@@ -17,15 +17,14 @@ pub struct State {
     pub ecdsa_key_id: EcdsaKeyId,
     pub evm_address: Option<String>,
     pub nonce: U256,
-    pub block_tag: BlockTag,
     pub client_id: String,
     pub client_secret: String,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum InvalidStateError {
-    InvalidEthereumContractAddress(String),
-    InvalidTopic(String),
+    // InvalidEthereumContractAddress(String),
+    // InvalidTopic(String),
 }
 
 /// Mutates (part of) the current state using `f`.
@@ -54,10 +53,8 @@ pub struct RpcServiceConfig {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
-    // pub rpc_services: RpcServices,
     pub rpc_services: Vec<RpcServiceConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
-    pub block_tag: BlockTag,
     pub client_id: String,
     pub client_secret: String,
     pub vault_manager_addresses: Vec<(u64, String)>,
@@ -70,7 +67,6 @@ impl TryFrom<InitArg> for State {
         InitArg {
             rpc_services,
             ecdsa_key_id,
-            block_tag,
             client_id,
             client_secret,
             vault_manager_addresses,
@@ -93,7 +89,6 @@ impl TryFrom<InitArg> for State {
             ecdsa_key_id,
             evm_address: None,
             nonce: U256::zero(),
-            block_tag,
             client_id,
             client_secret,
         };

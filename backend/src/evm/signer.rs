@@ -11,8 +11,8 @@ use std::str::FromStr;
 use super::fees::FeeEstimates;
 
 use crate::evm::rpc::{
-    MultiSendRawTransactionResult, RpcConfig, RpcServices, SendRawTransactionResult,
-    SendRawTransactionStatus, CANISTER_ID,
+    MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult, SendRawTransactionStatus,
+    CANISTER_ID,
 };
 use crate::state::read_state;
 
@@ -168,19 +168,6 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
             }
         },
         Err(e) => ic_cdk::trap(format!("Error: {:?}", e).as_str()),
-    }
-}
-
-impl RpcServices {
-    pub fn chain_id(&self) -> U64 {
-        match self {
-            RpcServices::EthSepolia(_) => U64::from(11155111),
-            RpcServices::Custom {
-                chainId,
-                services: _,
-            } => U64::from(*chainId),
-            RpcServices::EthMainnet(_) => U64::from(1),
-        }
     }
 }
 
