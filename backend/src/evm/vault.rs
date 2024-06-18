@@ -3,7 +3,7 @@ use ethers_core::types::U256;
 use super::fees::{self, FeeEstimates};
 use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
-use crate::order::management;
+use crate::management;
 use crate::state::{mutate_state, read_state};
 
 pub struct Ic2P2ramp;
@@ -187,7 +187,7 @@ impl Ic2P2ramp {
         let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
         let function = contract.function("releaseBaseCurrency").unwrap();
 
-        let order = management::get_order_by_id(order_id.clone()).await?;
+        let order = management::order::get_order_by_id(order_id.clone())?;
         let onramper_address = order
             .onramper_address
             .expect("onramper address should be setup");
