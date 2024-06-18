@@ -3,7 +3,7 @@ use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::evm::rpc::{BlockTag, RpcService, RpcServices};
+use crate::evm::rpc::{BlockTag, RpcServices};
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();
@@ -11,9 +11,8 @@ thread_local! {
 
 #[derive(Clone, Debug)]
 pub struct State {
-    // pub rpc_services: RpcServices,
+    pub vault_manager_addresses: HashMap<u64, String>,
     pub rpc_services: HashMap<u64, RpcServices>,
-    // pub rpc_service: RpcService,
     pub ecdsa_pub_key: Option<Vec<u8>>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub evm_address: Option<String>,
@@ -61,6 +60,7 @@ pub struct InitArg {
     pub block_tag: BlockTag,
     pub client_id: String,
     pub client_secret: String,
+    pub vault_manager_addresses: Vec<(u64, String)>,
 }
 
 impl TryFrom<InitArg> for State {
@@ -73,6 +73,7 @@ impl TryFrom<InitArg> for State {
             block_tag,
             client_id,
             client_secret,
+            vault_manager_addresses,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut rpc_services_map = HashMap::new();
@@ -80,7 +81,13 @@ impl TryFrom<InitArg> for State {
             rpc_services_map.insert(config.chain_id, config.services);
         }
 
+        let mut vault_manager_map = HashMap::new();
+        for (chain_id, address) in vault_manager_addresses {
+            vault_manager_map.insert(chain_id, address);
+        }
+
         let state = Self {
+            vault_manager_addresses: vault_manager_map,
             rpc_services: rpc_services_map,
             ecdsa_pub_key: None,
             ecdsa_key_id,
