@@ -1,10 +1,10 @@
-use crate::state::storage;
+use crate::state::storage::{self, PaymentProvider};
 
-pub async fn create_order(
+pub fn create_order(
     fiat_amount: u64,
     currency_symbol: String,
     crypto_amount: u64,
-    offramper_paypal_id: String,
+    offramper_providers: Vec<PaymentProvider>,
     offramper_address: String,
     chain_id: u64,
     token_type: String,
@@ -16,8 +16,8 @@ pub async fn create_order(
         fiat_amount,
         currency_symbol,
         crypto_amount,
-        offramper_paypal_id,
-        onramper_paypal_id: None,
+        offramper_providers,
+        onramper_provider: None,
         offramper_address,
         onramper_address: None,
         locked: false,
@@ -36,7 +36,7 @@ pub fn get_orders() -> Vec<storage::Order> {
     storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect())
 }
 
-pub async fn get_order_by_id(order_id: String) -> Result<storage::Order, String> {
+pub fn get_order_by_id(order_id: String) -> Result<storage::Order, String> {
     storage::ORDERS.with(|orders| {
         let orders = orders.borrow();
         if let Some(order) = orders.get(&order_id) {
@@ -47,29 +47,29 @@ pub async fn get_order_by_id(order_id: String) -> Result<storage::Order, String>
     })
 }
 
-pub async fn lock_order(
+pub fn lock_order(
     order_id: String,
-    onramper_paypal_id: String,
+    onramper_provider: PaymentProvider,
     onramper_address: String,
 ) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
         if let Some(mut order) = orders.remove(&order_id) {
             if order.locked {
-                return Err("Order is already locked".to_string());
+                return Err("order is already locked".to_string());
             }
             order.locked = true;
-            order.onramper_paypal_id = Some(onramper_paypal_id);
+            order.onramper_provider = Some(onramper_provider);
             order.onramper_address = Some(onramper_address);
             orders.insert(order_id.clone(), order);
-            Ok("Order locked".to_string())
+            Ok("order locked".to_string())
         } else {
-            Err("Order not found".to_string())
+            Err("order not found".to_string())
         }
     })
 }
 
-pub async fn mark_order_as_paid(order_id: String) -> Result<(), String> {
+pub fn mark_order_as_paid(order_id: String) -> Result<(), String> {
     println!("[mark_order_as_paid");
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
@@ -83,7 +83,7 @@ pub async fn mark_order_as_paid(order_id: String) -> Result<(), String> {
     })
 }
 
-pub async fn remove_order(order_id: String) -> Result<String, String> {
+pub fn remove_order(order_id: String) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
         if let Some(mut order) = orders.remove(&order_id) {
