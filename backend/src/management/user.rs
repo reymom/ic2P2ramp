@@ -1,0 +1,72 @@
+use crate::state::storage::{self, PaymentProvider, User};
+
+pub fn register_user(
+    evm_address: String,
+    payment_providers: Vec<PaymentProvider>,
+) -> Result<String, String> {
+    if payment_providers.is_empty() {
+        return Err("At least one payment provider is required.".to_string());
+    }
+
+    let caller = ic_cdk::caller();
+    let user = User {
+        evm_address: evm_address.clone(),
+        payment_providers,
+        offramped_amount: 0,
+        score: 0,
+    };
+
+    storage::USERS.with(|p| p.borrow_mut().insert(evm_address, user));
+    Ok(caller.to_string())
+}
+
+pub fn get_user(evm_address: String) -> Result<User, String> {
+    storage::USERS.with(|users| {
+        let users = users.borrow();
+        if let Some(user) = users.get(&evm_address) {
+            Ok(user.clone())
+        } else {
+            Err("User not found".to_string())
+        }
+    })
+}
+
+pub fn add_payment_provider(
+    evm_address: String,
+    payment_provider: PaymentProvider,
+) -> Result<String, String> {
+    storage::USERS.with(|users| {
+        let mut users = users.borrow_mut();
+        if let Some(mut user) = users.remove(&evm_address) {
+            let provider_type = match &payment_provider {
+                PaymentProvider::PayPal { .. } => "PayPal",
+                PaymentProvider::Revolut { .. } => "Revolut",
+            };
+            let mut replaced = false;
+            for provider in &mut user.payment_providers {
+                match provider {
+                    PaymentProvider::PayPal { .. } if provider_type == "PayPal" => {
+                        *provider = payment_provider.clone();
+                        replaced = true;
+                        break;
+                    }
+                    PaymentProvider::Revolut { .. } if provider_type == "Revolut" => {
+                        *provider = payment_provider.clone();
+                        replaced = true;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            if !replaced {
+                user.payment_providers.push(payment_provider);
+            }
+
+            users.insert(evm_address.clone(), user);
+            Ok("Payment provider added or replaced".to_string())
+        } else {
+            Err("User not found".to_string())
+        }
+    })
+}
