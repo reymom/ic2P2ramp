@@ -5,7 +5,7 @@ mod state;
 
 use std::time::Duration;
 
-use evm::rpc::{RpcApi, RpcServices};
+use evm::vault::Ic2P2ramp;
 use order::management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
 use state::storage::Order;
@@ -44,7 +44,7 @@ async fn test_deposit_funds(
     amount: u64,
     token_address: Option<String>,
 ) -> Result<String, String> {
-    match evm::vault::deposit_funds(chain_id, amount, token_address).await {
+    match Ic2P2ramp::deposit_funds(chain_id, amount, token_address).await {
         Ok(_) => Ok("Funds deposited successfully".to_string()),
         Err(err) => Err(format!("Failed to deposit funds: {}", err)),
     }
@@ -65,52 +65,13 @@ async fn get_usd_exchange_rate(
     }
 }
 
-// ---------------
-// Paypal Payment
-// ---------------
+// -----
+// USERS
+// -----
 
-#[ic_cdk::update]
-async fn verify_transaction(
-    order_id: String,
-    chain_id: u64,
-    transaction_id: String,
-) -> Result<String, String> {
-    let access_token = paypal_auth::get_paypal_access_token().await?;
-    let cycles: u128 = 10_000_000_000;
-    let order = management::get_order_by_id(order_id.clone()).await?;
-
-    let capture_details =
-        paypal_capture::fetch_paypal_capture_details(&access_token, &transaction_id, cycles)
-            .await?;
-
-    // Verify the captured payment details
-    let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
-    let received_amount: f64 = capture_details
-        .amount
-        .value
-        .parse()
-        .map_err(|e| format!("Failed to parse amount: {}", e))?;
-    ic_cdk::println!("received_amount = {}", received_amount);
-
-    let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
-    let currency_matches = capture_details.amount.currency_code == order.currency_symbol;
-    let offramper_matches = capture_details.payee.email_address == order.offramper_paypal_id;
-    // let onramper_matches = order.onramper_paypal_id.as_deref()
-    //     == Some(&capture_details.supplementary_data.related_ids.order_id);
-
-    if capture_details.status == "COMPLETED"
-        && amount_matches
-        && currency_matches
-        && offramper_matches
-    // && onramper_matches
-    {
-        // Update the order status in your storage
-        management::mark_order_as_paid(order.id).await?;
-        evm::vault::release_base_currency(chain_id.into(), order_id).await?;
-        Ok("Payment verified successfully".to_string())
-    } else {
-        Err("Payment verification failed".to_string())
-    }
+#[ic_cdk::query]
+fn get_user(user_id: &str) -> Result<User, String> {
+    Ok(())
 }
 
 // ------------------
@@ -165,6 +126,54 @@ async fn remove_order(order_id: String) -> Result<String, String> {
     // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
 
     management::remove_order(order_id).await
+}
+
+// ---------------
+// Paypal Payment
+// ---------------
+
+#[ic_cdk::update]
+async fn verify_transaction(
+    order_id: String,
+    chain_id: u64,
+    transaction_id: String,
+) -> Result<String, String> {
+    let access_token = paypal_auth::get_paypal_access_token().await?;
+    let cycles: u128 = 10_000_000_000;
+    let order = management::get_order_by_id(order_id.clone()).await?;
+
+    let capture_details =
+        paypal_capture::fetch_paypal_capture_details(&access_token, &transaction_id, cycles)
+            .await?;
+
+    // Verify the captured payment details
+    let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
+    let received_amount: f64 = capture_details
+        .amount
+        .value
+        .parse()
+        .map_err(|e| format!("Failed to parse amount: {}", e))?;
+    ic_cdk::println!("received_amount = {}", received_amount);
+
+    let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
+    let currency_matches = capture_details.amount.currency_code == order.currency_symbol;
+    let offramper_matches = capture_details.payee.email_address == order.offramper_paypal_id;
+    // let onramper_matches = order.onramper_paypal_id.as_deref()
+    //     == Some(&capture_details.supplementary_data.related_ids.order_id);
+
+    if capture_details.status == "COMPLETED"
+        && amount_matches
+        && currency_matches
+        && offramper_matches
+    // && onramper_matches
+    {
+        // Update the order status in your storage
+        management::mark_order_as_paid(order.id).await?;
+        Ic2P2ramp::release_base_currency(chain_id.into(), order_id).await?;
+        Ok("Payment verified successfully".to_string())
+    } else {
+        Err("Payment verification failed".to_string())
+    }
 }
 
 ic_cdk::export_candid!();
