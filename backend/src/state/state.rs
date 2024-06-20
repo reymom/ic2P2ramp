@@ -19,6 +19,7 @@ pub struct State {
     pub nonce: U256,
     pub client_id: String,
     pub client_secret: String,
+    pub approved_tokens: HashMap<(u64, String), bool>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -91,6 +92,7 @@ impl TryFrom<InitArg> for State {
             nonce: U256::zero(),
             client_id,
             client_secret,
+            approved_tokens: HashMap::new(),
         };
         Ok(state)
     }

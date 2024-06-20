@@ -11,13 +11,38 @@ use crate::state::{mutate_state, read_state};
 pub struct Ic2P2ramp;
 
 impl Ic2P2ramp {
-    pub fn get_vault_manager_address(&self, chain_id: u64) -> Result<String, String> {
+    fn get_vault_manager_address(chain_id: u64) -> Result<String, String> {
         read_state(|s| {
             s.vault_manager_addresses
                 .get(&chain_id)
                 .cloned()
                 .ok_or_else(|| format!("Vault manager address not found for chain_id {}", chain_id))
         })
+    }
+
+    pub async fn check_and_approve_token(
+        chain_id: u64,
+        token_address: String,
+        gas: U256,
+        fee_estimates: FeeEstimates,
+    ) -> Result<bool, String> {
+        let already_approved = read_state(|s| {
+            ic_cdk::println!("approved_tokens = {:?}", s.approved_tokens);
+            s.approved_tokens
+                .get(&(chain_id, token_address.clone()))
+                .cloned()
+                .unwrap_or(false)
+        });
+
+        if !already_approved {
+            Self::approve_infinite_allowance(chain_id, token_address.clone(), gas, fee_estimates)
+                .await?;
+            mutate_state(|s| {
+                s.approved_tokens.insert((chain_id, token_address), true);
+            });
+        }
+
+        Ok(true)
     }
 
     pub async fn deposit_funds(
@@ -30,15 +55,28 @@ impl Ic2P2ramp {
             .unwrap_or(U256::from(21_000));
 
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
-        println!(
+        ic_cdk::println!(
             "gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
-            gas, fee_estimates.max_fee_per_gas, fee_estimates.max_priority_fee_per_gas
+            gas,
+            fee_estimates.max_fee_per_gas,
+            fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = Self.get_vault_manager_address(chain_id)?;
+        let vault_manager_address = Self::get_vault_manager_address(chain_id)?;
 
         let request: SignRequest;
         if let Some(token_address) = token_address {
+            let token_approved = Self::check_and_approve_token(
+                chain_id,
+                token_address.clone(),
+                gas,
+                fee_estimates.clone(),
+            )
+            .await?;
+            if !token_approved {
+                return Err("Failed to approve token".to_string());
+            }
+
             request = Self::sign_request_deposit_token(
                 gas,
                 fee_estimates,
@@ -59,34 +97,7 @@ impl Ic2P2ramp {
             .await?;
         }
 
-        let tx = signer::sign_transaction(request).await;
-        println!("Transaction sent: {:?}", tx);
-
-        let status = signer::send_raw_transaction(tx.clone(), chain_id).await;
-        match status {
-            SendRawTransactionStatus::Ok(transaction_hash) => {
-                println!("Success {transaction_hash:?}");
-                mutate_state(|s| {
-                    s.nonce += U256::from(1);
-                });
-                Ok(())
-            }
-            SendRawTransactionStatus::NonceTooLow => {
-                let msg = "Nonce too low".to_string();
-                println!("{}", msg);
-                Err(msg)
-            }
-            SendRawTransactionStatus::NonceTooHigh => {
-                let msg = "Nonce too high".to_string();
-                println!("{}", msg);
-                Err(msg)
-            }
-            SendRawTransactionStatus::InsufficientFunds => {
-                let msg = "Insufficient funds".to_string();
-                println!("{}", msg);
-                Err(msg)
-            }
-        }
+        Self::send_signed_transaction(request, chain_id).await
     }
 
     async fn sign_request_deposit_token(
@@ -121,9 +132,8 @@ impl Ic2P2ramp {
             ])
             .unwrap();
 
-        let value = U256::from(0);
         Ok(signer::create_sign_request(
-            value,
+            U256::from(0),
             chain_id.into(),
             Some(vault_manager_address.clone()),
             None,
@@ -205,7 +215,7 @@ impl Ic2P2ramp {
             ])
             .unwrap();
 
-        let vault_manager_address = Self.get_vault_manager_address(chain_id)?;
+        let vault_manager_address = Self::get_vault_manager_address(chain_id)?;
         let value = U256::from(amount);
         let request = signer::create_sign_request(
             value,
@@ -230,115 +240,93 @@ impl Ic2P2ramp {
                 });
             }
             SendRawTransactionStatus::NonceTooLow => {
-                println!("Nonce too low");
+                ic_cdk::println!("Nonce too low");
             }
             SendRawTransactionStatus::NonceTooHigh => {
-                println!("Nonce too high");
+                ic_cdk::println!("Nonce too high");
             }
             SendRawTransactionStatus::InsufficientFunds => {
-                println!("Insufficient funds");
+                ic_cdk::println!("Insufficient funds");
             }
         }
 
         Ok(())
     }
+
+    async fn approve_infinite_allowance(
+        chain_id: u64,
+        token_address: String,
+        gas: U256,
+        fee_estimates: FeeEstimates,
+    ) -> Result<(), String> {
+        let abi = r#"
+            [
+                {
+                    "constant": false,
+                    "inputs": [
+                        {"name": "spender", "type": "address"},
+                        {"name": "value", "type": "uint256"}
+                    ],
+                    "name": "approve",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("approve").unwrap();
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(
+                    Self::get_vault_manager_address(chain_id)?.parse().unwrap(),
+                ),
+                ethers_core::abi::Token::Uint(U256::max_value()),
+            ])
+            .unwrap();
+
+        let request = signer::create_sign_request(
+            U256::from(0),
+            chain_id.into(),
+            Some(token_address.clone()),
+            None,
+            gas,
+            Some(data),
+            fee_estimates,
+        )
+        .await;
+
+        Self::send_signed_transaction(request, chain_id).await
+    }
+
+    async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<(), String> {
+        let tx = signer::sign_transaction(request).await;
+        ic_cdk::println!("Transaction sent: {:?}", tx);
+
+        let status = signer::send_raw_transaction(tx.clone(), chain_id).await;
+        match status {
+            SendRawTransactionStatus::Ok(transaction_hash) => {
+                ic_cdk::println!("Success {transaction_hash:?}");
+                mutate_state(|s| {
+                    s.nonce += U256::from(1);
+                });
+                Ok(())
+            }
+            SendRawTransactionStatus::NonceTooLow => {
+                let msg = "Nonce too low".to_string();
+                ic_cdk::println!("{}", msg);
+                Err(msg)
+            }
+            SendRawTransactionStatus::NonceTooHigh => {
+                let msg = "Nonce too high".to_string();
+                ic_cdk::println!("{}", msg);
+                Err(msg)
+            }
+            SendRawTransactionStatus::InsufficientFunds => {
+                let msg = "Insufficient funds".to_string();
+                ic_cdk::println!("{}", msg);
+                Err(msg)
+            }
+        }
+    }
 }
-
-// pub async fn withdraw(chain_id: u64, crypto_amount: u64) -> Result<String, String> {
-//     let rpc_providers = RpcServices::Custom {
-//         chainId: chain_id,
-//         services: vec![RpcApi {
-//             url: RCP_SEPOLIA_MANTLE.to_string(),
-//             headers: None,
-//         }],
-//     };
-//     let cycles = 10_000_000_000;
-
-//     let result = EvmRpcCanister::withdraw(
-//         rpc_providers,
-//         VAULT_MANAGER_ADDRESS.to_string(),
-//         USDT_ADDRESS.to_string(),
-//         crypto_amount,
-//         cycles,
-//     )
-//     .await
-//     .map_err(|e| format!("Call failed: {:?}", e))?;
-
-//     Ok(result.0)
-// }
-
-// pub async fn commit_order(chain_id: u64, offramper: String, amount: u64) -> Result<String, String> {
-//     let rpc_providers = RpcServices::Custom {
-//         chainId: chain_id,
-//         services: vec![RpcApi {
-//             url: RCP_SEPOLIA_MANTLE.to_string(),
-//             headers: None,
-//         }],
-//     };
-//     let cycles = 10_000_000_000;
-
-//     let result = EvmRpcCanister::commit_order(
-//         rpc_providers,
-//         VAULT_MANAGER_ADDRESS.to_string(),
-//         offramper,
-//         USDT_ADDRESS.to_string(),
-//         amount,
-//         cycles,
-//     )
-//     .await
-//     .map_err(|e| format!("Call failed: {:?}", e))?;
-
-//     Ok(result.0)
-// }
-
-// pub async fn uncommit_order(
-//     chain_id: u64,
-//     offramper: String,
-//     amount: u64,
-// ) -> Result<String, String> {
-//     let rpc_providers = RpcServices::Custom {
-//         chainId: chain_id,
-//         services: vec![RpcApi {
-//             url: RCP_SEPOLIA_MANTLE.to_string(),
-//             headers: None,
-//         }],
-//     };
-//     let cycles = 10_000_000_000;
-
-//     let result = EvmRpcCanister::uncommit_order(
-//         rpc_providers,
-//         VAULT_MANAGER_ADDRESS.to_string(),
-//         offramper,
-//         USDT_ADDRESS.to_string(),
-//         amount,
-//         cycles,
-//     )
-//     .await
-//     .map_err(|e| format!("Call failed: {:?}", e))?;
-
-//     Ok(result.0)
-// }
-
-// pub async fn release_funds(chain_id: u64, onramper: String, amount: u64) -> Result<String, String> {
-//     let rpc_providers = RpcServices::Custom {
-//         chainId: chain_id,
-//         services: vec![RpcApi {
-//             url: RCP_SEPOLIA_MANTLE.to_string(),
-//             headers: None,
-//         }],
-//     };
-//     let cycles = 10_000_000_000;
-
-//     let result = EvmRpcCanister::release_funds(
-//         rpc_providers,
-//         VAULT_MANAGER_ADDRESS.to_string(),
-//         onramper,
-//         USDT_ADDRESS.to_string(),
-//         amount,
-//         cycles,
-//     )
-//     .await
-//     .map_err(|e| format!("Call failed: {:?}", e))?;
-
-//     Ok(result.0)
-// }

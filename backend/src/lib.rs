@@ -5,6 +5,8 @@ mod state;
 
 use std::time::Duration;
 
+use ethers_core::types::U256;
+use evm::fees;
 use evm::vault::Ic2P2ramp;
 use management::order as order_management;
 use management::user as user_management;
@@ -30,7 +32,7 @@ fn setup_timers() {
 
 #[ic_cdk::init]
 fn init(arg: InitArg) {
-    println!("[init]: initialized minter with arg: {:?}", arg);
+    ic_cdk::println!("[init]: initialized minter with arg: {:?}", arg);
     initialize_state(state::State::try_from(arg).expect("BUG: failed to initialize minter"));
     setup_timers();
 }
@@ -51,6 +53,16 @@ async fn test_deposit_funds(
         Ok(_) => Ok("Funds deposited successfully".to_string()),
         Err(err) => Err(format!("Failed to deposit funds: {}", err)),
     }
+}
+
+#[ic_cdk::update]
+async fn test_check_and_approve_token(
+    chain_id: u64,
+    token_address: String,
+) -> Result<bool, String> {
+    let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+    Ic2P2ramp::check_and_approve_token(chain_id, token_address, U256::from(21_000), fee_estimates)
+        .await
 }
 
 // ---------
