@@ -70,7 +70,7 @@ pub fn lock_order(
 }
 
 pub fn mark_order_as_paid(order_id: String) -> Result<(), String> {
-    println!("[mark_order_as_paid");
+    ic_cdk::println!("[mark_order_as_paid");
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
         if let Some(mut order) = orders.remove(&order_id) {

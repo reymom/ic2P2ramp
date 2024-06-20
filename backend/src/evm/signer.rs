@@ -144,7 +144,6 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
     .unwrap();
     let cycles = 10_000_000_000;
 
-    ic_cdk::println!("[send_raw_transaction] rpc_providers = {:?}", rpc_providers);
     let arg2: Option<RpcConfig> = None;
     let res = ic_cdk::api::call::call_with_payment128(
         CANISTER_ID,
