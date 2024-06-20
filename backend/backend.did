@@ -1,11 +1,3 @@
-type BlockTag = variant {
-  Earliest;
-  Safe;
-  Finalized;
-  Latest;
-  Number : nat;
-  Pending;
-};
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -20,28 +12,33 @@ type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
   rpc_services : vec RpcServiceConfig;
-  block_tag : BlockTag;
+  vault_manager_addresses : vec record { nat64; text };
   client_id : text;
   client_secret : text;
 };
 type Order = record {
   id : text;
-  onramper_paypal_id : opt text;
   payment_done : bool;
   originator : principal;
   fiat_amount : nat64;
   locked : bool;
   currency_symbol : text;
-  offramper_paypal_id : text;
   proof_submitted : bool;
   onramper_address : opt text;
   chain_id : nat64;
+  offramper_providers : vec PaymentProvider;
   offramper_address : text;
+  onramper_provider : opt PaymentProvider;
   token_type : text;
   crypto_amount : nat64;
   removed : bool;
 };
+type PaymentProvider = variant {
+  PayPal : record { id : text };
+  Revolut : record { id : text };
+};
 type Result = variant { Ok : text; Err : text };
+type Result_1 = variant { Ok : User; Err : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
 type RpcServiceConfig = record { chain_id : nat64; services : RpcServices };
 type RpcServices = variant {
@@ -49,13 +46,30 @@ type RpcServices = variant {
   Custom : record { chainId : nat64; services : vec RpcApi };
   EthMainnet : opt vec EthMainnetService;
 };
+type User = record {
+  offramped_amount : nat64;
+  evm_address : text;
+  payment_providers : vec PaymentProvider;
+  score : nat32;
+};
 service : (InitArg) -> {
-  create_order : (nat64, text, nat64, text, text, nat64, text) -> (Result);
+  add_payment_provider : (text, PaymentProvider) -> (Result) query;
+  create_order : (
+      nat64,
+      text,
+      nat64,
+      vec PaymentProvider,
+      text,
+      nat64,
+      text,
+    ) -> (Result);
   get_evm_address : () -> (text) query;
   get_orders : () -> (vec Order) query;
   get_usd_exchange_rate : (text, text) -> (Result);
-  lock_order : (text, text, text) -> (Result);
+  get_user : (text) -> (Result_1) query;
+  lock_order : (text, PaymentProvider, text) -> (Result);
+  register_user : (text, vec PaymentProvider) -> (Result);
   remove_order : (text) -> (Result);
-  test_deposit_funds : (nat64, nat64, opt text) -> (Result);
+  test_deposit_funds : (nat64, nat64, opt text, opt text) -> (Result);
   verify_transaction : (text, nat64, text) -> (Result);
 }
