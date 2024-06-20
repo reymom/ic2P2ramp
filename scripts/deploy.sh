@@ -41,6 +41,14 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
     };
     rpc_services = vec {
       record {
+        chain_id = 11155111 : nat64;
+        service = variant {
+          EthSepolia = opt vec {
+            variant { Alchemy }
+          }
+        }
+      },
+      record {
         chain_id = 5003 : nat64;
         service = variant {
           Custom = record {
@@ -48,19 +56,11 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
             services = vec { record { url = "https://rpc.sepolia.mantle.xyz"; headers = null } };
           }
         }
-      },
-      record {
-        chain_id = 11155111 : nat64;
-        service = variant {
-          EthSepolia = opt vec {
-            variant { Alchemy }
-          }
-        }
       }
     };
     vault_manager_addresses = vec {
       record { 11155111 : nat64; "0x42ad57ab757ea55960f7d9805d82fa818683096b" };
-      record { 5003 : nat64; "0xAddressForMantle" };
+      record { 5003 : nat64; "0xdB976eCC0c95Ea84d7bB7249920Fcc73392783F5" };
     };
     client_id = "${CLIENT_ID}";
     client_secret = "${CLIENT_SECRET}";
