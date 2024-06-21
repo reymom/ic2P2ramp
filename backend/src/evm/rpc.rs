@@ -223,16 +223,16 @@ pub struct GetLogsArgs {
     pub topics: Option<Vec<Vec<String>>>,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug)]
 pub struct LogEntry {
     pub transactionHash: Option<String>,
-    pub blockNumber: Option<u128>,
+    pub blockNumber: Option<candid::Nat>,
     pub data: String,
     pub blockHash: Option<String>,
-    pub transactionIndex: Option<u128>,
+    pub transactionIndex: Option<candid::Nat>,
     pub topics: Vec<String>,
     pub address: String,
-    pub logIndex: Option<u128>,
+    pub logIndex: Option<candid::Nat>,
     pub removed: bool,
 }
 
@@ -266,30 +266,30 @@ pub enum MultiGetTransactionCountResult {
     Inconsistent(Vec<(RpcService, GetTransactionCountResult)>),
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug)]
 pub struct TransactionReceipt {
     pub to: String,
-    pub status: u128,
+    pub status: candid::Nat,
     pub transactionHash: String,
-    pub blockNumber: u128,
+    pub blockNumber: candid::Nat,
     pub from: String,
     pub logs: Vec<LogEntry>,
     pub blockHash: String,
     pub r#type: String,
-    pub transactionIndex: u128,
-    pub effectiveGasPrice: u128,
+    pub transactionIndex: candid::Nat,
+    pub effectiveGasPrice: candid::Nat,
     pub logsBloom: String,
     pub contractAddress: Option<String>,
-    pub gasUsed: u128,
+    pub gasUsed: candid::Nat,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug)]
 pub enum GetTransactionReceiptResult {
     Ok(Option<TransactionReceipt>),
     Err(RpcError),
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug)]
 pub enum MultiGetTransactionReceiptResult {
     Consistent(GetTransactionReceiptResult),
     Inconsistent(Vec<(RpcService, GetTransactionReceiptResult)>),

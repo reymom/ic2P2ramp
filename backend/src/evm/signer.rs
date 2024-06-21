@@ -9,11 +9,6 @@ use ic_cdk::api::management_canister::ecdsa::{
 use std::str::FromStr;
 
 use super::fees::FeeEstimates;
-
-use crate::evm::rpc::{
-    MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult, SendRawTransactionStatus,
-    CANISTER_ID,
-};
 use crate::state::read_state;
 
 pub struct SignRequest {
@@ -134,39 +129,25 @@ fn y_parity(prehash: &[u8], sig: &[u8], pubkey: &[u8]) -> u64 {
     )
 }
 
-pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
-    let rpc_providers = read_state(|s| {
-        s.rpc_services
-            .get(&chain_id)
-            .cloned()
-            .ok_or("Unsupported chain ID")
-    })
-    .unwrap();
-    let cycles = 10_000_000_000;
+// pub async fn estimate_gas(tx: String, chain_id: u64) -> () {
+//     let rpc_providers = read_state(|s| {
+//         s.rpc_services
+//             .get(&chain_id)
+//             .cloned()
+//             .ok_or("Unsupported chain ID")
+//     })
+//     .unwrap();
+//     let cycles = 10_000_000_000;
 
-    let arg2: Option<RpcConfig> = None;
-    let res = ic_cdk::api::call::call_with_payment128(
-        CANISTER_ID,
-        "eth_sendRawTransaction",
-        (rpc_providers, arg2, tx),
-        cycles,
-    )
-    .await;
-    match res {
-        Ok((res,)) => match res {
-            MultiSendRawTransactionResult::Consistent(status) => match status {
-                SendRawTransactionResult::Ok(status) => status,
-                SendRawTransactionResult::Err(e) => {
-                    ic_cdk::trap(format!("Error: {:?}", e).as_str());
-                }
-            },
-            MultiSendRawTransactionResult::Inconsistent(_) => {
-                ic_cdk::trap("Status is inconsistent");
-            }
-        },
-        Err(e) => ic_cdk::trap(format!("Error: {:?}", e).as_str()),
-    }
-}
+//     let arg: Option<RpcConfig> = None;
+//     let res = ic_cdk::api::call::call_with_payment128(
+//         CANISTER_ID,
+//         "eth_estimateGas",
+//         (rpc_providers, arg, tx),
+//         cycles,
+//     )
+//     .await;
+// }
 
 pub async fn get_public_key() -> Vec<u8> {
     let key_id = read_state(|s| s.ecdsa_key_id.clone());
