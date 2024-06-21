@@ -1,10 +1,12 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use ethers_core::types::U256;
 
 use super::fees::{self, FeeEstimates};
 use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
+use super::transaction::{self, check_transaction_receipt};
 use crate::management;
 use crate::state::{mutate_state, read_state};
 
@@ -35,11 +37,21 @@ impl Ic2P2ramp {
         });
 
         if !already_approved {
-            Self::approve_infinite_allowance(chain_id, token_address.clone(), gas, fee_estimates)
-                .await?;
-            mutate_state(|s| {
-                s.approved_tokens.insert((chain_id, token_address), true);
-            });
+            let tx_hash = Self::approve_infinite_allowance(
+                chain_id,
+                token_address.clone(),
+                gas,
+                fee_estimates,
+            )
+            .await?;
+
+            ic_cdk::spawn(Self::transaction_receipt_listener(
+                tx_hash,
+                chain_id,
+                token_address,
+                0,
+                60,
+            ));
         }
 
         Ok(true)
@@ -50,7 +62,7 @@ impl Ic2P2ramp {
         amount: u64,
         token_address: Option<String>,
         gas: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let gas = U256::from_str(gas.unwrap_or("21000".to_string()).as_str())
             .unwrap_or(U256::from(21_000));
 
@@ -83,7 +95,7 @@ impl Ic2P2ramp {
                 chain_id,
                 amount,
                 token_address,
-                &vault_manager_address,
+                vault_manager_address,
             )
             .await?;
         } else {
@@ -92,7 +104,7 @@ impl Ic2P2ramp {
                 fee_estimates,
                 chain_id,
                 amount,
-                &vault_manager_address,
+                vault_manager_address,
             )
             .await?;
         }
@@ -106,7 +118,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         amount: u64,
         token_address: String,
-        vault_manager_address: &String,
+        vault_manager_address: String,
     ) -> Result<SignRequest, String> {
         let abi = r#"
             [
@@ -149,7 +161,7 @@ impl Ic2P2ramp {
         fee_estimates: FeeEstimates,
         chain_id: u64,
         amount: u64,
-        vault_manager_address: &String,
+        vault_manager_address: String,
     ) -> Result<SignRequest, String> {
         let abi = r#"
             [
@@ -179,7 +191,7 @@ impl Ic2P2ramp {
         .await)
     }
 
-    pub async fn release_base_currency(chain_id: u64, order_id: String) -> Result<(), String> {
+    pub async fn release_base_currency(chain_id: u64, order_id: String) -> Result<String, String> {
         let gas = U256::from(60_000);
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
 
@@ -228,29 +240,7 @@ impl Ic2P2ramp {
         )
         .await;
 
-        let tx = signer::sign_transaction(request).await;
-        ic_cdk::println!("after sign_transaction in [release funds]");
-        let status = signer::send_raw_transaction(tx.clone(), chain_id).await;
-
-        match status {
-            SendRawTransactionStatus::Ok(transaction_hash) => {
-                ic_cdk::println!("Success {transaction_hash:?}");
-                mutate_state(|s| {
-                    s.nonce += U256::from(1);
-                });
-            }
-            SendRawTransactionStatus::NonceTooLow => {
-                ic_cdk::println!("Nonce too low");
-            }
-            SendRawTransactionStatus::NonceTooHigh => {
-                ic_cdk::println!("Nonce too high");
-            }
-            SendRawTransactionStatus::InsufficientFunds => {
-                ic_cdk::println!("Insufficient funds");
-            }
-        }
-
-        Ok(())
+        Self::send_signed_transaction(request, chain_id).await
     }
 
     async fn approve_infinite_allowance(
@@ -258,7 +248,7 @@ impl Ic2P2ramp {
         token_address: String,
         gas: U256,
         fee_estimates: FeeEstimates,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let abi = r#"
             [
                 {
@@ -299,18 +289,21 @@ impl Ic2P2ramp {
         Self::send_signed_transaction(request, chain_id).await
     }
 
-    async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<(), String> {
+    async fn send_signed_transaction(
+        request: SignRequest,
+        chain_id: u64,
+    ) -> Result<String, String> {
         let tx = signer::sign_transaction(request).await;
         ic_cdk::println!("Transaction sent: {:?}", tx);
 
-        let status = signer::send_raw_transaction(tx.clone(), chain_id).await;
+        let status = transaction::send_raw_transaction(tx.clone(), chain_id).await;
         match status {
             SendRawTransactionStatus::Ok(transaction_hash) => {
-                ic_cdk::println!("Success {transaction_hash:?}");
+                ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
                 mutate_state(|s| {
                     s.nonce += U256::from(1);
                 });
-                Ok(())
+                transaction_hash.ok_or("Transaction Hash is empty".to_string())
             }
             SendRawTransactionStatus::NonceTooLow => {
                 let msg = "Nonce too low".to_string();
@@ -326,6 +319,56 @@ impl Ic2P2ramp {
                 let msg = "Insufficient funds".to_string();
                 ic_cdk::println!("{}", msg);
                 Err(msg)
+            }
+        }
+    }
+
+    async fn transaction_receipt_listener(
+        tx_hash: String,
+        chain_id: u64,
+        token_address: String,
+        attempt: u32,
+        max_attempts: u32,
+    ) {
+        ic_cdk::println!("[transaction_receipt_listener] attempt = {:?}", attempt);
+        if attempt >= max_attempts {
+            ic_cdk::println!("Timeout waiting for transaction receipt");
+            return;
+        }
+
+        match check_transaction_receipt(tx_hash.clone(), chain_id).await {
+            Ok(Some(receipt)) => {
+                if receipt.status == 1_u32 {
+                    mutate_state(|s| {
+                        s.approved_tokens
+                            .insert((chain_id, token_address.clone()), true);
+                    });
+                    ic_cdk::println!(
+                        "[transaction_receipt_listener] Added token: {} for chain_id: {}",
+                        token_address,
+                        chain_id
+                    );
+                } else {
+                    ic_cdk::println!(
+                        "[transaction_receipt_listener] Transaction failed: {:?}",
+                        receipt
+                    );
+                }
+            }
+            Ok(None) => {
+                ic_cdk::println!("[transaction_receipt_listener] setting timer again...");
+                ic_cdk_timers::set_timer(Duration::from_secs(4), move || {
+                    ic_cdk::spawn(Self::transaction_receipt_listener(
+                        tx_hash.clone(),
+                        chain_id,
+                        token_address.clone(),
+                        attempt + 1,
+                        max_attempts,
+                    ));
+                });
+            }
+            Err(e) => {
+                ic_cdk::println!("{:?}", e);
             }
         }
     }
