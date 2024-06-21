@@ -33,39 +33,37 @@ cargo build --release --target wasm32-unknown-unknown --package backend
 dfx canister create --with-cycles 5_000_000_000_000 backend
 
 # Install the canister with initial state arguments
-dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument '(
+dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument "(
   record {
     ecdsa_key_id = record {
-      name = "test_key_1";
+      name = \"dfx_test_key\";
       curve = variant { secp256k1 };
     };
     rpc_services = vec {
       record {
-        chain_id = 11155111 : nat64;
-        service = variant {
-          EthSepolia = opt vec {
-            variant { Alchemy }
-          }
-        }
-      },
+        chain_id = 11_155_111 : nat64;
+        services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+      };
       record {
-        chain_id = 5003 : nat64;
-        service = variant {
+        chain_id = 5_003 : nat64;
+        services = variant {
           Custom = record {
-            chainId = 5003 : nat64;
-            services = vec { record { url = "https://rpc.sepolia.mantle.xyz"; headers = null } };
+            chainId = 5_003 : nat64;
+            services = vec {
+              record { url = \"https://rpc.sepolia.mantle.xyz\"; headers = null };
+            };
           }
-        }
-      }
+        };
+      };
     };
     vault_manager_addresses = vec {
-      record { 11155111 : nat64; "0x42ad57ab757ea55960f7d9805d82fa818683096b" };
-      record { 5003 : nat64; "0xdB976eCC0c95Ea84d7bB7249920Fcc73392783F5" };
+      record { 11_155_111 : nat64; \"0x42ad57ab757ea55960f7d9805d82fa818683096b\" };
+      record { 5_003 : nat64; \"0xdB976eCC0c95Ea84d7bB7249920Fcc73392783F5\" };
     };
-    client_id = "${CLIENT_ID}";
-    client_secret = "${CLIENT_SECRET}";
+    client_id = \"${CLIENT_ID}\";
+    client_secret = \"${CLIENT_SECRET}\";
   },
-)'
+)"
 
 # Wait for a few seconds to allow the EVM address to be generated
 sleep 3
