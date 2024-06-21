@@ -59,9 +59,10 @@ async fn test_deposit_funds(
 async fn test_check_and_approve_token(
     chain_id: u64,
     token_address: String,
+    gas: u32,
 ) -> Result<bool, String> {
     let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
-    Ic2P2ramp::check_and_approve_token(chain_id, token_address, U256::from(21_000), fee_estimates)
+    Ic2P2ramp::check_and_approve_token(chain_id, token_address, U256::from(gas), fee_estimates)
         .await
 }
 
@@ -200,7 +201,7 @@ async fn verify_transaction(
     {
         // Update the order status in your storage
         order_management::mark_order_as_paid(order.id)?;
-        Ic2P2ramp::release_base_currency(chain_id.into(), order_id).await?;
+        Ic2P2ramp::release_base_currency(chain_id, order_id).await?;
         Ok("Payment verified successfully".to_string())
     } else {
         Err("Payment verification failed".to_string())

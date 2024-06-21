@@ -39,6 +39,7 @@ type PaymentProvider = variant {
 };
 type Result = variant { Ok : text; Err : text };
 type Result_1 = variant { Ok : User; Err : text };
+type Result_2 = variant { Ok : bool; Err : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
 type RpcServiceConfig = record { chain_id : nat64; services : RpcServices };
 type RpcServices = variant {
@@ -70,6 +71,7 @@ service : (InitArg) -> {
   lock_order : (text, PaymentProvider, text) -> (Result);
   register_user : (text, vec PaymentProvider) -> (Result);
   remove_order : (text) -> (Result);
+  test_check_and_approve_token : (nat64, text, nat32) -> (Result_2);
   test_deposit_funds : (nat64, nat64, opt text, opt text) -> (Result);
   verify_transaction : (text, nat64, text) -> (Result);
 }
