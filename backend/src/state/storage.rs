@@ -3,7 +3,7 @@ use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::cell::RefCell;
 
 pub use super::common::PaymentProvider;
-pub use super::order::Order;
+pub use super::order::{Order, OrderState};
 pub use super::user::User;
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
@@ -18,7 +18,7 @@ thread_local! {
         )
     );
 
-    pub static ORDERS: RefCell<StableBTreeMap<String, Order, Memory>> = RefCell::new(
+    pub static ORDERS: RefCell<StableBTreeMap<String, OrderState, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
         )

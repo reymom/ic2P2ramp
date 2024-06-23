@@ -1,4 +1,4 @@
-use crate::state::storage::{self, PaymentProvider};
+use crate::state::storage::{self, Order, OrderState, PaymentProvider};
 
 pub fn create_order(
     fiat_amount: u64,
@@ -7,10 +7,10 @@ pub fn create_order(
     offramper_providers: Vec<PaymentProvider>,
     offramper_address: String,
     chain_id: u64,
-    token_type: String,
+    token_address: Option<String>,
 ) -> Result<String, String> {
     let order_id = storage::generate_order_id();
-    let order = storage::Order {
+    let order = Order {
         id: order_id.clone(),
         originator: ic_cdk::caller(),
         fiat_amount,
@@ -20,27 +20,38 @@ pub fn create_order(
         onramper_provider: None,
         offramper_address,
         onramper_address: None,
-        locked: false,
-        proof_submitted: false,
         chain_id,
-        token_type,
-        payment_done: false,
-        removed: false,
+        token_address,
     };
 
-    storage::ORDERS.with(|p| p.borrow_mut().insert(order_id.clone(), order));
+    storage::ORDERS.with(|p| {
+        p.borrow_mut()
+            .insert(order_id.clone(), OrderState::Created(order))
+    });
     Ok(order_id)
 }
 
-pub fn get_orders() -> Vec<storage::Order> {
+pub fn get_orders() -> Vec<OrderState> {
     storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect())
 }
 
-pub fn get_order_by_id(order_id: String) -> Result<storage::Order, String> {
+pub fn get_order_state_by_id(order_id: &str) -> Result<OrderState, String> {
     storage::ORDERS.with(|orders| {
         let orders = orders.borrow();
-        if let Some(order) = orders.get(&order_id) {
-            Ok(order.clone())
+        if let Some(order_state) = orders.get(&order_id.to_string()) {
+            Ok(order_state.clone())
+        } else {
+            Err("Order not found".to_string())
+        }
+    })
+}
+
+pub fn update_order_state(order_id: String, new_state: OrderState) -> Result<(), String> {
+    storage::ORDERS.with(|orders| {
+        let mut orders = orders.borrow_mut();
+        if orders.contains_key(&order_id) {
+            orders.insert(order_id.clone(), new_state);
+            Ok(())
         } else {
             Err("Order not found".to_string())
         }
@@ -48,21 +59,25 @@ pub fn get_order_by_id(order_id: String) -> Result<storage::Order, String> {
 }
 
 pub fn lock_order(
-    order_id: String,
+    order_id: &str,
     onramper_provider: PaymentProvider,
-    onramper_address: String,
+    onramper_address: &str,
 ) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
-        if let Some(mut order) = orders.remove(&order_id) {
-            if order.locked {
-                return Err("order is already locked".to_string());
+        if let Some(order_state) = orders.remove(&order_id.to_string()) {
+            match order_state {
+                OrderState::Created(order) => {
+                    orders.insert(
+                        order_id.to_string(),
+                        OrderState::Locked(
+                            order.lock(onramper_provider, onramper_address.to_string()),
+                        ),
+                    );
+                    Ok("Order locked".to_string())
+                }
+                _ => Err("Order is not in a creatable state".to_string()),
             }
-            order.locked = true;
-            order.onramper_provider = Some(onramper_provider);
-            order.onramper_address = Some(onramper_address);
-            orders.insert(order_id.clone(), order);
-            Ok("order locked".to_string())
         } else {
             Err("order not found".to_string())
         }
@@ -73,10 +88,15 @@ pub fn mark_order_as_paid(order_id: String) -> Result<(), String> {
     ic_cdk::println!("[mark_order_as_paid");
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
-        if let Some(mut order) = orders.remove(&order_id) {
-            order.payment_done = true;
-            orders.insert(order_id.clone(), order);
-            Ok(())
+        if let Some(order_state) = orders.remove(&order_id) {
+            match order_state {
+                OrderState::Locked(mut locked_order) => {
+                    locked_order.payment_done = true;
+                    orders.insert(order_id.clone(), OrderState::Locked(locked_order));
+                    Ok(())
+                }
+                _ => Err("Order is not in a lockable state".to_string()),
+            }
         } else {
             Err("Order not found".to_string())
         }
@@ -86,10 +106,15 @@ pub fn mark_order_as_paid(order_id: String) -> Result<(), String> {
 pub fn remove_order(order_id: String) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
-        if let Some(mut order) = orders.remove(&order_id) {
-            order.removed = true;
-            orders.insert(order_id.clone(), order);
-            Ok("Order removed successfully".to_string())
+        if let Some(order_state) = orders.remove(&order_id) {
+            match order_state {
+                OrderState::Locked(mut locked_order) => {
+                    locked_order.removed = true;
+                    orders.insert(order_id.clone(), OrderState::Locked(locked_order));
+                    Ok("Order removed successfully".to_string())
+                }
+                _ => Err("Order is not in a removable state".to_string()),
+            }
         } else {
             Err("Order not found".to_string())
         }

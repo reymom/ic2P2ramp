@@ -3,16 +3,14 @@ mod management;
 mod outcalls;
 mod state;
 
+use ethers_core::types::U256;
 use std::time::Duration;
 
-use ethers_core::types::U256;
-use evm::fees;
-use evm::vault::Ic2P2ramp;
+use evm::{fees, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
-use state::storage::Order;
-use state::storage::{PaymentProvider, User};
+use state::storage::{OrderState, PaymentProvider, User};
 use state::{initialize_state, mutate_state, read_state, InitArg};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
@@ -111,7 +109,7 @@ fn add_payment_provider(
 // ------------------
 
 #[ic_cdk::query]
-fn get_orders() -> Vec<Order> {
+fn get_orders() -> Vec<OrderState> {
     order_management::get_orders()
 }
 
@@ -123,7 +121,7 @@ fn create_order(
     offramper_providers: Vec<PaymentProvider>,
     address: String,
     chain_id: u64,
-    token_type: String,
+    token_address: Option<String>,
 ) -> Result<String, String> {
     // evm::vault::deposit_funds(chain_id, crypto_amount, token_type.clone()).await?;
 
@@ -134,7 +132,7 @@ fn create_order(
         offramper_providers,
         address,
         chain_id,
-        token_type,
+        token_address,
     )
 }
 
@@ -166,19 +164,23 @@ fn remove_order(order_id: String) -> Result<String, String> {
 #[ic_cdk::update]
 async fn verify_transaction(
     order_id: String,
-    chain_id: u64,
     transaction_id: String,
+    gas: String,
 ) -> Result<String, String> {
-    let access_token = paypal_auth::get_paypal_access_token().await?;
-    let cycles: u128 = 10_000_000_000;
-    let order = order_management::get_order_by_id(order_id.clone())?;
+    let order_state = order_management::get_order_state_by_id(order_id.clone())?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err("Order is not in a locked state".to_string()),
+    };
 
+    let cycles: u128 = 10_000_000_000;
+    let access_token = paypal_auth::get_paypal_access_token().await?;
     let capture_details =
         paypal_capture::fetch_paypal_capture_details(&access_token, &transaction_id, cycles)
             .await?;
 
     // Verify the captured payment details
-    let expected_fiat_amount = order.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
+    let expected_fiat_amount = order.base.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
     let received_amount: f64 = capture_details
         .amount
         .value
@@ -187,9 +189,9 @@ async fn verify_transaction(
     ic_cdk::println!("received_amount = {}", received_amount);
 
     let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
-    let currency_matches = capture_details.amount.currency_code == order.currency_symbol;
+    let currency_matches = capture_details.amount.currency_code == order.base.currency_symbol;
     let offramper_matches =
-        capture_details.payee.email_address == order.offramper_providers[0].get_id();
+        capture_details.payee.email_address == order.base.offramper_providers[0].get_id();
     // let onramper_matches = order.onramper_paypal_id.as_deref()
     //     == Some(&capture_details.supplementary_data.related_ids.order_id);
 
@@ -200,8 +202,9 @@ async fn verify_transaction(
     // && onramper_matches
     {
         // Update the order status in your storage
-        order_management::mark_order_as_paid(order.id)?;
-        Ic2P2ramp::release_base_currency(chain_id, order_id).await?;
+        order_management::mark_order_as_paid(order.base.id)?;
+        Ic2P2ramp::release_funds(order_id.clone(), Some(gas)).await?;
+        order_management::update_order_state(order_id, OrderState::Completed)?;
         Ok("Payment verified successfully".to_string())
     } else {
         Err("Payment verification failed".to_string())
