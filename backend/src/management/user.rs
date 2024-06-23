@@ -8,7 +8,6 @@ pub fn register_user(
         return Err("At least one payment provider is required.".to_string());
     }
 
-    let caller = ic_cdk::caller();
     let user = User {
         evm_address: evm_address.clone(),
         payment_providers,
@@ -16,8 +15,8 @@ pub fn register_user(
         score: 0,
     };
 
-    storage::USERS.with(|p| p.borrow_mut().insert(evm_address, user));
-    Ok(caller.to_string())
+    storage::USERS.with(|p| p.borrow_mut().insert(evm_address.clone(), user));
+    Ok(evm_address)
 }
 
 pub fn get_user(evm_address: String) -> Result<User, String> {

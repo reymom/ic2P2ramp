@@ -67,11 +67,14 @@ pub async fn fetch_paypal_capture_details(
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
-            ic_cdk::println!("str_body = {:?}", str_body);
+            ic_cdk::println!("[fetch_paypal_capture_details] str_body = {:?}", str_body);
 
             let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
-            ic_cdk::println!("capture_details = {:?}", capture_details);
+            ic_cdk::println!(
+                "[fetch_paypal_capture_details] capture_details = {:?}",
+                capture_details
+            );
 
             Ok(capture_details)
         }
