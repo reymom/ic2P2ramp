@@ -145,7 +145,7 @@ fn lock_order(
     // let order = management::get_order_by_id(order_id.clone()).await?;
     // evm::vault::commit_order(order.chain_id, order.offramper_address, order.crypto_amount).await?;
 
-    order_management::lock_order(order_id, onramper_provider, onramper_address)
+    order_management::lock_order(order_id.as_str(), onramper_provider, onramper_address)
 }
 
 #[ic_cdk::update]
@@ -154,7 +154,7 @@ fn remove_order(order_id: String) -> Result<String, String> {
 
     // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
 
-    order_management::remove_order(order_id)
+    order_management::remove_order(order_id.as_str())
 }
 
 // ---------------
@@ -167,7 +167,7 @@ async fn verify_transaction(
     transaction_id: String,
     gas: String,
 ) -> Result<String, String> {
-    let order_state = order_management::get_order_state_by_id(order_id.clone())?;
+    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err("Order is not in a locked state".to_string()),
@@ -202,9 +202,9 @@ async fn verify_transaction(
     // && onramper_matches
     {
         // Update the order status in your storage
-        order_management::mark_order_as_paid(order.base.id)?;
-        Ic2P2ramp::release_funds(order_id.clone(), Some(gas)).await?;
-        order_management::update_order_state(order_id, OrderState::Completed)?;
+        order_management::mark_order_as_paid(order.base.id.as_str())?;
+        Ic2P2ramp::release_funds(order_id.as_str(), Some(gas)).await?;
+        order_management::update_order_state(order_id.as_str(), OrderState::Completed)?;
         Ok("Payment verified successfully".to_string())
     } else {
         Err("Payment verification failed".to_string())

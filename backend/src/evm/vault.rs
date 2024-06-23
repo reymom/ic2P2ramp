@@ -192,8 +192,8 @@ impl Ic2P2ramp {
         .await)
     }
 
-    pub async fn release_funds(order_id: String, gas: Option<String>) -> Result<String, String> {
-        let order_state = management::order::get_order_state_by_id(order_id.clone())?;
+    pub async fn release_funds(order_id: &str, gas: Option<String>) -> Result<String, String> {
+        let order_state = management::order::get_order_state_by_id(&order_id.to_string())?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
             _ => return Err("Order is not in a locked state".to_string()),
