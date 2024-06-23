@@ -8,6 +8,7 @@ use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
 use super::transaction::{self, check_transaction_receipt};
 use crate::management;
+use crate::state::storage::OrderState;
 use crate::state::{mutate_state, read_state};
 
 pub struct Ic2P2ramp;
@@ -68,7 +69,7 @@ impl Ic2P2ramp {
 
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         ic_cdk::println!(
-            "gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
+            "[deposit_funds] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas,
             fee_estimates.max_fee_per_gas,
             fee_estimates.max_priority_fee_per_gas
@@ -191,46 +192,104 @@ impl Ic2P2ramp {
         .await)
     }
 
-    pub async fn release_base_currency(chain_id: u64, order_id: String) -> Result<String, String> {
-        let gas = U256::from(60_000);
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+    pub async fn release_funds(order_id: String, gas: Option<String>) -> Result<String, String> {
+        let order_state = management::order::get_order_state_by_id(order_id.clone())?;
+        let order = match order_state {
+            OrderState::Locked(locked_order) => locked_order,
+            _ => return Err("Order is not in a locked state".to_string()),
+        };
 
+        let gas = U256::from_str(gas.unwrap_or("21000".to_string()).as_str())
+            .unwrap_or(U256::from(21_000));
+        let fee_estimates = fees::get_fee_estimates(9, order.base.chain_id).await;
+        ic_cdk::println!(
+            "[release_funds] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
+            gas,
+            fee_estimates.max_fee_per_gas,
+            fee_estimates.max_priority_fee_per_gas
+        );
+        let vault_manager_address = Self::get_vault_manager_address(order.base.chain_id)?;
+
+        let request: SignRequest;
+        if let Some(token_address) = order.base.token_address {
+            let token_approved = Self::check_and_approve_token(
+                order.base.chain_id,
+                token_address.clone(),
+                gas,
+                fee_estimates.clone(),
+            )
+            .await?;
+            if !token_approved {
+                return Err("Failed to approve token".to_string());
+            }
+
+            request = Self::sign_request_release_token(
+                gas,
+                fee_estimates,
+                order.base.chain_id,
+                order.base.offramper_address,
+                order.base.onramper_address.unwrap(), // assuming onramper_address is always set in LockedOrder
+                token_address,
+                order.base.crypto_amount,
+                vault_manager_address,
+            )
+            .await?;
+        } else {
+            request = Self::sign_request_release_base_currency(
+                gas,
+                fee_estimates,
+                order.base.chain_id,
+                order.base.crypto_amount,
+                order.base.offramper_address,
+                order.base.onramper_address.unwrap(), // assuming onramper_address is always set in LockedOrder
+                vault_manager_address,
+            )
+            .await?;
+        }
+
+        Self::send_signed_transaction(request, order.base.chain_id).await
+    }
+
+    async fn sign_request_release_token(
+        gas: U256,
+        fee_estimates: FeeEstimates,
+        chain_id: u64,
+        offramper_address: String,
+        onramper_address: String,
+        token_address: String,
+        amount: u64,
+        vault_manager_address: String,
+    ) -> Result<SignRequest, String> {
         let abi = r#"
             [
                 {
-                    "constant": false,
                     "inputs": [
-                        {"name": "_onramper", "type": "address"},
-                        {"name": "_amount", "type": "uint256"}
+                        {"internalType": "address", "name": "_offramper", "type": "address"},
+                        {"internalType": "address", "name": "_onramper", "type": "address"},
+                        {"internalType": "address", "name": "_token", "type": "address"},
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
                     ],
-                    "name": "releaseBaseCurrency",
+                    "name": "releaseFunds",
                     "outputs": [],
-                    "stateMutability": "payable",
+                    "stateMutability": "nonpayable",
                     "type": "function"
                 }
             ]
         "#;
 
         let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
-        let function = contract.function("releaseBaseCurrency").unwrap();
-
-        let order = management::order::get_order_by_id(order_id.clone())?;
-        let onramper_address = order
-            .onramper_address
-            .expect("onramper address should be setup");
-        let amount = order.crypto_amount;
-
+        let function = contract.function("releaseFunds").unwrap();
         let data = function
             .encode_input(&[
+                ethers_core::abi::Token::Address(offramper_address.parse().unwrap()),
                 ethers_core::abi::Token::Address(onramper_address.parse().unwrap()),
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
             ])
             .unwrap();
 
-        let vault_manager_address = Self::get_vault_manager_address(chain_id)?;
-        let value = U256::from(amount);
-        let request = signer::create_sign_request(
-            value,
+        Ok(signer::create_sign_request(
+            U256::from(0),
             chain_id.into(),
             Some(vault_manager_address.clone()),
             None,
@@ -238,9 +297,54 @@ impl Ic2P2ramp {
             Some(data),
             fee_estimates,
         )
-        .await;
+        .await)
+    }
 
-        Self::send_signed_transaction(request, chain_id).await
+    async fn sign_request_release_base_currency(
+        gas: U256,
+        fee_estimates: FeeEstimates,
+        chain_id: u64,
+        amount: u64,
+        offramper_address: String,
+        onramper_address: String,
+        vault_manager_address: String,
+    ) -> Result<SignRequest, String> {
+        let abi = r#"
+            [
+                {
+                    "inputs": [
+                        {"internalType": "address", "name": "_offramper", "type": "address"},
+                        {"internalType": "address", "name": "_onramper", "type": "address"},
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                    ],
+                    "name": "releaseBaseCurrency",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("releaseBaseCurrency").unwrap();
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(offramper_address.parse().unwrap()),
+                ethers_core::abi::Token::Address(onramper_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        Ok(signer::create_sign_request(
+            U256::from(0),
+            chain_id.into(),
+            Some(vault_manager_address.clone()),
+            None,
+            gas,
+            Some(data),
+            fee_estimates,
+        )
+        .await)
     }
 
     async fn approve_infinite_allowance(
