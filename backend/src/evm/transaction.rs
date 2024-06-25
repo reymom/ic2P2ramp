@@ -1,8 +1,17 @@
+use std::time::Duration;
+
 use super::rpc::{
     GetTransactionReceiptResult, MultiGetTransactionReceiptResult, MultiSendRawTransactionResult,
-    RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, TransactionReceipt, CANISTER_ID,
+    RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, CANISTER_ID,
 };
 use crate::state::read_state;
+
+#[derive(Debug)]
+pub enum TransactionStatus {
+    Confirmed,
+    Failed(String),
+    Pending,
+}
 
 pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
     let rpc_providers = read_state(|s| {
@@ -38,10 +47,7 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
     }
 }
 
-pub async fn check_transaction_receipt(
-    tx_hash: String,
-    chain_id: u64,
-) -> Result<Option<TransactionReceipt>, String> {
+pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
     let rpc_providers = read_state(|s| {
         s.rpc_services
             .get(&chain_id)
@@ -63,17 +69,76 @@ pub async fn check_transaction_receipt(
 
     ic_cdk::println!("[check_transaction_receipt] res = {:?}", res);
     match res {
-        Ok((res,)) => match res {
-            MultiGetTransactionReceiptResult::Consistent(res) => match res {
-                GetTransactionReceiptResult::Ok(res) => Ok(res),
-                GetTransactionReceiptResult::Err(e) => {
-                    Err(format!("[check_transaction_receipt] Error: {:?}", e))
-                }
-            },
-            MultiGetTransactionReceiptResult::Inconsistent(_) => {
-                Err("Status is inconsistent".to_string())
+        Ok((MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Ok(
+            Some(receipt),
+        )),)) => {
+            if receipt.status == 1_u32 {
+                TransactionStatus::Confirmed
+            } else {
+                TransactionStatus::Failed(format!("Transaction failed: {:?}", receipt))
             }
-        },
-        Err(e) => Err(format!("[check_transaction_receipt] Error: {:?}", e)),
+        }
+        Ok((MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Ok(
+            None,
+        )),)) => TransactionStatus::Pending,
+        Ok(
+            (MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Err(e)),),
+        ) => TransactionStatus::Failed(format!("Error checking transaction: {:?}", e)),
+        Ok((MultiGetTransactionReceiptResult::Inconsistent(_),)) => {
+            TransactionStatus::Failed("Inconsistent status".to_string())
+        }
+        Err(e) => TransactionStatus::Failed(format!("Error checking transaction: {:?}", e)),
     }
+}
+
+pub fn spawn_transaction_checker<F>(
+    tx_hash: String,
+    chain_id: u64,
+    max_attempts: u32,
+    interval: Duration,
+    on_success: F,
+) where
+    F: Fn() + 'static,
+{
+    fn schedule_check<F>(
+        tx_hash: String,
+        chain_id: u64,
+        attempts: u32,
+        max_attempts: u32,
+        interval: Duration,
+        on_success: F,
+    ) where
+        F: Fn() + 'static,
+    {
+        ic_cdk_timers::set_timer(interval, move || {
+            ic_cdk::spawn(async move {
+                match check_transaction_status(tx_hash.clone(), chain_id).await {
+                    TransactionStatus::Confirmed => {
+                        on_success();
+                    }
+                    TransactionStatus::Pending if attempts < max_attempts => {
+                        ic_cdk::println!("[schedule_check] TransactionStatus::Pending...");
+                        schedule_check(
+                            tx_hash.clone(),
+                            chain_id,
+                            attempts + 1,
+                            max_attempts,
+                            interval,
+                            on_success,
+                        );
+                    }
+                    TransactionStatus::Failed(err) => {
+                        ic_cdk::println!("[schedule_check] Transaction failed: {:?}", err);
+                    }
+                    _ => {
+                        ic_cdk::println!(
+                            "[schedule_check] Transaction status check exceeded maximum attempts"
+                        );
+                    }
+                }
+            });
+        });
+    }
+
+    schedule_check(tx_hash, chain_id, 0, max_attempts, interval, on_success);
 }
