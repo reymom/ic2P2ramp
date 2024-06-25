@@ -65,9 +65,10 @@ pub fn lock_order(
 ) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
-        if let Some(order_state) = orders.remove(&order_id.to_string()) {
+        if let Some(order_state) = orders.get(&order_id.to_string()) {
             match order_state {
                 OrderState::Created(order) => {
+                    orders.remove(&order_id.to_string()).unwrap();
                     orders.insert(
                         order_id.to_string(),
                         OrderState::Locked(order.lock(onramper_provider, onramper_address)),

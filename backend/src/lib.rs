@@ -4,6 +4,7 @@ mod outcalls;
 mod state;
 
 use ethers_core::types::U256;
+use evm::transaction::spawn_transaction_checker;
 use std::time::Duration;
 
 use evm::{fees, vault::Ic2P2ramp};
@@ -39,6 +40,10 @@ fn init(arg: InitArg) {
 fn get_evm_address() -> String {
     read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
 }
+
+// -----
+// Tests
+// -----
 
 #[ic_cdk::update]
 async fn test_deposit_funds(
@@ -123,8 +128,6 @@ fn create_order(
     chain_id: u64,
     token_address: Option<String>,
 ) -> Result<String, String> {
-    // evm::vault::deposit_funds(chain_id, crypto_amount, token_type.clone()).await?;
-
     order_management::create_order(
         fiat_amount,
         fiat_symbol,
@@ -137,15 +140,40 @@ fn create_order(
 }
 
 #[ic_cdk::update]
-fn lock_order(
+async fn lock_order(
     order_id: String,
     onramper_provider: PaymentProvider,
     onramper_address: String,
+    gas: String,
 ) -> Result<String, String> {
-    // let order = management::get_order_by_id(order_id.clone()).await?;
-    // evm::vault::commit_order(order.chain_id, order.offramper_address, order.crypto_amount).await?;
+    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
+    let order = match order_state {
+        OrderState::Created(locked_order) => locked_order,
+        _ => return Err("Order is not in a created state".to_string()),
+    };
 
-    order_management::lock_order(order_id.as_str(), onramper_provider, onramper_address)
+    let tx_hash = Ic2P2ramp::commit_deposit(
+        order.chain_id,
+        order.offramper_address,
+        order.token_address,
+        order.crypto_amount,
+        Some(gas),
+    )
+    .await?;
+    spawn_transaction_checker(
+        tx_hash,
+        order.chain_id,
+        60,
+        Duration::from_secs(4),
+        move || {
+            let _ = order_management::lock_order(
+                order_id.as_str(),
+                onramper_provider.clone(),
+                onramper_address.clone(),
+            );
+        },
+    );
+    Ok("Payment verified successfully".to_string())
 }
 
 #[ic_cdk::update]
@@ -201,10 +229,19 @@ async fn verify_transaction(
         && offramper_matches
     // && onramper_matches
     {
-        // Update the order status in your storage
         order_management::mark_order_as_paid(order.base.id.as_str())?;
-        Ic2P2ramp::release_funds(order_id.as_str(), Some(gas)).await?;
-        order_management::update_order_state(order_id.as_str(), OrderState::Completed)?;
+        let tx_hash = Ic2P2ramp::release_funds(order_id.as_str(), Some(gas)).await?;
+        spawn_transaction_checker(
+            tx_hash,
+            order.base.chain_id,
+            60,
+            Duration::from_secs(4),
+            move || {
+                // Update order state to completed
+                let _ =
+                    management::order::update_order_state(order_id.as_str(), OrderState::Completed);
+            },
+        );
         Ok("Payment verified successfully".to_string())
     } else {
         Err("Payment verification failed".to_string())
