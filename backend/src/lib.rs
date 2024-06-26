@@ -4,6 +4,8 @@ mod outcalls;
 mod state;
 
 use ethers_core::types::U256;
+use evm::providers;
+use evm::rpc::ProviderView;
 use evm::transaction::spawn_transaction_checker;
 use std::time::Duration;
 
@@ -67,6 +69,11 @@ async fn test_check_and_approve_token(
     let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
     Ic2P2ramp::check_and_approve_token(chain_id, token_address, U256::from(gas), fee_estimates)
         .await
+}
+
+#[ic_cdk::query]
+async fn get_rpc_providers() -> Vec<ProviderView> {
+    providers::get_providers().await
 }
 
 // ---------
