@@ -8,18 +8,18 @@ use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
 use super::transaction::{self, spawn_transaction_checker};
 use crate::management;
-use crate::state::storage::OrderState;
-use crate::state::{mutate_state, read_state};
+use crate::state::{increment_nonce, mutate_state, read_state, storage::OrderState};
 
 pub struct Ic2P2ramp;
 
 impl Ic2P2ramp {
     fn get_vault_manager_address(chain_id: u64) -> Result<String, String> {
-        read_state(|s| {
-            s.vault_manager_addresses
+        read_state(|state| {
+            state
+                .chains
                 .get(&chain_id)
-                .cloned()
-                .ok_or_else(|| format!("Vault manager address not found for chain_id {}", chain_id))
+                .map(|chain_state| chain_state.vault_manager_address.clone())
+                .ok_or_else(|| "Chain ID or vault address not found".to_string())
         })
     }
 
@@ -29,14 +29,21 @@ impl Ic2P2ramp {
         gas: U256,
         fee_estimates: FeeEstimates,
     ) -> Result<bool, String> {
-        let already_approved = read_state(|s| {
-            ic_cdk::println!(
-                "[check_and_approve_token] approved_tokens = {:?}",
-                s.approved_tokens
-            );
-            s.approved_tokens
-                .get(&(chain_id, token_address.clone()))
-                .cloned()
+        let already_approved = read_state(|state| {
+            state
+                .chains
+                .get(&chain_id)
+                .map(|chain_state| {
+                    ic_cdk::println!(
+                        "[check_and_approve_token] approved_tokens = {:?}",
+                        chain_state.approved_tokens
+                    );
+                    chain_state
+                        .approved_tokens
+                        .get(&token_address)
+                        .cloned()
+                        .unwrap_or(false)
+                })
                 .unwrap_or(false)
         });
 
@@ -52,9 +59,12 @@ impl Ic2P2ramp {
             ic_cdk::println!("[check_and_approve_token] going to spawn_transaction_checker");
             spawn_transaction_checker(tx_hash, chain_id, 60, Duration::from_secs(4), move || {
                 // Mark token as approved
-                mutate_state(|s| {
-                    s.approved_tokens
-                        .insert((chain_id, token_address.clone()), true);
+                mutate_state(|state| {
+                    if let Some(chain_state) = state.chains.get_mut(&chain_id) {
+                        chain_state
+                            .approved_tokens
+                            .insert(token_address.clone(), true);
+                    }
                 });
                 ic_cdk::println!(
                     "[check_and_approve_token::spawn_transaction_checker] Added token: {} for chain_id: {}",
@@ -490,13 +500,10 @@ impl Ic2P2ramp {
         let tx = signer::sign_transaction(request).await;
         ic_cdk::println!("Transaction sent: {:?}", tx);
 
-        let status = transaction::send_raw_transaction(tx.clone(), chain_id).await;
-        match status {
+        match transaction::send_raw_transaction(tx.clone(), chain_id).await {
             SendRawTransactionStatus::Ok(transaction_hash) => {
                 ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
-                mutate_state(|s| {
-                    s.nonce += U256::from(1);
-                });
+                increment_nonce(chain_id);
                 transaction_hash.ok_or("Transaction Hash is empty".to_string())
             }
             SendRawTransactionStatus::NonceTooLow => {
