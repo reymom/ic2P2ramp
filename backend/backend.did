@@ -1,3 +1,8 @@
+type ChainConfig = record {
+  chain_id : nat64;
+  vault_manager_address : text;
+  services : RpcServices;
+};
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -11,37 +16,53 @@ type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
 type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
-  rpc_services : vec RpcServiceConfig;
-  vault_manager_addresses : vec record { nat64; text };
+  chains : vec ChainConfig;
   client_id : text;
   client_secret : text;
 };
+type LockedOrder = record {
+  payment_done : bool;
+  base : Order;
+  locked : bool;
+  proof_submitted : bool;
+  removed : bool;
+};
 type Order = record {
   id : text;
-  payment_done : bool;
   originator : principal;
+  token_address : opt text;
   fiat_amount : nat64;
-  locked : bool;
   currency_symbol : text;
-  proof_submitted : bool;
   onramper_address : opt text;
   chain_id : nat64;
   offramper_providers : vec PaymentProvider;
   offramper_address : text;
   onramper_provider : opt PaymentProvider;
-  token_type : text;
   crypto_amount : nat64;
-  removed : bool;
+};
+type OrderState = variant {
+  Locked : LockedOrder;
+  Cancelled;
+  Created : Order;
+  Completed;
 };
 type PaymentProvider = variant {
   PayPal : record { id : text };
   Revolut : record { id : text };
 };
+type ProviderView = record {
+  cyclesPerCall : nat64;
+  owner : principal;
+  hostname : text;
+  primary : bool;
+  chainId : nat64;
+  cyclesPerMessageByte : nat64;
+  providerId : nat64;
+};
 type Result = variant { Ok : text; Err : text };
 type Result_1 = variant { Ok : User; Err : text };
 type Result_2 = variant { Ok : bool; Err : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
-type RpcServiceConfig = record { chain_id : nat64; services : RpcServices };
 type RpcServices = variant {
   EthSepolia : opt vec EthSepoliaService;
   Custom : record { chainId : nat64; services : vec RpcApi };
@@ -62,16 +83,17 @@ service : (InitArg) -> {
       vec PaymentProvider,
       text,
       nat64,
-      text,
+      opt text,
     ) -> (Result);
   get_evm_address : () -> (text) query;
-  get_orders : () -> (vec Order) query;
+  get_orders : () -> (vec OrderState) query;
+  get_rpc_providers : () -> (vec ProviderView) query;
   get_usd_exchange_rate : (text, text) -> (Result);
   get_user : (text) -> (Result_1) query;
-  lock_order : (text, PaymentProvider, text) -> (Result);
+  lock_order : (text, PaymentProvider, text, text) -> (Result);
   register_user : (text, vec PaymentProvider) -> (Result);
   remove_order : (text) -> (Result);
   test_check_and_approve_token : (nat64, text, nat32) -> (Result_2);
   test_deposit_funds : (nat64, nat64, opt text, opt text) -> (Result);
-  verify_transaction : (text, nat64, text) -> (Result);
+  verify_transaction : (text, text, text) -> (Result);
 }
