@@ -1,7 +1,7 @@
 use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use crate::evm::rpc::RpcServices;
 
@@ -10,22 +10,26 @@ thread_local! {
 }
 
 #[derive(Clone, Debug)]
+pub struct ChainState {
+    pub vault_manager_address: String,
+    pub rpc_services: RpcServices,
+    pub nonce: U256,
+    pub approved_tokens: HashMap<String, bool>,
+}
+
+#[derive(Clone, Debug)]
 pub struct State {
-    pub vault_manager_addresses: HashMap<u64, String>,
-    pub rpc_services: HashMap<u64, RpcServices>,
+    pub chains: HashMap<u64, ChainState>,
     pub ecdsa_pub_key: Option<Vec<u8>>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub evm_address: Option<String>,
-    pub nonce: U256,
     pub client_id: String,
     pub client_secret: String,
-    pub approved_tokens: HashMap<(u64, String), bool>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum InvalidStateError {
-    // InvalidEthereumContractAddress(String),
-    // InvalidTopic(String),
+    InvalidEthereumContractAddress(String),
 }
 
 /// Mutates (part of) the current state using `f`.
@@ -46,19 +50,37 @@ pub fn initialize_state(state: State) {
     STATE.set(Some(state));
 }
 
+pub fn increment_nonce(chain_id: u64) {
+    mutate_state(|state| {
+        if let Some(chain_state) = state.chains.get_mut(&chain_id) {
+            chain_state.nonce += U256::from(1);
+        }
+    });
+}
+
+pub fn get_rpc_providers(chain_id: u64) -> RpcServices {
+    read_state(|s| {
+        s.chains
+            .get(&chain_id)
+            .map(|chain_state| chain_state.rpc_services.clone())
+            .ok_or("Unsupported chain ID")
+    })
+    .unwrap()
+}
+
 #[derive(CandidType, Deserialize, Debug, Clone)]
-pub struct RpcServiceConfig {
+pub struct ChainConfig {
     pub chain_id: u64,
+    pub vault_manager_address: String,
     pub services: RpcServices,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
-    pub rpc_services: Vec<RpcServiceConfig>,
+    pub chains: Vec<ChainConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub client_id: String,
     pub client_secret: String,
-    pub vault_manager_addresses: Vec<(u64, String)>,
 }
 
 impl TryFrom<InitArg> for State {
@@ -66,33 +88,36 @@ impl TryFrom<InitArg> for State {
 
     fn try_from(
         InitArg {
-            rpc_services,
+            chains,
             ecdsa_key_id,
             client_id,
             client_secret,
-            vault_manager_addresses,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
-        let mut rpc_services_map = HashMap::new();
-        for config in rpc_services {
-            rpc_services_map.insert(config.chain_id, config.services);
-        }
+        let mut chains_map = HashMap::new();
+        for config in chains {
+            ethers_core::types::Address::from_str(&config.vault_manager_address).map_err(|e| {
+                InvalidStateError::InvalidEthereumContractAddress(format!("ERROR: {}", e))
+            })?;
 
-        let mut vault_manager_map = HashMap::new();
-        for (chain_id, address) in vault_manager_addresses {
-            vault_manager_map.insert(chain_id, address);
+            chains_map.insert(
+                config.chain_id,
+                ChainState {
+                    vault_manager_address: config.vault_manager_address,
+                    rpc_services: config.services,
+                    nonce: U256::zero(),
+                    approved_tokens: HashMap::new(),
+                },
+            );
         }
 
         let state = Self {
-            vault_manager_addresses: vault_manager_map,
-            rpc_services: rpc_services_map,
+            chains: chains_map,
             ecdsa_pub_key: None,
             ecdsa_key_id,
             evm_address: None,
-            nonce: U256::zero(),
             client_id,
             client_secret,
-            approved_tokens: HashMap::new(),
         };
         Ok(state)
     }
