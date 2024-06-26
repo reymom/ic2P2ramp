@@ -36,7 +36,13 @@ pub async fn create_sign_request(
         max_fee_per_gas,
         max_priority_fee_per_gas,
     } = fee_estimates;
-    let nonce = read_state(|s| s.nonce);
+    let nonce = read_state(|s| {
+        s.chains
+            .get(&chain_id.as_u64())
+            .map(|chain_state| chain_state.nonce.clone())
+            .ok_or("Unsupported chain ID")
+    })
+    .unwrap();
 
     SignRequest {
         chain_id: Some(chain_id),
@@ -75,7 +81,7 @@ pub async fn sign_transaction(req: SignRequest) -> String {
         chain_id: req.chain_id,
     };
 
-    ic_cdk::println!("[sign_transaction] tx = {:?}", tx);
+    ic_cdk::println!("[sign_transaction] Eip1559 tx request = {:?}", tx);
 
     let mut unsigned_tx_bytes = tx.rlp().to_vec();
     unsigned_tx_bytes.insert(0, EIP1559_TX_ID);

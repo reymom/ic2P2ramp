@@ -7,7 +7,7 @@ use super::rpc::{
     BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, MultiFeeHistoryResult, EVM_RPC,
 };
 
-use crate::state::read_state;
+use crate::state::get_rpc_providers;
 
 #[derive(Clone)]
 pub struct FeeEstimates {
@@ -23,13 +23,7 @@ pub async fn fee_history(
     newest_block: BlockTag,
     reward_percentiles: Option<Vec<u8>>,
 ) -> FeeHistory {
-    let rpc_providers = read_state(|s| {
-        s.rpc_services
-            .get(&chain_id)
-            .cloned()
-            .ok_or("Unsupported chain ID")
-    })
-    .unwrap();
+    let rpc_providers = get_rpc_providers(chain_id);
 
     let fee_history_args: FeeHistoryArgs = FeeHistoryArgs {
         blockCount: block_count,

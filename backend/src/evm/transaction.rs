@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use super::rpc::{
     GetTransactionReceiptResult, MultiGetTransactionReceiptResult, MultiSendRawTransactionResult,
-    RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, CANISTER_ID,
+    RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, EVM_RPC,
 };
-use crate::state::read_state;
+use crate::state::get_rpc_providers;
 
 #[derive(Debug)]
 pub enum TransactionStatus {
@@ -14,24 +14,16 @@ pub enum TransactionStatus {
 }
 
 pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
-    let rpc_providers = read_state(|s| {
-        s.rpc_services
-            .get(&chain_id)
-            .cloned()
-            .ok_or("Unsupported chain ID")
-    })
-    .unwrap();
+    let rpc_providers = get_rpc_providers(chain_id);
     let cycles = 10_000_000_000;
 
-    let arg: Option<RpcConfig> = None;
-    let res = ic_cdk::api::call::call_with_payment128(
-        CANISTER_ID,
-        "eth_sendRawTransaction",
-        (rpc_providers, arg, tx),
-        cycles,
-    )
-    .await;
-    match res {
+    let arg: Option<RpcConfig> = Some(RpcConfig {
+        responseSizeEstimate: Some(1024),
+    });
+    match EVM_RPC
+        .send_raw_transaction(rpc_providers, arg, tx, cycles)
+        .await
+    {
         Ok((res,)) => match res {
             MultiSendRawTransactionResult::Consistent(status) => match status {
                 SendRawTransactionResult::Ok(status) => status,
@@ -48,23 +40,10 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
 }
 
 pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
-    let rpc_providers = read_state(|s| {
-        s.rpc_services
-            .get(&chain_id)
-            .cloned()
-            .ok_or("Unsupported chain ID")
-    })
-    .unwrap();
-
-    let cycles = 10_000_000_000;
+    let rpc_providers = get_rpc_providers(chain_id);
     let arg: Option<RpcConfig> = None;
-    let res: Result<(MultiGetTransactionReceiptResult,), _> =
-        ic_cdk::api::call::call_with_payment128(
-            CANISTER_ID,
-            "eth_getTransactionReceipt",
-            (rpc_providers.clone(), arg, tx_hash.clone()),
-            cycles,
-        )
+    let res = EVM_RPC
+        .eth_get_transaction_receipt(rpc_providers, arg, tx_hash)
         .await;
 
     ic_cdk::println!("[check_transaction_receipt] res = {:?}", res);
