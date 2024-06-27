@@ -69,3 +69,48 @@ pub fn add_payment_provider(
         }
     })
 }
+
+pub fn can_commit_order(onramper_address: &str) -> bool {
+    storage::USERS.with(|users| {
+        let users = users.borrow();
+        if let Some(user) = users.get(&onramper_address.to_string()) {
+            user.can_commit_order()
+        } else {
+            false
+        }
+    })
+}
+
+pub fn increase_user_score(onramper_address: &str, fiat_amount: u64) -> Result<i32, String> {
+    storage::USERS.with(|users| {
+        let mut users = users.borrow_mut();
+        if let Some(mut user) = users.remove(&onramper_address.to_string()) {
+            user.increase_score(fiat_amount);
+            let score = user.score;
+            users.insert(onramper_address.to_string(), user);
+            Ok(score)
+        } else {
+            Err(format!(
+                "No user found with evm address={:?}",
+                onramper_address
+            ))
+        }
+    })
+}
+
+pub fn decrease_user_score(onramper_address: &str) -> Result<i32, String> {
+    storage::USERS.with(|users| {
+        let mut users = users.borrow_mut();
+        if let Some(mut user) = users.remove(&onramper_address.to_string()) {
+            user.decrease_score();
+            let score = user.score;
+            users.insert(onramper_address.to_string(), user);
+            Ok(score)
+        } else {
+            Err(format!(
+                "No user found with evm address={:?}",
+                onramper_address
+            ))
+        }
+    })
+}

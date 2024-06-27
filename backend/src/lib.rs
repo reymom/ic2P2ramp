@@ -151,6 +151,10 @@ async fn lock_order(
     onramper_address: String,
     gas: String,
 ) -> Result<String, String> {
+    if !user_management::can_commit_order(&onramper_address) {
+        return Err("User is banned from committing orders".to_string());
+    }
+
     let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,

@@ -1,6 +1,9 @@
 use ic_cdk::api::time;
 
-use crate::state::storage::{self, Order, OrderState, PaymentProvider};
+use crate::{
+    management::user as user_management,
+    state::storage::{self, Order, OrderState, PaymentProvider},
+};
 
 pub fn create_order(
     fiat_amount: u64,
@@ -92,6 +95,11 @@ pub fn unlock_order(order_id: &str) -> Result<String, String> {
         if let Some(order_state) = orders.get(&order_id.to_string()) {
             match order_state {
                 OrderState::Locked(order) => {
+                    let score = user_management::decrease_user_score(
+                        &order.clone().base.onramper_address.unwrap(),
+                    )?;
+                    ic_cdk::println!("[mark_order_as_paid] user score decreased = {:?}", score);
+
                     orders.remove(&order_id.to_string()).unwrap();
                     orders.insert(order_id.to_string(), OrderState::Created(order.base));
                     Ok("Order locked".to_string())
@@ -111,6 +119,12 @@ pub fn mark_order_as_paid(order_id: &str) -> Result<(), String> {
         if let Some(order_state) = orders.remove(&order_id.to_string()) {
             match order_state {
                 OrderState::Locked(mut locked_order) => {
+                    let score = user_management::increase_user_score(
+                        &locked_order.clone().base.onramper_address.unwrap(),
+                        locked_order.base.fiat_amount,
+                    )?;
+                    ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
+
                     locked_order.payment_done = true;
                     orders.insert(order_id.to_string(), OrderState::Locked(locked_order));
                     Ok(())

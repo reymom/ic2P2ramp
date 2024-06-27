@@ -11,7 +11,21 @@ pub struct User {
     pub evm_address: String,
     pub payment_providers: Vec<PaymentProvider>,
     pub offramped_amount: u64,
-    pub score: u32,
+    pub score: i32,
+}
+
+impl User {
+    pub fn decrease_score(&mut self) {
+        self.score -= 1;
+    }
+
+    pub fn increase_score(&mut self, amount: u64) {
+        self.score += (amount / 1000) as i32; // Assuming amount is in cents
+    }
+
+    pub fn can_commit_order(&self) -> bool {
+        self.score >= 0
+    }
 }
 
 impl Storable for User {
