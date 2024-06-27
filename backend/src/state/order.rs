@@ -1,4 +1,5 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
+use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
 use std::borrow::Cow;
 
@@ -10,14 +11,15 @@ const MAX_ORDER_SIZE: u32 = 500;
 pub enum OrderState {
     Created(Order),
     Locked(LockedOrder),
-    Completed,
-    Cancelled,
+    Completed(String),
+    Cancelled(String),
 }
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct Order {
     pub id: String,
     pub originator: Principal,
+    pub created_at: u64,
     pub fiat_amount: u64,
     pub currency_symbol: String,
     pub crypto_amount: u64,
@@ -27,10 +29,6 @@ pub struct Order {
     pub onramper_address: Option<String>,
     pub chain_id: u64,
     pub token_address: Option<String>,
-    // pub locked: bool,
-    // pub proof_submitted: bool,
-    // pub payment_done: bool,
-    // pub removed: bool,
 }
 
 impl Order {
@@ -41,10 +39,9 @@ impl Order {
                 onramper_address: Some(onramper_address),
                 ..self
             },
-            locked: true,
             proof_submitted: false,
             payment_done: false,
-            removed: false,
+            locked_at: time(),
         }
     }
 }
@@ -52,10 +49,9 @@ impl Order {
 #[derive(CandidType, Deserialize, Clone)]
 pub struct LockedOrder {
     pub base: Order,
-    pub locked: bool,
     pub proof_submitted: bool,
     pub payment_done: bool,
-    pub removed: bool,
+    pub locked_at: u64,
 }
 
 impl Storable for OrderState {

@@ -1,3 +1,5 @@
+use ic_cdk::api::time;
+
 use crate::state::storage::{self, Order, OrderState, PaymentProvider};
 
 pub fn create_order(
@@ -13,6 +15,7 @@ pub fn create_order(
     let order = Order {
         id: order_id.clone(),
         originator: ic_cdk::caller(),
+        created_at: time(),
         fiat_amount,
         currency_symbol,
         crypto_amount,
@@ -83,6 +86,24 @@ pub fn lock_order(
     })
 }
 
+pub fn unlock_order(order_id: &str) -> Result<String, String> {
+    storage::ORDERS.with(|orders| {
+        let mut orders = orders.borrow_mut();
+        if let Some(order_state) = orders.get(&order_id.to_string()) {
+            match order_state {
+                OrderState::Locked(order) => {
+                    orders.remove(&order_id.to_string()).unwrap();
+                    orders.insert(order_id.to_string(), OrderState::Created(order.base));
+                    Ok("Order locked".to_string())
+                }
+                _ => Err("Order is not in a locked state".to_string()),
+            }
+        } else {
+            Err("order not found".to_string())
+        }
+    })
+}
+
 pub fn mark_order_as_paid(order_id: &str) -> Result<(), String> {
     ic_cdk::println!("[mark_order_as_paid");
     storage::ORDERS.with(|orders| {
@@ -102,14 +123,16 @@ pub fn mark_order_as_paid(order_id: &str) -> Result<(), String> {
     })
 }
 
-pub fn remove_order(order_id: &str) -> Result<String, String> {
+pub fn cancel_order(order_id: &str) -> Result<String, String> {
     storage::ORDERS.with(|orders| {
         let mut orders = orders.borrow_mut();
         if let Some(order_state) = orders.remove(&order_id.to_string()) {
             match order_state {
-                OrderState::Locked(mut locked_order) => {
-                    locked_order.removed = true;
-                    orders.insert(order_id.to_string(), OrderState::Locked(locked_order));
+                OrderState::Created(_) => {
+                    orders.insert(
+                        order_id.to_string(),
+                        OrderState::Cancelled(order_id.to_string()),
+                    );
                     Ok("Order removed successfully".to_string())
                 }
                 _ => Err("Order is not in a removable state".to_string()),

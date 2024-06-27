@@ -292,6 +292,86 @@ impl Ic2P2ramp {
         .await)
     }
 
+    pub async fn uncommit_deposit(
+        chain_id: u64,
+        offramper_address: String,
+        token_address: Option<String>,
+        amount: u64,
+        gas: Option<u64>,
+    ) -> Result<String, String> {
+        let gas = U256::from(gas.unwrap_or(21_000));
+
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        ic_cdk::println!(
+            "[commit_deposit] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
+            gas,
+            fee_estimates.max_fee_per_gas,
+            fee_estimates.max_priority_fee_per_gas
+        );
+
+        let vault_manager_address = Self::get_vault_manager_address(chain_id)?;
+        let token_address = token_address.unwrap_or(Address::zero().to_string());
+        let request = Self::sign_request_uncommit_deposit(
+            gas,
+            fee_estimates,
+            chain_id,
+            offramper_address,
+            token_address,
+            amount,
+            vault_manager_address,
+        )
+        .await?;
+
+        Self::send_signed_transaction(request, chain_id).await
+    }
+
+    async fn sign_request_uncommit_deposit(
+        gas: U256,
+        fee_estimates: FeeEstimates,
+        chain_id: u64,
+        offramper_address: String,
+        token_address: String,
+        amount: u64,
+        vault_manager_address: String,
+    ) -> Result<SignRequest, String> {
+        let abi = r#"
+            [
+                {
+                    "inputs": [
+                        {"internalType": "address", "name": "_offramper", "type": "address"},
+                        {"internalType": "address", "name": "_token", "type": "address"},
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                    ],
+                    "name": "uncommitDeposit",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let contract = ethers_core::abi::Contract::load(abi.as_bytes()).unwrap();
+        let function = contract.function("uncommitDeposit").unwrap();
+        let data = function
+            .encode_input(&[
+                ethers_core::abi::Token::Address(offramper_address.parse().unwrap()),
+                ethers_core::abi::Token::Address(token_address.parse().unwrap()),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ])
+            .unwrap();
+
+        Ok(signer::create_sign_request(
+            U256::from(0),
+            chain_id.into(),
+            Some(vault_manager_address.clone()),
+            None,
+            gas,
+            Some(data),
+            fee_estimates,
+        )
+        .await)
+    }
+
     pub async fn release_funds(order_id: &str, gas: Option<String>) -> Result<String, String> {
         let order_state = management::order::get_order_state_by_id(&order_id.to_string())?;
         let order = match order_state {

@@ -4,12 +4,10 @@ mod outcalls;
 mod state;
 
 use ethers_core::types::U256;
-use evm::providers;
-use evm::rpc::ProviderView;
-use evm::transaction::spawn_transaction_checker;
 use std::time::Duration;
 
-use evm::{fees, vault::Ic2P2ramp};
+use evm::transaction::spawn_transaction_checker;
+use evm::{fees, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
@@ -180,16 +178,44 @@ async fn lock_order(
             );
         },
     );
-    Ok("Payment verified successfully".to_string())
+    Ok("Order locked successfully".to_string())
 }
 
 #[ic_cdk::update]
-fn remove_order(order_id: String) -> Result<String, String> {
+async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<String, String> {
+    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err("Order is not in a locked state".to_string()),
+    };
+
+    let tx_hash = Ic2P2ramp::uncommit_deposit(
+        order.base.chain_id,
+        order.base.offramper_address,
+        order.base.token_address,
+        order.base.crypto_amount,
+        gas,
+    )
+    .await?;
+    spawn_transaction_checker(
+        tx_hash,
+        order.base.chain_id,
+        60,
+        Duration::from_secs(4),
+        move || {
+            let _ = order_management::unlock_order(order_id.as_str());
+        },
+    );
+    Ok("Order unlocked successfully".to_string())
+}
+
+#[ic_cdk::update]
+fn cancel_order(order_id: String) -> Result<String, String> {
     // let order = management::get_order_by_id(order_id.clone()).await?;
 
     // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
 
-    order_management::remove_order(order_id.as_str())
+    order_management::cancel_order(order_id.as_str())
 }
 
 // ---------------
@@ -245,8 +271,10 @@ async fn verify_transaction(
             Duration::from_secs(4),
             move || {
                 // Update order state to completed
-                let _ =
-                    management::order::update_order_state(order_id.as_str(), OrderState::Completed);
+                let _ = management::order::update_order_state(
+                    order_id.as_str(),
+                    OrderState::Completed(order_id.clone()),
+                );
             },
         );
         Ok("Payment verified successfully".to_string())
