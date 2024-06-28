@@ -1,6 +1,8 @@
 use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::call::call_with_payment128;
 
+use crate::errors::{RampError, Result};
+
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
 // const CYCLES_AMOUNT: u64 = 10_000_000_000;
 
@@ -44,7 +46,7 @@ struct ExchangeRate {
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
-enum ExchangeRateError {
+pub enum ExchangeRateError {
     AnonymousPrincipalNotAllowed,
     Pending,
     CryptoBaseAssetNotFound,
@@ -69,7 +71,7 @@ enum GetExchangeRateResult {
     Err(ExchangeRateError),
 }
 
-pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result<f64, String> {
+pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result<f64> {
     let request = GetExchangeRateRequest {
         base_asset: Asset {
             class: AssetClass::Cryptocurrency,
@@ -91,7 +93,7 @@ pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result
         cycles,
     )
     .await
-    .map_err(|e| format!("Failed to call exchange rate canister: {:?}", e))?;
+    .map_err(|e| RampError::CanisterCallError(format!("{:?}", e)))?;
 
     match result.0 {
         GetExchangeRateResult::Ok(rate_response) => {
@@ -99,9 +101,6 @@ pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result
             let float_divisor = 10u64.pow(rate_response.metadata.decimals) as f64;
             Ok(float_rate / float_divisor)
         }
-        GetExchangeRateResult::Err(err) => {
-            ic_cdk::println!("Exchange rate error: {:?}", err);
-            Err(format!("Exchange rate error: {:?}", err))
-        }
+        GetExchangeRateResult::Err(err) => Err(RampError::ExchangeRateError(err)),
     }
 }

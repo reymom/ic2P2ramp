@@ -3,6 +3,8 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::errors::{RampError, Result};
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PayPalCaptureDetails {
     id: String,
@@ -37,7 +39,7 @@ pub async fn fetch_paypal_capture_details(
     access_token: &str,
     transaction_id: &str,
     cycles: u128,
-) -> Result<PayPalCaptureDetails, String> {
+) -> Result<PayPalCaptureDetails> {
     let url = format!(
         "https://api-m.sandbox.paypal.com/v2/payments/captures/{}",
         transaction_id
@@ -65,12 +67,11 @@ pub async fn fetch_paypal_capture_details(
 
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body = String::from_utf8(response.body)
-                .expect("Transformed response is not UTF-8 encoded.");
+            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
             ic_cdk::println!("[fetch_paypal_capture_details] str_body = {:?}", str_body);
 
             let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
+                .map_err(|e| RampError::ParseError(e.to_string()))?;
             ic_cdk::println!(
                 "[fetch_paypal_capture_details] capture_details = {:?}",
                 capture_details
@@ -78,10 +79,6 @@ pub async fn fetch_paypal_capture_details(
 
             Ok(capture_details)
         }
-        Err((r, m)) => {
-            let message =
-                format!("The http_request resulted in an error. RejectionCode: {r:?}, Error: {m}");
-            Err(message)
-        }
+        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
     }
 }

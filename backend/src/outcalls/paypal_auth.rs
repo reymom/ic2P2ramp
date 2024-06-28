@@ -4,7 +4,10 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::state::read_state;
+use crate::{
+    errors::{RampError, Result},
+    state::read_state,
+};
 
 #[derive(Serialize, Deserialize)]
 struct AccessTokenResponse {
@@ -13,7 +16,7 @@ struct AccessTokenResponse {
     expires_in: u64,
 }
 
-pub async fn get_paypal_access_token() -> Result<String, String> {
+pub async fn get_paypal_access_token() -> Result<String> {
     let (client_id, client_secret) = read_state(|s| (s.client_id.clone(), s.client_secret.clone()));
     let credentials = general_purpose::STANDARD.encode(format!("{}:{}", client_id, client_secret));
 
@@ -40,17 +43,12 @@ pub async fn get_paypal_access_token() -> Result<String, String> {
     let cycles: u128 = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body =
-                String::from_utf8(response.body).expect("Response is not UTF-8 encoded.");
+            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
             let access_token_response: AccessTokenResponse = serde_json::from_str(&str_body)
-                .map_err(|e| format!("Failed to parse response: {}", e))?;
+                .map_err(|e| RampError::ParseError(e.to_string()))?;
 
             Ok(access_token_response.access_token)
         }
-        Err((r, m)) => {
-            let message =
-                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
-            Err(message)
-        }
+        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
     }
 }
