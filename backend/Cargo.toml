@@ -20,3 +20,5 @@ ethers-core = "2.0.14"
 getrandom = { version = "0.2", features = ["custom"] }
 hex = "0.4.3"
 base64 = "0.22.1"
+thiserror = "1.0"
+futures = "0.3"

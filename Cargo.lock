@@ -53,6 +53,7 @@ dependencies = [
  "base64",
  "candid",
  "ethers-core",
+ "futures",
  "getrandom",
  "hex",
  "ic-cdk",
@@ -61,6 +62,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
