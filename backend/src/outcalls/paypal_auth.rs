@@ -3,10 +3,11 @@ use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
 use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     errors::{RampError, Result},
-    state::read_state,
+    state::{paypal, read_state},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -17,7 +18,18 @@ struct AccessTokenResponse {
 }
 
 pub async fn get_paypal_access_token() -> Result<String> {
-    let (client_id, client_secret) = read_state(|s| (s.client_id.clone(), s.client_secret.clone()));
+    if let Some((token, expiration)) = paypal::get_paypal_token() {
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        if current_time < expiration {
+            return Ok(token);
+        }
+    }
+
+    let (client_id, client_secret) =
+        read_state(|s| (s.paypal.client_id.clone(), s.paypal.client_secret.clone()));
     let credentials = general_purpose::STANDARD.encode(format!("{}:{}", client_id, client_secret));
 
     let request_headers = vec![
@@ -46,6 +58,14 @@ pub async fn get_paypal_access_token() -> Result<String> {
             let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
             let access_token_response: AccessTokenResponse = serde_json::from_str(&str_body)
                 .map_err(|e| RampError::ParseError(e.to_string()))?;
+
+            // Store the token and its expiration time in the state
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let expiration_time = current_time + access_token_response.expires_in;
+            paypal::set_paypal_token(access_token_response.access_token.clone(), expiration_time);
 
             Ok(access_token_response.access_token)
         }
