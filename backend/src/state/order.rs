@@ -1,7 +1,7 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 
 use super::common::PaymentProvider;
 
@@ -13,6 +13,17 @@ pub enum OrderState {
     Locked(LockedOrder),
     Completed(String),
     Cancelled(String),
+}
+
+impl fmt::Display for OrderState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderState::Created(_) => write!(f, "Created"),
+            OrderState::Locked(_) => write!(f, "Locked"),
+            OrderState::Completed(_) => write!(f, "Completed"),
+            OrderState::Cancelled(_) => write!(f, "Cancelled"),
+        }
+    }
 }
 
 #[derive(CandidType, Deserialize, Clone)]
