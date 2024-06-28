@@ -6,7 +6,9 @@ use std::str::FromStr;
 
 use crate::evm::rpc::RpcServices;
 
-use super::state::{ChainState, InvalidStateError};
+use super::chains::ChainState;
+use super::paypal::PayPalState;
+use super::state::InvalidStateError;
 use super::State;
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
@@ -57,8 +59,12 @@ impl TryFrom<InitArg> for State {
             ecdsa_pub_key: None,
             ecdsa_key_id,
             evm_address: None,
-            client_id,
-            client_secret,
+            paypal: PayPalState {
+                access_token: None,
+                token_expiration: None,
+                client_id,
+                client_secret,
+            },
         };
         Ok(state)
     }
