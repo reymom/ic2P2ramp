@@ -4,7 +4,10 @@ use super::rpc::{
     GetTransactionReceiptResult, MultiGetTransactionReceiptResult, MultiSendRawTransactionResult,
     RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, EVM_RPC,
 };
-use crate::state::get_rpc_providers;
+use crate::{
+    errors::{RampError, Result},
+    state::get_rpc_providers,
+};
 
 #[derive(Debug)]
 pub enum TransactionStatus {
@@ -68,6 +71,35 @@ pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> Transac
         }
         Err(e) => TransactionStatus::Failed(format!("Error checking transaction: {:?}", e)),
     }
+}
+
+pub async fn wait_for_transaction_confirmation(
+    tx_hash: String,
+    chain_id: u64,
+    max_attempts: u32,
+    interval: Duration,
+) -> Result<()> {
+    for attempt in 0..max_attempts {
+        match check_transaction_status(tx_hash.clone(), chain_id).await {
+            TransactionStatus::Confirmed => {
+                return Ok(());
+            }
+            TransactionStatus::Failed(err) => {
+                return Err(RampError::TransactionFailed(err));
+            }
+            TransactionStatus::Pending => {
+                if attempt + 1 >= max_attempts {
+                    return Err(RampError::TransactionTimeout);
+                }
+                ic_cdk::println!(
+                    "[wait_for_transaction_confirmation] Transaction is pending in attempt={:?}",
+                    attempt
+                );
+            }
+        }
+        super::helpers::delay(interval).await;
+    }
+    Err(RampError::TransactionTimeout)
 }
 
 pub fn spawn_transaction_checker<F>(
