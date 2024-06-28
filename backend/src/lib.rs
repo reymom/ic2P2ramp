@@ -1,13 +1,14 @@
+mod errors;
 mod evm;
 mod management;
 mod outcalls;
 mod state;
 
-use ethers_core::types::U256;
+use errors::{RampError, Result};
 use std::time::Duration;
 
 use evm::transaction::spawn_transaction_checker;
-use evm::{fees, providers, rpc::ProviderView, vault::Ic2P2ramp};
+use evm::{providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
@@ -50,23 +51,18 @@ async fn test_deposit_funds(
     chain_id: u64,
     amount: u64,
     token_address: Option<String>,
-    gas: Option<String>,
-) -> Result<String, String> {
-    match Ic2P2ramp::deposit_funds(chain_id, amount, token_address, gas).await {
-        Ok(_) => Ok("Funds deposited successfully".to_string()),
-        Err(err) => Err(format!("Failed to deposit funds: {}", err)),
-    }
+    gas: Option<i32>,
+) -> Result<String> {
+    Ic2P2ramp::deposit_funds(chain_id, amount, token_address, gas).await
 }
 
+// ----------
+// Management
+// ----------
+
 #[ic_cdk::update]
-async fn test_check_and_approve_token(
-    chain_id: u64,
-    token_address: String,
-    gas: u32,
-) -> Result<bool, String> {
-    let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
-    Ic2P2ramp::check_and_approve_token(chain_id, token_address, U256::from(gas), fee_estimates)
-        .await
+async fn approve_token_allowance(chain_id: u64, token_address: String, gas: i32) -> Result<()> {
+    Ic2P2ramp::approve_token_allowance(chain_id, token_address, gas).await
 }
 
 #[ic_cdk::query]
@@ -79,10 +75,7 @@ async fn get_rpc_providers() -> Vec<ProviderView> {
 // ---------
 
 #[ic_cdk::update]
-async fn get_usd_exchange_rate(
-    fiat_symbol: String,
-    crypto_symbol: String,
-) -> Result<String, String> {
+async fn get_usd_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<String> {
     match xrc_rates::get_exchange_rate(&fiat_symbol, &crypto_symbol).await {
         Ok(rate) => Ok(rate.to_string()),
         Err(err) => Err(err),
@@ -94,23 +87,17 @@ async fn get_usd_exchange_rate(
 // -----
 
 #[ic_cdk::update]
-fn register_user(
-    evm_address: String,
-    payment_providers: Vec<PaymentProvider>,
-) -> Result<String, String> {
+fn register_user(evm_address: String, payment_providers: Vec<PaymentProvider>) -> Result<String> {
     user_management::register_user(evm_address, payment_providers)
 }
 
 #[ic_cdk::query]
-fn get_user(evm_address: String) -> Result<User, String> {
+fn get_user(evm_address: String) -> Result<User> {
     user_management::get_user(evm_address)
 }
 
 #[ic_cdk::query]
-fn add_payment_provider(
-    evm_address: String,
-    payment_provider: PaymentProvider,
-) -> Result<String, String> {
+fn add_payment_provider(evm_address: String, payment_provider: PaymentProvider) -> Result<()> {
     user_management::add_payment_provider(evm_address, payment_provider)
 }
 
@@ -132,7 +119,7 @@ fn create_order(
     address: String,
     chain_id: u64,
     token_address: Option<String>,
-) -> Result<String, String> {
+) -> Option<String> {
     order_management::create_order(
         fiat_amount,
         fiat_symbol,
@@ -149,16 +136,16 @@ async fn lock_order(
     order_id: String,
     onramper_provider: PaymentProvider,
     onramper_address: String,
-    gas: String,
-) -> Result<String, String> {
-    if !user_management::can_commit_order(&onramper_address) {
-        return Err("User is banned from committing orders".to_string());
+    gas: Option<i32>,
+) -> Result<()> {
+    if !user_management::can_commit_order(&onramper_address)? {
+        return Err(RampError::UserBanned);
     }
 
     let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,
-        _ => return Err("Order is not in a created state".to_string()),
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
     let tx_hash = Ic2P2ramp::commit_deposit(
@@ -166,7 +153,7 @@ async fn lock_order(
         order.offramper_address,
         order.token_address,
         order.crypto_amount,
-        Some(gas),
+        gas,
     )
     .await?;
     spawn_transaction_checker(
@@ -182,15 +169,15 @@ async fn lock_order(
             );
         },
     );
-    Ok("Order locked successfully".to_string())
+    Ok(())
 }
 
 #[ic_cdk::update]
-async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<String, String> {
+async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
     let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
-        _ => return Err("Order is not in a locked state".to_string()),
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
     let tx_hash = Ic2P2ramp::uncommit_deposit(
@@ -210,11 +197,11 @@ async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<String, Stri
             let _ = order_management::unlock_order(order_id.as_str());
         },
     );
-    Ok("Order unlocked successfully".to_string())
+    Ok(())
 }
 
 #[ic_cdk::update]
-fn cancel_order(order_id: String) -> Result<String, String> {
+fn cancel_order(order_id: String) -> Result<String> {
     // let order = management::get_order_by_id(order_id.clone()).await?;
 
     // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
@@ -230,12 +217,12 @@ fn cancel_order(order_id: String) -> Result<String, String> {
 async fn verify_transaction(
     order_id: String,
     transaction_id: String,
-    gas: String,
-) -> Result<String, String> {
+    gas: Option<i32>,
+) -> Result<()> {
     let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
-        _ => return Err("Order is not in a locked state".to_string()),
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
     let cycles: u128 = 10_000_000_000;
@@ -245,12 +232,12 @@ async fn verify_transaction(
             .await?;
 
     // Verify the captured payment details
-    let expected_fiat_amount = order.base.fiat_amount as f64 / 100.0; // Assuming fiat_amount is in cents
+    let expected_fiat_amount = order.base.fiat_amount as f64 / 100.0; // fiat_amount is in cents
     let received_amount: f64 = capture_details
         .amount
         .value
         .parse()
-        .map_err(|e| format!("Failed to parse amount: {}", e))?;
+        .map_err(RampError::from)?;
     ic_cdk::println!("received_amount = {}", received_amount);
 
     let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
@@ -267,7 +254,7 @@ async fn verify_transaction(
     // && onramper_matches
     {
         order_management::mark_order_as_paid(order.base.id.as_str())?;
-        let tx_hash = Ic2P2ramp::release_funds(order_id.as_str(), Some(gas)).await?;
+        let tx_hash = Ic2P2ramp::release_funds(order_id.as_str(), gas).await?;
         spawn_transaction_checker(
             tx_hash,
             order.base.chain_id,
@@ -281,9 +268,9 @@ async fn verify_transaction(
                 );
             },
         );
-        Ok("Payment verified successfully".to_string())
+        Ok(())
     } else {
-        Err("Payment verification failed".to_string())
+        Err(RampError::PaymentVerificationFailed)
     }
 }
 
