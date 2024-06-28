@@ -6,7 +6,7 @@ use super::rpc::{
 };
 use crate::{
     errors::{RampError, Result},
-    state::get_rpc_providers,
+    state::chains::get_rpc_providers,
 };
 
 #[derive(Debug)]

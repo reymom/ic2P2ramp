@@ -9,7 +9,8 @@ use super::signer::{self, SignRequest};
 use super::transaction::{send_raw_transaction, wait_for_transaction_confirmation};
 use crate::errors::{RampError, Result};
 use crate::management;
-use crate::state::{increment_nonce, mutate_state, state, storage::OrderState};
+use crate::state::chains;
+use crate::state::{increment_nonce, mutate_state, storage::OrderState};
 
 pub struct Ic2P2ramp;
 
@@ -19,7 +20,7 @@ impl Ic2P2ramp {
         token_address: String,
         gas: i32,
     ) -> Result<()> {
-        if state::token_is_approved(chain_id, token_address.clone())? {
+        if chains::token_is_approved(chain_id, token_address.clone())? {
             return Err(RampError::TokenAlreadyRegistered);
         };
 
@@ -75,11 +76,11 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = state::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
         let request: SignRequest;
         if let Some(token_address) = token_address {
-            if !state::token_is_approved(chain_id, token_address.clone())? {
+            if !chains::token_is_approved(chain_id, token_address.clone())? {
                 return Err(RampError::TokenUnregistered);
             }
 
@@ -194,7 +195,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = state::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or(Address::zero().to_string());
         let request = Self::sign_request_commit_deposit(
             gas,
@@ -269,7 +270,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = state::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or(Address::zero().to_string());
         let request = Self::sign_request_uncommit_deposit(
             gas,
@@ -342,11 +343,11 @@ impl Ic2P2ramp {
             fee_estimates.max_fee_per_gas,
             fee_estimates.max_priority_fee_per_gas
         );
-        let vault_manager_address = state::get_vault_manager_address(order.base.chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(order.base.chain_id)?;
 
         let request: SignRequest;
         if let Some(token_address) = order.base.token_address {
-            if state::token_is_approved(order.base.chain_id, token_address.clone())? {
+            if chains::token_is_approved(order.base.chain_id, token_address.clone())? {
                 return Err(RampError::TokenAlreadyRegistered);
             };
             request = Self::sign_request_release_token(
@@ -484,7 +485,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        let vault_manager_address = state::get_vault_manager_address(chain_id)?
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?
             .parse()
             .map_err(|e| RampError::EthersAbiError(format!("Invalid address error: {:?}", e)))?;
 

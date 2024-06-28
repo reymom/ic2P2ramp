@@ -7,7 +7,7 @@ use super::rpc::{
     BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, MultiFeeHistoryResult, EVM_RPC,
 };
 
-use crate::state::get_rpc_providers;
+use crate::state::chains::get_rpc_providers;
 
 #[derive(Clone)]
 pub struct FeeEstimates {
