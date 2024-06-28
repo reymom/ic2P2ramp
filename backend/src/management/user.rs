@@ -1,11 +1,16 @@
-use crate::state::storage::{self, PaymentProvider, User};
+use crate::{
+    errors::{RampError, Result},
+    state::storage::{self, PaymentProvider, User},
+};
 
 pub fn register_user(
     evm_address: String,
     payment_providers: Vec<PaymentProvider>,
-) -> Result<String, String> {
+) -> Result<String> {
     if payment_providers.is_empty() {
-        return Err("At least one payment provider is required.".to_string());
+        return Err(RampError::InvalidInput(
+            "Provider list is empty.".to_string(),
+        ));
     }
 
     let user = User {
@@ -19,21 +24,18 @@ pub fn register_user(
     Ok(evm_address)
 }
 
-pub fn get_user(evm_address: String) -> Result<User, String> {
+pub fn get_user(evm_address: String) -> Result<User> {
     storage::USERS.with(|users| {
         let users = users.borrow();
         if let Some(user) = users.get(&evm_address) {
             Ok(user.clone())
         } else {
-            Err("User not found".to_string())
+            Err(RampError::UserNotFound)
         }
     })
 }
 
-pub fn add_payment_provider(
-    evm_address: String,
-    payment_provider: PaymentProvider,
-) -> Result<String, String> {
+pub fn add_payment_provider(evm_address: String, payment_provider: PaymentProvider) -> Result<()> {
     storage::USERS.with(|users| {
         let mut users = users.borrow_mut();
         if let Some(mut user) = users.remove(&evm_address) {
@@ -63,25 +65,25 @@ pub fn add_payment_provider(
             }
 
             users.insert(evm_address.clone(), user);
-            Ok("Payment provider added or replaced".to_string())
+            Ok(())
         } else {
-            Err("User not found".to_string())
+            Err(RampError::UserNotFound)
         }
     })
 }
 
-pub fn can_commit_order(onramper_address: &str) -> bool {
+pub fn can_commit_order(onramper_address: &str) -> Result<bool> {
     storage::USERS.with(|users| {
         let users = users.borrow();
         if let Some(user) = users.get(&onramper_address.to_string()) {
-            user.can_commit_order()
+            Ok(user.can_commit_order())
         } else {
-            false
+            Err(RampError::UserNotFound)
         }
     })
 }
 
-pub fn increase_user_score(onramper_address: &str, fiat_amount: u64) -> Result<i32, String> {
+pub fn increase_user_score(onramper_address: &str, fiat_amount: u64) -> Result<i32> {
     storage::USERS.with(|users| {
         let mut users = users.borrow_mut();
         if let Some(mut user) = users.remove(&onramper_address.to_string()) {
@@ -90,15 +92,12 @@ pub fn increase_user_score(onramper_address: &str, fiat_amount: u64) -> Result<i
             users.insert(onramper_address.to_string(), user);
             Ok(score)
         } else {
-            Err(format!(
-                "No user found with evm address={:?}",
-                onramper_address
-            ))
+            Err(RampError::UserNotFound)
         }
     })
 }
 
-pub fn decrease_user_score(onramper_address: &str) -> Result<i32, String> {
+pub fn decrease_user_score(onramper_address: &str) -> Result<i32> {
     storage::USERS.with(|users| {
         let mut users = users.borrow_mut();
         if let Some(mut user) = users.remove(&onramper_address.to_string()) {
@@ -107,10 +106,7 @@ pub fn decrease_user_score(onramper_address: &str) -> Result<i32, String> {
             users.insert(onramper_address.to_string(), user);
             Ok(score)
         } else {
-            Err(format!(
-                "No user found with evm address={:?}",
-                onramper_address
-            ))
+            Err(RampError::UserNotFound)
         }
     })
 }
