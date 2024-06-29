@@ -14,8 +14,20 @@ pub enum RampError {
     #[error("Order Not Found")]
     OrderNotFound,
 
+    #[error("Order Could Not be Created")]
+    OrderCreateFailed,
+
     #[error("Invalid Order State: {0}")]
     InvalidOrderState(String),
+
+    #[error("Invalid Ethereum address")]
+    InvalidAddress,
+
+    #[error("Provider is Not Defined for User {0}")]
+    ProviderNotInUser(String),
+
+    #[error("Invalid onramper provider")]
+    InvalidOnramperProvider,
 
     #[error("User Not Found")]
     UserNotFound,

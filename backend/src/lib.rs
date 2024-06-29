@@ -12,8 +12,8 @@ use evm::{providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
-use state::storage::{OrderState, PaymentProvider, User};
-use state::{initialize_state, mutate_state, read_state, InitArg};
+use state::storage::{self, OrderState, PaymentProvider, User};
+use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
@@ -62,7 +62,7 @@ async fn test_deposit_funds(
 
 #[ic_cdk::update]
 async fn approve_token_allowance(chain_id: u64, token_address: String, gas: i32) -> Result<()> {
-    Ic2P2ramp::approve_token_allowance(chain_id, token_address, gas).await
+    Ic2P2ramp::approve_token_allowance(chain_id, &token_address, gas).await
 }
 
 #[ic_cdk::query]
@@ -93,11 +93,14 @@ fn register_user(evm_address: String, payment_providers: Vec<PaymentProvider>) -
 
 #[ic_cdk::query]
 fn get_user(evm_address: String) -> Result<User> {
-    user_management::get_user(evm_address)
+    storage::get_user(&evm_address)
 }
 
 #[ic_cdk::query]
-fn add_payment_provider(evm_address: String, payment_provider: PaymentProvider) -> Result<()> {
+fn add_payment_provider_for_user(
+    evm_address: String,
+    payment_provider: PaymentProvider,
+) -> Result<()> {
     user_management::add_payment_provider(evm_address, payment_provider)
 }
 
@@ -116,19 +119,28 @@ fn create_order(
     fiat_symbol: String,
     crypto_amount: u64,
     offramper_providers: Vec<PaymentProvider>,
-    address: String,
+    offramper_address: String,
     chain_id: u64,
     token_address: Option<String>,
-) -> Option<String> {
+) -> Result<String> {
+    let user = storage::get_user(&offramper_address)?;
+
+    for provider in &offramper_providers {
+        if !user.payment_providers.contains(provider) {
+            return Err(RampError::ProviderNotInUser(offramper_address));
+        }
+    }
+
     order_management::create_order(
         fiat_amount,
         fiat_symbol,
         crypto_amount,
         offramper_providers,
-        address,
+        offramper_address,
         chain_id,
         token_address,
     )
+    .ok_or_else(|| RampError::OrderCreateFailed)
 }
 
 #[ic_cdk::update]
@@ -138,15 +150,19 @@ async fn lock_order(
     onramper_address: String,
     gas: Option<i32>,
 ) -> Result<()> {
-    if !user_management::can_commit_order(&onramper_address)? {
+    if !user_management::can_commit_orders(&onramper_address)? {
         return Err(RampError::UserBanned);
     }
 
-    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
+    let order_state = order_management::get_order_by_id(&order_id)?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
+
+    if !contains_provider_type(onramper_provider.clone(), &order.offramper_providers) {
+        return Err(RampError::InvalidOnramperProvider);
+    }
 
     let tx_hash = Ic2P2ramp::commit_deposit(
         order.chain_id,
@@ -174,7 +190,7 @@ async fn lock_order(
 
 #[ic_cdk::update]
 async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
-    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
+    let order_state = order_management::get_order_by_id(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -194,7 +210,7 @@ async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
         60,
         Duration::from_secs(4),
         move || {
-            let _ = order_management::unlock_order(order_id.as_str());
+            let _ = order_management::unlock_order(&order_id);
         },
     );
     Ok(())
@@ -202,11 +218,7 @@ async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
 
 #[ic_cdk::update]
 fn cancel_order(order_id: String) -> Result<String> {
-    // let order = management::get_order_by_id(order_id.clone()).await?;
-
-    // evm::vault::withdraw(order.chain_id, order.crypto_amount).await?;
-
-    order_management::cancel_order(order_id.as_str())
+    order_management::cancel_order(&order_id)
 }
 
 // ---------------
@@ -219,7 +231,7 @@ async fn verify_transaction(
     transaction_id: String,
     gas: Option<i32>,
 ) -> Result<()> {
-    let order_state = order_management::get_order_state_by_id(order_id.as_str())?;
+    let order_state = order_management::get_order_by_id(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
