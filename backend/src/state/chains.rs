@@ -43,7 +43,7 @@ pub fn get_vault_manager_address(chain_id: u64) -> Result<String> {
     })
 }
 
-pub fn token_is_approved(chain_id: u64, token_address: String) -> Result<bool> {
+pub fn token_is_approved(chain_id: u64, token_address: &str) -> Result<bool> {
     read_state(|state| {
         state
             .chains
@@ -52,7 +52,7 @@ pub fn token_is_approved(chain_id: u64, token_address: String) -> Result<bool> {
             .map(|chain_state| {
                 chain_state
                     .approved_tokens
-                    .get(&token_address)
+                    .get(token_address)
                     .cloned()
                     .unwrap_or(false)
             })

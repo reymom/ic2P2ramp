@@ -2,11 +2,13 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::borrow::Cow;
 
+use crate::{errors::Result, management::validate_evm_address};
+
 use super::common::PaymentProvider;
 
-const MAX_USER_SIZE: u32 = 100;
+const MAX_USER_SIZE: u32 = 350;
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct User {
     pub evm_address: String,
     pub payment_providers: Vec<PaymentProvider>,
@@ -15,6 +17,17 @@ pub struct User {
 }
 
 impl User {
+    pub fn new(evm_address: String) -> Result<Self> {
+        validate_evm_address(&evm_address)?;
+
+        Ok(Self {
+            evm_address,
+            payment_providers: Vec::new(),
+            offramped_amount: 0,
+            score: 1,
+        })
+    }
+
     pub fn decrease_score(&mut self) {
         self.score -= 1;
     }
@@ -23,7 +36,7 @@ impl User {
         self.score += (amount / 1000) as i32; // Assuming amount is in cents
     }
 
-    pub fn can_commit_order(&self) -> bool {
+    pub fn can_commit_orders(&self) -> bool {
         self.score >= 0
     }
 }

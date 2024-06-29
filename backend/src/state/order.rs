@@ -35,9 +35,7 @@ pub struct Order {
     pub currency_symbol: String,
     pub crypto_amount: u64,
     pub offramper_providers: Vec<PaymentProvider>,
-    pub onramper_provider: Option<PaymentProvider>,
     pub offramper_address: String,
-    pub onramper_address: Option<String>,
     pub chain_id: u64,
     pub token_address: Option<String>,
 }
@@ -45,11 +43,9 @@ pub struct Order {
 impl Order {
     pub fn lock(self, onramper_provider: PaymentProvider, onramper_address: String) -> LockedOrder {
         LockedOrder {
-            base: Order {
-                onramper_provider: Some(onramper_provider),
-                onramper_address: Some(onramper_address),
-                ..self
-            },
+            base: self,
+            onramper_address,
+            onramper_provider,
             proof_submitted: false,
             payment_done: false,
             locked_at: time(),
@@ -60,6 +56,8 @@ impl Order {
 #[derive(CandidType, Deserialize, Clone)]
 pub struct LockedOrder {
     pub base: Order,
+    pub onramper_provider: PaymentProvider,
+    pub onramper_address: String,
     pub proof_submitted: bool,
     pub payment_done: bool,
     pub locked_at: u64,
