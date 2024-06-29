@@ -13,6 +13,24 @@ type EthMainnetService = variant {
   Ankr;
 };
 type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type ExchangeRateError = variant {
+  AnonymousPrincipalNotAllowed;
+  CryptoQuoteAssetNotFound;
+  FailedToAcceptCycles;
+  ForexBaseAssetNotFound;
+  CryptoBaseAssetNotFound;
+  StablecoinRateTooFewRates;
+  ForexAssetsNotFound;
+  InconsistentRatesReceived;
+  RateLimited;
+  StablecoinRateZeroRate;
+  Other : record { code : nat32; description : text };
+  ForexInvalidTimestamp;
+  NotEnoughCycles;
+  ForexQuoteAssetNotFound;
+  StablecoinRateNotFound;
+  Pending;
+};
 type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
@@ -21,11 +39,12 @@ type InitArg = record {
   client_secret : text;
 };
 type LockedOrder = record {
+  locked_at : nat64;
   payment_done : bool;
   base : Order;
-  locked : bool;
   proof_submitted : bool;
-  removed : bool;
+  onramper_address : text;
+  onramper_provider : PaymentProvider;
 };
 type Order = record {
   id : text;
@@ -33,18 +52,17 @@ type Order = record {
   token_address : opt text;
   fiat_amount : nat64;
   currency_symbol : text;
-  onramper_address : opt text;
+  created_at : nat64;
   chain_id : nat64;
   offramper_providers : vec PaymentProvider;
   offramper_address : text;
-  onramper_provider : opt PaymentProvider;
   crypto_amount : nat64;
 };
 type OrderState = variant {
   Locked : LockedOrder;
-  Cancelled;
+  Cancelled : text;
   Created : Order;
-  Completed;
+  Completed : text;
 };
 type PaymentProvider = variant {
   PayPal : record { id : text };
@@ -59,9 +77,38 @@ type ProviderView = record {
   cyclesPerMessageByte : nat64;
   providerId : nat64;
 };
-type Result = variant { Ok : text; Err : text };
-type Result_1 = variant { Ok : User; Err : text };
-type Result_2 = variant { Ok : bool; Err : text };
+type RampError = variant {
+  TokenAlreadyRegistered;
+  InvalidAddress;
+  HttpRequestError : record { nat64; text };
+  TransactionTimeout;
+  PaymentVerificationFailed;
+  InvalidInput : text;
+  InvalidOnramperProvider;
+  UserBanned;
+  ExchangeRateError : ExchangeRateError;
+  TransactionFailed : text;
+  ParseFloatError : text;
+  OrderNotFound;
+  ProviderNotInUser : text;
+  EthersAbiError : text;
+  ChainIdNotFound : nat64;
+  TokenUnregistered;
+  ParseError : text;
+  NonceTooLow;
+  EmptyTransactionHash;
+  InvalidOrderState : text;
+  NonceTooHigh;
+  CanisterCallError : text;
+  Utf8Error;
+  VaultManagerAddressNotFound : nat64;
+  UserNotFound;
+  InsufficientFunds;
+  OrderCreateFailed;
+};
+type Result = variant { Ok; Err : RampError };
+type Result_1 = variant { Ok : text; Err : RampError };
+type Result_2 = variant { Ok : User; Err : RampError };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
 type RpcServices = variant {
   EthSepolia : opt vec EthSepoliaService;
@@ -72,10 +119,12 @@ type User = record {
   offramped_amount : nat64;
   evm_address : text;
   payment_providers : vec PaymentProvider;
-  score : nat32;
+  score : int32;
 };
 service : (InitArg) -> {
-  add_payment_provider : (text, PaymentProvider) -> (Result) query;
+  add_payment_provider_for_user : (text, PaymentProvider) -> (Result) query;
+  approve_token_allowance : (nat64, text, int32) -> (Result);
+  cancel_order : (text) -> (Result_1);
   create_order : (
       nat64,
       text,
@@ -84,16 +133,15 @@ service : (InitArg) -> {
       text,
       nat64,
       opt text,
-    ) -> (Result);
+    ) -> (Result_1);
   get_evm_address : () -> (text) query;
   get_orders : () -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
-  get_usd_exchange_rate : (text, text) -> (Result);
-  get_user : (text) -> (Result_1) query;
-  lock_order : (text, PaymentProvider, text, text) -> (Result);
-  register_user : (text, vec PaymentProvider) -> (Result);
-  remove_order : (text) -> (Result);
-  test_check_and_approve_token : (nat64, text, nat32) -> (Result_2);
-  test_deposit_funds : (nat64, nat64, opt text, opt text) -> (Result);
-  verify_transaction : (text, text, text) -> (Result);
+  get_usd_exchange_rate : (text, text) -> (Result_1);
+  get_user : (text) -> (Result_2) query;
+  lock_order : (text, PaymentProvider, text, opt int32) -> (Result);
+  register_user : (text, vec PaymentProvider) -> (Result_1);
+  test_deposit_funds : (nat64, nat64, opt text, opt int32) -> (Result_1);
+  unlock_order : (text, opt nat64) -> (Result);
+  verify_transaction : (text, text, opt int32) -> (Result);
 }
