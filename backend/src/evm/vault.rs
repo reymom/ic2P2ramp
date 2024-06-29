@@ -8,7 +8,7 @@ use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
 use super::transaction::{send_raw_transaction, wait_for_transaction_confirmation};
 use crate::errors::{RampError, Result};
-use crate::management;
+use crate::management::{self, validate_evm_address};
 use crate::state::chains;
 use crate::state::{increment_nonce, mutate_state, storage::OrderState};
 
@@ -17,17 +17,18 @@ pub struct Ic2P2ramp;
 impl Ic2P2ramp {
     pub async fn approve_token_allowance(
         chain_id: u64,
-        token_address: String,
+        token_address: &str,
         gas: i32,
     ) -> Result<()> {
-        if chains::token_is_approved(chain_id, token_address.clone())? {
+        validate_evm_address(&token_address)?;
+        if chains::token_is_approved(chain_id, token_address)? {
             return Err(RampError::TokenAlreadyRegistered);
         };
 
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         let tx_hash = Self::approve_infinite_allowance(
             chain_id,
-            token_address.clone(),
+            token_address,
             U256::from(gas),
             fee_estimates,
         )
@@ -46,7 +47,7 @@ impl Ic2P2ramp {
                     if let Some(chain_state) = state.chains.get_mut(&chain_id) {
                         chain_state
                             .approved_tokens
-                            .insert(token_address.clone(), true);
+                            .insert(token_address.to_string(), true);
                     }
                 });
                 ic_cdk::println!(
@@ -80,7 +81,7 @@ impl Ic2P2ramp {
 
         let request: SignRequest;
         if let Some(token_address) = token_address {
-            if !chains::token_is_approved(chain_id, token_address.clone())? {
+            if !chains::token_is_approved(chain_id, &token_address)? {
                 return Err(RampError::TokenUnregistered);
             }
 
@@ -196,7 +197,8 @@ impl Ic2P2ramp {
         );
 
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
-        let token_address = token_address.unwrap_or(Address::zero().to_string());
+        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
+        ic_cdk::println!("[commit_deposit] token_address = {:?}", token_address);
         let request = Self::sign_request_commit_deposit(
             gas,
             fee_estimates,
@@ -238,7 +240,7 @@ impl Ic2P2ramp {
 
         Self::create_sign_request(
             abi,
-            "commit_deposit",
+            "commitDeposit",
             gas,
             fee_estimates,
             chain_id,
@@ -329,7 +331,7 @@ impl Ic2P2ramp {
     }
 
     pub async fn release_funds(order_id: &str, gas: Option<i32>) -> Result<String> {
-        let order_state = management::order::get_order_state_by_id(&order_id.to_string())?;
+        let order_state = management::order::get_order_by_id(order_id)?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
             _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -347,7 +349,7 @@ impl Ic2P2ramp {
 
         let request: SignRequest;
         if let Some(token_address) = order.base.token_address {
-            if chains::token_is_approved(order.base.chain_id, token_address.clone())? {
+            if chains::token_is_approved(order.base.chain_id, &token_address)? {
                 return Err(RampError::TokenAlreadyRegistered);
             };
             request = Self::sign_request_release_token(
@@ -355,7 +357,7 @@ impl Ic2P2ramp {
                 fee_estimates,
                 order.base.chain_id,
                 order.base.offramper_address,
-                order.base.onramper_address.unwrap(), // onramper_address is always set in LockedOrder
+                order.onramper_address,
                 token_address,
                 order.base.crypto_amount,
                 vault_manager_address,
@@ -368,7 +370,7 @@ impl Ic2P2ramp {
                 order.base.chain_id,
                 order.base.crypto_amount,
                 order.base.offramper_address,
-                order.base.onramper_address.unwrap(), // onramper_address is always set in LockedOrder
+                order.onramper_address,
                 vault_manager_address,
             )
             .await?;
@@ -466,7 +468,7 @@ impl Ic2P2ramp {
 
     async fn approve_infinite_allowance(
         chain_id: u64,
-        token_address: String,
+        token_address: &str,
         gas: U256,
         fee_estimates: FeeEstimates,
     ) -> Result<String> {
@@ -496,7 +498,7 @@ impl Ic2P2ramp {
             fee_estimates,
             chain_id,
             U256::from(0),
-            token_address,
+            token_address.to_string(),
             &[
                 ethers_core::abi::Token::Address(vault_manager_address),
                 ethers_core::abi::Token::Uint(U256::max_value()),
@@ -523,7 +525,7 @@ impl Ic2P2ramp {
             .function(function_name)
             .map_err(|e| RampError::EthersAbiError(format!("Function not found error: {:?}", e)))?;
         let data = function
-            .encode_input(&inputs)
+            .encode_input(inputs)
             .map_err(|e| RampError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
 
         Ok(signer::create_sign_request(
