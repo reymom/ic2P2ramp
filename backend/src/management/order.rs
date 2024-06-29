@@ -24,9 +24,7 @@ pub fn create_order(
         currency_symbol,
         crypto_amount,
         offramper_providers,
-        onramper_provider: None,
         offramper_address,
-        onramper_address: None,
         chain_id,
         token_address,
     };
@@ -42,7 +40,7 @@ pub fn get_orders() -> Vec<OrderState> {
     storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect())
 }
 
-pub fn get_order_state_by_id(order_id: &str) -> Result<OrderState> {
+pub fn get_order_by_id(order_id: &str) -> Result<OrderState> {
     storage::ORDERS.with(|orders| {
         let orders = orders.borrow();
         if let Some(order_state) = orders.get(&order_id.to_string()) {
@@ -96,9 +94,8 @@ pub fn unlock_order(order_id: &str) -> Result<()> {
         if let Some(order_state) = orders.get(&order_id.to_string()) {
             match order_state {
                 OrderState::Locked(order) => {
-                    let score = user_management::decrease_user_score(
-                        &order.clone().base.onramper_address.unwrap(),
-                    )?;
+                    let score =
+                        user_management::decrease_user_score(&order.clone().onramper_address)?;
                     ic_cdk::println!("[mark_order_as_paid] user score decreased = {:?}", score);
 
                     orders.remove(&order_id.to_string()).unwrap();
@@ -120,7 +117,7 @@ pub fn mark_order_as_paid(order_id: &str) -> Result<()> {
             match order_state {
                 OrderState::Locked(mut locked_order) => {
                     let score = user_management::increase_user_score(
-                        &locked_order.clone().base.onramper_address.unwrap(),
+                        &locked_order.clone().onramper_address,
                         locked_order.base.fiat_amount,
                     )?;
                     ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
