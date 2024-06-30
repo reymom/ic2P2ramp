@@ -32,6 +32,9 @@ pub enum RampError {
     #[error("User Not Found")]
     UserNotFound,
 
+    #[error("User Could Not be Created")]
+    UserCreateFailed,
+
     #[error("User score below zero")]
     UserBanned,
 

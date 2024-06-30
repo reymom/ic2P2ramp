@@ -8,8 +8,8 @@ use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
 use super::transaction::{send_raw_transaction, wait_for_transaction_confirmation};
 use crate::errors::{RampError, Result};
-use crate::management::{self, validate_evm_address};
-use crate::state::chains;
+use crate::management::validate_evm_address;
+use crate::state::{chains, storage};
 use crate::state::{increment_nonce, mutate_state, storage::OrderState};
 
 pub struct Ic2P2ramp;
@@ -330,8 +330,8 @@ impl Ic2P2ramp {
         .await
     }
 
-    pub async fn release_funds(order_id: &str, gas: Option<i32>) -> Result<String> {
-        let order_state = management::order::get_order_by_id(order_id)?;
+    pub async fn release_funds(order_id: u64, gas: Option<i32>) -> Result<String> {
+        let order_state = storage::get_order(&order_id)?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
             _ => return Err(RampError::InvalidOrderState(order_state.to_string())),

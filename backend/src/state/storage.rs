@@ -21,7 +21,7 @@ thread_local! {
         )
     );
 
-    pub static ORDERS: RefCell<StableBTreeMap<String, OrderState, Memory>> = RefCell::new(
+    pub static ORDERS: RefCell<StableBTreeMap<u64, OrderState, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
         )
@@ -30,13 +30,29 @@ thread_local! {
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
 }
 
-pub fn insert_user(user: &User) -> String {
-    let evm_address = user.evm_address.clone();
+pub fn mutate_user<F, R>(evm_address: &str, f: F) -> Result<R>
+where
+    F: FnOnce(&mut User) -> R,
+{
+    USERS.with_borrow_mut(|users| {
+        if let Some(mut user) = users.get(&evm_address.to_string()) {
+            let result = f(&mut user);
+            users.insert(evm_address.to_string(), user);
+            Ok(result)
+        } else {
+            Err(RampError::UserNotFound)
+        }
+    })
+}
 
-    USERS.with_borrow_mut(|p| {
-        p.insert(evm_address.clone(), user.clone());
-    });
-    evm_address
+pub fn insert_user(user: &User) -> Option<User> {
+    USERS.with_borrow_mut(|p| p.insert(user.evm_address.clone(), user.clone()))
+}
+
+pub fn remove_user(evm_address: &str) -> Result<User> {
+    USERS
+        .with_borrow_mut(|p| p.remove(&evm_address.to_string()))
+        .ok_or_else(|| RampError::UserNotFound)
 }
 
 pub fn get_user(evm_address: &str) -> Result<User> {
@@ -47,16 +63,28 @@ pub fn get_user(evm_address: &str) -> Result<User> {
         .ok_or_else(|| RampError::UserNotFound)
 }
 
-pub fn generate_order_id() -> String {
+pub fn generate_order_id() -> u64 {
     ORDER_ID_COUNTER.with(|counter| {
         let mut counter = counter.borrow_mut();
         *counter += 1;
-        counter.to_string()
+        *counter
     })
+}
+
+pub fn insert_order(order: &Order) -> Option<OrderState> {
+    ORDERS.with_borrow_mut(|p| p.insert(order.id.clone(), OrderState::Created(order.clone())))
+}
+
+pub fn get_order(order_id: &u64) -> Result<OrderState> {
+    ORDERS
+        .with_borrow(|orders| orders.get(order_id))
+        .ok_or_else(|| RampError::OrderNotFound)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
     use ic_stable_structures::DefaultMemoryImpl;
@@ -67,11 +95,13 @@ mod tests {
         let mut map: StableBTreeMap<String, User, _> =
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
+        let mut payment_providers = HashSet::new();
+        payment_providers.insert(PaymentProvider::PayPal {
+            id: "paypal_id".to_string(),
+        });
         let user = User {
             evm_address: "0x123".to_string(),
-            payment_providers: vec![PaymentProvider::PayPal {
-                id: "paypal_id".to_string(),
-            }],
+            payment_providers,
             offramped_amount: 0,
             score: 1,
         };
@@ -88,7 +118,7 @@ mod tests {
         let mut updated_user = retrieved_user.clone();
         updated_user
             .payment_providers
-            .push(PaymentProvider::Revolut {
+            .insert(PaymentProvider::Revolut {
                 id: "revolut_id".to_string(),
             });
         map.insert(updated_user.evm_address.clone(), updated_user.clone());
