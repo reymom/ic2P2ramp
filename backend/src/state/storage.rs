@@ -6,7 +6,7 @@ use crate::errors::{RampError, Result};
 use crate::management::validate_evm_address;
 
 pub use super::common::PaymentProvider;
-pub use super::order::{Order, OrderState};
+pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
 pub use super::user::User;
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
@@ -79,6 +79,24 @@ pub fn get_order(order_id: &u64) -> Result<OrderState> {
     ORDERS
         .with_borrow(|orders| orders.get(order_id))
         .ok_or_else(|| RampError::OrderNotFound)
+}
+
+pub fn filter_orders<F>(filter: F) -> Vec<OrderState>
+where
+    F: Fn(&OrderState) -> bool,
+{
+    ORDERS.with_borrow(|orders| {
+        orders
+            .iter()
+            .filter_map(|(_, order_state)| {
+                if filter(&order_state) {
+                    Some(order_state.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     errors::{RampError, Result},
     management::user as user_management,
-    state::storage::{self, Order, OrderState, PaymentProvider},
+    state::storage::{self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider},
 };
 
 pub fn create_order(
@@ -25,15 +25,36 @@ pub fn create_order(
         token_address,
     )?;
 
-    match storage::insert_order(&order) {
-        Some(OrderState::Created(order)) => Ok(order.id),
-        Some(order_state) => Err(RampError::InvalidOrderState(order_state.to_string())),
-        None => Err(RampError::OrderCreateFailed),
-    }
+    storage::insert_order(&order);
+    Ok(order.id)
 }
 
-pub fn get_orders() -> Vec<OrderState> {
-    storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect())
+pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
+    match filter {
+        None => storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect()),
+        Some(OrderFilter::ByOfframperAddress(address)) => {
+            storage::filter_orders(|order_state| match order_state {
+                OrderState::Created(order) => order.offramper_address == address,
+                OrderState::Locked(order) => order.base.offramper_address == address,
+                _ => false,
+            })
+        }
+        Some(OrderFilter::LockedByOnramper(address)) => {
+            storage::filter_orders(|order_state| match order_state {
+                OrderState::Locked(order) => order.onramper_address == address,
+                _ => false,
+            })
+        }
+        Some(OrderFilter::ByState(state)) => {
+            storage::filter_orders(|order_state| match (state.clone(), order_state) {
+                (OrderStateFilter::Created, OrderState::Created(_))
+                | (OrderStateFilter::Locked, OrderState::Locked(_))
+                | (OrderStateFilter::Completed, OrderState::Completed(_))
+                | (OrderStateFilter::Cancelled, OrderState::Cancelled(_)) => true,
+                _ => false,
+            })
+        }
+    }
 }
 
 pub fn update_order_state(order_id: u64, new_state: OrderState) -> Result<()> {

@@ -13,7 +13,7 @@ use evm::{providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
-use state::storage::{self, OrderState, PaymentProvider, User};
+use state::storage::{self, OrderFilter, OrderState, PaymentProvider, User};
 use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
@@ -115,8 +115,8 @@ fn add_payment_provider_for_user(
 // ------------------
 
 #[ic_cdk::query]
-fn get_orders() -> Vec<OrderState> {
-    order_management::get_orders()
+fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
+    order_management::get_orders(filter)
 }
 
 #[ic_cdk::update]

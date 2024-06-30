@@ -107,3 +107,18 @@ impl Storable for OrderState {
         is_fixed_size: false,
     };
 }
+
+#[derive(CandidType, Clone, Deserialize)]
+pub enum OrderFilter {
+    ByOfframperAddress(String),
+    LockedByOnramper(String),
+    ByState(OrderStateFilter),
+}
+
+#[derive(CandidType, Clone, Deserialize)]
+pub enum OrderStateFilter {
+    Created,
+    Locked,
+    Completed,
+    Cancelled,
+}
