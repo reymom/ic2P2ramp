@@ -9,13 +9,8 @@ pub type Result<T> = std::result::Result<T, RampError>;
 
 #[derive(Error, Debug, CandidType)]
 pub enum RampError {
-    // #[error("Unauthorized")]
-    // Unauthorized,
     #[error("Order Not Found")]
     OrderNotFound,
-
-    #[error("Order Could Not be Created")]
-    OrderCreateFailed,
 
     #[error("Invalid Order State: {0}")]
     InvalidOrderState(String),
@@ -31,9 +26,6 @@ pub enum RampError {
 
     #[error("User Not Found")]
     UserNotFound,
-
-    #[error("User Could Not be Created")]
-    UserCreateFailed,
 
     #[error("User score below zero")]
     UserBanned,
