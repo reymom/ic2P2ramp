@@ -1,6 +1,6 @@
 use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use crate::{errors::Result, management::validate_evm_address};
 
@@ -11,7 +11,7 @@ const MAX_USER_SIZE: u32 = 350;
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct User {
     pub evm_address: String,
-    pub payment_providers: Vec<PaymentProvider>,
+    pub payment_providers: HashSet<PaymentProvider>,
     pub offramped_amount: u64,
     pub score: i32,
 }
@@ -22,7 +22,7 @@ impl User {
 
         Ok(Self {
             evm_address,
-            payment_providers: Vec::new(),
+            payment_providers: HashSet::new(),
             offramped_amount: 0,
             score: 1,
         })

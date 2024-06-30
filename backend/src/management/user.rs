@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     errors::{RampError, Result},
     state::storage::{self, PaymentProvider, User},
@@ -5,14 +7,17 @@ use crate::{
 
 pub fn register_user(
     evm_address: String,
-    payment_providers: Vec<PaymentProvider>,
-) -> Result<String> {
+    payment_providers: HashSet<PaymentProvider>,
+) -> Result<User> {
     if payment_providers.is_empty() {
         return Err(RampError::InvalidInput(
             "Provider list is empty.".to_string(),
         ));
     }
-    payment_providers.iter().try_for_each(|p| p.validate())?;
+    payment_providers
+        .clone()
+        .into_iter()
+        .try_for_each(|p| p.validate())?;
 
     if let Ok(_) = storage::get_user(&evm_address) {
         return Err(RampError::InvalidInput(
@@ -23,28 +28,16 @@ pub fn register_user(
     let mut user = User::new(evm_address.clone())?;
     user.payment_providers = payment_providers;
 
-    Ok(storage::insert_user(&user))
+    storage::insert_user(&user).ok_or_else(|| RampError::UserCreateFailed)
 }
 
-pub fn add_payment_provider(evm_address: String, payment_provider: PaymentProvider) -> Result<()> {
+pub fn add_payment_provider(evm_address: &str, payment_provider: PaymentProvider) -> Result<()> {
     payment_provider.validate()?;
 
-    let mut user = storage::get_user(&evm_address)?;
+    storage::mutate_user(evm_address, |user| {
+        user.payment_providers.replace(payment_provider);
+    })?;
 
-    let provider_type = payment_provider.get_type();
-    let mut replaced = false;
-    for provider in &mut user.payment_providers {
-        if provider.get_type() == provider_type {
-            *provider = payment_provider.clone();
-            replaced = true;
-            break;
-        }
-    }
-    if !replaced {
-        user.payment_providers.push(payment_provider);
-    }
-
-    storage::insert_user(&user);
     Ok(())
 }
 

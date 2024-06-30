@@ -5,6 +5,7 @@ mod outcalls;
 mod state;
 
 use errors::{RampError, Result};
+use std::collections::HashSet;
 use std::time::Duration;
 
 use evm::transaction::spawn_transaction_checker;
@@ -87,7 +88,7 @@ async fn get_usd_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Re
 // -----
 
 #[ic_cdk::update]
-fn register_user(evm_address: String, payment_providers: Vec<PaymentProvider>) -> Result<String> {
+fn register_user(evm_address: String, payment_providers: HashSet<PaymentProvider>) -> Result<User> {
     user_management::register_user(evm_address, payment_providers)
 }
 
@@ -96,12 +97,17 @@ fn get_user(evm_address: String) -> Result<User> {
     storage::get_user(&evm_address)
 }
 
-#[ic_cdk::query]
+#[ic_cdk::update]
+fn remove_user(evm_address: String) -> Result<User> {
+    storage::remove_user(&evm_address)
+}
+
+#[ic_cdk::update]
 fn add_payment_provider_for_user(
     evm_address: String,
     payment_provider: PaymentProvider,
 ) -> Result<()> {
-    user_management::add_payment_provider(evm_address, payment_provider)
+    user_management::add_payment_provider(&evm_address, payment_provider)
 }
 
 // ------------------
@@ -118,11 +124,11 @@ fn create_order(
     fiat_amount: u64,
     fiat_symbol: String,
     crypto_amount: u64,
-    offramper_providers: Vec<PaymentProvider>,
+    offramper_providers: HashSet<PaymentProvider>,
     offramper_address: String,
     chain_id: u64,
     token_address: Option<String>,
-) -> Result<String> {
+) -> Result<u64> {
     let user = storage::get_user(&offramper_address)?;
 
     for provider in &offramper_providers {
@@ -140,12 +146,11 @@ fn create_order(
         chain_id,
         token_address,
     )
-    .ok_or_else(|| RampError::OrderCreateFailed)
 }
 
 #[ic_cdk::update]
 async fn lock_order(
-    order_id: String,
+    order_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: String,
     gas: Option<i32>,
@@ -154,13 +159,13 @@ async fn lock_order(
         return Err(RampError::UserBanned);
     }
 
-    let order_state = order_management::get_order_by_id(&order_id)?;
+    let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    if !contains_provider_type(onramper_provider.clone(), &order.offramper_providers) {
+    if !contains_provider_type(&onramper_provider, &order.offramper_providers) {
         return Err(RampError::InvalidOnramperProvider);
     }
 
@@ -179,7 +184,7 @@ async fn lock_order(
         Duration::from_secs(4),
         move || {
             let _ = order_management::lock_order(
-                order_id.as_str(),
+                order_id,
                 onramper_provider.clone(),
                 onramper_address.clone(),
             );
@@ -189,8 +194,8 @@ async fn lock_order(
 }
 
 #[ic_cdk::update]
-async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
-    let order_state = order_management::get_order_by_id(&order_id)?;
+async fn unlock_order(order_id: u64, gas: Option<u64>) -> Result<()> {
+    let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -210,15 +215,15 @@ async fn unlock_order(order_id: String, gas: Option<u64>) -> Result<()> {
         60,
         Duration::from_secs(4),
         move || {
-            let _ = order_management::unlock_order(&order_id);
+            let _ = order_management::unlock_order(order_id);
         },
     );
     Ok(())
 }
 
 #[ic_cdk::update]
-fn cancel_order(order_id: String) -> Result<String> {
-    order_management::cancel_order(&order_id)
+fn cancel_order(order_id: u64) -> Result<String> {
+    order_management::cancel_order(order_id)
 }
 
 // ---------------
@@ -226,12 +231,8 @@ fn cancel_order(order_id: String) -> Result<String> {
 // ---------------
 
 #[ic_cdk::update]
-async fn verify_transaction(
-    order_id: String,
-    transaction_id: String,
-    gas: Option<i32>,
-) -> Result<()> {
-    let order_state = order_management::get_order_by_id(&order_id)?;
+async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<i32>) -> Result<()> {
+    let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -254,8 +255,15 @@ async fn verify_transaction(
 
     let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
     let currency_matches = capture_details.amount.currency_code == order.base.currency_symbol;
-    let offramper_matches =
-        capture_details.payee.email_address == order.base.offramper_providers[0].get_id();
+
+    let offramper_provider = order
+        .base
+        .offramper_providers
+        .iter()
+        .find(|p| p.get_type() == order.onramper_provider.get_type())
+        .ok_or_else(|| RampError::ProviderNotInUser(order.base.offramper_address))?;
+
+    let offramper_matches = capture_details.payee.email_address == offramper_provider.get_id();
     // let onramper_matches = order.onramper_paypal_id.as_deref()
     //     == Some(&capture_details.supplementary_data.related_ids.order_id);
 
@@ -265,8 +273,8 @@ async fn verify_transaction(
         && offramper_matches
     // && onramper_matches
     {
-        order_management::mark_order_as_paid(order.base.id.as_str())?;
-        let tx_hash = Ic2P2ramp::release_funds(order_id.as_str(), gas).await?;
+        order_management::mark_order_as_paid(order.base.id)?;
+        let tx_hash = Ic2P2ramp::release_funds(order_id, gas).await?;
         spawn_transaction_checker(
             tx_hash,
             order.base.chain_id,
@@ -275,8 +283,8 @@ async fn verify_transaction(
             move || {
                 // Update order state to completed
                 let _ = management::order::update_order_state(
-                    order_id.as_str(),
-                    OrderState::Completed(order_id.clone()),
+                    order_id,
+                    OrderState::Completed(order_id),
                 );
             },
         );
