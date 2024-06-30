@@ -47,7 +47,7 @@ type LockedOrder = record {
   onramper_provider : PaymentProvider;
 };
 type Order = record {
-  id : text;
+  id : nat64;
   originator : principal;
   token_address : opt text;
   fiat_amount : nat64;
@@ -60,9 +60,9 @@ type Order = record {
 };
 type OrderState = variant {
   Locked : LockedOrder;
-  Cancelled : text;
+  Cancelled : nat64;
   Created : Order;
-  Completed : text;
+  Completed : nat64;
 };
 type PaymentProvider = variant {
   PayPal : record { id : text };
@@ -97,6 +97,7 @@ type RampError = variant {
   ParseError : text;
   NonceTooLow;
   EmptyTransactionHash;
+  UserCreateFailed;
   InvalidOrderState : text;
   NonceTooHigh;
   CanisterCallError : text;
@@ -108,7 +109,8 @@ type RampError = variant {
 };
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : text; Err : RampError };
-type Result_2 = variant { Ok : User; Err : RampError };
+type Result_2 = variant { Ok : nat64; Err : RampError };
+type Result_3 = variant { Ok : User; Err : RampError };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
 type RpcServices = variant {
   EthSepolia : opt vec EthSepoliaService;
@@ -122,9 +124,9 @@ type User = record {
   score : int32;
 };
 service : (InitArg) -> {
-  add_payment_provider_for_user : (text, PaymentProvider) -> (Result) query;
+  add_payment_provider_for_user : (text, PaymentProvider) -> (Result);
   approve_token_allowance : (nat64, text, int32) -> (Result);
-  cancel_order : (text) -> (Result_1);
+  cancel_order : (nat64) -> (Result_1);
   create_order : (
       nat64,
       text,
@@ -133,15 +135,16 @@ service : (InitArg) -> {
       text,
       nat64,
       opt text,
-    ) -> (Result_1);
+    ) -> (Result_2);
   get_evm_address : () -> (text) query;
   get_orders : () -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
   get_usd_exchange_rate : (text, text) -> (Result_1);
-  get_user : (text) -> (Result_2) query;
-  lock_order : (text, PaymentProvider, text, opt int32) -> (Result);
-  register_user : (text, vec PaymentProvider) -> (Result_1);
+  get_user : (text) -> (Result_3) query;
+  lock_order : (nat64, PaymentProvider, text, opt int32) -> (Result);
+  register_user : (text, vec PaymentProvider) -> (Result_3);
+  remove_user : (text) -> (Result_3);
   test_deposit_funds : (nat64, nat64, opt text, opt int32) -> (Result_1);
-  unlock_order : (text, opt nat64) -> (Result);
-  verify_transaction : (text, text, opt int32) -> (Result);
+  unlock_order : (nat64, opt nat64) -> (Result);
+  verify_transaction : (nat64, text, opt int32) -> (Result);
 }
