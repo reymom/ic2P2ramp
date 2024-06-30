@@ -28,7 +28,8 @@ pub fn register_user(
     let mut user = User::new(evm_address.clone())?;
     user.payment_providers = payment_providers;
 
-    storage::insert_user(&user).ok_or_else(|| RampError::UserCreateFailed)
+    storage::insert_user(&user);
+    Ok(user)
 }
 
 pub fn add_payment_provider(evm_address: &str, payment_provider: PaymentProvider) -> Result<()> {

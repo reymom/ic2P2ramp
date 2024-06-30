@@ -14,8 +14,12 @@ pub enum PaymentProvider {
 impl PartialEq for PaymentProvider {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (PaymentProvider::PayPal { .. }, PaymentProvider::PayPal { .. }) => true,
-            (PaymentProvider::Revolut { .. }, PaymentProvider::Revolut { .. }) => true,
+            (PaymentProvider::PayPal { id: id1 }, PaymentProvider::PayPal { id: id2 }) => {
+                id1 == id2
+            }
+            (PaymentProvider::Revolut { id: id1 }, PaymentProvider::Revolut { id: id2 }) => {
+                id1 == id2
+            }
             _ => false,
         }
     }
@@ -23,10 +27,8 @@ impl PartialEq for PaymentProvider {
 
 impl std::hash::Hash for PaymentProvider {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            PaymentProvider::PayPal { .. } => state.write_u8(0),
-            PaymentProvider::Revolut { .. } => state.write_u8(1),
-        }
+        self.get_type().hash(state);
+        self.get_id().hash(state);
     }
 }
 
@@ -59,5 +61,33 @@ pub fn contains_provider_type(
     provider: &PaymentProvider,
     providers: &HashSet<PaymentProvider>,
 ) -> bool {
-    providers.contains(&provider)
+    providers
+        .iter()
+        .any(|p| p.get_type() == provider.get_type())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_contains_provider_type() {
+        let mut providers = HashSet::new();
+        providers.insert(PaymentProvider::PayPal {
+            id: "paypal_1".to_string(),
+        });
+        providers.insert(PaymentProvider::Revolut {
+            id: "revolut_1".to_string(),
+        });
+
+        let paypal_provider = PaymentProvider::PayPal {
+            id: "paypal_2".to_string(),
+        };
+        let revolut_provider = PaymentProvider::Revolut {
+            id: "revolut_2".to_string(),
+        };
+
+        assert!(contains_provider_type(&paypal_provider, &providers));
+        assert!(contains_provider_type(&revolut_provider, &providers));
+    }
 }
