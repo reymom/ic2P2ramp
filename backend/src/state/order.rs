@@ -1,9 +1,11 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, collections::HashSet, fmt};
 
-use super::common::PaymentProvider;
+use crate::{errors::Result, management};
+
+use super::{common::PaymentProvider, storage};
 
 const MAX_ORDER_SIZE: u32 = 500;
 
@@ -11,8 +13,8 @@ const MAX_ORDER_SIZE: u32 = 500;
 pub enum OrderState {
     Created(Order),
     Locked(LockedOrder),
-    Completed(String),
-    Cancelled(String),
+    Completed(u64),
+    Cancelled(u64),
 }
 
 impl fmt::Display for OrderState {
@@ -28,19 +30,47 @@ impl fmt::Display for OrderState {
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct Order {
-    pub id: String,
+    pub id: u64,
     pub originator: Principal,
     pub created_at: u64,
     pub fiat_amount: u64,
     pub currency_symbol: String,
     pub crypto_amount: u64,
-    pub offramper_providers: Vec<PaymentProvider>,
+    pub offramper_providers: HashSet<PaymentProvider>,
     pub offramper_address: String,
     pub chain_id: u64,
     pub token_address: Option<String>,
 }
 
 impl Order {
+    pub fn new(
+        fiat_amount: u64,
+        currency_symbol: String,
+        crypto_amount: u64,
+        offramper_providers: HashSet<PaymentProvider>,
+        offramper_address: String,
+        chain_id: u64,
+        token_address: Option<String>,
+    ) -> Result<Self> {
+        management::validate_evm_address(&offramper_address)?;
+
+        let order_id = storage::generate_order_id();
+        let order = Order {
+            id: order_id.clone(),
+            originator: ic_cdk::caller(),
+            created_at: time(),
+            fiat_amount,
+            currency_symbol,
+            crypto_amount,
+            offramper_providers,
+            offramper_address,
+            chain_id,
+            token_address,
+        };
+
+        Ok(order)
+    }
+
     pub fn lock(self, onramper_provider: PaymentProvider, onramper_address: String) -> LockedOrder {
         LockedOrder {
             base: self,
