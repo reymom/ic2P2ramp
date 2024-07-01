@@ -58,12 +58,19 @@ type Order = record {
   offramper_address : text;
   crypto_amount : nat64;
 };
+type OrderFilter = variant {
+  ByChainId : nat64;
+  ByOfframperAddress : text;
+  ByState : OrderStateFilter;
+  LockedByOnramper : text;
+};
 type OrderState = variant {
   Locked : LockedOrder;
   Cancelled : nat64;
   Created : Order;
   Completed : nat64;
 };
+type OrderStateFilter = variant { Locked; Cancelled; Created; Completed };
 type PaymentProvider = variant {
   PayPal : record { id : text };
   Revolut : record { id : text };
@@ -97,7 +104,6 @@ type RampError = variant {
   ParseError : text;
   NonceTooLow;
   EmptyTransactionHash;
-  UserCreateFailed;
   InvalidOrderState : text;
   NonceTooHigh;
   CanisterCallError : text;
@@ -105,7 +111,6 @@ type RampError = variant {
   VaultManagerAddressNotFound : nat64;
   UserNotFound;
   InsufficientFunds;
-  OrderCreateFailed;
 };
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : text; Err : RampError };
@@ -125,7 +130,7 @@ type User = record {
 };
 service : (InitArg) -> {
   add_payment_provider_for_user : (text, PaymentProvider) -> (Result);
-  approve_token_allowance : (nat64, text, int32) -> (Result);
+  approve_token_allowance : (nat64, text, nat32) -> (Result);
   cancel_order : (nat64) -> (Result_1);
   create_order : (
       nat64,
@@ -137,14 +142,16 @@ service : (InitArg) -> {
       opt text,
     ) -> (Result_2);
   get_evm_address : () -> (text) query;
-  get_orders : () -> (vec OrderState) query;
+  get_orders : (opt OrderFilter) -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
   get_usd_exchange_rate : (text, text) -> (Result_1);
   get_user : (text) -> (Result_3) query;
-  lock_order : (nat64, PaymentProvider, text, opt int32) -> (Result);
+  lock_order : (nat64, PaymentProvider, text, opt nat32) -> (Result);
   register_user : (text, vec PaymentProvider) -> (Result_3);
   remove_user : (text) -> (Result_3);
-  test_deposit_funds : (nat64, nat64, opt text, opt int32) -> (Result_1);
-  unlock_order : (nat64, opt nat64) -> (Result);
-  verify_transaction : (nat64, text, opt int32) -> (Result);
+  set_icp_evm_address : (nat64, text, opt nat32) -> (Result_1);
+  test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_1);
+  transfer_value : (nat64, text, nat, opt int32) -> (Result_1);
+  unlock_order : (nat64, opt nat32) -> (Result);
+  verify_transaction : (nat64, text, opt nat32) -> (Result);
 }

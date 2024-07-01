@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use evm::transaction::spawn_transaction_checker;
-use evm::{providers, rpc::ProviderView, vault::Ic2P2ramp};
+use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
@@ -43,6 +43,17 @@ fn get_evm_address() -> String {
     read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
 }
 
+#[ic_cdk::update]
+async fn transfer_value(
+    chain_id: u64,
+    to: String,
+    amount: u128,
+    gas: Option<i32>,
+) -> Result<String> {
+    helpers::validate_evm_address(&to)?;
+    Ic2P2ramp::transfer_eth(chain_id, to, amount, gas).await
+}
+
 // -----
 // Tests
 // -----
@@ -52,7 +63,7 @@ async fn test_deposit_funds(
     chain_id: u64,
     amount: u64,
     token_address: Option<String>,
-    gas: Option<i32>,
+    gas: Option<u32>,
 ) -> Result<String> {
     Ic2P2ramp::deposit_funds(chain_id, amount, token_address, gas).await
 }
@@ -62,7 +73,7 @@ async fn test_deposit_funds(
 // ----------
 
 #[ic_cdk::update]
-async fn approve_token_allowance(chain_id: u64, token_address: String, gas: i32) -> Result<()> {
+async fn approve_token_allowance(chain_id: u64, token_address: String, gas: u32) -> Result<()> {
     Ic2P2ramp::approve_token_allowance(chain_id, &token_address, gas).await
 }
 
@@ -153,7 +164,7 @@ async fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: String,
-    gas: Option<i32>,
+    gas: Option<u32>,
 ) -> Result<()> {
     if !user_management::can_commit_orders(&onramper_address)? {
         return Err(RampError::UserBanned);
@@ -194,7 +205,7 @@ async fn lock_order(
 }
 
 #[ic_cdk::update]
-async fn unlock_order(order_id: u64, gas: Option<u64>) -> Result<()> {
+async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<()> {
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -222,7 +233,7 @@ async fn unlock_order(order_id: u64, gas: Option<u64>) -> Result<()> {
 }
 
 #[ic_cdk::update]
-fn cancel_order(order_id: u64) -> Result<String> {
+fn cancel_order(order_id: u64) -> Result<()> {
     order_management::cancel_order(order_id)
 }
 
@@ -231,7 +242,7 @@ fn cancel_order(order_id: u64) -> Result<String> {
 // ---------------
 
 #[ic_cdk::update]
-async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<i32>) -> Result<()> {
+async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u32>) -> Result<()> {
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
