@@ -3,14 +3,10 @@ use std::time::Duration;
 use ethers_core::types::{Address, U256};
 
 use super::fees::{self, FeeEstimates};
-use super::helpers;
-use super::rpc::SendRawTransactionStatus;
 use super::signer::{self, SignRequest};
-use super::transaction::{send_raw_transaction, wait_for_transaction_confirmation};
+use super::{helpers, transaction};
 use crate::errors::{RampError, Result};
-use crate::management::validate_evm_address;
-use crate::state::{chains, storage};
-use crate::state::{increment_nonce, mutate_state, storage::OrderState};
+use crate::state::{chains, mutate_state, storage, storage::OrderState};
 
 pub struct Ic2P2ramp;
 
@@ -18,9 +14,9 @@ impl Ic2P2ramp {
     pub async fn approve_token_allowance(
         chain_id: u64,
         token_address: &str,
-        gas: i32,
+        gas: u32,
     ) -> Result<()> {
-        validate_evm_address(&token_address)?;
+        helpers::validate_evm_address(&token_address)?;
         if chains::token_is_approved(chain_id, token_address)? {
             return Err(RampError::TokenAlreadyRegistered);
         };
@@ -34,7 +30,7 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        match wait_for_transaction_confirmation(
+        match transaction::wait_for_transaction_confirmation(
             tx_hash.clone(),
             chain_id,
             60,
@@ -65,7 +61,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         amount: u64,
         token_address: Option<String>,
-        gas: Option<i32>,
+        gas: Option<u32>,
     ) -> Result<String> {
         let gas = U256::from(gas.unwrap_or(21_000));
 
@@ -105,7 +101,7 @@ impl Ic2P2ramp {
             .await?;
         }
 
-        Self::send_signed_transaction(request, chain_id).await
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
     async fn sign_request_deposit_token(
@@ -131,7 +127,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "depositToken",
             gas,
@@ -166,7 +162,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "depositBaseCurrency",
             gas,
@@ -184,7 +180,7 @@ impl Ic2P2ramp {
         offramper_address: String,
         token_address: Option<String>,
         amount: u64,
-        gas: Option<i32>,
+        gas: Option<u32>,
     ) -> Result<String> {
         let gas = U256::from(gas.unwrap_or(21_000));
 
@@ -198,7 +194,6 @@ impl Ic2P2ramp {
 
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
-        ic_cdk::println!("[commit_deposit] token_address = {:?}", token_address);
         let request = Self::sign_request_commit_deposit(
             gas,
             fee_estimates,
@@ -210,7 +205,7 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        Self::send_signed_transaction(request, chain_id).await
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
     async fn sign_request_commit_deposit(
@@ -238,7 +233,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "commitDeposit",
             gas,
@@ -260,7 +255,7 @@ impl Ic2P2ramp {
         offramper_address: String,
         token_address: Option<String>,
         amount: u64,
-        gas: Option<u64>,
+        gas: Option<u32>,
     ) -> Result<String> {
         let gas = U256::from(gas.unwrap_or(21_000));
 
@@ -285,7 +280,7 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        Self::send_signed_transaction(request, chain_id).await
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
     async fn sign_request_uncommit_deposit(
@@ -313,7 +308,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "uncommitDeposit",
             gas,
@@ -330,7 +325,7 @@ impl Ic2P2ramp {
         .await
     }
 
-    pub async fn release_funds(order_id: u64, gas: Option<i32>) -> Result<String> {
+    pub async fn release_funds(order_id: u64, gas: Option<u32>) -> Result<String> {
         let order_state = storage::get_order(&order_id)?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
@@ -376,7 +371,7 @@ impl Ic2P2ramp {
             .await?;
         }
 
-        Self::send_signed_transaction(request, order.base.chain_id).await
+        transaction::send_signed_transaction(request, order.base.chain_id).await
     }
 
     async fn sign_request_release_token(
@@ -406,7 +401,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "releaseFunds",
             gas,
@@ -449,7 +444,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        Self::create_sign_request(
+        transaction::create_sign_request(
             abi,
             "releaseBaseCurrency",
             gas,
@@ -491,7 +486,7 @@ impl Ic2P2ramp {
             .parse()
             .map_err(|e| RampError::EthersAbiError(format!("Invalid address error: {:?}", e)))?;
 
-        let request = Self::create_sign_request(
+        let request = transaction::create_sign_request(
             abi,
             "approve",
             gas,
@@ -506,53 +501,35 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        Self::send_signed_transaction(request, chain_id).await
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
-    async fn create_sign_request(
-        abi: &str,
-        function_name: &str,
-        gas: U256,
-        fee_estimates: FeeEstimates,
+    pub async fn transfer_eth(
         chain_id: u64,
-        value: U256,
-        to_address: String,
-        inputs: &[ethers_core::abi::Token],
-    ) -> Result<SignRequest> {
-        let contract = ethers_core::abi::Contract::load(abi.as_bytes())
-            .map_err(|e| RampError::EthersAbiError(format!("Contract load error: {:?}", e)))?;
-        let function = contract
-            .function(function_name)
-            .map_err(|e| RampError::EthersAbiError(format!("Function not found error: {:?}", e)))?;
-        let data = function
-            .encode_input(inputs)
-            .map_err(|e| RampError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
+        to: String,
+        value: u128,
+        gas: Option<i32>,
+    ) -> Result<String> {
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let gas = U256::from(gas.unwrap_or(30_000));
 
-        Ok(signer::create_sign_request(
-            value,
+        let gas_cost = fee_estimates.max_fee_per_gas * gas;
+        if U256::from(value) <= gas_cost {
+            return Err(RampError::InsufficientFunds);
+        }
+        let transfer_value = U256::from(value) - gas_cost;
+
+        let request = signer::create_sign_request(
+            transfer_value,
             chain_id.into(),
-            Some(to_address.clone()),
+            Some(to),
             None,
             gas,
-            Some(data),
+            None,
             fee_estimates,
         )
-        .await)
-    }
+        .await;
 
-    async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
-        let tx = signer::sign_transaction(request).await;
-        ic_cdk::println!("Transaction sent: {:?}", tx);
-
-        match send_raw_transaction(tx.clone(), chain_id).await {
-            SendRawTransactionStatus::Ok(transaction_hash) => {
-                ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
-                increment_nonce(chain_id);
-                transaction_hash.ok_or(RampError::EmptyTransactionHash)
-            }
-            SendRawTransactionStatus::NonceTooLow => Err(RampError::NonceTooLow),
-            SendRawTransactionStatus::NonceTooHigh => Err(RampError::NonceTooHigh),
-            SendRawTransactionStatus::InsufficientFunds => Err(RampError::InsufficientFunds),
-        }
+        transaction::send_signed_transaction(request, chain_id).await
     }
 }

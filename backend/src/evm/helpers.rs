@@ -1,6 +1,7 @@
+use std::str::FromStr;
 use std::time::Duration;
 
-use ethers_core::types::H160;
+use ethers_core::types::{Address, H160};
 
 use crate::errors::{RampError, Result};
 
@@ -38,4 +39,9 @@ pub fn parse_address(address: String) -> Result<H160> {
     address
         .parse()
         .map_err(|e| RampError::EthersAbiError(format!("Invalid address error: {:?}", e)))
+}
+
+pub fn validate_evm_address(evm_address: &str) -> Result<()> {
+    Address::from_str(evm_address).map_err(|_| RampError::InvalidAddress)?;
+    Ok(())
 }

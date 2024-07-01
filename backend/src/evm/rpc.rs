@@ -400,8 +400,15 @@ impl Service {
         arg0: RpcServices,
         arg1: Option<RpcConfig>,
         arg2: String,
+        cycles: u128,
     ) -> Result<(MultiGetTransactionReceiptResult,)> {
-        ic_cdk::call(self.0, "eth_getTransactionReceipt", (arg0, arg1, arg2)).await
+        ic_cdk::api::call::call_with_payment128(
+            self.0,
+            "eth_getTransactionReceipt",
+            (arg0, arg1, arg2),
+            cycles,
+        )
+        .await
     }
     pub async fn send_raw_transaction(
         &self,

@@ -1,12 +1,20 @@
 use std::time::Duration;
 
-use super::rpc::{
-    GetTransactionReceiptResult, MultiGetTransactionReceiptResult, MultiSendRawTransactionResult,
-    RpcConfig, SendRawTransactionResult, SendRawTransactionStatus, EVM_RPC,
+use ethers_core::types::U256;
+
+use super::{
+    fees::FeeEstimates,
+    rpc::{
+        GetTransactionReceiptResult, MultiGetTransactionReceiptResult,
+        MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
+        SendRawTransactionStatus, EVM_RPC,
+    },
+    signer::SignRequest,
 };
 use crate::{
     errors::{RampError, Result},
-    state::chains::get_rpc_providers,
+    evm::signer,
+    state::{chains::get_rpc_providers, increment_nonce},
 };
 
 #[derive(Debug)]
@@ -14,6 +22,53 @@ pub enum TransactionStatus {
     Confirmed,
     Failed(String),
     Pending,
+}
+
+pub async fn create_sign_request(
+    abi: &str,
+    function_name: &str,
+    gas: U256,
+    fee_estimates: FeeEstimates,
+    chain_id: u64,
+    value: U256,
+    to_address: String,
+    inputs: &[ethers_core::abi::Token],
+) -> Result<SignRequest> {
+    let contract = ethers_core::abi::Contract::load(abi.as_bytes())
+        .map_err(|e| RampError::EthersAbiError(format!("Contract load error: {:?}", e)))?;
+    let function = contract
+        .function(function_name)
+        .map_err(|e| RampError::EthersAbiError(format!("Function not found error: {:?}", e)))?;
+    let data = function
+        .encode_input(inputs)
+        .map_err(|e| RampError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
+
+    Ok(signer::create_sign_request(
+        value,
+        chain_id.into(),
+        Some(to_address.clone()),
+        None,
+        gas,
+        Some(data),
+        fee_estimates,
+    )
+    .await)
+}
+
+pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
+    let tx = signer::sign_transaction(request).await;
+    ic_cdk::println!("Transaction sent: {:?}", tx);
+
+    match send_raw_transaction(tx.clone(), chain_id).await {
+        SendRawTransactionStatus::Ok(transaction_hash) => {
+            ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
+            increment_nonce(chain_id);
+            transaction_hash.ok_or(RampError::EmptyTransactionHash)
+        }
+        SendRawTransactionStatus::NonceTooLow => Err(RampError::NonceTooLow),
+        SendRawTransactionStatus::NonceTooHigh => Err(RampError::NonceTooHigh),
+        SendRawTransactionStatus::InsufficientFunds => Err(RampError::InsufficientFunds),
+    }
 }
 
 pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
@@ -43,10 +98,11 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
 }
 
 pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
+    let cycles = 10_000_000_000;
     let rpc_providers = get_rpc_providers(chain_id);
     let arg: Option<RpcConfig> = None;
     let res = EVM_RPC
-        .eth_get_transaction_receipt(rpc_providers, arg, tx_hash)
+        .eth_get_transaction_receipt(rpc_providers, arg, tx_hash, cycles)
         .await;
 
     ic_cdk::println!("[check_transaction_receipt] res = {:?}", res);
