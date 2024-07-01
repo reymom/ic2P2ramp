@@ -64,10 +64,6 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
     }
 }
 
-pub fn update_order_state(order_id: u64, new_state: OrderState) -> Result<()> {
-    storage::mutate_order(&order_id, |order_state| *order_state = new_state)
-}
-
 pub fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
@@ -118,6 +114,16 @@ pub fn cancel_order(order_id: u64) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(_) => {
             *order_state = OrderState::Cancelled(order_id);
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
+}
+
+pub fn set_order_completed(order_id: u64) -> Result<()> {
+    storage::mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            *order_state = OrderState::Completed(order.clone().complete());
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),

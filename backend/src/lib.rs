@@ -297,10 +297,12 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
             Duration::from_secs(4),
             move || {
                 // Update order state to completed
-                let _ = management::order::update_order_state(
-                    order_id,
-                    OrderState::Completed(order_id),
-                );
+                match management::order::set_order_completed(order_id) {
+                    Ok(_) => {
+                        ic_cdk::println!("[verify_transaction] order {:?} completed", order_id)
+                    }
+                    Err(e) => ic_cdk::trap(format!("could not complete order: {:?}", e).as_str()),
+                }
             },
         );
         Ok(())

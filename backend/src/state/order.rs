@@ -13,7 +13,7 @@ const MAX_ORDER_SIZE: u32 = 500;
 pub enum OrderState {
     Created(Order),
     Locked(LockedOrder),
-    Completed(u64),
+    Completed(CompletedOrder),
     Cancelled(u64),
 }
 
@@ -26,6 +26,21 @@ impl fmt::Display for OrderState {
             OrderState::Cancelled(_) => write!(f, "Cancelled"),
         }
     }
+}
+
+impl Storable for OrderState {
+    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: MAX_ORDER_SIZE,
+        is_fixed_size: false,
+    };
 }
 
 #[derive(CandidType, Deserialize, Clone)]
@@ -76,7 +91,6 @@ impl Order {
             base: self,
             onramper_address,
             onramper_provider,
-            proof_submitted: false,
             payment_done: false,
             locked_at: time(),
         }
@@ -88,24 +102,34 @@ pub struct LockedOrder {
     pub base: Order,
     pub onramper_provider: PaymentProvider,
     pub onramper_address: String,
-    pub proof_submitted: bool,
     pub payment_done: bool,
     pub locked_at: u64,
 }
 
-impl Storable for OrderState {
-    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
-        Cow::Owned(Encode!(self).unwrap())
+impl LockedOrder {
+    pub fn complete(self) -> CompletedOrder {
+        self.into()
     }
+}
 
-    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
+#[derive(CandidType, Deserialize, Clone)]
+pub struct CompletedOrder {
+    pub onramper: String,
+    pub offramper: String,
+    pub fiat_amount: u64,
+    pub chain_id: u64,
+}
+
+impl From<LockedOrder> for CompletedOrder {
+    fn from(locked_order: LockedOrder) -> Self {
+        let base = locked_order.base;
+        CompletedOrder {
+            onramper: locked_order.onramper_address,
+            offramper: base.offramper_address,
+            fiat_amount: base.fiat_amount,
+            chain_id: base.chain_id,
+        }
     }
-
-    const BOUND: Bound = Bound::Bounded {
-        max_size: MAX_ORDER_SIZE,
-        is_fixed_size: false,
-    };
 }
 
 #[derive(CandidType, Clone, Deserialize)]
