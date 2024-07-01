@@ -2,7 +2,7 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
-use crate::{errors::Result, management::validate_evm_address};
+use crate::{errors::Result, evm::helpers};
 
 use super::common::PaymentProvider;
 
@@ -18,7 +18,7 @@ pub struct User {
 
 impl User {
     pub fn new(evm_address: String) -> Result<Self> {
-        validate_evm_address(&evm_address)?;
+        helpers::validate_evm_address(&evm_address)?;
 
         Ok(Self {
             evm_address,

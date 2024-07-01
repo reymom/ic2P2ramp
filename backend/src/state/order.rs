@@ -3,7 +3,7 @@ use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet, fmt};
 
-use crate::{errors::Result, management};
+use crate::{errors::Result, evm::helpers};
 
 use super::{common::PaymentProvider, storage};
 
@@ -52,7 +52,7 @@ impl Order {
         chain_id: u64,
         token_address: Option<String>,
     ) -> Result<Self> {
-        management::validate_evm_address(&offramper_address)?;
+        helpers::validate_evm_address(&offramper_address)?;
 
         let order_id = storage::generate_order_id();
         let order = Order {
@@ -113,6 +113,7 @@ pub enum OrderFilter {
     ByOfframperAddress(String),
     LockedByOnramper(String),
     ByState(OrderStateFilter),
+    ByChainId(u64),
 }
 
 #[derive(CandidType, Clone, Deserialize)]

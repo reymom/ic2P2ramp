@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use crate::{
     errors::{RampError, Result},
     management::user as user_management,
-    state::storage::{self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider},
+    state::storage::{
+        self, mutate_order, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
+    },
 };
 
 pub fn create_order(
@@ -54,19 +56,18 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
                 _ => false,
             })
         }
+        Some(OrderFilter::ByChainId(chain_id)) => {
+            storage::filter_orders(|order_state| match order_state {
+                OrderState::Created(order) => order.chain_id == chain_id,
+                OrderState::Locked(order) => order.base.chain_id == chain_id,
+                _ => false,
+            })
+        }
     }
 }
 
 pub fn update_order_state(order_id: u64, new_state: OrderState) -> Result<()> {
-    storage::ORDERS.with(|orders| {
-        let mut orders = orders.borrow_mut();
-        if orders.contains_key(&order_id) {
-            orders.insert(order_id, new_state);
-            Ok(())
-        } else {
-            Err(RampError::OrderNotFound)
-        }
-    })
+    mutate_order(&order_id, |order_state| *order_state = new_state)
 }
 
 pub fn lock_order(
@@ -74,85 +75,50 @@ pub fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: String,
 ) -> Result<()> {
-    storage::ORDERS.with(|orders| {
-        let mut orders = orders.borrow_mut();
-        if let Some(order_state) = orders.get(&order_id) {
-            match order_state {
-                OrderState::Created(order) => {
-                    orders.remove(&order_id).unwrap();
-                    orders.insert(
-                        order_id,
-                        OrderState::Locked(order.lock(onramper_provider, onramper_address)),
-                    );
-                    Ok(())
-                }
-                _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-            }
-        } else {
-            Err(RampError::OrderNotFound)
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Created(order) => {
+            *order_state =
+                OrderState::Locked(order.clone().lock(onramper_provider, onramper_address));
+            Ok(())
         }
-    })
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }
 
 pub fn unlock_order(order_id: u64) -> Result<()> {
-    storage::ORDERS.with(|orders| {
-        let mut orders = orders.borrow_mut();
-        if let Some(order_state) = orders.get(&order_id) {
-            match order_state {
-                OrderState::Locked(order) => {
-                    let score =
-                        user_management::decrease_user_score(&order.clone().onramper_address)?;
-                    ic_cdk::println!("[mark_order_as_paid] user score decreased = {:?}", score);
-
-                    orders.remove(&order_id);
-                    orders.insert(order_id, OrderState::Created(order.base));
-                    Ok(())
-                }
-                _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-            }
-        } else {
-            Err(RampError::OrderNotFound)
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            let score = user_management::decrease_user_score(&order.onramper_address)?;
+            ic_cdk::println!("[unlock_order] user score decreased = {:?}", score);
+            *order_state = OrderState::Created(order.base.clone());
+            Ok(())
         }
-    })
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }
 
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
-    storage::ORDERS.with(|orders| {
-        let mut orders = orders.borrow_mut();
-        if let Some(order_state) = orders.remove(&order_id) {
-            match order_state {
-                OrderState::Locked(mut locked_order) => {
-                    let score = user_management::increase_user_score(
-                        &locked_order.clone().onramper_address,
-                        locked_order.base.fiat_amount,
-                    )?;
-                    ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
-
-                    locked_order.payment_done = true;
-                    orders.insert(order_id, OrderState::Locked(locked_order));
-                    Ok(())
-                }
-                _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-            }
-        } else {
-            Err(RampError::OrderNotFound)
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            let score = user_management::increase_user_score(
+                &order.onramper_address,
+                order.base.fiat_amount,
+            )?;
+            ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
+            order.payment_done = true;
+            // *order_state = OrderState::Locked(order.clone());
+            Ok(())
         }
-    })
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }
 
-pub fn cancel_order(order_id: u64) -> Result<String> {
-    storage::ORDERS.with(|orders| {
-        let mut orders = orders.borrow_mut();
-        if let Some(order_state) = orders.remove(&order_id) {
-            match order_state {
-                OrderState::Created(_) => {
-                    orders.insert(order_id, OrderState::Cancelled(order_id));
-                    Ok(order_id.to_string())
-                }
-                _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-            }
-        } else {
-            Err(RampError::OrderNotFound)
+pub fn cancel_order(order_id: u64) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Created(_) => {
+            *order_state = OrderState::Cancelled(order_id);
+            Ok(())
         }
-    })
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }

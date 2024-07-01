@@ -2,12 +2,11 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::cell::RefCell;
 
-use crate::errors::{RampError, Result};
-use crate::management::validate_evm_address;
-
 pub use super::common::PaymentProvider;
 pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
 pub use super::user::User;
+use crate::errors::{RampError, Result};
+use crate::evm::helpers;
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -29,6 +28,10 @@ thread_local! {
 
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
 }
+
+// -----
+// USERS
+// -----
 
 pub fn mutate_user<F, R>(evm_address: &str, f: F) -> Result<R>
 where
@@ -56,12 +59,16 @@ pub fn remove_user(evm_address: &str) -> Result<User> {
 }
 
 pub fn get_user(evm_address: &str) -> Result<User> {
-    validate_evm_address(&evm_address)?;
+    helpers::validate_evm_address(&evm_address)?;
 
     USERS
         .with_borrow(|users| users.get(&evm_address.to_string()))
         .ok_or_else(|| RampError::UserNotFound)
 }
+
+// ------
+// ORDERS
+// ------
 
 pub fn generate_order_id() -> u64 {
     ORDER_ID_COUNTER.with(|counter| {
@@ -96,6 +103,21 @@ where
                 }
             })
             .collect()
+    })
+}
+
+pub fn mutate_order<F, R>(order_id: &u64, f: F) -> Result<R>
+where
+    F: FnOnce(&mut OrderState) -> R,
+{
+    ORDERS.with_borrow_mut(|orders| {
+        if let Some(mut order_state) = orders.get(&order_id) {
+            let result = f(&mut order_state);
+            orders.insert(*order_id, order_state);
+            Ok(result)
+        } else {
+            Err(RampError::OrderNotFound)
+        }
     })
 }
 

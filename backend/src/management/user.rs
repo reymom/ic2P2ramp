@@ -25,7 +25,7 @@ pub fn register_user(
         ));
     }
 
-    let mut user = User::new(evm_address.clone())?;
+    let mut user = User::new(evm_address)?;
     user.payment_providers = payment_providers;
 
     storage::insert_user(&user);
