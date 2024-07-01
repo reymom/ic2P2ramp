@@ -13,7 +13,7 @@ use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
-use state::storage::{self, OrderFilter, OrderState, PaymentProvider, User};
+use state::storage::{self, OrderFilter, OrderState, PaymentProvider, User, UserType};
 use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
@@ -99,8 +99,12 @@ async fn get_usd_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Re
 // -----
 
 #[ic_cdk::update]
-fn register_user(evm_address: String, payment_providers: HashSet<PaymentProvider>) -> Result<User> {
-    user_management::register_user(evm_address, payment_providers)
+fn register_user(
+    evm_address: String,
+    user_type: UserType,
+    payment_providers: HashSet<PaymentProvider>,
+) -> Result<User> {
+    user_management::register_user(evm_address, user_type, payment_providers)
 }
 
 #[ic_cdk::query]

@@ -2,11 +2,12 @@ use std::collections::HashSet;
 
 use crate::{
     errors::{RampError, Result},
-    state::storage::{self, PaymentProvider, User},
+    state::storage::{self, PaymentProvider, User, UserType},
 };
 
 pub fn register_user(
     evm_address: String,
+    user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
 ) -> Result<User> {
     if payment_providers.is_empty() {
@@ -25,7 +26,7 @@ pub fn register_user(
         ));
     }
 
-    let mut user = User::new(evm_address)?;
+    let mut user = User::new(evm_address, user_type)?;
     user.payment_providers = payment_providers;
 
     storage::insert_user(&user);
@@ -46,18 +47,21 @@ pub fn can_commit_orders(onramper_address: &str) -> Result<bool> {
     Ok(storage::get_user(&onramper_address)?.can_commit_orders())
 }
 
-pub fn increase_user_score(onramper_address: &str, fiat_amount: u64) -> Result<i32> {
-    let mut user = storage::get_user(&onramper_address)?;
-    user.increase_score(fiat_amount);
-    let score = user.score.clone();
-    storage::insert_user(&user);
-    Ok(score)
+pub fn update_onramper_payment(address: &str, fiat_amount: u64) -> Result<i32> {
+    storage::mutate_user(&address, |user| {
+        user.increase_score(fiat_amount);
+        user.update_fiat_amount(fiat_amount);
+        user.score
+    })
+}
+
+pub fn update_offramper_payment(address: &str, fiat_amount: u64) -> Result<()> {
+    storage::mutate_user(&address, |user| user.update_fiat_amount(fiat_amount))
 }
 
 pub fn decrease_user_score(onramper_address: &str) -> Result<i32> {
-    let mut user = storage::get_user(&onramper_address)?;
-    user.decrease_score();
-    let score = user.score.clone();
-    storage::insert_user(&user);
-    Ok(score)
+    storage::mutate_user(&onramper_address, |user| {
+        user.decrease_score();
+        user.score
+    })
 }

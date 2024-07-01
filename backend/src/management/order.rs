@@ -3,9 +3,7 @@ use std::collections::HashSet;
 use crate::{
     errors::{RampError, Result},
     management::user as user_management,
-    state::storage::{
-        self, mutate_order, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
-    },
+    state::storage::{self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider},
 };
 
 pub fn create_order(
@@ -67,7 +65,7 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
 }
 
 pub fn update_order_state(order_id: u64, new_state: OrderState) -> Result<()> {
-    mutate_order(&order_id, |order_state| *order_state = new_state)
+    storage::mutate_order(&order_id, |order_state| *order_state = new_state)
 }
 
 pub fn lock_order(
@@ -75,7 +73,7 @@ pub fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: String,
 ) -> Result<()> {
-    mutate_order(&order_id, |order_state| match order_state {
+    storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(order) => {
             *order_state =
                 OrderState::Locked(order.clone().lock(onramper_provider, onramper_address));
@@ -86,7 +84,7 @@ pub fn lock_order(
 }
 
 pub fn unlock_order(order_id: u64) -> Result<()> {
-    mutate_order(&order_id, |order_state| match order_state {
+    storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
             let score = user_management::decrease_user_score(&order.onramper_address)?;
             ic_cdk::println!("[unlock_order] user score decreased = {:?}", score);
@@ -98,15 +96,18 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
 }
 
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
-    mutate_order(&order_id, |order_state| match order_state {
+    storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            let score = user_management::increase_user_score(
+            let score = user_management::update_onramper_payment(
                 &order.onramper_address,
                 order.base.fiat_amount,
             )?;
             ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
+            user_management::update_offramper_payment(
+                &order.base.offramper_address,
+                order.base.fiat_amount,
+            )?;
             order.payment_done = true;
-            // *order_state = OrderState::Locked(order.clone());
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -114,7 +115,7 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
 }
 
 pub fn cancel_order(order_id: u64) -> Result<()> {
-    mutate_order(&order_id, |order_state| match order_state {
+    storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(_) => {
             *order_state = OrderState::Cancelled(order_id);
             Ok(())

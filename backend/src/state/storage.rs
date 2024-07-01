@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 pub use super::common::PaymentProvider;
 pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
-pub use super::user::User;
+pub use super::user::{User, UserType};
 use crate::errors::{RampError, Result};
 use crate::evm::helpers;
 
@@ -125,6 +125,8 @@ where
 mod tests {
     use std::collections::HashSet;
 
+    use crate::state::user::UserType;
+
     use super::*;
     use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
     use ic_stable_structures::DefaultMemoryImpl;
@@ -141,8 +143,9 @@ mod tests {
         });
         let user = User {
             evm_address: "0x123".to_string(),
+            user_type: UserType::Offramper,
             payment_providers,
-            offramped_amount: 0,
+            fiat_amount: 0,
             score: 1,
         };
 
@@ -151,7 +154,7 @@ mod tests {
 
         assert_eq!(user.evm_address, retrieved_user.evm_address);
         assert_eq!(user.payment_providers, retrieved_user.payment_providers);
-        assert_eq!(user.offramped_amount, retrieved_user.offramped_amount);
+        assert_eq!(user.fiat_amount, retrieved_user.fiat_amount);
         assert_eq!(user.score, retrieved_user.score);
 
         // Update user
