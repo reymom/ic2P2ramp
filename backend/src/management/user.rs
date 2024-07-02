@@ -43,8 +43,11 @@ pub fn add_payment_provider(evm_address: &str, payment_provider: PaymentProvider
     Ok(())
 }
 
-pub fn can_commit_orders(onramper_address: &str) -> Result<bool> {
-    Ok(storage::get_user(&onramper_address)?.can_commit_orders())
+pub fn can_commit_orders(onramper_address: &str) -> Result<()> {
+    let user = storage::get_user(&onramper_address)?;
+    user.is_banned()?;
+    user.validate_onramper()?;
+    Ok(())
 }
 
 pub fn update_onramper_payment(address: &str, fiat_amount: u64) -> Result<i32> {

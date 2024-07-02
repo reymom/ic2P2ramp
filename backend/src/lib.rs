@@ -145,6 +145,8 @@ fn create_order(
     token_address: Option<String>,
 ) -> Result<u64> {
     let user = storage::get_user(&offramper_address)?;
+    user.is_banned()?;
+    user.validate_onramper()?;
 
     for provider in &offramper_providers {
         if !user.payment_providers.contains(provider) {
@@ -170,9 +172,7 @@ async fn lock_order(
     onramper_address: String,
     gas: Option<u32>,
 ) -> Result<()> {
-    if !user_management::can_commit_orders(&onramper_address)? {
-        return Err(RampError::UserBanned);
-    }
+    user_management::can_commit_orders(&onramper_address)?;
 
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {

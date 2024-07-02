@@ -268,7 +268,7 @@ impl Ic2P2ramp {
         );
 
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
-        let token_address = token_address.unwrap_or(Address::zero().to_string());
+        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
         let request = Self::sign_request_uncommit_deposit(
             gas,
             fee_estimates,

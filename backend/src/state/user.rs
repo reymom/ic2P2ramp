@@ -2,7 +2,10 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
-use crate::{errors::Result, evm::helpers};
+use crate::{
+    errors::{RampError, Result},
+    evm::helpers,
+};
 
 use super::common::PaymentProvider;
 
@@ -36,6 +39,20 @@ impl User {
         })
     }
 
+    pub fn validate_offramper(&self) -> Result<()> {
+        match self.user_type {
+            UserType::Offramper => Ok(()),
+            UserType::Onramper => Err(RampError::UserNotOfframper),
+        }
+    }
+
+    pub fn validate_onramper(&self) -> Result<()> {
+        match self.user_type {
+            UserType::Onramper => Ok(()),
+            UserType::Offramper => Err(RampError::UserNotOnramper),
+        }
+    }
+
     pub fn update_fiat_amount(&mut self, amount: u64) {
         self.fiat_amount += amount;
     }
@@ -48,8 +65,11 @@ impl User {
         self.score += (amount / 1000) as i32; // Assuming amount is in cents
     }
 
-    pub fn can_commit_orders(&self) -> bool {
-        self.score >= 0
+    pub fn is_banned(&self) -> Result<()> {
+        if self.score < 0 {
+            return Err(RampError::UserBanned);
+        }
+        Ok(())
     }
 }
 
