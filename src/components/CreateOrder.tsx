@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { backend } from '../declarations/backend';
+import { PaymentProvider } from '../declarations/backend/backend.did';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import addresses from '../constants/addresses';
-
 import {
-    MantleSepoliaTokens,
     SepoliaTokens,
+    BaseSepoliaTokens,
     PolygonZkEvmTokens,
     OptimismSepoliaTokens,
     NetworkIds
@@ -21,19 +21,39 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
     const [fiatAmount, setFiatAmount] = useState<number>();
     const [cryptoAmount, setCryptoAmount] = useState(0);
     const [paypalId, setPaypalId] = useState('');
-    const [selectedToken, setSelectedToken] = useState('');
+    const [selectedToken, setSelectedToken] = useState<[] | [string]>([]);
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+    const [paymentProviders, setPaymentProviders] = useState<PaymentProvider[]>([]);
+    const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { address, chain, chainId } = useAccount();
 
+    useEffect(() => {
+        const fetchPaymentProviders = async () => {
+            if (address) {
+                try {
+                    const result = await backend.get_user(address);
+                    if ('Ok' in result) {
+                        setPaymentProviders(result.Ok.payment_providers);
+                    } else {
+                        console.error(result.Err);
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch payment providers: ', error);
+                }
+            }
+        };
+        fetchPaymentProviders();
+    }, [address]);
+
     const getTokenOptions = () => {
         switch (chainId) {
-            case NetworkIds.MANTLE_SEPOLIA:
-                return Object.values(MantleSepoliaTokens);
             case NetworkIds.SEPOLIA:
                 return Object.values(SepoliaTokens);
+            case NetworkIds.BASE_SEPOLIA:
+                return Object.values(BaseSepoliaTokens);
             case NetworkIds.POLYGON_ZKEVM_TESTNET:
                 return Object.values(PolygonZkEvmTokens);
             case NetworkIds.OP_SEPOLIA:
@@ -61,8 +81,8 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
     };
 
     useEffect(() => {
-        if (selectedToken) {
-            getExchangeRateFromXRC(selectedToken);
+        if (selectedToken.length > 0) {
+            getExchangeRateFromXRC(selectedToken[0]!);
         }
     }, [selectedToken]);
 
@@ -71,6 +91,16 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
             setFiatAmount(cryptoAmount * exchangeRate);
         }
     }, [cryptoAmount, exchangeRate]);
+
+    const handleProviderSelection = (provider: PaymentProvider) => {
+        setSelectedProviders((prevSelected) => {
+            if (prevSelected.includes(provider)) {
+                return prevSelected.filter((p) => p !== provider);
+            } else {
+                return [...prevSelected, provider];
+            }
+        });
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -114,12 +144,14 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
                 setMessage('Transaction successful!');
             } else {
                 setMessage('Transaction failed!');
+                return;
             }
 
             const result = await backend.create_order(
                 BigInt(Math.ceil(fiatAmount! * 100)),
+                selectedCurrency,
                 cryptoAmountInWei,
-                paypalId,
+                selectedProviders,
                 address as string,
                 BigInt(chainId!),
                 selectedToken
@@ -172,7 +204,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
                     <label className="block text-gray-700 w-24">Token:</label>
                     <select
                         value={selectedToken}
-                        onChange={(e) => setSelectedToken(e.target.value)}
+                        onChange={(e) => setSelectedToken([e.target.value])}
                         className="flex-grow px-3 py-2 border rounded"
                         required
                     >

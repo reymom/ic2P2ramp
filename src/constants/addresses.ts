@@ -4,24 +4,24 @@ interface AddressMapping {
 }
 
 const addresses: { [chainId: number]: AddressMapping } = {
-  // Mantle Sepolia Testnet
-  5003: {
-    native: '0x8B1b90637F188541401DeeA100718ca618927E52',
-    usdt: '0x67d2d3a45457b69259FB1F8d8178bAE4F6B11b4d',
-  },
   // Sepolia
   11155111: {
-    native: '0xdaE80C0f07Bc847840f7342a8EC9AD78e695c5a3',
+    native: '0x42ad57ab757ea55960f7d9805d82fa818683096b',
     usdt: '0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF',
   },
-  // Polyzon zkEVM Testnet
-  1442: {
-    native: '',
+  // Base Sepolia
+  84532: {
+    native: '0xfa29381958DD8a2dD86246FC0Ab2932972640580',
+    usdt: '0x67d2d3a45457b69259FB1F8d8178bAE4F6B11b4d',
+  },
+  // Polyzon zkEVM Cardona
+  2442: {
+    native: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
     usdt: '',
   },
-  // OP Sepolia Testnet
+  // OP Sepolia
   11155420: {
-    native: '',
+    native: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
     usdt: '',
   },
 };
