@@ -146,7 +146,7 @@ fn create_order(
 ) -> Result<u64> {
     let user = storage::get_user(&offramper_address)?;
     user.is_banned()?;
-    user.validate_onramper()?;
+    user.validate_offramper()?;
 
     for provider in &offramper_providers {
         if !user.payment_providers.contains(provider) {

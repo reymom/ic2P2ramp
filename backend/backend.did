@@ -94,8 +94,10 @@ type RampError = variant {
   InvalidAddress;
   HttpRequestError : record { nat64; text };
   TransactionTimeout;
+  UserNotOfframper;
   PaymentVerificationFailed;
   InvalidInput : text;
+  UserNotOnramper;
   InvalidOnramperProvider;
   UserBanned;
   ExchangeRateError : ExchangeRateError;
