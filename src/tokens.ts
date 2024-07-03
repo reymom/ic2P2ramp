@@ -1,9 +1,9 @@
-export enum MantleSepoliaTokens {
+export enum SepoliaTokens {
   USDT = 'USDT',
-  MNT = 'MNT',
+  ETH = 'ETH',
 }
 
-export enum SepoliaTokens {
+export enum BaseSepoliaTokens {
   USDT = 'USDT',
   ETH = 'ETH',
 }
@@ -19,8 +19,8 @@ export enum OptimismSepoliaTokens {
 }
 
 export const NetworkIds = {
-  MANTLE_SEPOLIA: 5003,
   SEPOLIA: 11155111,
+  BASE_SEPOLIA: 84532,
   OP_SEPOLIA: 11155420,
-  POLYGON_ZKEVM_TESTNET: 1442,
+  POLYGON_ZKEVM_TESTNET: 2442,
 };
