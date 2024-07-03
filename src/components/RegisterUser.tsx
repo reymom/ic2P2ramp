@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import { backend } from '../declarations/backend';
-import { PaymentProvider } from '../declarations/backend/backend.did';
+import { PaymentProvider, UserType } from '../declarations/backend/backend.did';
 import { useAccount } from 'wagmi';
-import { pageTypes, PaymentProviderTypes } from '../model/types';
+import { pageTypes, PaymentProviderTypes, UserTypes } from '../model/types';
+import { stringToUserType, paymentProviderToString, stringToPaymentProvider } from '../model/utils';
 
 interface RegisterUserProps {
     setCurrentTab: (tab: pageTypes) => void;
+    userType: UserTypes;
 }
 
-const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab }) => {
-    const [providers, setProviders] = useState<PaymentProvider[]>([
-        { PayPal: { 'id': "fdsadfs" } },
-        { Revolut: { 'id': "fdsdfsa" } }
-    ]);
+const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab, userType }) => {
+    const [providers, setProviders] = useState<PaymentProvider[]>([]);
     const [providerType, setProviderType] = useState<PaymentProviderTypes>("PayPal");
     const [providerId, setProviderId] = useState('');
     const [message, setMessage] = useState('');
@@ -21,19 +20,14 @@ const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab }) => {
 
     const handleAddProvider = () => {
         const updatedProviders = providers.map((provider) => {
-            const key = Object.keys(provider)[0];
-            if (key === providerType) {
-                return providerType === 'PayPal'
-                    ? { PayPal: { id: providerId } }
-                    : { Revolut: { id: providerId } };
+            if (paymentProviderToString(provider) === providerType) {
+                return stringToPaymentProvider(providerType, providerId);
             }
             return provider;
         });
 
-        if (!providers.some(provider => Object.keys(provider)[0] === providerType)) {
-            const newProvider = providerType === 'PayPal'
-                ? { PayPal: { id: providerId } }
-                : { Revolut: { id: providerId } };
+        if (!providers.some(provider => paymentProviderToString(provider) === providerType)) {
+            const newProvider = stringToPaymentProvider(providerType, providerId);
             updatedProviders.push(newProvider);
         }
 
@@ -48,11 +42,11 @@ const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab }) => {
         }
 
         try {
-            const result = await backend.register_user(address as string, providers);
+            const result = await backend.register_user(address as string, stringToUserType(userType), providers);
             if ('Ok' in result) {
                 setCurrentTab(pageTypes.create);
             } else {
-                setMessage(result.Err);
+                setMessage(result.Err.toString());
             }
         } catch (error) {
             setMessage(`Failed to register user: ${error}`);

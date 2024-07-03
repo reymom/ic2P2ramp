@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -7,16 +7,35 @@ import RegisterUser from './components/RegisterUser';
 import CreateOrder from './components/CreateOrder';
 import ViewOrders from './components/ViewOrders';
 import ConnectAddress from './components/ConnectAddress';
-import { pageTypes, userTypes } from './model/types';
+import { pageTypes, UserTypes } from './model/types';
 
 // JSON viewer component
 import 'react-json-view-lite/dist/index.css';
+import { OrderFilter } from './declarations/backend/backend.did';
+import { useAccount } from 'wagmi';
 
 function App() {
     const [loading, setLoading] = useState(false);
     const [currentTab, setCurrentTab] = useState<pageTypes>(pageTypes.connect);
     const [selectedCurrency, setSelectedCurrency] = useState<string>('USD');
-    const [userType, setUserType] = useState<userTypes>(userTypes.visitor);
+    const [userType, setUserType] = useState<UserTypes>("Visitor");
+
+    const { address } = useAccount();
+
+    useEffect(() => {
+        getInitialOrderFilter();
+    }, [userType]);
+
+    const getInitialOrderFilter = (): OrderFilter | null => {
+        switch (userType) {
+            case "Offramper":
+                return { ByOfframperAddress: address } as OrderFilter
+            case "Onramper":
+                return { ByState: { Locked: null } }
+            case "Visitor":
+                return { ByState: { Created: null } }
+        }
+    }
 
     const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         setSelectedCurrency(event.target.value);
@@ -61,11 +80,11 @@ function App() {
                     </button>
                 </div> */}
                 <div className="bg-white p-4 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-1/3" style={{ opacity: loading ? 0.5 : 1 }}>
-                    {currentTab === pageTypes.connect && <ConnectAddress setCurrentTab={setCurrentTab} />}
-                    {currentTab === pageTypes.login && <RegisterUser setCurrentTab={setCurrentTab} />}
-                    {currentTab === pageTypes.addProvider && <RegisterUser setCurrentTab={setCurrentTab} />}
+                    {currentTab === pageTypes.connect && <ConnectAddress setCurrentTab={setCurrentTab} setUserType={setUserType} />}
+                    {currentTab === pageTypes.login && <RegisterUser setCurrentTab={setCurrentTab} userType={userType} />}
+                    {/* {currentTab === pageTypes.addProvider && <RegisterUser setCurrentTab={setCurrentTab} />} */}
                     {currentTab === pageTypes.create && <CreateOrder selectedCurrency={selectedCurrency} />}
-                    {currentTab === pageTypes.view && <ViewOrders />}
+                    {currentTab === pageTypes.view && <ViewOrders userType={userType} initialFilter={getInitialOrderFilter()} />}
                 </div>
             </div>
         </div>
