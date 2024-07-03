@@ -41,6 +41,11 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
     };
     chains = vec {
       record {
+        chain_id = 11155111 : nat64;
+        vault_manager_address = \"0x42ad57ab757ea55960f7d9805d82fa818683096b\";
+        services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+      };
+      record {
         chain_id = 84532 : nat64;
         vault_manager_address = \"0xfa29381958DD8a2dD86246FC0Ab2932972640580\";
         services = variant {
