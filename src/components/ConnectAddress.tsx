@@ -1,43 +1,22 @@
 import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import { pageTypes } from '../model/types';
-import { backend } from '../declarations/backend';
-import { UserTypes } from '../model/types';
+import { useUser } from '../UserContext';
+import { userTypeToString } from '../model/utils';
+import { useNavigate } from 'react-router-dom';
 
-interface ConnectAddressProps {
-    setCurrentTab: (tab: pageTypes) => void;
-    setUserType: (type: UserTypes) => void;
-}
-
-const ConnectAddress: React.FC<ConnectAddressProps> = ({ setCurrentTab, setUserType }) => {
-    const { isConnected, address } = useAccount();
+const ConnectAddress: React.FC = () => {
+    const { isConnected } = useAccount();
+    const { userType } = useUser();
+    const navigate = useNavigate();
 
     useEffect(() => {
-        if (isConnected) {
-            checkUserRegistration();
+        if (userType == "Onramper") {
+            navigate("/view");
+        } else if (userType == "Offramper") {
+            navigate("/create");
         }
-    }, [isConnected, address]);
-
-    const checkUserRegistration = async () => {
-        try {
-            const result = await backend.get_user(address as string);
-            if ('Ok' in result) {
-                const user = result.Ok;
-                if ('Onramper' in user.user_type) {
-                    setUserType('Onramper');
-                    setCurrentTab(pageTypes.view);
-                } else if ('Offramper' in user.user_type) {
-                    setUserType('Offramper');
-                    setCurrentTab(pageTypes.create);
-                }
-            } else {
-                setCurrentTab(pageTypes.login);
-            }
-        } catch (error) {
-            console.error('Failed to check user registration: ', error);
-        }
-    };
+    }, [userType]);
 
     return (
         <div className="flex flex-col items-center justify-center text-center h-full py-16 rounded">
@@ -45,11 +24,11 @@ const ConnectAddress: React.FC<ConnectAddressProps> = ({ setCurrentTab, setUserT
                 <ConnectButton />
             </div>
             {isConnected && (
-                <button onClick={() => setCurrentTab(pageTypes.login)} className="my-4 px-4 py-2 bg-blue-500 text-white rounded">
-                    Add Payment Preferences
+                <button onClick={() => navigate('/login')} className="my-4 px-4 py-2 bg-blue-500 text-white rounded">
+                    Register
                 </button>
             )}
-            <button onClick={() => setCurrentTab(pageTypes.view)} className="mt-6 px-4 py-2 bg-gray-400 text-white rounded">
+            <button onClick={() => navigate('/view')} className="mt-6 px-4 py-2 bg-gray-400 text-white rounded">
                 Enter as Guest
             </button>
         </div>
