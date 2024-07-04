@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
-import { backend } from '../declarations/backend';
-import { PaymentProvider, UserType } from '../declarations/backend/backend.did';
+import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
-import { pageTypes, PaymentProviderTypes, UserTypes } from '../model/types';
+
+import { backend } from '../declarations/backend';
+import { PaymentProvider } from '../declarations/backend/backend.did';
+import { PaymentProviderTypes, UserTypes } from '../model/types';
 import { stringToUserType, paymentProviderToString, stringToPaymentProvider } from '../model/utils';
+import { useUser } from '../UserContext';
 
-interface RegisterUserProps {
-    setCurrentTab: (tab: pageTypes) => void;
-    userType: UserTypes;
-}
-
-const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab, userType }) => {
+const RegisterUser: React.FC = () => {
+    const [userType, setUserType] = useState<UserTypes>("Onramper");
     const [providers, setProviders] = useState<PaymentProvider[]>([]);
     const [providerType, setProviderType] = useState<PaymentProviderTypes>("PayPal");
     const [providerId, setProviderId] = useState('');
     const [message, setMessage] = useState('');
 
     const { address } = useAccount();
+    const { setUser: setGlobalUser } = useUser();
+    const navigate = useNavigate();
 
     const handleAddProvider = () => {
         const updatedProviders = providers.map((provider) => {
@@ -44,8 +45,10 @@ const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab, userType }) 
         try {
             const result = await backend.register_user(address as string, stringToUserType(userType), providers);
             if ('Ok' in result) {
-                setCurrentTab(pageTypes.create);
+                setGlobalUser(result.Ok);
+                navigate(userType === "Onramper" ? "/view" : "/create");
             } else {
+                setGlobalUser(null);
                 setMessage(result.Err.toString());
             }
         } catch (error) {
@@ -56,6 +59,17 @@ const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab, userType }) 
     return (
         <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
             <h2 className="text-lg font-bold mb-4">Register</h2>
+            <div className="flex items-center mb-6">
+                <label className="block text-gray-400 w-24">User Type:</label>
+                <select
+                    value={userType}
+                    onChange={(e) => setUserType(e.target.value as 'Offramper' | 'Onramper')}
+                    className="flex-grow px-3 py-2 border rounded"
+                >
+                    <option value="Offramper">Offramper</option>
+                    <option value="Onramper">Onramper</option>
+                </select>
+            </div>
             <div className="flex items-center mb-4">
                 <label className="block text-gray-700 w-24">Provider:</label>
                 <select
@@ -90,7 +104,7 @@ const RegisterUser: React.FC<RegisterUserProps> = ({ setCurrentTab, userType }) 
             </div>
             <div className="flex justify-between mt-4">
                 <button
-                    onClick={() => setCurrentTab(pageTypes.view)}
+                    onClick={() => navigate("/view")}
                     className="px-4 py-2 bg-gray-400 text-white rounded"
                 >
                     Skip
