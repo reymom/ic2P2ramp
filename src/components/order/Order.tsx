@@ -11,18 +11,18 @@ import {
     OptimismSepoliaTokens,
     NetworkIds
 } from '../../tokens';
+import { useUser } from '../../UserContext';
 
 interface OrderProps {
     order: OrderState;
-    userType: UserTypes;
-    address: string;
-    chainId: number;
     commitToOrder: (orderId: bigint, provider: PaymentProvider) => void;
     removeOrder: (order: Order) => void;
     handlePayPalSuccess: (transactionId: string, orderId: bigint) => void;
 }
 
-const OrderActions: React.FC<OrderProps> = ({ order, userType, commitToOrder, removeOrder, handlePayPalSuccess }) => {
+const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder, handlePayPalSuccess }) => {
+    const { userType } = useUser();
+
     const getNetworkName = (chainId: number) => {
         switch (chainId) {
             case NetworkIds.SEPOLIA:

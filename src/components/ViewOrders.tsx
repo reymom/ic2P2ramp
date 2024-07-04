@@ -7,10 +7,9 @@ import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import addresses from '../constants/addresses';
-import { UserTypes } from '../model/types';
 import { filterStateToFilterStateType } from '../model/utils';
 
-function ViewOrders({ userType, initialFilter }: { userType: UserTypes, initialFilter: OrderFilter | null }) {
+function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [orders, setOrders] = useState<OrderState[]>([]);
     const [cachedAll, setCachedAll] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -19,6 +18,7 @@ function ViewOrders({ userType, initialFilter }: { userType: UserTypes, initialF
     const [filter, setFilter] = useState<OrderFilter | null>(initialFilter);
 
     const { address, chainId } = useAccount();
+
 
     useEffect(() => {
         fetchOrders();
@@ -151,7 +151,7 @@ function ViewOrders({ userType, initialFilter }: { userType: UserTypes, initialF
     return (
         <div>
             <h2 className="text-lg font-bold mb-4">View Orders</h2>
-            <OrderFilters setFilter={setFilter} userType={userType} />
+            <OrderFilters setFilter={setFilter} />
             {loading ? (
                 <div className="loader" />
             ) : (
@@ -160,9 +160,6 @@ function ViewOrders({ userType, initialFilter }: { userType: UserTypes, initialF
                         <OrderActions
                             key={index}
                             order={order}
-                            userType={userType}
-                            address={address as string}
-                            chainId={chainId as number}
                             commitToOrder={commitToOrder}
                             removeOrder={removeOrder}
                             handlePayPalSuccess={handlePayPalSuccess}

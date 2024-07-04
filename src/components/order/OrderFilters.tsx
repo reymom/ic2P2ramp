@@ -3,16 +3,17 @@ import { OrderFilter } from '../../declarations/backend/backend.did';
 import { stringToOrderFilter, stringToOrderStateFilter } from '../../model/utils';
 import { OrderFilterTypes, OrderStateFilterTypes, UserTypes } from '../../model/types';
 import { useAccount } from 'wagmi';
+import { useUser } from '../../UserContext';
 
 interface OrderFiltersProps {
     setFilter: (filter: OrderFilter | null) => void;
-    userType: UserTypes;
 }
 
-const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, userType }) => {
+const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
     const [filterType, setFilterType] = useState<OrderFilterTypes | null>(null);
 
     const { address, chainId } = useAccount();
+    const { userType } = useUser();
 
     useEffect(() => {
         constructFilter();
