@@ -12,15 +12,13 @@ import {
     OptimismSepoliaTokens,
     NetworkIds
 } from '../tokens';
+import { useUser } from '../UserContext';
+import { useNavigate } from 'react-router-dom';
 
-interface CreateOrderProps {
-    selectedCurrency: string;
-}
-
-const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
+const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
+    const [currency, setCurrency] = useState<string>("$");
     const [cryptoAmount, setCryptoAmount] = useState(0);
-    const [paypalId, setPaypalId] = useState('');
     const [selectedToken, setSelectedToken] = useState<[] | [string]>([]);
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -28,25 +26,20 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
     const [paymentProviders, setPaymentProviders] = useState<PaymentProvider[]>([]);
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
-    const { address, chain, chainId } = useAccount();
+    const { chain, chainId } = useAccount();
+    const { user } = useUser();
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchPaymentProviders = async () => {
-            if (address) {
-                try {
-                    const result = await backend.get_user(address);
-                    if ('Ok' in result) {
-                        setPaymentProviders(result.Ok.payment_providers);
-                    } else {
-                        console.error(result.Err);
-                    }
-                } catch (error) {
-                    console.error('Failed to fetch payment providers: ', error);
-                }
+            if (user) {
+                setPaymentProviders(user.payment_providers);
+            } else {
+                navigate("/view");
             }
         };
         fetchPaymentProviders();
-    }, [address]);
+    }, [user]);
 
     const getTokenOptions = () => {
         switch (chainId) {
@@ -65,7 +58,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
 
     const getExchangeRateFromXRC = async (token: string) => {
         try {
-            const result = await backend.get_usd_exchange_rate(selectedCurrency, token);
+            const result = await backend.get_usd_exchange_rate(currency, token);
             console.log("result = ", result);
             if ('Ok' in result) {
                 const rate = parseFloat(result.Ok);
@@ -121,7 +114,7 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
                 throw new Error('Unsupported network');
             }
 
-            const { native, usdt } = networkAddresses;
+            const { native } = networkAddresses;
 
             const vaultContract = new ethers.Contract(native, icP2PrampABI, signer);
 
@@ -149,10 +142,10 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
 
             const result = await backend.create_order(
                 BigInt(Math.ceil(fiatAmount! * 100)),
-                selectedCurrency,
+                currency,
                 cryptoAmountInWei,
                 selectedProviders,
-                address as string,
+                user!.evm_address,
                 BigInt(chainId!),
                 selectedToken
             );
@@ -172,13 +165,26 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
             <form onSubmit={handleSubmit}>
                 <div className="flex items-center mb-4">
                     <label className="block text-gray-700 w-24">Fiat Amount:</label>
-                    <input
-                        type="number"
-                        value={fiatAmount?.toFixed(2)}
-                        className="flex-grow px-3 py-2 border rounded"
-                        required
-                        disabled
-                    />
+                    <div className="flex-grow px-2 py-2 flex items-center">
+                        <input
+                            type="number"
+                            value={fiatAmount?.toFixed(2)}
+                            className="py-2 border rounded-l"
+                            required
+                            disabled
+                        />
+                        <select
+                            value={currency}
+                            onChange={(e) => setCurrency(e.target.value)}
+                            className="py-3 border rounded-r"
+                        >
+                            <option value="USD">$</option>
+                            <option value="EUR">€</option>
+                            <option value="GBP">£</option>
+                            <option value="JPY">¥</option>
+                            <option value="SGD">S$</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="flex items-center mb-4">
                     <label className="block text-gray-700 w-24">Crypto Amount:</label>
@@ -190,15 +196,20 @@ const CreateOrder: React.FC<CreateOrderProps> = ({ selectedCurrency }) => {
                         required
                     />
                 </div>
-                <div className="flex items-center mb-4">
-                    <label className="block text-gray-700 w-24">PayPal ID:</label>
-                    <input
-                        type="text"
-                        value={paypalId}
-                        onChange={(e) => setPaypalId(e.target.value)}
-                        className="flex-grow px-3 py-2 border rounded"
-                        required
-                    />
+                <div className="mb-4 items-center text-center">
+                    <label className="block text-gray-700">Payment Providers:</label>
+                    {paymentProviders.map((provider, index) => (
+                        <div key={index} className="flex items-center mb-2">
+                            <input
+                                type="checkbox"
+                                id={`provider-${index}`}
+                                className="mr-2"
+                                checked={selectedProviders.includes(provider)}
+                                onChange={() => handleProviderSelection(provider)}
+                            />
+                            <label htmlFor={`provider-${index}`} className="text-gray-700">{Object.keys(provider)[0]}</label>
+                        </div>
+                    ))}
                 </div>
                 <div className="flex items-center mb-4">
                     <label className="block text-gray-700 w-24">Token:</label>
