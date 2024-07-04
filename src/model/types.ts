@@ -5,14 +5,6 @@ import {
   UserType,
 } from '../declarations/backend/backend.did';
 
-export enum pageTypes {
-  connect,
-  login,
-  addProvider,
-  create,
-  view,
-}
-
 type ExtractKeys<T> = T extends { [key: string]: any } ? keyof T : never;
 
 export function candidToEnum<T extends object>(obj: T): ExtractKeys<T> {
