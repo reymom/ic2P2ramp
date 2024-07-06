@@ -48,10 +48,7 @@ function App() {
                             path="/create"
                             element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
                         />
-                        <Route
-                            path="/view"
-                            element={<ProtectedRoute allowedUserTypes={["Onramper", "Visitor"]} outlet={<ViewOrders initialFilter={getInitialOrderFilter()} />} />}
-                        />
+                        <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
                         <Route path="/profile" element={<UserProfile />} />
                     </Routes>
                 </div>

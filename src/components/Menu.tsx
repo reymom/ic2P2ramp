@@ -31,7 +31,7 @@ const Menu: React.FC = () => {
         if (!user) {
             return (
                 <>
-                    <Link to="/login" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">Register</Link>
+                    <Link to="/" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">Register</Link>
                     <Link to="/view" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">View Orders</Link>
                 </>
             );
@@ -92,7 +92,7 @@ const Menu: React.FC = () => {
             )}
             {!isMobile &&
                 <div className="flex justify-between w-full">
-                    <Link to="/" className="flex items-center w-96">
+                    <Link to="/" className="flex items-center w-72">
                         <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
                         <h1 className="text-xl font-bold">ic2P2ramp</h1>
                     </Link>
@@ -101,7 +101,7 @@ const Menu: React.FC = () => {
                             {renderLinks()}
                         </div>
                     </div>
-                    <div className="w-96 justify-end items-end justify-items-end mr-0">
+                    <div className="w-72 justify-end items-end justify-items-end mr-0">
                         <ConnectButton accountStatus='full' chainStatus="icon" showBalance={false} />
                     </div>
                 </div>
