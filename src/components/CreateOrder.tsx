@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
-    const [currency, setCurrency] = useState<string>("$");
+    const [currency, setCurrency] = useState<string>("USD");
     const [cryptoAmount, setCryptoAmount] = useState(0);
     const [selectedToken, setSelectedToken] = useState<[] | [string]>([]);
     const [message, setMessage] = useState('');
@@ -57,7 +57,11 @@ const CreateOrder: React.FC = () => {
     };
 
     const getExchangeRateFromXRC = async (token: string) => {
+        if (token === "") return;
         try {
+            console.log("currency = ", currency);
+            console.log("token = ", token);
+
             const result = await backend.get_usd_exchange_rate(currency, token);
             console.log("result = ", result);
             if ('Ok' in result) {
@@ -152,6 +156,7 @@ const CreateOrder: React.FC = () => {
             console.log("result(backend.create_order) = ", result);
 
             setMessage("order created successfully!");
+            navigate("/view");
         } catch (error) {
             setMessage(`Error creating offramp order, error = ${error}`);
         } finally {
@@ -169,18 +174,21 @@ const CreateOrder: React.FC = () => {
                         <input
                             type="number"
                             value={fiatAmount?.toFixed(2)}
-                            className="py-2 border rounded-l"
+                            className="py-2 px-2 border rounded-l"
                             required
                             disabled
                         />
                         <select
                             value={currency}
                             onChange={(e) => setCurrency(e.target.value)}
-                            className="py-3 border rounded-r"
+                            className="py-2 border rounded-r"
                         >
                             <option value="USD">$</option>
                             <option value="EUR">€</option>
                             <option value="GBP">£</option>
+                            <option value="CHF">₣</option>
+                            <option value="CZK">Kč</option>
+                            <option value="AUD">AU$</option>
                             <option value="JPY">¥</option>
                             <option value="SGD">S$</option>
                         </select>
