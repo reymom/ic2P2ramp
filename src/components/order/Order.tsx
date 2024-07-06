@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 
 import { Order, OrderState, PaymentProvider } from '../../declarations/backend/backend.did';
@@ -12,6 +12,8 @@ import {
     NetworkIds
 } from '../../tokens';
 import { useUser } from '../../UserContext';
+import { paymentProviderToString } from '../../model/utils';
+import { truncate } from '../../model/helper';
 
 interface OrderProps {
     order: OrderState;
@@ -21,7 +23,12 @@ interface OrderProps {
 }
 
 const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder, handlePayPalSuccess }) => {
+    const [committedProvider, setCommittedProvider] = useState<PaymentProvider>();
     const { userType } = useUser();
+
+    const handleProviderSelection = (provider: PaymentProvider) => {
+        setCommittedProvider(provider);
+    };
 
     const getNetworkName = (chainId: number) => {
         switch (chainId) {
@@ -53,13 +60,6 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
         }
     };
 
-    const truncate = (str: string, frontChars: number, backChars: number) => {
-        if (str.length <= frontChars + backChars) {
-            return str;
-        }
-        return str.slice(0, frontChars) + '...' + str.slice(-backChars);
-    };
-
     const formatFiatAmount = (fiatAmount: bigint) => {
         return (Number(fiatAmount) / 100).toFixed(2);
     };
@@ -72,15 +72,30 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     <div>
                         <strong>Crypto Amount:</strong> {ethers.formatEther(order.Created.crypto_amount.toString())} {getTokenSymbol(order.Created.token_address?.[0] ?? '', Number(order.Created.chain_id))}
                     </div>
-                    <div><strong>PayPal ID:</strong> {truncate(order.Created.offramper_address, 6, 6)}</div>
+                    <div><strong>Providers:</strong>
+                        {order.Created.offramper_providers.map(provider => (
+                            <div key={paymentProviderToString(provider)}>
+                                <input
+                                    type="checkbox"
+                                    id={paymentProviderToString(provider)}
+                                    name={paymentProviderToString(provider)}
+                                    value={paymentProviderToString(provider)}
+                                    onChange={() => handleProviderSelection(provider)}
+                                    checked={committedProvider && paymentProviderToString(committedProvider) === paymentProviderToString(provider)}
+                                />
+                                <label htmlFor={paymentProviderToString(provider)}>{paymentProviderToString(provider)}</label>
+                            </div>
+                        ))}
+                    </div>
                     <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address, 6, 6)}</div>
                     <div><strong>Network:</strong> {getNetworkName(Number(order.Created.chain_id))}</div>
                     <div><strong>Token:</strong> {order.Created.token_address?.[0] ?? ''}</div>
                     {userType === 'Onramper' && (
                         <div>
                             <button
-                                onClick={() => commitToOrder(order.Created.id, order.Created.offramper_providers.values().next().value)}
+                                onClick={() => commitToOrder(order.Created.id, committedProvider!)}
                                 className="mt-2 px-4 py-2 bg-green-500 text-white rounded"
+                                disabled={!committedProvider}
                             >
                                 Commit
                             </button>
@@ -112,6 +127,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                         <div>
                             <PayPalButton
                                 amount={order.Locked.base.fiat_amount}
+                                clientId="Ab_E80t7BM4rNxj7trOAlRz_UmpEqPHANABmFUzD-7Zj-iiUI9nhkRilop_2lWKoWTE_bfEFiXV33mHb"
                                 paypalId={order.Locked.base.offramper_address}
                                 onSuccess={(transactionId) => handlePayPalSuccess(transactionId, order.Locked.base.id)}
                                 currency="USD"

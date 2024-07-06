@@ -48,7 +48,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             setMessage(`Commiting to loan order ${orderId}...`);
 
             await backend.lock_order(orderId, provider, address as string, [100000]);
-            await fetchOrders();
+            setMessage("Order commited successfully");
         } catch (err) {
             console.error(err);
             setMessage(`Error commiting to order ${orderId}.`);
