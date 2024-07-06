@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useUser } from '../UserContext';
-import { userTypeToString } from '../model/utils';
 import { useNavigate } from 'react-router-dom';
 
 const ConnectAddress: React.FC = () => {
