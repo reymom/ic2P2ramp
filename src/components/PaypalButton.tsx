@@ -2,18 +2,19 @@ import React, { useEffect } from 'react';
 
 interface PayPalButtonProps {
     amount: bigint;
+    clientId: string;
     paypalId: string;
     onSuccess: (transactionId: string) => void;
     currency: string;
 }
 
-const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, paypalId, onSuccess, currency }) => {
+const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, clientId, paypalId, onSuccess, currency }) => {
     useEffect(() => {
         if (!paypalId) return;
 
         // Load PayPal script
         const script = document.createElement('script');
-        script.src = `https://www.paypal.com/sdk/js?client-id=${paypalId}&currency=USD`;
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}`;
         script.addEventListener('load', () => {
             // @ts-ignore
             window.paypal.Buttons({
@@ -23,7 +24,10 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, paypalId, onSuccess
                             amount: {
                                 value: amount.toString(),
                                 currency_code: currency
-                            }
+                            },
+                            payee: {
+                                email_address: paypalId
+                            },
                         }]
                     });
                 },
