@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi';
 import { backend } from '../declarations/backend';
 import { PaymentProvider } from '../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, UserTypes } from '../model/types';
-import { stringToUserType, paymentProviderToString, stringToPaymentProvider } from '../model/utils';
+import { stringToUserType, paymentProviderTypeToString, stringToPaymentProviderType } from '../model/utils';
 import { useUser } from '../UserContext';
 
 const RegisterUser: React.FC = () => {
@@ -21,18 +21,12 @@ const RegisterUser: React.FC = () => {
     const navigate = useNavigate();
 
     const handleAddProvider = () => {
-        const updatedProviders = providers.map((provider) => {
-            if (paymentProviderToString(provider) === providerType) {
-                return stringToPaymentProvider(providerType, providerId);
-            }
-            return provider;
-        });
-
-        if (!providers.some(provider => paymentProviderToString(provider) === providerType)) {
-            const newProvider = stringToPaymentProvider(providerType, providerId);
-            updatedProviders.push(newProvider);
+        const newProvider: PaymentProvider = {
+            provider_type: stringToPaymentProviderType(providerType),
+            id: providerId,
         }
 
+        const updatedProviders = [...providers, newProvider];
         setProviders(updatedProviders);
         setProviderId('');
     };
@@ -102,7 +96,7 @@ const RegisterUser: React.FC = () => {
                 <ul className="list-disc list-inside bg-gray-100 p-2 rounded">
                     {providers.map((provider, index) => (
                         <li key={index} className="py-1">
-                            {Object.keys(provider)[0]}: {Object.values(provider)[0].id}
+                            {paymentProviderTypeToString(provider.provider_type)}: {provider.id}
                         </li>
                     ))}
                 </ul>

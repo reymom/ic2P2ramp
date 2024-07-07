@@ -1,26 +1,30 @@
 import {
   OrderFilter,
   OrderStateFilter,
+  PaymentProviderType,
   UserType,
 } from '../declarations/backend/backend.did';
-import { OrderFilterTypes, OrderStateFilterTypes, UserTypes } from './types';
-import { PaymentProvider } from '../declarations/backend/backend.did';
-import { PaymentProviderTypes, candidToEnum } from './types';
+import {
+  OrderFilterTypes,
+  OrderStateFilterTypes,
+  UserTypes,
+  PaymentProviderTypes,
+  candidToEnum,
+} from './types';
 
 // Payment Providers
-export const paymentProviderToString = (
-  provider: PaymentProvider,
+export const paymentProviderTypeToString = (
+  providerType: PaymentProviderType,
 ): PaymentProviderTypes => {
-  if ('PayPal' in provider) return 'PayPal';
-  if ('Revolut' in provider) return 'Revolut';
+  if ('PayPal' in providerType) return 'PayPal';
+  if ('Revolut' in providerType) return 'Revolut';
   throw new Error('Unknown payment provider');
 };
 
-export const stringToPaymentProvider = (
+export const stringToPaymentProviderType = (
   providerType: PaymentProviderTypes,
-  id: string,
-): PaymentProvider => {
-  return { [providerType]: { id } } as PaymentProvider;
+): PaymentProviderType => {
+  return { [providerType]: null } as PaymentProviderType;
 };
 
 // -----

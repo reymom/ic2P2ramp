@@ -1,7 +1,7 @@
 import {
   OrderFilter,
   OrderStateFilter,
-  PaymentProvider,
+  PaymentProviderType,
   UserType,
 } from '../declarations/backend/backend.did';
 
@@ -11,10 +11,12 @@ export function candidToEnum<T extends object>(obj: T): ExtractKeys<T> {
   return Object.keys(obj)[0] as ExtractKeys<T>;
 }
 
-export type PaymentProviderTypes = ExtractKeys<PaymentProvider>;
+export type PaymentProviderTypes = ExtractKeys<PaymentProviderType>;
 
 export type UserTypes = ExtractKeys<UserType> | 'Visitor';
 
 export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 
 export type OrderStateFilterTypes = ExtractKeys<OrderStateFilter>;
+
+export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];

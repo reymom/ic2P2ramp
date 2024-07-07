@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../UserContext';
-import { paymentProviderToString, stringToPaymentProvider, userTypeToString } from '../model/utils';
-import { PaymentProvider } from '../declarations/backend/backend.did';
+import { paymentProviderTypeToString, stringToPaymentProviderType, userTypeToString } from '../model/utils';
 import { backend } from '../declarations/backend';
 import { PaymentProviderTypes, providerTypes } from '../model/types';
 import { truncate } from '../model/helper';
+import { PaymentProvider } from '../declarations/backend/backend.did';
 
 const UserProfile: React.FC = () => {
-    const [newProviders, setNewProviders] = useState<{ [key in PaymentProviderTypes]?: string }>({});
+    const [providerType, setProviderType] = useState<PaymentProviderTypes>();
+    const [providerId, setProviderId] = useState('');
     const [message, setMessage] = useState('');
     const { user, setUser } = useUser();
     const navigate = useNavigate();
@@ -16,31 +17,25 @@ const UserProfile: React.FC = () => {
     useEffect(() => {
         if (!user) {
             navigate('/');
-        } else {
-            const initialProviders: { [key in PaymentProviderTypes]?: string } = {};
-            user.payment_providers.forEach(provider => {
-                const key = paymentProviderToString(provider);
-                initialProviders[key] = Object.values(provider)[0].id;
-            });
-            setNewProviders(initialProviders);
         }
     }, [user, navigate]);
 
-    const handleProviderChange = (type: PaymentProviderTypes, value: string) => {
-        setNewProviders(prev => ({ ...prev, [type]: value }));
-    };
 
     if (!user) {
         return null;
     }
 
-    const handleProviderSubmit = async (key: PaymentProviderTypes) => {
-        const updatedProvider = stringToPaymentProvider(key, newProviders[key]!);
+    const handleAddProvider = async () => {
+        if (!providerType) return;
+
+        const newProvider: PaymentProvider = {
+            provider_type: stringToPaymentProviderType(providerType),
+            id: providerId
+        }
         try {
-            const result = await backend.add_payment_provider_for_user(user.evm_address, updatedProvider);
+            const result = await backend.add_payment_provider_for_user(user.evm_address, newProvider);
             if ('Ok' in result) {
-                const updatedProviders = user.payment_providers.filter(provider => paymentProviderToString(provider) !== key);
-                updatedProviders.push(updatedProvider);
+                const updatedProviders = [...user.payment_providers, newProvider]
                 setUser({ ...user, payment_providers: updatedProviders });
                 setMessage('Provider updated successfully');
             } else {
@@ -68,24 +63,36 @@ const UserProfile: React.FC = () => {
             </div>
             <div>
                 <strong>Payment Providers:</strong>
-                {providerTypes.map(type => (
-                    <div key={type} className="my-4 flex items-center">
-                        <label className="block text-gray-700 w-20">{type}</label>
-                        <input
-                            type="text"
-                            value={newProviders[type] || ''}
-                            onChange={(e) => handleProviderChange(type, e.target.value)}
-                            className="px-3 py-2 border rounded flex-grow mr-2 w-36"
-                        />
-                        <button
-                            onClick={() => handleProviderSubmit(type)}
-                            className="px-2 py-2 bg-blue-500 text-white rounded"
-                        >
-                            Update
-                        </button>
-                    </div>
+                {user.payment_providers.map((provider, index) => (
+                    <li key={index} className="py-1">
+                        {paymentProviderTypeToString(provider.provider_type)}: {provider.id}
+                    </li>
                 ))}
             </div>
+            <div className="flex items-center mb-4">
+                <label className="block text-gray-700 w-24">Provider:</label>
+                <select
+                    value={providerType}
+                    onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
+                    className="flex-grow px-3 py-2 border rounded"
+                >
+                    {providerTypes.map(type => (
+                        <option value={type}>{type}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex items-center mb-4">
+                <label className="block text-gray-700 w-24">Provider ID:</label>
+                <input
+                    type="text"
+                    value={providerId}
+                    onChange={(e) => setProviderId(e.target.value)}
+                    className="flex-grow px-3 py-2 border rounded"
+                />
+            </div>
+            <button onClick={handleAddProvider} className="px-4 py-2 bg-blue-500 text-white rounded">
+                Add Provider
+            </button>
             {message && <p className="mt-4 text-sm font-medium text-grey-600">{message}</p>}
         </div>
     );
