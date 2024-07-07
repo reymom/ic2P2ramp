@@ -1,18 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ethers } from 'ethers';
 
-import { Order, OrderState, PaymentProvider } from '../../declarations/backend/backend.did';
+import { Order, OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import PayPalButton from '../PaypalButton';
-import { UserTypes } from '../../model/types';
-import {
-    SepoliaTokens,
-    BaseSepoliaTokens,
-    PolygonZkEvmTokens,
-    OptimismSepoliaTokens,
-    NetworkIds
-} from '../../tokens';
+import { NetworkIds, getTokenMapping } from '../../constants/addresses';
 import { useUser } from '../../UserContext';
-import { paymentProviderToString } from '../../model/utils';
+import { paymentProviderTypeToString } from '../../model/utils';
 import { truncate } from '../../model/helper';
 
 interface OrderProps {
@@ -23,10 +16,19 @@ interface OrderProps {
 }
 
 const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder, handlePayPalSuccess }) => {
-    const [committedProvider, setCommittedProvider] = useState<PaymentProvider>();
-    const { userType } = useUser();
+    const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, String]>();
+    const { user, userType } = useUser();
 
-    const handleProviderSelection = (provider: PaymentProvider) => {
+    const handleProviderSelection = (providerType: PaymentProviderType) => {
+        if (!user) return;
+
+        const onramperProvider = user.payment_providers.find(provider => {
+            return paymentProviderTypeToString(provider.provider_type) === paymentProviderTypeToString(providerType);
+        });
+        console.log("onramperProvider = ", onramperProvider);
+        if (!onramperProvider) return;
+
+        const provider: [PaymentProviderType, String] = [providerType, onramperProvider.id];
         setCommittedProvider(provider);
     };
 
@@ -45,19 +47,9 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
         }
     };
 
-    const getTokenSymbol = (tokenType: string, chainId: number): string => {
-        switch (chainId) {
-            case NetworkIds.SEPOLIA:
-                return SepoliaTokens[tokenType as keyof typeof SepoliaTokens] || tokenType;
-            case NetworkIds.BASE_SEPOLIA:
-                return BaseSepoliaTokens[tokenType as keyof typeof BaseSepoliaTokens] || tokenType;
-            case NetworkIds.POLYGON_ZKEVM_TESTNET:
-                return PolygonZkEvmTokens[tokenType as keyof typeof PolygonZkEvmTokens] || tokenType;
-            case NetworkIds.OP_SEPOLIA:
-                return OptimismSepoliaTokens[tokenType as keyof typeof OptimismSepoliaTokens] || tokenType;
-            default:
-                return tokenType;
-        }
+    const getTokenSymbol = (tokenAddress: string, chainId: number): string => {
+        const tokenMapping = getTokenMapping(chainId);
+        return tokenMapping[tokenAddress] || tokenAddress;
     };
 
     const formatFiatAmount = (fiatAmount: bigint) => {
@@ -74,26 +66,26 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     </div>
                     <div><strong>Providers:</strong>
                         {order.Created.offramper_providers.map(provider => (
-                            <div key={paymentProviderToString(provider)}>
+                            <div key={paymentProviderTypeToString(provider[0])}>
                                 <input
                                     type="checkbox"
-                                    id={paymentProviderToString(provider)}
-                                    name={paymentProviderToString(provider)}
-                                    value={paymentProviderToString(provider)}
-                                    onChange={() => handleProviderSelection(provider)}
-                                    checked={committedProvider && paymentProviderToString(committedProvider) === paymentProviderToString(provider)}
+                                    id={paymentProviderTypeToString(provider[0])}
+                                    name={paymentProviderTypeToString(provider[0])}
+                                    onChange={() => handleProviderSelection(provider[0])}
+                                    checked={committedProvider && paymentProviderTypeToString(committedProvider[0]) === paymentProviderTypeToString(provider[0])}
                                 />
-                                <label htmlFor={paymentProviderToString(provider)}>{paymentProviderToString(provider)}</label>
+                                <label htmlFor={paymentProviderTypeToString(provider[0])}>{paymentProviderTypeToString(provider[0])}</label>
                             </div>
                         ))}
                     </div>
                     <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address, 6, 6)}</div>
                     <div><strong>Network:</strong> {getNetworkName(Number(order.Created.chain_id))}</div>
-                    <div><strong>Token:</strong> {order.Created.token_address?.[0] ?? ''}</div>
                     {userType === 'Onramper' && (
                         <div>
                             <button
-                                onClick={() => commitToOrder(order.Created.id, committedProvider!)}
+                                onClick={() => commitToOrder(order.Created.id, {
+                                    provider_type: committedProvider![0], id: committedProvider![1]
+                                } as PaymentProvider)}
                                 className="mt-2 px-4 py-2 bg-green-500 text-white rounded"
                                 disabled={!committedProvider}
                             >
@@ -119,16 +111,23 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     <div>
                         <strong>Crypto Amount:</strong> {ethers.formatEther(order.Locked.base.crypto_amount.toString())} {getTokenSymbol(order.Locked.base.token_address?.[0] ?? '', Number(order.Locked.base.chain_id))}
                     </div>
-                    <div><strong>PayPal ID:</strong> {truncate(order.Locked.base.offramper_address, 6, 6)}</div>
+                    <div><strong>Offramper Provider:</strong>
+                        {order.Locked.base.offramper_providers.map(provider => {
+                            console.log("provider ", provider);
+                            return (<div key={paymentProviderTypeToString(provider[0])}>{paymentProviderTypeToString(provider[0])}: {provider[1]}</div>);
+                        })}
+                    </div>
+                    <div><strong>Onramper Provider:</strong> {paymentProviderTypeToString(order.Locked.onramper_provider.provider_type)}: {order.Locked.onramper_provider.id}</div>
                     <div><strong>Offramper Address:</strong> {truncate(order.Locked.base.offramper_address, 6, 6)}</div>
                     <div><strong>Network:</strong> {getNetworkName(Number(order.Locked.base.chain_id))}</div>
-                    <div><strong>Token:</strong> {order.Locked.base.token_address?.[0] ?? ''}</div>
                     {userType === 'Onramper' && (
                         <div>
                             <PayPalButton
-                                amount={order.Locked.base.fiat_amount}
+                                amount={order.Locked.base.fiat_amount / BigInt(100)}
                                 clientId="Ab_E80t7BM4rNxj7trOAlRz_UmpEqPHANABmFUzD-7Zj-iiUI9nhkRilop_2lWKoWTE_bfEFiXV33mHb"
-                                paypalId={order.Locked.base.offramper_address}
+                                paypalId={order.Locked.base.offramper_providers.find(
+                                    provider => paymentProviderTypeToString(provider[0]) === paymentProviderTypeToString(order.Locked.onramper_provider.provider_type)
+                                )?.[1]!}
                                 onSuccess={(transactionId) => handlePayPalSuccess(transactionId, order.Locked.base.id)}
                                 currency="USD"
                             />

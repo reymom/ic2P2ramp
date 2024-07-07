@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
+
 import { backend } from '../declarations/backend';
 import { Order, OrderFilter, OrderState, PaymentProvider } from '../declarations/backend/backend.did';
 import OrderFilters from './order/OrderFilters';
 import OrderActions from './order/Order';
-import { useAccount } from 'wagmi';
-import { ethers } from 'ethers';
+import { addresses } from '../constants/addresses';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
-import addresses from '../constants/addresses';
 import { filterStateToFilterStateType } from '../model/utils';
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
@@ -18,7 +19,6 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [filter, setFilter] = useState<OrderFilter | null>(initialFilter);
 
     const { address, chainId } = useAccount();
-
 
     useEffect(() => {
         fetchOrders();
@@ -43,12 +43,29 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     const commitToOrder = async (orderId: bigint, provider: PaymentProvider) => {
-        try {
-            setIsLoading(true);
-            setMessage(`Commiting to loan order ${orderId}...`);
+        setIsLoading(true);
+        setMessage(`Commiting to loan order ${orderId}...`);
 
-            await backend.lock_order(orderId, provider, address as string, [100000]);
-            setMessage("Order commited successfully");
+        try {
+            const result = await backend.lock_order(orderId, provider, address!.toString(), [100000]);
+
+            if ('Ok' in result) {
+                setMessage(`Order Locked! tx = ${result.Ok}`);
+            } else {
+                let errorMessage = 'An unknown error occurred';
+
+                for (const [key, value] of Object.entries(result.Err)) {
+                    if (value !== null) {
+                        errorMessage = `Error: ${key} - ${JSON.stringify(value)}`;
+                        break;
+                    } else {
+                        errorMessage = `Error: ${key}`;
+                        break;
+                    }
+                }
+
+                setMessage(errorMessage);
+            }
         } catch (err) {
             console.error(err);
             setMessage(`Error commiting to order ${orderId}.`);
@@ -71,13 +88,8 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             await provider.send('eth_requestAccounts', []);
             const signer = await provider.getSigner();
 
-            const networkAddresses = addresses[chainId!];
-            if (!networkAddresses) {
-                throw new Error('Unsupported network');
-            }
-
-            const { native } = networkAddresses;
-            const vaultContract = new ethers.Contract(native, icP2PrampABI, signer);
+            const tokenAddress = order.token_address[0] ?? addresses[Number(order.chain_id)].native[1];
+            const vaultContract = new ethers.Contract(tokenAddress, icP2PrampABI, signer);
 
             const gasEstimate = await vaultContract.uncommitDeposit.estimateGas(order.offramper_address, ethers.ZeroAddress, order.crypto_amount);
             const transactionResponse = await vaultContract.uncommitDeposit(order.offramper_address, ethers.ZeroAddress, order.crypto_amount, {
@@ -95,8 +107,25 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 return;
             }
 
-            await backend.cancel_order(order.id);
-            await fetchOrders();
+            const result = await backend.cancel_order(order.id);
+            if ('Ok' in result) {
+                setMessage("Order Cancelled");
+                await fetchOrders();
+            } else {
+                let errorMessage = 'An unknown error occurred';
+
+                for (const [key, value] of Object.entries(result.Err)) {
+                    if (value !== null) {
+                        errorMessage = `Error: ${key} - ${JSON.stringify(value)}`;
+                        break;
+                    } else {
+                        errorMessage = `Error: ${key}`;
+                        break;
+                    }
+                }
+
+                setMessage(errorMessage);
+            }
         } catch (err) {
             console.error(err);
             setMessage(`Error removing order ${order.id}.`);
@@ -106,8 +135,9 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     const handlePayPalSuccess = async (transactionId: string, orderId: bigint) => {
+        setIsLoading(true);
+        setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
         try {
-            setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}`);
             // Send transaction ID to backend to verify payment
             const response = await backend.verify_transaction(
                 orderId,
@@ -116,10 +146,28 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             );
             console.log('Backend response:', response);
 
-            fetchOrders();
+            if ('Ok' in response) {
+                setMessage(`Order Verified and Funds Transferred successfully!`);
+            } else {
+                let errorMessage = 'An unknown error occurred';
+
+                for (const [key, value] of Object.entries(response.Err)) {
+                    if (value !== null) {
+                        errorMessage = `Error: ${key} - ${JSON.stringify(value)}`;
+                        break;
+                    } else {
+                        errorMessage = `Error: ${key}`;
+                        break;
+                    }
+                }
+
+                setMessage(errorMessage);
+            }
         } catch (err) {
             console.error(err);
             setMessage(`Error verifying payment for order ${orderId}.`);
+        } finally {
+            setIsLoading(false);
         }
     };
 

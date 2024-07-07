@@ -55,7 +55,7 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, clientId, paypalId,
             {paypalId ? (
                 <div id="paypal-button-container" className="flex justify-center"></div>
             ) : (
-                <div className="text-red-500 text-center">Please enter your PayPal ID to proceed with payment</div>
+                <div className="text-red-500 text-center">Please enter your PayPal ID to proceed with the payment</div>
             )}
         </div>
     );
