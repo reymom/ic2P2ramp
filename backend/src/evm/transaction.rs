@@ -178,9 +178,11 @@ pub fn spawn_transaction_checker<F>(
         F: Fn() + 'static,
     {
         ic_cdk_timers::set_timer(interval, move || {
+            ic_cdk::println!("[schedule_check] spawning...");
             ic_cdk::spawn(async move {
                 match check_transaction_status(tx_hash.clone(), chain_id).await {
                     TransactionStatus::Confirmed => {
+                        ic_cdk::println!("[schedule_check] TransactionStatus::Confirmed");
                         on_success();
                     }
                     TransactionStatus::Pending if attempts < max_attempts => {

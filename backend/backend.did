@@ -59,7 +59,7 @@ type Order = record {
   currency_symbol : text;
   created_at : nat64;
   chain_id : nat64;
-  offramper_providers : vec PaymentProvider;
+  offramper_providers : vec record { PaymentProviderType; text };
   offramper_address : text;
   crypto_amount : nat64;
 };
@@ -76,10 +76,11 @@ type OrderState = variant {
   Completed : CompletedOrder;
 };
 type OrderStateFilter = variant { Locked; Cancelled; Created; Completed };
-type PaymentProvider = variant {
-  PayPal : record { id : text };
-  Revolut : record { id : text };
+type PaymentProvider = record {
+  id : text;
+  provider_type : PaymentProviderType;
 };
+type PaymentProviderType = variant { PayPal; Revolut };
 type ProviderView = record {
   cyclesPerCall : nat64;
   owner : principal;
@@ -104,7 +105,7 @@ type RampError = variant {
   TransactionFailed : text;
   ParseFloatError : text;
   OrderNotFound;
-  ProviderNotInUser : text;
+  ProviderNotInUser : PaymentProviderType;
   EthersAbiError : text;
   ChainIdNotFound : nat64;
   TokenUnregistered;
@@ -145,21 +146,21 @@ service : (InitArg) -> {
       nat64,
       text,
       nat64,
-      vec PaymentProvider,
+      vec record { PaymentProviderType; text },
       text,
       nat64,
       opt text,
     ) -> (Result_1);
   get_evm_address : () -> (text) query;
+  get_exchange_rate : (text, text) -> (Result_2);
   get_orders : (opt OrderFilter) -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
-  get_usd_exchange_rate : (text, text) -> (Result_2);
   get_user : (text) -> (Result_3) query;
-  lock_order : (nat64, PaymentProvider, text, opt nat32) -> (Result);
+  lock_order : (nat64, PaymentProvider, text, opt nat32) -> (Result_2);
   register_user : (text, UserType, vec PaymentProvider) -> (Result_3);
   remove_user : (text) -> (Result_3);
   test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_2);
   transfer_value : (nat64, text, nat, opt int32) -> (Result_2);
-  unlock_order : (nat64, opt nat32) -> (Result);
+  unlock_order : (nat64, opt nat32) -> (Result_2);
   verify_transaction : (nat64, text, opt nat32) -> (Result);
 }

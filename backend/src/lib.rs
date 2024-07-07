@@ -5,7 +5,7 @@ mod outcalls;
 mod state;
 
 use errors::{RampError, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use evm::transaction::spawn_transaction_checker;
@@ -13,7 +13,9 @@ use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_capture, xrc_rates};
-use state::storage::{self, OrderFilter, OrderState, PaymentProvider, User, UserType};
+use state::storage::{
+    self, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
+};
 use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
@@ -87,7 +89,7 @@ async fn get_rpc_providers() -> Vec<ProviderView> {
 // ---------
 
 #[ic_cdk::update]
-async fn get_usd_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<String> {
+async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<String> {
     match xrc_rates::get_exchange_rate(&fiat_symbol, &crypto_symbol).await {
         Ok(rate) => Ok(rate.to_string()),
         Err(err) => Err(err),
@@ -139,7 +141,7 @@ fn create_order(
     fiat_amount: u64,
     fiat_symbol: String,
     crypto_amount: u64,
-    offramper_providers: HashSet<PaymentProvider>,
+    offramper_providers: HashMap<PaymentProviderType, String>,
     offramper_address: String,
     chain_id: u64,
     token_address: Option<String>,
@@ -148,9 +150,14 @@ fn create_order(
     user.is_banned()?;
     user.validate_offramper()?;
 
-    for provider in &offramper_providers {
-        if !user.payment_providers.contains(provider) {
-            return Err(RampError::ProviderNotInUser(offramper_address));
+    for (provider_type, provider_id) in &offramper_providers {
+        let provider = PaymentProvider {
+            provider_type: provider_type.clone(),
+            id: provider_id.clone(),
+        };
+
+        if !user.payment_providers.contains(&provider) {
+            return Err(RampError::ProviderNotInUser(provider_type.clone()));
         }
     }
 
@@ -171,7 +178,7 @@ async fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: String,
     gas: Option<u32>,
-) -> Result<()> {
+) -> Result<String> {
     user_management::can_commit_orders(&onramper_address)?;
 
     let order_state = storage::get_order(&order_id)?;
@@ -193,7 +200,7 @@ async fn lock_order(
     )
     .await?;
     spawn_transaction_checker(
-        tx_hash,
+        tx_hash.clone(),
         order.chain_id,
         60,
         Duration::from_secs(4),
@@ -205,11 +212,11 @@ async fn lock_order(
             );
         },
     );
-    Ok(())
+    Ok(tx_hash)
 }
 
 #[ic_cdk::update]
-async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<()> {
+async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -225,7 +232,7 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<()> {
     )
     .await?;
     spawn_transaction_checker(
-        tx_hash,
+        tx_hash.clone(),
         order.base.chain_id,
         60,
         Duration::from_secs(4),
@@ -233,7 +240,7 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<()> {
             let _ = order_management::unlock_order(order_id);
         },
     );
-    Ok(())
+    Ok(tx_hash)
 }
 
 #[ic_cdk::update]
@@ -271,14 +278,13 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
     let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
     let currency_matches = capture_details.amount.currency_code == order.base.currency_symbol;
 
-    let offramper_provider = order
+    let offramper_provider_id = order
         .base
         .offramper_providers
-        .iter()
-        .find(|p| p.get_type() == order.onramper_provider.get_type())
-        .ok_or_else(|| RampError::ProviderNotInUser(order.base.offramper_address))?;
+        .get(&order.onramper_provider.provider_type)
+        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type))?;
 
-    let offramper_matches = capture_details.payee.email_address == offramper_provider.get_id();
+    let offramper_matches = capture_details.payee.email_address == *offramper_provider_id;
     // let onramper_matches = order.onramper_paypal_id.as_deref()
     //     == Some(&capture_details.supplementary_data.related_ids.order_id);
 

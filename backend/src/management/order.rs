@@ -1,16 +1,19 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use crate::{
     errors::{RampError, Result},
     management::user as user_management,
-    state::storage::{self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider},
+    state::storage::{
+        self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
+        PaymentProviderType,
+    },
 };
 
 pub fn create_order(
     fiat_amount: u64,
     currency_symbol: String,
     crypto_amount: u64,
-    offramper_providers: HashSet<PaymentProvider>,
+    offramper_providers: HashMap<PaymentProviderType, String>,
     offramper_address: String,
     chain_id: u64,
     token_address: Option<String>,

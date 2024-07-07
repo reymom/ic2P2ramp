@@ -1,11 +1,14 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
-use std::{borrow::Cow, collections::HashSet, fmt};
+use std::{borrow::Cow, collections::HashMap, fmt};
 
 use crate::{errors::Result, evm::helpers};
 
-use super::{common::PaymentProvider, storage};
+use super::{
+    common::{PaymentProvider, PaymentProviderType},
+    storage,
+};
 
 const MAX_ORDER_SIZE: u32 = 500;
 
@@ -51,7 +54,7 @@ pub struct Order {
     pub fiat_amount: u64,
     pub currency_symbol: String,
     pub crypto_amount: u64,
-    pub offramper_providers: HashSet<PaymentProvider>,
+    pub offramper_providers: HashMap<PaymentProviderType, String>,
     pub offramper_address: String,
     pub chain_id: u64,
     pub token_address: Option<String>,
@@ -62,7 +65,7 @@ impl Order {
         fiat_amount: u64,
         currency_symbol: String,
         crypto_amount: u64,
-        offramper_providers: HashSet<PaymentProvider>,
+        offramper_providers: HashMap<PaymentProviderType, String>,
         offramper_address: String,
         chain_id: u64,
         token_address: Option<String>,

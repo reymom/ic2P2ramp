@@ -2,7 +2,7 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::cell::RefCell;
 
-pub use super::common::PaymentProvider;
+pub use super::common::{PaymentProvider, PaymentProviderType};
 pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
 pub use super::user::{User, UserType};
 use crate::errors::{RampError, Result};
@@ -125,6 +125,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
+    use crate::state::common::PaymentProviderType;
     use crate::state::user::UserType;
 
     use super::*;
@@ -138,7 +139,8 @@ mod tests {
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
         let mut payment_providers = HashSet::new();
-        payment_providers.insert(PaymentProvider::PayPal {
+        payment_providers.insert(PaymentProvider {
+            provider_type: PaymentProviderType::PayPal,
             id: "paypal_id".to_string(),
         });
         let user = User {
@@ -159,11 +161,10 @@ mod tests {
 
         // Update user
         let mut updated_user = retrieved_user.clone();
-        updated_user
-            .payment_providers
-            .insert(PaymentProvider::Revolut {
-                id: "revolut_id".to_string(),
-            });
+        updated_user.payment_providers.insert(PaymentProvider {
+            provider_type: PaymentProviderType::Revolut,
+            id: "revolut_id".to_string(),
+        });
         map.insert(updated_user.evm_address.clone(), updated_user.clone());
 
         let retrieved_updated_user = map.get(&"0x123".to_string()).unwrap();

@@ -37,7 +37,7 @@ pub fn add_payment_provider(evm_address: &str, payment_provider: PaymentProvider
     payment_provider.validate()?;
 
     storage::mutate_user(evm_address, |user| {
-        user.payment_providers.replace(payment_provider);
+        user.payment_providers.insert(payment_provider);
     })?;
 
     Ok(())

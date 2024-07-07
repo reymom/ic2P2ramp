@@ -3,7 +3,7 @@ use std::num::ParseFloatError;
 use candid::CandidType;
 use thiserror::Error;
 
-use crate::outcalls::xrc_rates::ExchangeRateError;
+use crate::{outcalls::xrc_rates::ExchangeRateError, state::storage::PaymentProviderType};
 
 pub type Result<T> = std::result::Result<T, RampError>;
 
@@ -18,8 +18,8 @@ pub enum RampError {
     #[error("Invalid Ethereum address")]
     InvalidAddress,
 
-    #[error("Provider is Not Defined for User {0}")]
-    ProviderNotInUser(String),
+    #[error("Provider is Not Defined for User {:?}", .0)]
+    ProviderNotInUser(PaymentProviderType),
 
     #[error("Invalid onramper provider")]
     InvalidOnramperProvider,
