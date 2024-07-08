@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
 
 import { Order, OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import PayPalButton from '../PaypalButton';
-import { NetworkIds, getTokenMapping } from '../../constants/addresses';
+import { NetworkIds, getTokenMapping } from '../../constants/tokens';
 import { useUser } from '../../UserContext';
 import { paymentProviderTypeToString } from '../../model/utils';
 import { truncate } from '../../model/helper';
+import { addresses } from '../../constants/addresses';
+import { icP2PrampABI } from '../../constants/ic2P2ramp';
+import { backend } from '../../declarations/backend';
+import { rampErrorToString } from '../../model/error';
 
 interface OrderProps {
     order: OrderState;
-    commitToOrder: (orderId: bigint, provider: PaymentProvider) => void;
-    removeOrder: (order: Order) => void;
-    handlePayPalSuccess: (transactionId: string, orderId: bigint) => void;
+    refetchOrders: () => void;
 }
 
-const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder, handlePayPalSuccess }) => {
+const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, String]>();
+    const [isLoading, setIsLoading] = useState(false);
+    const [message, setMessage] = useState('');
+
+    const { address, chainId } = useAccount();
     const { user, userType } = useUser();
 
     const handleProviderSelection = (providerType: PaymentProviderType) => {
@@ -32,20 +39,111 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
         setCommittedProvider(provider);
     };
 
-    const getNetworkName = (chainId: number) => {
-        switch (chainId) {
-            case NetworkIds.SEPOLIA:
-                return 'Sepolia';
-            case NetworkIds.BASE_SEPOLIA:
-                return 'Base Sepolia';
-            case NetworkIds.OP_SEPOLIA:
-                return 'Optimism Sepolia';
-            case NetworkIds.POLYGON_ZKEVM_TESTNET:
-                return 'Polygon zkEVM Testnet';
-            default:
-                return 'Unknown Network';
+    const commitToOrder = async (orderId: bigint, provider: PaymentProvider) => {
+        setIsLoading(true);
+        setMessage(`Commiting to loan order ${orderId}...`);
+
+        try {
+            const result = await backend.lock_order(orderId, provider, address!.toString(), [100000]);
+
+            if ('Ok' in result) {
+                const explorerUrl = Object.values(NetworkIds).find(network => network.id === chainId)?.explorer;
+                const txLink = `${explorerUrl}${result.Ok}`;
+                setMessage(`Order Locked! tx = <a href="${txLink}" target="_blank">${truncate(result.Ok, 8, 8)}</a>`);
+                setTimeout(() => {
+                    refetchOrders();
+                }, 3500);
+            } else {
+                const errorMessage = rampErrorToString(result.Err);
+                setMessage(errorMessage);
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage(`Error commiting to order ${orderId}.`);
+        } finally {
+            setIsLoading(false);
         }
     };
+
+    const removeOrder = async (order: Order) => {
+        console.log("order = ", order);
+        try {
+            setIsLoading(true);
+            setMessage(`Removing order ${order.id}...`);
+
+            if (!window.ethereum) {
+                throw new Error('No crypto wallet found. Please install it.');
+            }
+
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+
+            const tokenAddress = order.token_address[0] ?? addresses[Number(order.chain_id)].native[1];
+            const vaultContract = new ethers.Contract(tokenAddress, icP2PrampABI, signer);
+
+            const gasEstimate = await vaultContract.uncommitDeposit.estimateGas(order.offramper_address, ethers.ZeroAddress, order.crypto_amount);
+            const transactionResponse = await vaultContract.uncommitDeposit(order.offramper_address, ethers.ZeroAddress, order.crypto_amount, {
+                gasLimit: gasEstimate
+            });
+
+            setMessage('Transaction sent, waiting for confirmation...');
+            const receipt = await transactionResponse.wait();
+            console.log('Transaction receipt:', receipt);
+
+            if (receipt.status === 1) {
+                setMessage('Transaction successful!');
+            } else {
+                setMessage('ICP Transaction failed!');
+                return;
+            }
+
+            const result = await backend.cancel_order(order.id);
+            if ('Ok' in result) {
+                setMessage("Order Cancelled");
+                refetchOrders();
+            } else {
+                const errorMessage = rampErrorToString(result.Err);
+                setMessage(errorMessage);
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage(`Error removing order ${order.id}.`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handlePayPalSuccess = async (transactionId: string, orderId: bigint) => {
+        console.log("[handlePayPalSuccess] transactionID = ", transactionId);
+
+        setIsLoading(true);
+        setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
+        try {
+            // Send transaction ID to backend to verify payment
+            const response = await backend.verify_transaction(
+                orderId,
+                transactionId,
+                [100000]
+            );
+
+            if ('Ok' in response) {
+                setMessage(`Order Verified and Funds Transferred successfully!`);
+            } else {
+                const errorMessage = rampErrorToString(response.Err);
+                setMessage(errorMessage);
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage(`Error verifying payment for order ${orderId.toString()}.`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const getNetworkName = (chainId: number): string => {
+        return Object.values(NetworkIds).find(network => network.id === chainId)?.name!;
+    }
 
     const getTokenSymbol = (tokenAddress: string, chainId: number): string => {
         const tokenMapping = getTokenMapping(chainId);
@@ -113,7 +211,6 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     </div>
                     <div><strong>Offramper Provider:</strong>
                         {order.Locked.base.offramper_providers.map(provider => {
-                            console.log("provider ", provider);
                             return (<div key={paymentProviderTypeToString(provider[0])}>{paymentProviderTypeToString(provider[0])}: {provider[1]}</div>);
                         })}
                     </div>
@@ -123,13 +220,13 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     {userType === 'Onramper' && (
                         <div>
                             <PayPalButton
-                                amount={order.Locked.base.fiat_amount / BigInt(100)}
-                                clientId="Ab_E80t7BM4rNxj7trOAlRz_UmpEqPHANABmFUzD-7Zj-iiUI9nhkRilop_2lWKoWTE_bfEFiXV33mHb"
+                                orderId={order.Locked.base.id.toString()}
+                                amount={Number(order.Locked.base.fiat_amount) / 100.}
+                                currency={order.Locked.base.currency_symbol}
                                 paypalId={order.Locked.base.offramper_providers.find(
                                     provider => paymentProviderTypeToString(provider[0]) === paymentProviderTypeToString(order.Locked.onramper_provider.provider_type)
                                 )?.[1]!}
                                 onSuccess={(transactionId) => handlePayPalSuccess(transactionId, order.Locked.base.id)}
-                                currency="USD"
                             />
                         </div>
                     )}
@@ -148,6 +245,14 @@ const OrderActions: React.FC<OrderProps> = ({ order, commitToOrder, removeOrder,
                     <div><strong>Order ID:</strong> {order.Cancelled.toString()}</div>
                     <div><strong>Status:</strong> Cancelled</div>
                 </div>
+            )}
+            {isLoading ? (
+                <div className="mt-4 flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
+                </div>
+            ) : (
+                message && <div className="message-container" dangerouslySetInnerHTML={{ __html: message }}></div>
             )}
         </li>
     );

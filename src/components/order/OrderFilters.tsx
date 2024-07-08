@@ -27,9 +27,17 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
 
         const [filterCategory, filterValue] = filterType.split(':');
         switch (filterCategory) {
-            case "ByState": stringToOrderFilter(filterType, stringToOrderStateFilter(filterValue as OrderStateFilterTypes));
-            case "ByOfframperAddress" || "LockedByOnramper": stringToOrderFilter(filterType, address);
-            case "ByChainId": stringToOrderFilter(filterType, chainId);
+            case "ByState":
+                setFilter(stringToOrderFilter(filterCategory, stringToOrderStateFilter(filterValue as OrderStateFilterTypes)));
+                break;
+            case "ByOfframperAddress": case "LockedByOnramper":
+                setFilter(stringToOrderFilter(filterCategory, address));
+                break;
+            case "ByChainId":
+                setFilter(stringToOrderFilter(filterCategory, chainId));
+                break;
+            default:
+                setFilter(null);
         }
     }
 
@@ -56,11 +64,15 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 <option value='ByState:Created'>Created</option>
                 <option value='ByState:Completed'>Completed</option>
 
-                <option value="ByChainId">Chain ID</option>
-                {userType == "Offramper" ? (
-                    <option value="ByOfframperAddress">By Offramper Address</option>
-                ) : (
-                    <option value="LockedByOnramper">Locked by Onramper</option>
+                {chainId && (
+                    <option value="ByChainId">Chain ID</option>
+                )}
+                {address && (
+                    userType == "Offramper" ? (
+                        <option value="ByOfframperAddress">By Offramper Address</option>
+                    ) : (
+                        <option value="LockedByOnramper">Locked by Onramper</option>
+                    )
                 )}
             </select>
         </div>

@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 
-import { backend } from '../declarations/backend';
-import { PaymentProvider, PaymentProviderType } from '../declarations/backend/backend.did';
-import { icP2PrampABI } from '../constants/ic2P2ramp';
-import { TokenOption, addresses, getTokenOptions } from '../constants/addresses';
-import { useUser } from '../UserContext';
+import { backend } from '../../declarations/backend';
+import { PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
+import { icP2PrampABI } from '../../constants/ic2P2ramp';
+import { TokenOption, addresses, getTokenOptions } from '../../constants/addresses';
+import { useUser } from '../../UserContext';
+import { rampErrorToString } from '../../model/error';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
@@ -40,11 +41,8 @@ const CreateOrder: React.FC = () => {
         if (token === "") return;
         setLoadingRate(true);
         try {
-            console.log("currency = ", currency);
-            console.log("token = ", token);
-
             const result = await backend.get_exchange_rate(currency, token);
-            console.log("result = ", result);
+            console.log("[exchangeRate] result = ", result);
             if ('Ok' in result) {
                 const rate = parseFloat(result.Ok);
                 setExchangeRate(rate);
@@ -144,8 +142,13 @@ const CreateOrder: React.FC = () => {
             );
             console.log("result(backend.create_order) = ", result);
 
-            setMessage("order created successfully!");
-            navigate("/view");
+            if ('Ok' in result) {
+                setMessage(`Order with ID=${result.Ok} created!`);
+                navigate("/view");
+            } else {
+                const errorMessage = rampErrorToString(result.Err);
+                setMessage(errorMessage);
+            }
         } catch (error) {
             setMessage(`Error creating offramp order, error = ${error}`);
         } finally {
