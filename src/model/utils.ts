@@ -52,7 +52,10 @@ export const filterToFilterType = (filter: OrderFilter): OrderFilterTypes => {
   return candidToEnum(filter);
 };
 
-export const stringToOrderFilter = (key: string, value: any): OrderFilter => {
+export const stringToOrderFilter = (
+  key: OrderFilterTypes,
+  value: any,
+): OrderFilter => {
   return { [key]: value } as OrderFilter;
 };
 

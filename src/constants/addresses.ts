@@ -3,7 +3,7 @@ interface AddressMapping {
   usdt: [string, string];
 }
 
-export const addresses: { [chainId: number]: AddressMapping } = {
+const testAddresses: { [chainId: number]: AddressMapping } = {
   // Sepolia
   11155111: {
     native: ['ETH', '0x42ad57ab757ea55960f7d9805d82fa818683096b'],
@@ -25,6 +25,20 @@ export const addresses: { [chainId: number]: AddressMapping } = {
     usdt: ['USDT', ''],
   },
 };
+
+const prodAddresses: { [chainId: number]: AddressMapping } = {
+  1: {
+    native: ['ETH', '0x...'],
+    usdt: ['USDT', '0x...'],
+  },
+  137: {
+    native: ['MATIC', '0x...'],
+    usdt: ['USDT', '0x...'],
+  },
+};
+
+export const addresses =
+  process.env.FRONTEND_ENV === 'production' ? prodAddresses : testAddresses;
 
 export interface TokenOption {
   name: string;
