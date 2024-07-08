@@ -3,15 +3,36 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    state::read_state,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct PayPalCaptureDetails {
+pub struct PayPalOrderDetails {
     id: String,
     pub status: String,
+    pub purchase_units: Vec<PurchaseUnit>,
+    pub payer: Payer,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PurchaseUnit {
     pub amount: Amount,
     pub payee: Payee,
-    pub supplementary_data: SupplementaryData,
+    pub payments: Payments,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Payments {
+    pub captures: Vec<Capture>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Capture {
+    id: String,
+    status: String,
+    pub amount: Amount,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,24 +47,18 @@ pub struct Payee {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SupplementaryData {
-    pub related_ids: RelatedIds,
+pub struct Payer {
+    pub email_address: String,
+    payer_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RelatedIds {
-    pub order_id: String,
-}
-
-pub async fn fetch_paypal_capture_details(
+pub async fn fetch_paypal_order(
     access_token: &str,
-    transaction_id: &str,
+    order_id: &str,
     cycles: u128,
-) -> Result<PayPalCaptureDetails> {
-    let url = format!(
-        "https://api-m.sandbox.paypal.com/v2/payments/captures/{}",
-        transaction_id
-    );
+) -> Result<PayPalOrderDetails> {
+    let api_url = read_state(|s| s.paypal.api_url.clone());
+    let url = format!("{}/v2/checkout/orders/{}", api_url, order_id);
 
     let request_headers = vec![
         HttpHeader {
@@ -68,16 +83,13 @@ pub async fn fetch_paypal_capture_details(
     match http_request(request, cycles).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
-            ic_cdk::println!("[fetch_paypal_capture_details] str_body = {:?}", str_body);
+            ic_cdk::println!("[fetch_paypal_order] str_body = {:?}", str_body);
 
-            let capture_details: PayPalCaptureDetails = serde_json::from_str(&str_body)
+            let order_details: PayPalOrderDetails = serde_json::from_str(&str_body)
                 .map_err(|e| RampError::ParseError(e.to_string()))?;
-            ic_cdk::println!(
-                "[fetch_paypal_capture_details] capture_details = {:?}",
-                capture_details
-            );
+            ic_cdk::println!("[fetch_paypal_order] order_details = {:?}", order_details);
 
-            Ok(capture_details)
+            Ok(order_details)
         }
         Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
     }

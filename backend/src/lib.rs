@@ -12,7 +12,7 @@ use evm::transaction::spawn_transaction_checker;
 use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
-use outcalls::{paypal_auth, paypal_capture, xrc_rates};
+use outcalls::{paypal_auth, paypal_order, xrc_rates};
 use state::storage::{
     self, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
 };
@@ -254,6 +254,12 @@ fn cancel_order(order_id: u64) -> Result<()> {
 
 #[ic_cdk::update]
 async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u32>) -> Result<()> {
+    ic_cdk::println!(
+        "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",
+        order_id,
+        transaction_id
+    );
+
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -262,21 +268,23 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
 
     let cycles: u128 = 10_000_000_000;
     let access_token = paypal_auth::get_paypal_access_token().await?;
+    ic_cdk::println!("[verify_transaction] Obtained PayPal access token");
     let capture_details =
-        paypal_capture::fetch_paypal_capture_details(&access_token, &transaction_id, cycles)
-            .await?;
+        paypal_order::fetch_paypal_order(&access_token, &transaction_id, cycles).await?;
 
     // Verify the captured payment details
     let expected_fiat_amount = order.base.fiat_amount as f64 / 100.0; // fiat_amount is in cents
     let received_amount: f64 = capture_details
-        .amount
-        .value
-        .parse()
-        .map_err(RampError::from)?;
+        .purchase_units
+        .iter()
+        .flat_map(|unit| &unit.payments.captures)
+        .map(|capture| capture.amount.value.parse::<f64>().unwrap())
+        .sum();
     ic_cdk::println!("received_amount = {}", received_amount);
 
     let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
-    let currency_matches = capture_details.amount.currency_code == order.base.currency_symbol;
+    let currency_matches =
+        capture_details.purchase_units[0].amount.currency_code == order.base.currency_symbol;
 
     let offramper_provider_id = order
         .base
@@ -284,16 +292,17 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
         .get(&order.onramper_provider.provider_type)
         .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type))?;
 
-    let offramper_matches = capture_details.payee.email_address == *offramper_provider_id;
-    // let onramper_matches = order.onramper_paypal_id.as_deref()
-    //     == Some(&capture_details.supplementary_data.related_ids.order_id);
+    let offramper_matches =
+        capture_details.purchase_units[0].payee.email_address == *offramper_provider_id;
+    let onramper_matches = capture_details.payer.email_address == order.onramper_provider.id;
 
     if capture_details.status == "COMPLETED"
         && amount_matches
         && currency_matches
         && offramper_matches
-    // && onramper_matches
+        && onramper_matches
     {
+        ic_cdk::println!("[verify_transaction] verified is true!!");
         order_management::mark_order_as_paid(order.base.id)?;
         let tx_hash = Ic2P2ramp::release_funds(order_id, gas).await?;
         spawn_transaction_checker(
