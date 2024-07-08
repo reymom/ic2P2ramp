@@ -9,8 +9,8 @@ import Menu from './components/Menu';
 import UserProfile from './components/UserProfile';
 import ConnectAddress from './components/ConnectAddress';
 import RegisterUser from './components/RegisterUser';
-import CreateOrder from './components/CreateOrder';
-import ViewOrders from './components/ViewOrders';
+import CreateOrder from './components/order/CreateOrder';
+import ViewOrders from './components/order/ViewOrders';
 import { userTypeToString } from './model/utils';
 import { OrderFilter } from './declarations/backend/backend.did';
 

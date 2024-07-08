@@ -1,63 +1,86 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface PayPalButtonProps {
-    amount: bigint;
-    clientId: string;
+    orderId: string
+    amount: Number;
+    currency: string;
     paypalId: string;
     onSuccess: (transactionId: string) => void;
-    currency: string;
 }
 
-const PayPalButton: React.FC<PayPalButtonProps> = ({ amount, clientId, paypalId, onSuccess, currency }) => {
+declare global {
+    interface Window {
+        paypal: any;
+    }
+}
+
+const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, paypalId, onSuccess }) => {
+    const paypalRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
-        if (!paypalId) return;
-
-        // Load PayPal script
-        const script = document.createElement('script');
-        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}`;
-        script.addEventListener('load', () => {
-            // @ts-ignore
-            window.paypal.Buttons({
-                createOrder: (data: any, actions: any) => {
-                    return actions.order.create({
-                        purchase_units: [{
-                            amount: {
-                                value: amount.toString(),
-                                currency_code: currency
-                            },
-                            payee: {
-                                email_address: paypalId
-                            },
-                        }]
-                    });
-                },
-                onApprove: async (data: any, actions: any) => {
-                    const details = await actions.order.capture();
-                    console.log("details = ", details);
-
-                    // const transactionId = details.id;
-                    // onSuccess(transactionId);
-
-                    const captureId = details.purchase_units[0].payments.captures[0].id;
-                    console.log("captureId = ", captureId);
-                    onSuccess(captureId)
-                },
-                onError: (err: any) => {
-                    console.error('PayPal Checkout onError', err);
+        if (window.paypal) {
+            renderPayPalButtons();
+        } else {
+            const checkPaypalLoaded = setInterval(() => {
+                if (window.paypal) {
+                    clearInterval(checkPaypalLoaded);
+                    renderPayPalButtons();
                 }
-            }).render('#paypal-button-container');
-        });
-        document.body.appendChild(script);
-    }, [amount, onSuccess, currency]);
+            }, 1000);
+        }
+
+        // Cleanup to remove PayPal button if component is unmounted
+        return () => {
+            if (paypalRef.current) {
+                paypalRef.current.innerHTML = "";
+            }
+        };
+    }, [amount, currency, onSuccess]);
+
+    const renderPayPalButtons = () => {
+        if (!paypalRef.current) {
+            console.error('PayPal button container not found');
+            return;
+        }
+
+        window.paypal.Buttons({
+            fundingSource: window.paypal.FUNDING.PAYPAL,
+            createOrder: (data: any, actions: any) => {
+                return actions.order.create({
+                    purchase_units: [{
+                        amount: {
+                            value: amount.toString(),
+                            currency_code: currency
+                        },
+                        payee: {
+                            email_address: paypalId
+                        },
+                    }]
+                });
+            },
+            onApprove: async (data: any, actions: any) => {
+                const details = await actions.order.capture();
+                console.log("details = ", details);
+
+                const orderId = details.id;
+                onSuccess(orderId);
+            },
+            onError: (err: any) => {
+                console.error('PayPal Checkout onError', err);
+            }
+        }).render(`#paypal-button-container-${orderId}`);
+    };
+
 
     return (
         <div className="mt-4">
-            {paypalId ? (
-                <div id="paypal-button-container" className="flex justify-center"></div>
+            {paypalId !== "" ? (
+                <div ref={paypalRef} id={`paypal-button-container-${orderId}`} className="flex justify-center"></div>
             ) : (
-                <div className="text-red-500 text-center">Please enter your PayPal ID to proceed with the payment</div>
-            )}
-        </div>
+                <div className="text-red-500 text-center">Please enter a PayPal ID to proceed with the payment</div>
+            )
+            }
+        </div >
     );
 }
 
