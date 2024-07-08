@@ -6,6 +6,7 @@ pub struct PayPalState {
     pub token_expiration: Option<u64>,
     pub client_id: String,
     pub client_secret: String,
+    pub api_url: String,
 }
 
 pub fn get_paypal_token() -> Option<(String, u64)> {

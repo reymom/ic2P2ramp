@@ -24,6 +24,7 @@ pub struct InitArg {
     pub ecdsa_key_id: EcdsaKeyId,
     pub client_id: String,
     pub client_secret: String,
+    pub paypal_api_url: String,
 }
 
 impl TryFrom<InitArg> for State {
@@ -35,6 +36,7 @@ impl TryFrom<InitArg> for State {
             ecdsa_key_id,
             client_id,
             client_secret,
+            paypal_api_url,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -64,6 +66,7 @@ impl TryFrom<InitArg> for State {
                 token_expiration: None,
                 client_id,
                 client_secret,
+                api_url: paypal_api_url,
             },
         };
         Ok(state)
