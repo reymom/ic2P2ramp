@@ -84,6 +84,7 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm b
     };
     client_id = \"${CLIENT_ID}\";
     client_secret = \"${CLIENT_SECRET}\";
+    paypal_api_url = \"https://api-m.sandbox.paypal.com\";
   },
 )"
 

@@ -40,6 +40,7 @@ type ExchangeRateError = variant {
 type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
+  paypal_api_url : text;
   chains : vec ChainConfig;
   client_id : text;
   client_secret : text;
