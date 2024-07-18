@@ -40,10 +40,9 @@ type ExchangeRateError = variant {
 type HttpHeader = record { value : text; name : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
-  paypal_api_url : text;
+  revolut : RevolutConfig;
   chains : vec ChainConfig;
-  client_id : text;
-  client_secret : text;
+  paypal : PaypalConfig;
 };
 type LockedOrder = record {
   locked_at : nat64;
@@ -82,6 +81,11 @@ type PaymentProvider = record {
   provider_type : PaymentProviderType;
 };
 type PaymentProviderType = variant { PayPal; Revolut };
+type PaypalConfig = record {
+  api_url : text;
+  client_id : text;
+  client_secret : text;
+};
 type ProviderView = record {
   cyclesPerCall : nat64;
   owner : principal;
@@ -125,6 +129,7 @@ type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : nat64; Err : RampError };
 type Result_2 = variant { Ok : text; Err : RampError };
 type Result_3 = variant { Ok : User; Err : RampError };
+type RevolutConfig = record { api_url : text; client_id : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader };
 type RpcServices = variant {
   EthSepolia : opt vec EthSepoliaService;
@@ -161,6 +166,7 @@ service : (InitArg) -> {
   register_user : (text, UserType, vec PaymentProvider) -> (Result_3);
   remove_user : (text) -> (Result_3);
   test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_2);
+  test_set_paypal_token : () -> (Result_2);
   transfer_value : (nat64, text, nat, opt int32) -> (Result_2);
   unlock_order : (nat64, opt nat32) -> (Result_2);
   verify_transaction : (nat64, text, opt nat32) -> (Result);
