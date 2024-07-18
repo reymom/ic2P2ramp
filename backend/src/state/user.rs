@@ -2,12 +2,9 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
-use crate::{
-    errors::{RampError, Result},
-    evm::helpers,
-};
+use crate::errors::{RampError, Result};
 
-use super::common::PaymentProvider;
+use super::common::{Address, PaymentProvider};
 
 const MAX_USER_SIZE: u32 = 350;
 
@@ -19,23 +16,27 @@ pub enum UserType {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct User {
-    pub evm_address: String,
     pub user_type: UserType,
     pub payment_providers: HashSet<PaymentProvider>,
     pub fiat_amount: u64, // received for offramped or payed by onramper
     pub score: i32,
+    pub login_method: Address,
+    pub addresses: HashSet<Address>,
 }
 
 impl User {
-    pub fn new(evm_address: String, user_type: UserType) -> Result<Self> {
-        helpers::validate_evm_address(&evm_address)?;
+    pub fn new(user_type: UserType, initial_address: Address) -> Result<Self> {
+        let mut addresses = HashSet::new();
+        initial_address.validate()?;
+        addresses.insert(initial_address.clone());
 
         Ok(Self {
-            evm_address,
             user_type,
             payment_providers: HashSet::new(),
             fiat_amount: 0,
             score: 1,
+            login_method: initial_address,
+            addresses,
         })
     }
 

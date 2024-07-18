@@ -2,11 +2,10 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::cell::RefCell;
 
-pub use super::common::{PaymentProvider, PaymentProviderType};
+pub use super::common::{Address, PaymentProvider, PaymentProviderType};
 pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
 pub use super::user::{User, UserType};
 use crate::errors::{RampError, Result};
-use crate::evm::helpers;
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -14,7 +13,7 @@ thread_local! {
     static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 
-    pub static USERS: RefCell<StableBTreeMap<String, User, Memory>> = RefCell::new(
+    pub static USERS: RefCell<StableBTreeMap<Address, User, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))),
         )
@@ -31,14 +30,14 @@ thread_local! {
 // USERS
 // -----
 
-pub fn mutate_user<F, R>(evm_address: &str, f: F) -> Result<R>
+pub fn mutate_user<F, R>(address: &Address, f: F) -> Result<R>
 where
     F: FnOnce(&mut User) -> R,
 {
     USERS.with_borrow_mut(|users| {
-        if let Some(mut user) = users.get(&evm_address.to_string()) {
+        if let Some(mut user) = users.get(&address) {
             let result = f(&mut user);
-            users.insert(evm_address.to_string(), user);
+            users.insert(address.clone(), user);
             Ok(result)
         } else {
             Err(RampError::UserNotFound)
@@ -47,20 +46,18 @@ where
 }
 
 pub fn insert_user(user: &User) -> Option<User> {
-    USERS.with_borrow_mut(|p| p.insert(user.evm_address.clone(), user.clone()))
+    USERS.with_borrow_mut(|p| p.insert(user.login_method.clone(), user.clone()))
 }
 
-pub fn remove_user(evm_address: &str) -> Result<User> {
+pub fn remove_user(address: &Address) -> Result<User> {
     USERS
-        .with_borrow_mut(|p| p.remove(&evm_address.to_string()))
+        .with_borrow_mut(|p| p.remove(&address))
         .ok_or_else(|| RampError::UserNotFound)
 }
 
-pub fn get_user(evm_address: &str) -> Result<User> {
-    helpers::validate_evm_address(&evm_address)?;
-
+pub fn get_user(address: &Address) -> Result<User> {
     USERS
-        .with_borrow(|users| users.get(&evm_address.to_string()))
+        .with_borrow(|users| users.get(&address))
         .ok_or_else(|| RampError::UserNotFound)
 }
 
@@ -113,19 +110,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use crate::state::common::PaymentProviderType;
+    use crate::state::common::{AddressType, PaymentProviderType};
     use crate::state::user::UserType;
 
     use super::*;
+    use candid::Principal;
+    use ethers_core::types::Address as EthAddress;
     use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
     use ic_stable_structures::DefaultMemoryImpl;
+    use std::collections::HashSet;
 
     #[test]
     fn test_stable_btree_map() {
         let memory_manager = MemoryManager::init(DefaultMemoryImpl::default());
-        let mut map: StableBTreeMap<String, User, _> =
+        let mut map: StableBTreeMap<Address, User, _> =
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
         let mut payment_providers = HashSet::new();
@@ -133,18 +131,16 @@ mod tests {
             provider_type: PaymentProviderType::PayPal,
             id: "paypal_id".to_string(),
         });
-        let user = User {
-            evm_address: "0x123".to_string(),
-            user_type: UserType::Offramper,
-            payment_providers,
-            fiat_amount: 0,
-            score: 1,
+
+        let login_address = Address {
+            address_type: AddressType::EVM,
+            address: format!("{:#x}", EthAddress::random()),
         };
 
-        map.insert(user.evm_address.clone(), user.clone());
-        let retrieved_user = map.get(&"0x123".to_string()).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        map.insert(login_address.clone(), user.clone());
 
-        assert_eq!(user.evm_address, retrieved_user.evm_address);
+        let retrieved_user = map.get(&login_address).unwrap();
         assert_eq!(user.payment_providers, retrieved_user.payment_providers);
         assert_eq!(user.fiat_amount, retrieved_user.fiat_amount);
         assert_eq!(user.score, retrieved_user.score);
@@ -155,12 +151,117 @@ mod tests {
             provider_type: PaymentProviderType::Revolut,
             id: "revolut_id".to_string(),
         });
-        map.insert(updated_user.evm_address.clone(), updated_user.clone());
+        map.insert(updated_user.login_method.clone(), updated_user.clone());
 
-        let retrieved_updated_user = map.get(&"0x123".to_string()).unwrap();
+        let retrieved_updated_user = map.get(&login_address).unwrap();
         assert_eq!(
             updated_user.payment_providers,
             retrieved_updated_user.payment_providers
         );
+
+        // Add address
+        let new_address = Address {
+            address_type: AddressType::ICP,
+            address: Principal::anonymous().to_string(),
+        };
+        if let Some(existing_address) = user.addresses.take(&new_address) {
+            ic_cdk::println!(
+                "updating address {:?} to {:?}",
+                existing_address,
+                new_address
+            )
+        }
+        updated_user.addresses.insert(new_address.clone());
+
+        map.insert(updated_user.login_method.clone(), updated_user.clone());
+
+        let retrieved_user_with_new_address = map.get(&login_address).unwrap();
+        assert!(retrieved_user_with_new_address
+            .addresses
+            .contains(&new_address));
+    }
+
+    #[test]
+    fn test_add_address() {
+        let login_address = Address {
+            address_type: AddressType::EVM,
+            address: format!("{:#x}", EthAddress::random()),
+        };
+
+        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+
+        let new_address = Address {
+            address_type: AddressType::ICP,
+            address: "2chl6-4hpzw-vqaaa-aaaaa-c".to_string(),
+        };
+        if let Some(existing_address) = user.addresses.take(&new_address) {
+            ic_cdk::println!(
+                "updating address {:?} to {:?}",
+                existing_address,
+                new_address
+            )
+        }
+        user.addresses.insert(new_address.clone());
+        assert!(user.addresses.contains(&new_address));
+
+        // Attempt to add the same address type should replace the old one
+        let updated_address = Address {
+            address_type: AddressType::ICP,
+            address: Principal::anonymous().to_string(),
+        };
+
+        if let Some(existing_address) = user.addresses.take(&updated_address) {
+            ic_cdk::println!(
+                "updating address {:?} to {:?}",
+                existing_address,
+                new_address
+            )
+        }
+        user.addresses.insert(updated_address.clone());
+        assert_eq!(user.addresses.len(), 2);
+        assert_eq!(
+            user.addresses.get(&new_address).unwrap().address,
+            updated_address.address
+        );
+    }
+
+    #[test]
+    fn test_multiple_users_same_address_type() {
+        let memory_manager = MemoryManager::init(DefaultMemoryImpl::default());
+        let mut map: StableBTreeMap<Address, User, _> =
+            StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
+
+        let login_address1 = Address {
+            address_type: AddressType::EVM,
+            address: format!("{:#x}", EthAddress::random()),
+        };
+        let login_address2 = Address {
+            address_type: AddressType::EVM,
+            address: format!("{:#x}", EthAddress::random()),
+        };
+
+        let user1 = User::new(UserType::Offramper, login_address1.clone()).unwrap();
+        let user2 = User::new(UserType::Onramper, login_address2.clone()).unwrap();
+
+        map.insert(login_address1.clone(), user1.clone());
+        map.insert(login_address2.clone(), user2.clone());
+
+        let retrieved_user1 = map.get(&login_address1).unwrap();
+        let retrieved_user2 = map.get(&login_address2).unwrap();
+
+        assert_eq!(user1.addresses, retrieved_user1.addresses);
+        assert_eq!(user2.addresses, retrieved_user2.addresses);
+        assert_ne!(
+            retrieved_user1
+                .addresses
+                .get(&login_address1)
+                .unwrap()
+                .address,
+            retrieved_user2
+                .addresses
+                .get(&login_address2)
+                .unwrap()
+                .address,
+        )
     }
 }
