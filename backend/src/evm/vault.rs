@@ -325,7 +325,7 @@ impl Ic2P2ramp {
         .await
     }
 
-    pub async fn release_funds(order_id: u64, gas: Option<u32>) -> Result<String> {
+    pub async fn release_funds(order_id: u64, chain_id: u64, gas: Option<u32>) -> Result<String> {
         let order_state = storage::get_order(&order_id)?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
@@ -333,28 +333,28 @@ impl Ic2P2ramp {
         };
 
         let gas = U256::from(gas.unwrap_or(21_000));
-        let fee_estimates = fees::get_fee_estimates(9, order.base.chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         ic_cdk::println!(
             "[release_funds] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas,
             fee_estimates.max_fee_per_gas,
             fee_estimates.max_priority_fee_per_gas
         );
-        let vault_manager_address = chains::get_vault_manager_address(order.base.chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
         let request: SignRequest;
-        if let Some(token_address) = order.base.token_address {
-            if chains::token_is_approved(order.base.chain_id, &token_address)? {
+        if let Some(token_address) = order.base.crypto.token {
+            if chains::token_is_approved(chain_id, &token_address)? {
                 return Err(RampError::TokenAlreadyRegistered);
             };
             request = Self::sign_request_release_token(
                 gas,
                 fee_estimates,
-                order.base.chain_id,
-                order.base.offramper_address,
-                order.onramper_address,
+                chain_id,
+                order.base.offramper_address.address,
+                order.onramper_address.address,
                 token_address,
-                order.base.crypto_amount,
+                order.base.crypto.amount,
                 vault_manager_address,
             )
             .await?;
@@ -362,16 +362,16 @@ impl Ic2P2ramp {
             request = Self::sign_request_release_base_currency(
                 gas,
                 fee_estimates,
-                order.base.chain_id,
-                order.base.crypto_amount,
-                order.base.offramper_address,
-                order.onramper_address,
+                chain_id,
+                order.base.crypto.amount,
+                order.base.offramper_address.address,
+                order.onramper_address.address,
                 vault_manager_address,
             )
             .await?;
         }
 
-        transaction::send_signed_transaction(request, order.base.chain_id).await
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
     async fn sign_request_release_token(

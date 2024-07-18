@@ -1,6 +1,8 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use candid::Principal;
+use email_address::EmailAddress;
 use ethers_core::types::{Address, H160};
 
 use crate::errors::{RampError, Result};
@@ -43,5 +45,23 @@ pub fn parse_address(address: String) -> Result<H160> {
 
 pub fn validate_evm_address(evm_address: &str) -> Result<()> {
     Address::from_str(evm_address).map_err(|_| RampError::InvalidAddress)?;
+    Ok(())
+}
+
+pub fn validate_icp_address(icp_address: &str) -> Result<()> {
+    Principal::from_text(icp_address).map_err(|_| RampError::InvalidAddress)?;
+    Ok(())
+}
+
+pub fn validate_email(address: &str) -> Result<()> {
+    if EmailAddress::is_valid(address) {
+        Ok(())
+    } else {
+        Err(RampError::InvalidAddress)
+    }
+}
+
+pub fn validate_solana_address(_solana_address: &str) -> Result<()> {
+    // solana_sdk::pubkey::Pubkey::from_str(solana_address).map_err(|_| RampError::InvalidAddress)?;
     Ok(())
 }
