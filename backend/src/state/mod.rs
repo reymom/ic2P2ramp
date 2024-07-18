@@ -1,3 +1,4 @@
+pub mod blockchain;
 pub mod chains;
 mod common;
 mod init;
