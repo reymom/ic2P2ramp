@@ -5,6 +5,7 @@ mod outcalls;
 mod state;
 
 use errors::{RampError, Result};
+use state::blockchain::Blockchain;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -14,7 +15,7 @@ use management::order as order_management;
 use management::user as user_management;
 use outcalls::{paypal_auth, paypal_order, revolut_auth, xrc_rates};
 use state::storage::{
-    self, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
+    self, Address, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
 };
 use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
 
@@ -164,29 +165,34 @@ async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result
 
 #[ic_cdk::update]
 fn register_user(
-    evm_address: String,
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
+    login_address: Address,
 ) -> Result<User> {
-    user_management::register_user(evm_address, user_type, payment_providers)
+    user_management::register_user(user_type, payment_providers, login_address)
 }
 
 #[ic_cdk::query]
-fn get_user(evm_address: String) -> Result<User> {
-    storage::get_user(&evm_address)
+fn get_user(address: Address) -> Result<User> {
+    storage::get_user(&address)
 }
 
 #[ic_cdk::update]
-fn remove_user(evm_address: String) -> Result<User> {
-    storage::remove_user(&evm_address)
+fn remove_user(address: Address) -> Result<User> {
+    storage::remove_user(&address)
+}
+
+#[ic_cdk::update]
+fn add_address_for_user(login_address: Address, address: Address) -> Result<()> {
+    user_management::add_address(&login_address, address)
 }
 
 #[ic_cdk::update]
 fn add_payment_provider_for_user(
-    evm_address: String,
+    address: Address,
     payment_provider: PaymentProvider,
 ) -> Result<()> {
-    user_management::add_payment_provider(&evm_address, payment_provider)
+    user_management::add_payment_provider(&address, payment_provider)
 }
 
 // ------------------
@@ -202,11 +208,11 @@ fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
 fn create_order(
     fiat_amount: u64,
     fiat_symbol: String,
-    crypto_amount: u64,
     offramper_providers: HashMap<PaymentProviderType, String>,
-    offramper_address: String,
-    chain_id: u64,
+    blockchain: Blockchain,
     token_address: Option<String>,
+    crypto_amount: u64,
+    offramper_address: Address,
 ) -> Result<u64> {
     let user = storage::get_user(&offramper_address)?;
     user.is_banned()?;
@@ -226,11 +232,11 @@ fn create_order(
     order_management::create_order(
         fiat_amount,
         fiat_symbol,
-        crypto_amount,
         offramper_providers,
-        offramper_address,
-        chain_id,
+        blockchain,
         token_address,
+        crypto_amount,
+        offramper_address,
     )
 }
 
@@ -238,7 +244,7 @@ fn create_order(
 async fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
-    onramper_address: String,
+    onramper_address: Address,
     gas: Option<u32>,
 ) -> Result<String> {
     user_management::can_commit_orders(&onramper_address)?;
@@ -253,28 +259,33 @@ async fn lock_order(
         return Err(RampError::InvalidOnramperProvider);
     }
 
-    let tx_hash = Ic2P2ramp::commit_deposit(
-        order.chain_id,
-        order.offramper_address,
-        order.token_address,
-        order.crypto_amount,
-        gas,
-    )
-    .await?;
-    spawn_transaction_checker(
-        tx_hash.clone(),
-        order.chain_id,
-        60,
-        Duration::from_secs(4),
-        move || {
-            let _ = order_management::lock_order(
-                order_id,
-                onramper_provider.clone(),
-                onramper_address.clone(),
+    match order.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            let tx_hash = Ic2P2ramp::commit_deposit(
+                chain_id,
+                order.offramper_address.address,
+                order.crypto.token,
+                order.crypto.amount,
+                gas,
+            )
+            .await?;
+            spawn_transaction_checker(
+                tx_hash.clone(),
+                chain_id,
+                60,
+                Duration::from_secs(4),
+                move || {
+                    let _ = order_management::lock_order(
+                        order_id,
+                        onramper_provider.clone(),
+                        onramper_address.clone(),
+                    );
+                },
             );
-        },
-    );
-    Ok(tx_hash)
+            Ok(tx_hash)
+        }
+        _ => todo!(),
+    }
 }
 
 #[ic_cdk::update]
@@ -285,24 +296,29 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let tx_hash = Ic2P2ramp::uncommit_deposit(
-        order.base.chain_id,
-        order.base.offramper_address,
-        order.base.token_address,
-        order.base.crypto_amount,
-        gas,
-    )
-    .await?;
-    spawn_transaction_checker(
-        tx_hash.clone(),
-        order.base.chain_id,
-        60,
-        Duration::from_secs(4),
-        move || {
-            let _ = order_management::unlock_order(order_id);
-        },
-    );
-    Ok(tx_hash)
+    match order.base.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            let tx_hash = Ic2P2ramp::uncommit_deposit(
+                chain_id,
+                order.base.offramper_address.address,
+                order.base.crypto.token,
+                order.base.crypto.amount,
+                gas,
+            )
+            .await?;
+            spawn_transaction_checker(
+                tx_hash.clone(),
+                chain_id,
+                60,
+                Duration::from_secs(4),
+                move || {
+                    let _ = order_management::unlock_order(order_id);
+                },
+            );
+            Ok(tx_hash)
+        }
+        _ => todo!(),
+    }
 }
 
 #[ic_cdk::update]
@@ -367,22 +383,34 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
     {
         ic_cdk::println!("[verify_transaction] verified is true!!");
         order_management::mark_order_as_paid(order.base.id)?;
-        let tx_hash = Ic2P2ramp::release_funds(order_id, gas).await?;
-        spawn_transaction_checker(
-            tx_hash,
-            order.base.chain_id,
-            60,
-            Duration::from_secs(4),
-            move || {
-                // Update order state to completed
-                match management::order::set_order_completed(order_id) {
-                    Ok(_) => {
-                        ic_cdk::println!("[verify_transaction] order {:?} completed", order_id)
-                    }
-                    Err(e) => ic_cdk::trap(format!("could not complete order: {:?}", e).as_str()),
-                }
-            },
-        );
+
+        match order.base.crypto.blockchain {
+            Blockchain::EVM { chain_id } => {
+                let tx_hash = Ic2P2ramp::release_funds(order_id, chain_id, gas).await?;
+                spawn_transaction_checker(
+                    tx_hash,
+                    chain_id,
+                    60,
+                    Duration::from_secs(4),
+                    move || {
+                        // Update order state to completed
+                        match management::order::set_order_completed(order_id) {
+                            Ok(_) => {
+                                ic_cdk::println!(
+                                    "[verify_transaction] order {:?} completed",
+                                    order_id
+                                )
+                            }
+                            Err(e) => {
+                                ic_cdk::trap(format!("could not complete order: {:?}", e).as_str())
+                            }
+                        }
+                    },
+                );
+            }
+            _ => todo!(),
+        }
+
         Ok(())
     } else {
         Err(RampError::PaymentVerificationFailed)
