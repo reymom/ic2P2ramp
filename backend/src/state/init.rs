@@ -8,6 +8,7 @@ use crate::evm::rpc::RpcServices;
 
 use super::chains::ChainState;
 use super::paypal::PayPalState;
+use super::revolut::RevolutState;
 use super::state::InvalidStateError;
 use super::State;
 
@@ -18,13 +19,26 @@ pub struct ChainConfig {
     pub services: RpcServices,
 }
 
+#[derive(CandidType, Deserialize, Debug, Clone)]
+pub struct PaypalConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub api_url: String,
+}
+
+#[derive(CandidType, Deserialize, Debug, Clone)]
+pub struct RevolutConfig {
+    pub client_id: String,
+    //what else?
+    pub api_url: String,
+}
+
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
     pub chains: Vec<ChainConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
-    pub client_id: String,
-    pub client_secret: String,
-    pub paypal_api_url: String,
+    pub paypal: PaypalConfig,
+    pub revolut: RevolutConfig,
 }
 
 impl TryFrom<InitArg> for State {
@@ -34,9 +48,8 @@ impl TryFrom<InitArg> for State {
         InitArg {
             chains,
             ecdsa_key_id,
-            client_id,
-            client_secret,
-            paypal_api_url,
+            paypal,
+            revolut,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -64,9 +77,15 @@ impl TryFrom<InitArg> for State {
             paypal: PayPalState {
                 access_token: None,
                 token_expiration: None,
-                client_id,
-                client_secret,
-                api_url: paypal_api_url,
+                client_id: paypal.client_id,
+                client_secret: paypal.client_secret,
+                api_url: paypal.api_url,
+            },
+            revolut: RevolutState {
+                access_token: None,
+                token_expiration: None,
+                client_id: revolut.client_id,
+                api_url: revolut.api_url,
             },
         };
         Ok(state)
