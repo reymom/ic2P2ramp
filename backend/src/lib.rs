@@ -12,13 +12,11 @@ use evm::transaction::spawn_transaction_checker;
 use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
-use outcalls::{paypal_auth, paypal_order, xrc_rates};
+use outcalls::{paypal_auth, paypal_order, revolut_auth, xrc_rates};
 use state::storage::{
     self, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
 };
 use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
-
-pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
 fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::ZERO, || {
@@ -32,6 +30,65 @@ fn setup_timers() {
         })
     });
 }
+
+// #[ic_cdk::pre_upgrade]
+// fn pre_upgrade() {
+//     fn pre_upgrade() {
+//         let order_id_counter = ORDER_ID_COUNTER.with(|counter| *counter.borrow());
+//         let locked_order_timers = LOCKED_ORDER_TIMERS.with(|timers| {
+//             timers
+//                 .borrow()
+//                 .iter()
+//                 .map(|(&order_id, _)| {
+//                     (order_id, ic_cdk::api::time() + 3600) // Example: Timer set for 1 hour from current time
+//                 })
+//                 .collect::<HashMap<u64, u64>>()
+//         });
+//         let serializable_state = SerializableState {
+//             order_id_counter,
+//             locked_order_timers,
+//         };
+//         let mut state_bytes = vec![];
+//         ciborium::ser::into_writer(&serializable_state, &mut state_bytes)
+//             .expect("failed to encode state");
+//         let len = state_bytes.len() as u32;
+//         let mut memory = memory::get_upgrades_memory();
+//         let mut writer = Writer::new(&mut memory, 0);
+//         writer.write(&len.to_le_bytes()).unwrap();
+//         writer.write(&state_bytes).unwrap();
+//     }
+// }
+
+// #[ic_cdk::post_upgrade]
+// fn post_upgrade() {
+//     let memory = memory::get_upgrades_memory();
+//     let mut state_len_bytes = [0; 4];
+//     memory.read(0, &mut state_len_bytes);
+//     let state_len = u32::from_le_bytes(state_len_bytes) as usize;
+//     let mut state_bytes = vec![0; state_len];
+//     memory.read(4, &mut state_bytes);
+//     let serializable_state: SerializableState =
+//         ciborium::de::from_reader(&*state_bytes).expect("failed to decode state");
+//     ORDER_ID_COUNTER.with(|counter| {
+//         *counter.borrow_mut() = serializable_state.order_id_counter;
+//     });
+//     LOCKED_ORDER_TIMERS.with(|timers| {
+//         let mut timers = timers.borrow_mut();
+//         for (order_id, expiration_time) in serializable_state.locked_order_timers {
+//             let remaining_duration = expiration_time - ic_cdk::api::time();
+//             if remaining_duration > 0 {
+//                 let timer_id = set_timer(Duration::from_secs(remaining_duration), move || {
+//                     ic_cdk::spawn(async move {
+//                         if let Err(e) = management::order::unlock_order(order_id) {
+//                             ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
+//                         }
+//                     });
+//                 });
+//                 timers.insert(order_id, timer_id);
+//             }
+//         }
+//     });
+// }
 
 #[ic_cdk::init]
 fn init(arg: InitArg) {
@@ -68,6 +125,11 @@ async fn test_deposit_funds(
     gas: Option<u32>,
 ) -> Result<String> {
     Ic2P2ramp::deposit_funds(chain_id, amount, token_address, gas).await
+}
+
+#[ic_cdk::update]
+async fn test_set_paypal_token() -> Result<String> {
+    Ok(revolut_auth::get_revolut_access_token().await?)
 }
 
 // ----------
@@ -272,8 +334,9 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
     let capture_details =
         paypal_order::fetch_paypal_order(&access_token, &transaction_id, cycles).await?;
 
-    // Verify the captured payment details
-    let expected_fiat_amount = order.base.fiat_amount as f64 / 100.0; // fiat_amount is in cents
+    // Verify the captured payment details (amounts are in cents)
+    let total_expected_amount = (order.base.fiat_amount + order.base.offramper_fee) as f64 / 100.0;
+
     let received_amount: f64 = capture_details
         .purchase_units
         .iter()
@@ -282,7 +345,7 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
         .sum();
     ic_cdk::println!("received_amount = {}", received_amount);
 
-    let amount_matches = (received_amount - expected_fiat_amount).abs() < f64::EPSILON;
+    let amount_matches = (received_amount - total_expected_amount).abs() < f64::EPSILON;
     let currency_matches =
         capture_details.purchase_units[0].amount.currency_code == order.base.currency_symbol;
 

@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use crate::{
     errors::{RampError, Result},
     management::user as user_management,
-    state::storage::{
-        self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
-        PaymentProviderType,
+    state::{
+        state,
+        storage::{
+            self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
+            PaymentProviderType,
+        },
     },
 };
 
@@ -79,7 +82,11 @@ pub fn lock_order(
             Ok(())
         }
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    })?
+    })??;
+
+    state::set_order_timer(order_id);
+
+    Ok(())
 }
 
 pub fn unlock_order(order_id: u64) -> Result<()> {
@@ -91,7 +98,9 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-    })?
+    })??;
+
+    state::clear_order_timer(order_id)
 }
 
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
@@ -110,7 +119,9 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-    })?
+    })??;
+
+    state::clear_order_timer(order_id)
 }
 
 pub fn cancel_order(order_id: u64) -> Result<()> {

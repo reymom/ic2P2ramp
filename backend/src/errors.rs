@@ -12,6 +12,9 @@ pub enum RampError {
     #[error("Order Not Found")]
     OrderNotFound,
 
+    #[error("Order Timer Not Found")]
+    OrderTimerNotFound,
+
     #[error("Invalid Order State: {0}")]
     InvalidOrderState(String),
 

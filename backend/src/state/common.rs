@@ -41,28 +41,10 @@ pub fn contains_provider_type(
     providers.get(&provider.provider_type).is_some()
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
+    // Static strategy: 2% fee for the offramper, 0.5% for the admin
+    let offramper_fee = fiat_amount / 50; // 2%
+    let admin_fee = crypto_amount / 200; // 0.5%
 
-//     #[test]
-//     fn test_contains_provider_type() {
-//         let mut providers = HashSet::new();
-//         providers.insert(PaymentProvider::PayPal {
-//             id: "paypal_1".to_string(),
-//         });
-//         providers.insert(PaymentProvider::Revolut {
-//             id: "revolut_1".to_string(),
-//         });
-
-//         let paypal_provider = PaymentProvider::PayPal {
-//             id: "paypal_2".to_string(),
-//         };
-//         let revolut_provider = PaymentProvider::Revolut {
-//             id: "revolut_2".to_string(),
-//         };
-
-//         assert!(contains_provider_type(&paypal_provider, &providers));
-//         assert!(contains_provider_type(&revolut_provider, &providers));
-//     }
-// }
+    (offramper_fee, admin_fee)
+}
