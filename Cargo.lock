@@ -52,6 +52,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "candid",
+ "email_address",
  "ethers-core",
  "futures",
  "getrandom",
@@ -351,6 +352,15 @@ dependencies = [
  "sec1",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "email_address"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1019fa28f600f5b581b7a603d515c3f1635da041ca211b5055804788673abfe"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
