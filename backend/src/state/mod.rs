@@ -3,6 +3,7 @@ mod common;
 mod init;
 mod order;
 pub mod paypal;
+pub mod revolut;
 pub mod state;
 pub mod storage;
 mod user;

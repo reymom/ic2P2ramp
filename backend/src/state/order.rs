@@ -6,8 +6,8 @@ use std::{borrow::Cow, collections::HashMap, fmt};
 use crate::{errors::Result, evm::helpers};
 
 use super::{
-    common::{PaymentProvider, PaymentProviderType},
-    storage,
+    common::{calculate_fees, PaymentProvider, PaymentProviderType},
+    state,
 };
 
 const MAX_ORDER_SIZE: u32 = 500;
@@ -52,8 +52,10 @@ pub struct Order {
     pub originator: Principal,
     pub created_at: u64,
     pub fiat_amount: u64,
+    pub offramper_fee: u64,
     pub currency_symbol: String,
     pub crypto_amount: u64,
+    pub admin_fee: u64,
     pub offramper_providers: HashMap<PaymentProviderType, String>,
     pub offramper_address: String,
     pub chain_id: u64,
@@ -72,14 +74,18 @@ impl Order {
     ) -> Result<Self> {
         helpers::validate_evm_address(&offramper_address)?;
 
-        let order_id = storage::generate_order_id();
+        let order_id = state::generate_order_id();
+        let (offramper_fee, admin_fee) = calculate_fees(fiat_amount, crypto_amount);
+
         let order = Order {
             id: order_id.clone(),
             originator: ic_cdk::caller(),
             created_at: time(),
             fiat_amount,
+            offramper_fee,
             currency_symbol,
             crypto_amount,
+            admin_fee,
             offramper_providers,
             offramper_address,
             chain_id,
@@ -120,7 +126,9 @@ pub struct CompletedOrder {
     pub onramper: String,
     pub offramper: String,
     pub fiat_amount: u64,
+    pub offramper_fee: u64,
     pub chain_id: u64,
+    pub completed_at: u64,
 }
 
 impl From<LockedOrder> for CompletedOrder {
@@ -130,7 +138,9 @@ impl From<LockedOrder> for CompletedOrder {
             onramper: locked_order.onramper_address,
             offramper: base.offramper_address,
             fiat_amount: base.fiat_amount,
+            offramper_fee: base.offramper_fee,
             chain_id: base.chain_id,
+            completed_at: time(),
         }
     }
 }

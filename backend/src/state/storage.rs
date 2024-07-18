@@ -25,8 +25,6 @@ thread_local! {
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
         )
     );
-
-    static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
 }
 
 // -----
@@ -69,14 +67,6 @@ pub fn get_user(evm_address: &str) -> Result<User> {
 // ------
 // ORDERS
 // ------
-
-pub fn generate_order_id() -> u64 {
-    ORDER_ID_COUNTER.with(|counter| {
-        let mut counter = counter.borrow_mut();
-        *counter += 1;
-        *counter
-    })
-}
 
 pub fn insert_order(order: &Order) -> Option<OrderState> {
     ORDERS.with_borrow_mut(|p| p.insert(order.id.clone(), OrderState::Created(order.clone())))
