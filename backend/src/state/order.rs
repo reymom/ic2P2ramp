@@ -1,13 +1,15 @@
-use candid::{CandidType, Decode, Deserialize, Encode, Principal};
+use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashMap, fmt};
 
-use crate::{errors::Result, evm::helpers};
+use crate::errors::{RampError, Result};
 
 use super::{
-    common::{calculate_fees, PaymentProvider, PaymentProviderType},
+    blockchain::{Blockchain, Crypto},
+    common::{calculate_fees, AddressType, PaymentProvider, PaymentProviderType},
     state,
+    storage::Address,
 };
 
 const MAX_ORDER_SIZE: u32 = 500;
@@ -49,60 +51,85 @@ impl Storable for OrderState {
 #[derive(CandidType, Deserialize, Clone)]
 pub struct Order {
     pub id: u64,
-    pub originator: Principal,
     pub created_at: u64,
     pub fiat_amount: u64,
     pub offramper_fee: u64,
     pub currency_symbol: String,
-    pub crypto_amount: u64,
-    pub admin_fee: u64,
     pub offramper_providers: HashMap<PaymentProviderType, String>,
-    pub offramper_address: String,
-    pub chain_id: u64,
-    pub token_address: Option<String>,
+    pub crypto: Crypto,
+    pub offramper_address: Address,
 }
 
 impl Order {
     pub fn new(
         fiat_amount: u64,
         currency_symbol: String,
-        crypto_amount: u64,
         offramper_providers: HashMap<PaymentProviderType, String>,
-        offramper_address: String,
-        chain_id: u64,
-        token_address: Option<String>,
+
+        blockchain: Blockchain,
+        token: Option<String>,
+        crypto_amount: u64,
+
+        offramper_address: Address,
     ) -> Result<Self> {
-        helpers::validate_evm_address(&offramper_address)?;
+        offramper_address.validate()?;
+
+        // Check if the address type matches the blockchain type
+        match (blockchain.clone(), &offramper_address.address_type) {
+            (Blockchain::EVM { .. }, AddressType::EVM)
+            | (Blockchain::ICP { .. }, AddressType::ICP)
+            | (Blockchain::Solana, AddressType::Solana) => (),
+            _ => {
+                return Err(RampError::InvalidInput(
+                    "Address type does not match blockchain type".to_string(),
+                ));
+            }
+        }
 
         let order_id = state::generate_order_id();
-        let (offramper_fee, admin_fee) = calculate_fees(fiat_amount, crypto_amount);
+        let (offramper_fee, crypto_fee) = calculate_fees(fiat_amount, crypto_amount);
 
         let order = Order {
             id: order_id.clone(),
-            originator: ic_cdk::caller(),
             created_at: time(),
             fiat_amount,
             offramper_fee,
             currency_symbol,
-            crypto_amount,
-            admin_fee,
             offramper_providers,
+            crypto: Crypto::new(blockchain, token, crypto_amount, crypto_fee),
             offramper_address,
-            chain_id,
-            token_address,
         };
 
         Ok(order)
     }
 
-    pub fn lock(self, onramper_provider: PaymentProvider, onramper_address: String) -> LockedOrder {
-        LockedOrder {
+    pub fn lock(
+        self,
+        onramper_provider: PaymentProvider,
+        onramper_address: Address,
+    ) -> Result<LockedOrder> {
+        // Check if the address type matches the blockchain type
+        match (
+            self.crypto.blockchain.clone(),
+            &onramper_address.address_type,
+        ) {
+            (Blockchain::EVM { .. }, AddressType::EVM)
+            | (Blockchain::ICP { .. }, AddressType::ICP)
+            | (Blockchain::Solana, AddressType::Solana) => (),
+            _ => {
+                return Err(RampError::InvalidInput(
+                    "Address type does not match blockchain type".to_string(),
+                ));
+            }
+        }
+
+        Ok(LockedOrder {
             base: self,
             onramper_address,
             onramper_provider,
             payment_done: false,
             locked_at: time(),
-        }
+        })
     }
 }
 
@@ -110,7 +137,7 @@ impl Order {
 pub struct LockedOrder {
     pub base: Order,
     pub onramper_provider: PaymentProvider,
-    pub onramper_address: String,
+    pub onramper_address: Address,
     pub payment_done: bool,
     pub locked_at: u64,
 }
@@ -123,11 +150,11 @@ impl LockedOrder {
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct CompletedOrder {
-    pub onramper: String,
-    pub offramper: String,
+    pub onramper: Address,
+    pub offramper: Address,
     pub fiat_amount: u64,
     pub offramper_fee: u64,
-    pub chain_id: u64,
+    pub blockchain: Blockchain,
     pub completed_at: u64,
 }
 
@@ -139,7 +166,7 @@ impl From<LockedOrder> for CompletedOrder {
             offramper: base.offramper_address,
             fiat_amount: base.fiat_amount,
             offramper_fee: base.offramper_fee,
-            chain_id: base.chain_id,
+            blockchain: base.crypto.blockchain,
             completed_at: time(),
         }
     }
@@ -147,10 +174,10 @@ impl From<LockedOrder> for CompletedOrder {
 
 #[derive(CandidType, Clone, Deserialize)]
 pub enum OrderFilter {
-    ByOfframperAddress(String),
-    LockedByOnramper(String),
+    ByOfframperAddress(Address),
+    LockedByOnramper(Address),
     ByState(OrderStateFilter),
-    ByChainId(u64),
+    ByBlockchain(Blockchain),
 }
 
 #[derive(CandidType, Clone, Deserialize)]

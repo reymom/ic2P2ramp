@@ -4,9 +4,10 @@ use crate::{
     errors::{RampError, Result},
     management::user as user_management,
     state::{
+        blockchain::Blockchain,
         state,
         storage::{
-            self, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
+            self, Address, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
             PaymentProviderType,
         },
     },
@@ -15,20 +16,20 @@ use crate::{
 pub fn create_order(
     fiat_amount: u64,
     currency_symbol: String,
-    crypto_amount: u64,
     offramper_providers: HashMap<PaymentProviderType, String>,
-    offramper_address: String,
-    chain_id: u64,
-    token_address: Option<String>,
+    blockchain: Blockchain,
+    token: Option<String>,
+    crypto_amount: u64,
+    offramper_address: Address,
 ) -> Result<u64> {
     let order = Order::new(
         fiat_amount,
         currency_symbol,
-        crypto_amount,
         offramper_providers,
+        blockchain,
+        token,
+        crypto_amount,
         offramper_address,
-        chain_id,
-        token_address,
     )?;
 
     storage::insert_order(&order);
@@ -60,10 +61,10 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
                 _ => false,
             })
         }
-        Some(OrderFilter::ByChainId(chain_id)) => {
+        Some(OrderFilter::ByBlockchain(blockchain)) => {
             storage::filter_orders(|order_state| match order_state {
-                OrderState::Created(order) => order.chain_id == chain_id,
-                OrderState::Locked(order) => order.base.chain_id == chain_id,
+                OrderState::Created(order) => order.crypto.blockchain == blockchain,
+                OrderState::Locked(order) => order.base.crypto.blockchain == blockchain,
                 _ => false,
             })
         }
@@ -73,12 +74,12 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
 pub fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
-    onramper_address: String,
+    onramper_address: Address,
 ) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(order) => {
             *order_state =
-                OrderState::Locked(order.clone().lock(onramper_provider, onramper_address));
+                OrderState::Locked(order.clone().lock(onramper_provider, onramper_address)?);
             Ok(())
         }
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
