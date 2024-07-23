@@ -1,4 +1,3 @@
-use super::revolut_auth::get_revolut_access_token;
 use crate::{
     errors::{RampError, Result},
     state::read_state,
@@ -7,11 +6,12 @@ use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
 
+use super::auth::get_revolut_access_token;
+
 pub async fn get_revolut_transactions(account_id: &str) -> Result<String> {
     let access_token = get_revolut_access_token().await?;
 
-    let (client_id, api_url) =
-        read_state(|s| (s.revolut.client_id.clone(), s.revolut.api_url.clone()));
+    let api_url = read_state(|s| s.revolut.api_url.clone());
 
     let request_headers = vec![
         HttpHeader {
@@ -20,7 +20,7 @@ pub async fn get_revolut_transactions(account_id: &str) -> Result<String> {
         },
         HttpHeader {
             name: "x-fapi-financial-id".to_string(),
-            value: "001580000103UAvAAM".to_string(), // Replace with your financial ID
+            value: "001580000103UAvAAM".to_string(),
         },
         HttpHeader {
             name: "Content-Type".to_string(),

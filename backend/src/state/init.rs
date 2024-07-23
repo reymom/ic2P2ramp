@@ -29,8 +29,8 @@ pub struct PaypalConfig {
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct RevolutConfig {
     pub client_id: String,
-    //what else?
     pub api_url: String,
+    pub proxy_url: String,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -86,6 +86,7 @@ impl TryFrom<InitArg> for State {
                 token_expiration: None,
                 client_id: revolut.client_id,
                 api_url: revolut.api_url,
+                proxy_url: revolut.proxy_url,
             },
         };
         Ok(state)

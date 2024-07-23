@@ -6,6 +6,7 @@ pub struct RevolutState {
     pub token_expiration: Option<u64>,
     pub client_id: String,
     pub api_url: String,
+    pub proxy_url: String,
 }
 
 pub fn get_revolut_token() -> Option<(String, u64)> {

@@ -5,16 +5,16 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use ic_cdk::api::time;
 
+use crate::state::read_state;
 use crate::{
     errors::{RampError, Result},
-    state::{read_state, revolut},
+    state::revolut,
 };
 
 #[derive(Serialize, Deserialize)]
 struct AccessTokenResponse {
     access_token: String,
-    token_type: String,
-    expires_in: u64,
+    expires_at: u64,
 }
 
 pub async fn get_revolut_access_token() -> Result<String> {
@@ -30,30 +30,18 @@ pub async fn get_revolut_access_token() -> Result<String> {
         }
     }
 
-    ic_cdk::println!("[get_revolut_access_token] Fetching new token from Revolut");
-    let (client_id, api_url) =
-        read_state(|s| (s.revolut.client_id.clone(), s.revolut.api_url.clone()));
-    ic_cdk::println!(
-        "[get_revolut_access_token] client_id = {}, api_url = {}",
-        client_id,
-        api_url
-    );
+    let api_url = read_state(|s| s.revolut.proxy_url.clone());
 
     let request_headers = vec![HttpHeader {
         name: "Content-Type".to_string(),
-        value: "application/x-www-form-urlencoded".to_string(),
+        value: "application/json".to_string(),
     }];
 
-    let request_body = format!(
-        "grant_type=client_credentials&scope=accounts&client_id={}",
-        client_id
-    );
-
     let request = CanisterHttpRequestArgument {
-        url: format!("{}/token", api_url),
+        url: format!("{}/revolut/token", api_url),
         method: HttpMethod::POST,
-        body: Some(request_body.as_bytes().to_vec()),
-        max_response_bytes: None,
+        body: None,
+        max_response_bytes: Some(1024), // content-length is 576 bytes
         transform: None,
         headers: request_headers,
     };
@@ -70,8 +58,7 @@ pub async fn get_revolut_access_token() -> Result<String> {
                 .map_err(|e| RampError::ParseError(e.to_string()))?;
 
             // Store the token and its expiration time in the state
-            let current_time = time() / 1_000_000_000;
-            let expiration_time = current_time + access_token_response.expires_in;
+            let expiration_time = access_token_response.expires_at;
             ic_cdk::println!(
                 "[get_revolut_access_token] New token expiration time: {}",
                 expiration_time
