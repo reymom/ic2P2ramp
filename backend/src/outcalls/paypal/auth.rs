@@ -2,7 +2,8 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
 use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,
+    TransformContext, TransformFunc,
 };
 use ic_cdk::api::time;
 
@@ -15,7 +16,7 @@ use crate::{
 struct AccessTokenResponse {
     access_token: String,
     token_type: String,
-    expires_in: u64,
+    // expires_in: u64,
 }
 
 pub async fn get_paypal_access_token() -> Result<String> {
@@ -62,25 +63,28 @@ pub async fn get_paypal_access_token() -> Result<String> {
         url: format!("{}/v1/oauth2/token", api_url),
         method: HttpMethod::POST,
         body: Some("grant_type=client_credentials".as_bytes().to_vec()),
-        max_response_bytes: None,
-        transform: None,
+        max_response_bytes: Some(4096), // response is 974 bytes
+        transform: Some(TransformContext {
+            function: TransformFunc(candid::Func {
+                principal: ic_cdk::api::id(),
+                method: "transform_remove_expires_in".to_string(),
+            }),
+            context: vec![],
+        }),
         headers: request_headers,
     };
-
-    ic_cdk::println!("[get_paypal_access_token] request = {:?}", request);
 
     let cycles: u128 = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
-            ic_cdk::println!("[get_paypal_access_token] Response body: {}", str_body);
 
             let access_token_response: AccessTokenResponse = serde_json::from_str(&str_body)
                 .map_err(|e| RampError::ParseError(e.to_string()))?;
 
             // Store the token and its expiration time in the state
             let current_time = time() / 1_000_000_000;
-            let expiration_time = current_time + access_token_response.expires_in;
+            let expiration_time = current_time + 32400;
             ic_cdk::println!(
                 "[get_paypal_access_token] New token expiration time: {}",
                 expiration_time
@@ -91,4 +95,18 @@ pub async fn get_paypal_access_token() -> Result<String> {
         }
         Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
     }
+}
+
+#[ic_cdk::query]
+fn transform_remove_expires_in(args: TransformArgs) -> HttpResponse {
+    let mut response: HttpResponse = args.response;
+    let mut body_str = String::from_utf8_lossy(&response.body).to_string();
+
+    let mut json_body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+    json_body.as_object_mut().unwrap().remove("expires_in");
+
+    body_str = serde_json::to_string(&json_body).unwrap();
+    response.body = body_str.into_bytes();
+
+    response
 }

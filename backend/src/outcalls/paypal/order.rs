@@ -75,7 +75,7 @@ pub async fn fetch_paypal_order(
         url,
         method: HttpMethod::GET,
         body: None,
-        max_response_bytes: None,
+        max_response_bytes: Some(3000), // content-length is 2630 bytes
         transform: None,
         headers: request_headers,
     };

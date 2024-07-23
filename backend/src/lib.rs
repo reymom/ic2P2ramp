@@ -4,16 +4,17 @@ mod management;
 mod outcalls;
 mod state;
 
-use errors::{RampError, Result};
+use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use state::blockchain::Blockchain;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use errors::{RampError, Result};
 use evm::transaction::spawn_transaction_checker;
 use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
 use management::order as order_management;
 use management::user as user_management;
-use outcalls::{paypal_auth, paypal_order, revolut_auth, xrc_rates};
+use outcalls::{paypal, revolut, xrc_rates};
 use state::storage::{
     self, Address, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
 };
@@ -129,8 +130,13 @@ async fn test_deposit_funds(
 }
 
 #[ic_cdk::update]
-async fn test_set_paypal_token() -> Result<String> {
-    Ok(revolut_auth::get_revolut_access_token().await?)
+async fn test_get_revolut_token() -> Result<String> {
+    Ok(revolut::auth::get_revolut_access_token().await?)
+}
+
+#[ic_cdk::update]
+async fn test_get_paypal_token() -> Result<String> {
+    Ok(paypal::auth::get_paypal_access_token().await?)
 }
 
 // ----------
@@ -345,10 +351,10 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
     };
 
     let cycles: u128 = 10_000_000_000;
-    let access_token = paypal_auth::get_paypal_access_token().await?;
+    let access_token = paypal::auth::get_paypal_access_token().await?;
     ic_cdk::println!("[verify_transaction] Obtained PayPal access token");
     let capture_details =
-        paypal_order::fetch_paypal_order(&access_token, &transaction_id, cycles).await?;
+        paypal::order::fetch_paypal_order(&access_token, &transaction_id, cycles).await?;
 
     // Verify the captured payment details (amounts are in cents)
     let total_expected_amount = (order.base.fiat_amount + order.base.offramper_fee) as f64 / 100.0;
