@@ -1,16 +1,13 @@
 use std::collections::HashMap;
 
+use crate::management::user as user_management;
+use crate::types::{
+    order::{Order, OrderFilter, OrderState, OrderStateFilter},
+    Address, Blockchain, PaymentProvider, PaymentProviderType,
+};
 use crate::{
     errors::{RampError, Result},
-    management::user as user_management,
-    state::{
-        blockchain::Blockchain,
-        state,
-        storage::{
-            self, Address, Order, OrderFilter, OrderState, OrderStateFilter, PaymentProvider,
-            PaymentProviderType,
-        },
-    },
+    state, storage,
 };
 
 pub fn create_order(

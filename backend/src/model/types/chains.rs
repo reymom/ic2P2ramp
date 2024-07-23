@@ -5,9 +5,8 @@ use ethers_core::types::U256;
 use crate::{
     errors::{RampError, Result},
     evm::rpc::RpcServices,
+    state::read_state,
 };
-
-use super::read_state;
 
 #[derive(Clone, Debug)]
 pub struct ChainState {

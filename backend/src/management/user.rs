@@ -1,8 +1,12 @@
 use std::collections::HashSet;
 
+use crate::types::{
+    user::{User, UserType},
+    Address, PaymentProvider,
+};
 use crate::{
     errors::{RampError, Result},
-    state::storage::{self, Address, PaymentProvider, User, UserType},
+    state::storage,
 };
 
 pub fn register_user(

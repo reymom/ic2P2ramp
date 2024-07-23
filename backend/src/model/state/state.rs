@@ -8,7 +8,7 @@ use crate::{
     management,
 };
 
-use super::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
+use crate::types::{paypal::PayPalState, revolut::RevolutState, ChainState};
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();

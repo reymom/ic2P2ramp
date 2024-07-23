@@ -1,123 +1,136 @@
-use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemory};
-use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
-use std::cell::RefCell;
+use candid::{CandidType, Decode, Deserialize, Encode};
+use ic_stable_structures::{storable::Bound, Storable};
+use std::{borrow::Cow, cmp::Ordering, collections::HashMap, hash::Hash};
 
-pub use super::common::{Address, PaymentProvider, PaymentProviderType};
-pub use super::order::{Order, OrderFilter, OrderState, OrderStateFilter};
-pub use super::user::{User, UserType};
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    evm::helpers,
+};
 
-pub type Memory = VirtualMemory<DefaultMemoryImpl>;
-
-thread_local! {
-    static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
-        RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
-
-    pub static USERS: RefCell<StableBTreeMap<Address, User, Memory>> = RefCell::new(
-        StableBTreeMap::init(
-            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))),
-        )
-    );
-
-    pub static ORDERS: RefCell<StableBTreeMap<u64, OrderState, Memory>> = RefCell::new(
-        StableBTreeMap::init(
-            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
-        )
-    );
+#[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PaymentProviderType {
+    PayPal,
+    Revolut,
 }
 
-// -----
-// USERS
-// -----
+#[derive(CandidType, Deserialize, Clone, Debug, Eq, Hash)]
+pub struct PaymentProvider {
+    pub provider_type: PaymentProviderType,
+    pub id: String,
+}
 
-pub fn mutate_user<F, R>(address: &Address, f: F) -> Result<R>
-where
-    F: FnOnce(&mut User) -> R,
-{
-    USERS.with_borrow_mut(|users| {
-        if let Some(mut user) = users.get(&address) {
-            let result = f(&mut user);
-            users.insert(address.clone(), user);
-            Ok(result)
-        } else {
-            Err(RampError::UserNotFound)
+impl PartialEq for PaymentProvider {
+    fn eq(&self, other: &Self) -> bool {
+        self.provider_type == other.provider_type
+    }
+}
+
+impl PaymentProvider {
+    pub fn validate(&self) -> Result<()> {
+        if self.id.is_empty() {
+            return Err(RampError::InvalidInput(
+                "Payment Provider ID is empty".to_string(),
+            ));
         }
-    })
+        Ok(())
+    }
 }
 
-pub fn insert_user(user: &User) -> Option<User> {
-    USERS.with_borrow_mut(|p| p.insert(user.login_method.clone(), user.clone()))
+pub fn contains_provider_type(
+    provider: &PaymentProvider,
+    providers: &HashMap<PaymentProviderType, String>,
+) -> bool {
+    providers.get(&provider.provider_type).is_some()
 }
 
-pub fn remove_user(address: &Address) -> Result<User> {
-    USERS
-        .with_borrow_mut(|p| p.remove(&address))
-        .ok_or_else(|| RampError::UserNotFound)
+pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
+    // Static strategy: 2% fee for the offramper, 0.5% for the admin
+    let offramper_fee = fiat_amount / 50; // 2%
+    let crypto_fee = crypto_amount / 200; // 0.5%
+
+    (offramper_fee, crypto_fee)
 }
 
-pub fn get_user(address: &Address) -> Result<User> {
-    USERS
-        .with_borrow(|users| users.get(&address))
-        .ok_or_else(|| RampError::UserNotFound)
+// ---------
+// Addresses
+// ---------
+const MAX_ADDRESS_SIZE: u32 = 100;
+
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash, PartialOrd)]
+pub enum AddressType {
+    Email,
+    EVM,
+    ICP,
+    Solana,
 }
 
-// ------
-// ORDERS
-// ------
-
-pub fn insert_order(order: &Order) -> Option<OrderState> {
-    ORDERS.with_borrow_mut(|p| p.insert(order.id.clone(), OrderState::Created(order.clone())))
+#[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialOrd)]
+pub struct Address {
+    pub address_type: AddressType,
+    pub address: String,
 }
 
-pub fn get_order(order_id: &u64) -> Result<OrderState> {
-    ORDERS
-        .with_borrow(|orders| orders.get(order_id))
-        .ok_or_else(|| RampError::OrderNotFound)
+impl PartialEq for Address {
+    fn eq(&self, other: &Self) -> bool {
+        self.address_type == other.address_type
+    }
 }
 
-pub fn filter_orders<F>(filter: F) -> Vec<OrderState>
-where
-    F: Fn(&OrderState) -> bool,
-{
-    ORDERS.with_borrow(|orders| {
-        orders
-            .iter()
-            .filter_map(|(_, order_state)| {
-                if filter(&order_state) {
-                    Some(order_state.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
+impl Hash for Address {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.address_type.hash(state);
+    }
 }
 
-pub fn mutate_order<F, R>(order_id: &u64, f: F) -> Result<R>
-where
-    F: FnOnce(&mut OrderState) -> R,
-{
-    ORDERS.with_borrow_mut(|orders| {
-        if let Some(mut order_state) = orders.get(&order_id) {
-            let result = f(&mut order_state);
-            orders.insert(*order_id, order_state);
-            Ok(result)
-        } else {
-            Err(RampError::OrderNotFound)
+impl Address {
+    pub fn validate(&self) -> Result<()> {
+        if self.address.is_empty() {
+            return Err(RampError::InvalidInput("Address is empty".to_string()));
         }
-    })
+
+        match self.address_type {
+            AddressType::EVM => helpers::validate_evm_address(&self.address),
+            AddressType::ICP => helpers::validate_icp_address(&self.address),
+            AddressType::Email => helpers::validate_email(&self.address),
+            AddressType::Solana => helpers::validate_solana_address(&self.address),
+        }?;
+
+        Ok(())
+    }
+}
+
+impl Storable for Address {
+    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: MAX_ADDRESS_SIZE,
+        is_fixed_size: false,
+    };
+}
+
+impl std::cmp::Ord for Address {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.address.cmp(&other.address)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::state::common::{AddressType, PaymentProviderType};
-    use crate::state::user::UserType;
+    use crate::model::types::user::User;
+    use crate::types::{
+        common::AddressType, user::UserType, Address, PaymentProvider, PaymentProviderType,
+    };
 
-    use super::*;
     use candid::Principal;
     use ethers_core::types::Address as EthAddress;
     use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
-    use ic_stable_structures::DefaultMemoryImpl;
+    use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
     use std::collections::HashSet;
 
     #[test]

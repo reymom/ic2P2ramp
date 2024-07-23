@@ -3,13 +3,15 @@ use ic_cdk::api::time;
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashMap, fmt};
 
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    state,
+    types::Address,
+};
 
 use super::{
     blockchain::{Blockchain, Crypto},
     common::{calculate_fees, AddressType, PaymentProvider, PaymentProviderType},
-    state,
-    storage::Address,
 };
 
 const MAX_ORDER_SIZE: u32 = 500;

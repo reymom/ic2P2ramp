@@ -1,24 +1,23 @@
-mod errors;
 mod evm;
 mod management;
+mod model;
 mod outcalls;
-mod state;
 
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
-use state::blockchain::Blockchain;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use errors::{RampError, Result};
-use evm::transaction::spawn_transaction_checker;
-use evm::{helpers, providers, rpc::ProviderView, vault::Ic2P2ramp};
-use management::order as order_management;
-use management::user as user_management;
-use outcalls::{paypal, revolut, xrc_rates};
-use state::storage::{
-    self, Address, OrderFilter, OrderState, PaymentProvider, PaymentProviderType, User, UserType,
+use evm::{helpers, providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
+use management::{order as order_management, user as user_management};
+use model::errors::{self, RampError, Result};
+use model::state::{self, initialize_state, mutate_state, read_state, storage, InitArg, State};
+use model::types::{
+    self,
+    order::{OrderFilter, OrderState},
+    user::{User, UserType},
+    Address, Blockchain, PaymentProvider, PaymentProviderType,
 };
-use state::{contains_provider_type, initialize_state, mutate_state, read_state, InitArg};
+use outcalls::{paypal, revolut, xrc_rates};
 
 fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::ZERO, || {
@@ -95,7 +94,7 @@ fn setup_timers() {
 #[ic_cdk::init]
 fn init(arg: InitArg) {
     ic_cdk::println!("[init]: initialized minter with arg: {:?}", arg);
-    initialize_state(state::State::try_from(arg).expect("BUG: failed to initialize minter"));
+    initialize_state(State::try_from(arg).expect("BUG: failed to initialize minter"));
     setup_timers();
 }
 
@@ -261,7 +260,7 @@ async fn lock_order(
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    if !contains_provider_type(&onramper_provider, &order.offramper_providers) {
+    if !types::contains_provider_type(&onramper_provider, &order.offramper_providers) {
         return Err(RampError::InvalidOnramperProvider);
     }
 
@@ -275,7 +274,7 @@ async fn lock_order(
                 gas,
             )
             .await?;
-            spawn_transaction_checker(
+            transaction::spawn_transaction_checker(
                 tx_hash.clone(),
                 chain_id,
                 60,
@@ -312,7 +311,7 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
                 gas,
             )
             .await?;
-            spawn_transaction_checker(
+            transaction::spawn_transaction_checker(
                 tx_hash.clone(),
                 chain_id,
                 60,
@@ -393,7 +392,7 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
         match order.base.crypto.blockchain {
             Blockchain::EVM { chain_id } => {
                 let tx_hash = Ic2P2ramp::release_funds(order_id, chain_id, gas).await?;
-                spawn_transaction_checker(
+                transaction::spawn_transaction_checker(
                     tx_hash,
                     chain_id,
                     60,

@@ -5,11 +5,9 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use ic_cdk::api::time;
 
+use crate::errors::{RampError, Result};
 use crate::state::read_state;
-use crate::{
-    errors::{RampError, Result},
-    state::revolut,
-};
+use crate::types::revolut;
 
 #[derive(Serialize, Deserialize)]
 struct AccessTokenResponse {

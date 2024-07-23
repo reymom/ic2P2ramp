@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     errors::{RampError, Result},
     state::read_state,
+    types::revolut,
 };
 
 #[derive(Serialize)]

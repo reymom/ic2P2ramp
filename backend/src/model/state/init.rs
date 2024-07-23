@@ -4,13 +4,9 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use super::state::{InvalidStateError, State};
 use crate::evm::rpc::RpcServices;
-
-use super::chains::ChainState;
-use super::paypal::PayPalState;
-use super::revolut::RevolutState;
-use super::state::InvalidStateError;
-use super::State;
+use crate::model::types::{paypal::PayPalState, revolut::RevolutState, ChainState};
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct ChainConfig {

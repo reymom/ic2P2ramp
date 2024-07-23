@@ -3,7 +3,7 @@ use std::num::ParseFloatError;
 use candid::CandidType;
 use thiserror::Error;
 
-use crate::{outcalls::xrc_rates::ExchangeRateError, state::storage::PaymentProviderType};
+use crate::{outcalls::xrc_rates::ExchangeRateError, types::PaymentProviderType};
 
 pub type Result<T> = std::result::Result<T, RampError>;
 

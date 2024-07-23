@@ -5,8 +5,12 @@ use ethers_core::types::{Address, U256};
 use super::fees::{self, FeeEstimates};
 use super::signer::{self, SignRequest};
 use super::{helpers, transaction};
-use crate::errors::{RampError, Result};
-use crate::state::{chains, mutate_state, storage, storage::OrderState};
+
+use crate::{
+    errors::{RampError, Result},
+    state::{mutate_state, storage},
+    types::{self, order::OrderState},
+};
 
 pub struct Ic2P2ramp;
 
@@ -17,7 +21,7 @@ impl Ic2P2ramp {
         gas: u32,
     ) -> Result<()> {
         helpers::validate_evm_address(&token_address)?;
-        if chains::token_is_approved(chain_id, token_address)? {
+        if types::token_is_approved(chain_id, token_address)? {
             return Err(RampError::TokenAlreadyRegistered);
         };
 
@@ -73,11 +77,11 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
 
         let request: SignRequest;
         if let Some(token_address) = token_address {
-            if !chains::token_is_approved(chain_id, &token_address)? {
+            if !types::token_is_approved(chain_id, &token_address)? {
                 return Err(RampError::TokenUnregistered);
             }
 
@@ -192,7 +196,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
         let request = Self::sign_request_commit_deposit(
             gas,
@@ -267,7 +271,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
         let request = Self::sign_request_uncommit_deposit(
             gas,
@@ -340,11 +344,12 @@ impl Ic2P2ramp {
             fee_estimates.max_fee_per_gas,
             fee_estimates.max_priority_fee_per_gas
         );
-        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
 
+        // todo: substract admin_fee to fund the icp evm canister
         let request: SignRequest;
         if let Some(token_address) = order.base.crypto.token {
-            if chains::token_is_approved(chain_id, &token_address)? {
+            if types::token_is_approved(chain_id, &token_address)? {
                 return Err(RampError::TokenAlreadyRegistered);
             };
             request = Self::sign_request_release_token(
@@ -482,7 +487,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        let vault_manager_address = chains::get_vault_manager_address(chain_id)?
+        let vault_manager_address = types::get_vault_manager_address(chain_id)?
             .parse()
             .map_err(|e| RampError::EthersAbiError(format!("Invalid address error: {:?}", e)))?;
 

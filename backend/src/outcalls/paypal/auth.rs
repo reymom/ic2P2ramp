@@ -9,7 +9,8 @@ use ic_cdk::api::time;
 
 use crate::{
     errors::{RampError, Result},
-    state::{paypal, read_state},
+    state::read_state,
+    types::paypal,
 };
 
 #[derive(Serialize, Deserialize)]

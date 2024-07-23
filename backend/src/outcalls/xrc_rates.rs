@@ -4,7 +4,6 @@ use ic_cdk::api::call::call_with_payment128;
 use crate::errors::{RampError, Result};
 
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
-// const CYCLES_AMOUNT: u64 = 10_000_000_000;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 enum AssetClass {

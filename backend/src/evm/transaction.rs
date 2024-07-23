@@ -9,12 +9,13 @@ use super::{
         MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
         SendRawTransactionStatus, EVM_RPC,
     },
-    signer::SignRequest,
+    signer::{self, SignRequest},
 };
+
 use crate::{
     errors::{RampError, Result},
-    evm::signer,
-    state::{chains::get_rpc_providers, increment_nonce},
+    state::increment_nonce,
+    types::get_rpc_providers,
 };
 
 #[derive(Debug)]
