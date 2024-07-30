@@ -1,18 +1,60 @@
+use ic_cdk::api::management_canister::http_request::{
+    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse,
+};
+use num_traits::cast::ToPrimitive;
+use serde::Deserialize;
+
+use super::auth::get_revolut_access_token;
 use crate::{
     errors::{RampError, Result},
     state::read_state,
 };
-use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
-};
 
-use super::auth::get_revolut_access_token;
+#[derive(Deserialize, Debug)]
+pub struct PaymentDetailsResponse {
+    pub data: PaymentData,
+}
 
-pub async fn get_revolut_transactions(account_id: &str) -> Result<String> {
+#[derive(Deserialize, Debug)]
+pub struct PaymentData {
+    #[serde(rename = "Status")]
+    pub status: String,
+    #[serde(rename = "Initiation")]
+    pub initiation: InitiationDetails,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct InitiationDetails {
+    #[serde(rename = "InstructedAmount")]
+    pub instructed_amount: AmountDetails,
+    #[serde(rename = "DebtorAccount")]
+    pub debtor_account: Option<AccountDetails>,
+    #[serde(rename = "CreditorAccount")]
+    pub creditor_account: AccountDetails,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AmountDetails {
+    #[serde(rename = "Amount")]
+    pub amount: String,
+    #[serde(rename = "Currency")]
+    pub currency: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AccountDetails {
+    #[serde(rename = "SchemeName")]
+    pub scheme_name: String,
+    #[serde(rename = "Identification")]
+    pub identification: String,
+    #[serde(rename = "Name")]
+    pub name: Option<String>,
+}
+
+pub async fn fetch_revolut_payment_details(
+    domestic_payment_id: &str,
+) -> Result<PaymentDetailsResponse> {
     let access_token = get_revolut_access_token().await?;
-
-    let api_url = read_state(|s| s.revolut.api_url.clone());
-
     let request_headers = vec![
         HttpHeader {
             name: "Authorization".to_string(),
@@ -28,22 +70,37 @@ pub async fn get_revolut_transactions(account_id: &str) -> Result<String> {
         },
     ];
 
+    let api_url = read_state(|s| s.revolut.api_url.clone());
     let request = CanisterHttpRequestArgument {
-        url: format!("{}/accounts/{}/transactions", api_url, account_id),
+        url: format!("{}/domestic-payments/{}", api_url, domestic_payment_id),
         method: HttpMethod::GET,
         body: None,
-        max_response_bytes: None,
+        max_response_bytes: Some(4096),
         transform: None,
         headers: request_headers,
     };
 
     let cycles: u128 = 10_000_000_000;
-    match http_request(request, cycles).await {
-        Ok((response,)) => {
-            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
-            ic_cdk::println!("[get_revolut_transactions] Response body: {}", str_body);
-            Ok(str_body)
-        }
-        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
+    let (response,): (HttpResponse,) = match http_request(request, cycles).await {
+        Ok(response) => response,
+        Err((code, message)) => return Err(RampError::HttpRequestError(code as u64, message)),
+    };
+
+    if response.status.0 != 200u64.into() {
+        return Err(RampError::HttpRequestError(
+            response.status.0.to_u64().unwrap_or_default(),
+            String::from_utf8_lossy(&response.body).to_string(),
+        ));
     }
+
+    let response_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+    ic_cdk::println!(
+        "[get_revolut_transactions] Response body: {}",
+        response_body
+    );
+
+    let payment_details: PaymentDetailsResponse =
+        serde_json::from_str(&response_body).map_err(|e| RampError::ParseError(e.to_string()))?;
+
+    Ok(payment_details)
 }
