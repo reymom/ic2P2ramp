@@ -52,11 +52,7 @@ pub struct Payer {
     payer_id: String,
 }
 
-pub async fn fetch_paypal_order(
-    access_token: &str,
-    order_id: &str,
-    cycles: u128,
-) -> Result<PayPalOrderDetails> {
+pub async fn fetch_paypal_order(access_token: &str, order_id: &str) -> Result<PayPalOrderDetails> {
     let api_url = read_state(|s| s.paypal.api_url.clone());
     let url = format!("{}/v2/checkout/orders/{}", api_url, order_id);
 
@@ -75,11 +71,12 @@ pub async fn fetch_paypal_order(
         url,
         method: HttpMethod::GET,
         body: None,
-        max_response_bytes: Some(3000), // content-length is 2630 bytes
+        max_response_bytes: Some(5096), // content-length is 2630 bytes
         transform: None,
         headers: request_headers,
     };
 
+    let cycles = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
