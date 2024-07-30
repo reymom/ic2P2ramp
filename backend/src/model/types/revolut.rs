@@ -7,6 +7,9 @@ pub struct RevolutState {
     pub client_id: String,
     pub api_url: String,
     pub proxy_url: String,
+    pub private_key_der: Vec<u8>,
+    pub kid: String,
+    pub tan: String,
 }
 
 pub fn get_revolut_token() -> Option<(String, u64)> {

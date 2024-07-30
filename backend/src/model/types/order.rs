@@ -57,7 +57,7 @@ pub struct Order {
     pub fiat_amount: u64,
     pub offramper_fee: u64,
     pub currency_symbol: String,
-    pub offramper_providers: HashMap<PaymentProviderType, String>,
+    pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     pub crypto: Crypto,
     pub offramper_address: Address,
 }
@@ -66,7 +66,7 @@ impl Order {
     pub fn new(
         fiat_amount: u64,
         currency_symbol: String,
-        offramper_providers: HashMap<PaymentProviderType, String>,
+        offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
 
         blockchain: Blockchain,
         token: Option<String>,
@@ -109,6 +109,8 @@ impl Order {
         self,
         onramper_provider: PaymentProvider,
         onramper_address: Address,
+        consent_id: Option<String>,
+        consent_url: Option<String>,
     ) -> Result<LockedOrder> {
         // Check if the address type matches the blockchain type
         match (
@@ -129,7 +131,10 @@ impl Order {
             base: self,
             onramper_address,
             onramper_provider,
+            consent_id,
+            consent_url,
             payment_done: false,
+            payment_id: None,
             locked_at: time(),
         })
     }
@@ -140,7 +145,10 @@ pub struct LockedOrder {
     pub base: Order,
     pub onramper_provider: PaymentProvider,
     pub onramper_address: Address,
+    pub consent_id: Option<String>,
+    pub consent_url: Option<String>,
     pub payment_done: bool,
+    pub payment_id: Option<String>,
     pub locked_at: u64,
 }
 
