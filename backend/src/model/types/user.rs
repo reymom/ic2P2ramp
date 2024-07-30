@@ -18,7 +18,7 @@ pub enum UserType {
 pub struct User {
     pub user_type: UserType,
     pub payment_providers: HashSet<PaymentProvider>,
-    pub fiat_amount: u64, // received for offramped or payed by onramper
+    pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login_method: Address,
     pub addresses: HashSet<Address>,

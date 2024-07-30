@@ -14,23 +14,51 @@ pub enum PaymentProviderType {
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug, Eq, Hash)]
-pub struct PaymentProvider {
-    pub provider_type: PaymentProviderType,
-    pub id: String,
+pub enum PaymentProvider {
+    PayPal {
+        id: String,
+    },
+    Revolut {
+        scheme: String,
+        id: String,
+        name: Option<String>,
+    },
 }
+
+// #[derive(CandidType, Deserialize, Clone, Debug, Eq, Hash)]
+// pub struct PaymentProvider {
+//     pub provider_type: PaymentProviderType,
+//     pub details: PaymentProviderDetails,
+// }
 
 impl PartialEq for PaymentProvider {
     fn eq(&self, other: &Self) -> bool {
-        self.provider_type == other.provider_type
+        self.provider_type() == other.provider_type()
     }
 }
 
 impl PaymentProvider {
+    pub fn provider_type(&self) -> PaymentProviderType {
+        match self {
+            PaymentProvider::PayPal { .. } => PaymentProviderType::PayPal,
+            PaymentProvider::Revolut { .. } => PaymentProviderType::Revolut,
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
-        if self.id.is_empty() {
-            return Err(RampError::InvalidInput(
-                "Payment Provider ID is empty".to_string(),
-            ));
+        match self {
+            PaymentProvider::PayPal { id } => {
+                if id.is_empty() {
+                    return Err(RampError::InvalidInput("Paypal ID is empty".to_string()));
+                }
+            }
+            PaymentProvider::Revolut { scheme, id, .. } => {
+                if scheme.is_empty() || id.is_empty() {
+                    return Err(RampError::InvalidInput(
+                        "Revolut details are empty".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -38,9 +66,9 @@ impl PaymentProvider {
 
 pub fn contains_provider_type(
     provider: &PaymentProvider,
-    providers: &HashMap<PaymentProviderType, String>,
+    providers: &HashMap<PaymentProviderType, PaymentProvider>,
 ) -> bool {
-    providers.get(&provider.provider_type).is_some()
+    providers.get(&provider.provider_type()).is_some()
 }
 
 pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
@@ -123,9 +151,7 @@ impl std::cmp::Ord for Address {
 #[cfg(test)]
 mod tests {
     use crate::model::types::user::User;
-    use crate::types::{
-        common::AddressType, user::UserType, Address, PaymentProvider, PaymentProviderType,
-    };
+    use crate::types::{common::AddressType, user::UserType, Address, PaymentProvider};
 
     use candid::Principal;
     use ethers_core::types::Address as EthAddress;
@@ -140,8 +166,7 @@ mod tests {
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
         let mut payment_providers = HashSet::new();
-        payment_providers.insert(PaymentProvider {
-            provider_type: PaymentProviderType::PayPal,
+        payment_providers.insert(PaymentProvider::PayPal {
             id: "paypal_id".to_string(),
         });
 
@@ -160,10 +185,13 @@ mod tests {
 
         // Update user
         let mut updated_user = retrieved_user.clone();
-        updated_user.payment_providers.insert(PaymentProvider {
-            provider_type: PaymentProviderType::Revolut,
-            id: "revolut_id".to_string(),
-        });
+        updated_user
+            .payment_providers
+            .insert(PaymentProvider::Revolut {
+                id: "revolut_id".to_string(),
+                scheme: "scheme".to_string(),
+                name: Some("name".to_string()),
+            });
         map.insert(updated_user.login_method.clone(), updated_user.clone());
 
         let retrieved_updated_user = map.get(&login_address).unwrap();
