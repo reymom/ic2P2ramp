@@ -13,7 +13,7 @@ use crate::{
 pub fn create_order(
     fiat_amount: u64,
     currency_symbol: String,
-    offramper_providers: HashMap<PaymentProviderType, String>,
+    offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
     token: Option<String>,
     crypto_amount: u64,
@@ -68,15 +68,21 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
     }
 }
 
-pub fn lock_order(
+pub async fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: Address,
+    consent_id: Option<String>,
+    consent_url: Option<String>,
 ) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(order) => {
-            *order_state =
-                OrderState::Locked(order.clone().lock(onramper_provider, onramper_address)?);
+            *order_state = OrderState::Locked(order.clone().lock(
+                onramper_provider,
+                onramper_address,
+                consent_id,
+                consent_url,
+            )?);
             Ok(())
         }
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -120,6 +126,16 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
     })??;
 
     state::clear_order_timer(order_id)
+}
+
+pub fn set_payment_id(order_id: u64, payment_id: String) -> Result<()> {
+    storage::mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            order.payment_id = Some(payment_id);
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }
 
 pub fn cancel_order(order_id: u64) -> Result<()> {
