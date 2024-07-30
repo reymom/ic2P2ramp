@@ -37,7 +37,7 @@ pub async fn get_revolut_access_token() -> Result<String> {
 
     let request = CanisterHttpRequestArgument {
         url: format!("{}/revolut/token", api_url),
-        method: HttpMethod::POST,
+        method: HttpMethod::GET,
         body: None,
         max_response_bytes: Some(1024), // content-length is 576 bytes
         transform: None,
