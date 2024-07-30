@@ -1,6 +1,7 @@
 use std::num::ParseFloatError;
 
 use candid::CandidType;
+use ic_cdk::api::call::RejectionCode;
 use thiserror::Error;
 
 use crate::{outcalls::xrc_rates::ExchangeRateError, types::PaymentProviderType};
@@ -27,6 +28,9 @@ pub enum RampError {
     #[error("Invalid onramper provider")]
     InvalidOnramperProvider,
 
+    #[error("Invalid offramper provider")]
+    InvalidOfframperProvider,
+
     #[error("User Not Found")]
     UserNotFound,
 
@@ -41,6 +45,12 @@ pub enum RampError {
 
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
+
+    #[error("Missing Debtor Account")]
+    MissingDebtorAccount,
+
+    #[error("Missing Revolut's Access Token")]
+    MissingAccessToken,
 
     #[error("Chain ID not found: {0}")]
     ChainIdNotFound(u64),
@@ -95,10 +105,37 @@ pub enum RampError {
 
     #[error("Failed to parse float amount: {0}")]
     ParseFloatError(String),
+
+    #[error("pkcs8 error: {0}")]
+    Pkcs8Error(String),
+
+    #[error("Rsa Error: {0}")]
+    RsaError(String),
+
+    #[error("IC Rejection Code: {0:?}, Error: {1}")]
+    ICRejectionError(RejectionCode, String),
 }
 
 impl From<ParseFloatError> for RampError {
     fn from(err: ParseFloatError) -> Self {
         RampError::ParseFloatError(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for RampError {
+    fn from(err: serde_json::Error) -> Self {
+        RampError::ParseError(err.to_string())
+    }
+}
+
+impl From<rsa::errors::Error> for RampError {
+    fn from(err: rsa::errors::Error) -> Self {
+        RampError::RsaError(err.to_string())
+    }
+}
+
+impl From<rsa::pkcs8::Error> for RampError {
+    fn from(err: rsa::pkcs8::Error) -> Self {
+        RampError::Pkcs8Error(err.to_string())
     }
 }
