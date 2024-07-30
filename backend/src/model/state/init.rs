@@ -27,6 +27,9 @@ pub struct RevolutConfig {
     pub client_id: String,
     pub api_url: String,
     pub proxy_url: String,
+    pub private_key_der: Vec<u8>,
+    pub kid: String,
+    pub tan: String,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -83,6 +86,9 @@ impl TryFrom<InitArg> for State {
                 client_id: revolut.client_id,
                 api_url: revolut.api_url,
                 proxy_url: revolut.proxy_url,
+                private_key_der: revolut.private_key_der,
+                kid: revolut.kid,
+                tan: revolut.tan,
             },
         };
         Ok(state)
