@@ -1,6 +1,7 @@
 import {
   OrderFilter,
   OrderStateFilter,
+  PaymentProvider,
   PaymentProviderType,
   UserType,
 } from '../declarations/backend/backend.did';
@@ -21,10 +22,12 @@ export const paymentProviderTypeToString = (
   throw new Error('Unknown payment provider');
 };
 
-export const stringToPaymentProviderType = (
-  providerType: PaymentProviderTypes,
+export const providerToProviderType = (
+  provider: PaymentProvider,
 ): PaymentProviderType => {
-  return { [providerType]: null } as PaymentProviderType;
+  if ('Paypal' in provider) return { PayPal: null };
+  if ('Revolut' in provider) return { Revolut: null };
+  throw new Error('Unkown provider type');
 };
 
 // -----

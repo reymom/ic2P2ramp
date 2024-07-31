@@ -4,8 +4,8 @@ import { useAccount } from 'wagmi';
 
 import { backend } from '../declarations/backend';
 import { PaymentProvider } from '../declarations/backend/backend.did';
-import { PaymentProviderTypes, providerTypes, UserTypes } from '../model/types';
-import { stringToUserType, paymentProviderTypeToString, stringToPaymentProviderType } from '../model/utils';
+import { PaymentProviderTypes, providerTypes, revolutSchemes, UserTypes } from '../model/types';
+import { stringToUserType } from '../model/utils';
 import { useUser } from '../UserContext';
 
 const RegisterUser: React.FC = () => {
@@ -13,6 +13,8 @@ const RegisterUser: React.FC = () => {
     const [providers, setProviders] = useState<PaymentProvider[]>([]);
     const [providerType, setProviderType] = useState<PaymentProviderTypes>("PayPal");
     const [providerId, setProviderId] = useState('');
+    const [revolutScheme, setRevolutScheme] = useState<revolutSchemes>('UK.OBIE.SortCodeAccountNumber');
+    const [revolutName, setRevolutName] = useState('');
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -21,14 +23,25 @@ const RegisterUser: React.FC = () => {
     const navigate = useNavigate();
 
     const handleAddProvider = () => {
-        const newProvider: PaymentProvider = {
-            provider_type: stringToPaymentProviderType(providerType),
-            id: providerId,
+        let newProvider: PaymentProvider;
+        if (providerType === 'PayPal') {
+            newProvider = { PayPal: { id: providerId } };
+        } else if (providerType === 'Revolut') {
+            if (userType === 'Offramper' && !revolutName) {
+                setMessage('Name is required.');
+                return;
+            }
+            newProvider = { Revolut: { id: providerId, scheme: revolutScheme, name: revolutName ? [revolutName] : [] } };
+        } else {
+            setMessage('Unknown payment provider');
+            return;
         }
 
         const updatedProviders = [...providers, newProvider];
         setProviders(updatedProviders);
         setProviderId('');
+        setRevolutScheme('UK.OBIE.SortCodeAccountNumber');
+        setRevolutName('');
     };
 
     const handleSubmit = async () => {
@@ -39,7 +52,11 @@ const RegisterUser: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const result = await backend.register_user(address as string, stringToUserType(userType), providers);
+            const loginAddress = {
+                address_type: { EVM: null },
+                address: address as string,
+            };
+            const result = await backend.register_user(stringToUserType(userType), providers, loginAddress);
             if ('Ok' in result) {
                 setGlobalUser(result.Ok);
                 navigate(userType === "Onramper" ? "/view" : "/create");
@@ -89,16 +106,56 @@ const RegisterUser: React.FC = () => {
                     className="flex-grow px-3 py-2 border rounded"
                 />
             </div>
+            {providerType === 'Revolut' && (
+                <>
+                    <div className="flex items-center mb-4">
+                        <label className="block text-gray-700 w-24">Scheme:</label>
+                        <input
+                            type="text"
+                            value={revolutScheme}
+                            onChange={(e) => setRevolutScheme(e.target.value as revolutSchemes)}
+                            className="flex-grow px-3 py-2 border rounded"
+                        />
+                    </div>
+                    {userType === 'Offramper' && (
+                        <div className="flex items-center mb-4">
+                            <label className="block text-gray-700 w-24">Name:</label>
+                            <input
+                                type="text"
+                                value={revolutName}
+                                onChange={(e) => setRevolutName(e.target.value)}
+                                className="flex-grow px-3 py-2 border rounded"
+                            />
+                        </div>
+                    )}
+                </>
+            )}
             <button onClick={handleAddProvider} className="px-4 py-2 bg-blue-500 text-white rounded">
                 Add Provider
             </button>
             <div className="mt-4">
                 <ul className="list-disc list-inside bg-gray-100 p-2 rounded">
-                    {providers.map((provider, index) => (
-                        <li key={index} className="py-1">
-                            {paymentProviderTypeToString(provider.provider_type)}: {provider.id}
-                        </li>
-                    ))}
+                    {providers.map((provider, index) => {
+                        if ('PayPal' in provider) {
+                            return (
+                                <li key={index} className="py-1">
+                                    PayPal: {provider.PayPal.id}
+                                </li>
+                            );
+                        } else if ('Revolut' in provider) {
+                            return (
+                                <li key={index} className="py-1">
+                                    Revolut: {provider.Revolut.id}
+                                    <div>Scheme: {provider.Revolut.scheme}</div>
+                                    {provider.Revolut.name && provider.Revolut.name.length > 0 && (
+                                        <div>Name: {provider.Revolut.name[0]}</div>
+                                    )}
+                                </li>
+                            );
+                        } else {
+                            return null;
+                        }
+                    })}
                 </ul>
             </div>
             <div className="flex justify-between mt-4">

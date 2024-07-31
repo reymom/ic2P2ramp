@@ -20,3 +20,9 @@ export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 export type OrderStateFilterTypes = ExtractKeys<OrderStateFilter>;
 
 export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];
+
+export type revolutSchemes =
+  | 'UK.OBIE.IBAN'
+  | 'UK.OBIE.SortCodeAccountNumber'
+  | 'US.RoutingNumberAccountNumber'
+  | 'US.BranchCodeAccountNumber';
