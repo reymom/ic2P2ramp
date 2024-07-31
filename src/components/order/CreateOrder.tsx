@@ -4,17 +4,19 @@ import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 
 import { backend } from '../../declarations/backend';
-import { PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
+import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
 import { icP2PrampABI } from '../../constants/ic2P2ramp';
 import { TokenOption, addresses, getTokenOptions } from '../../constants/addresses';
 import { useUser } from '../../UserContext';
 import { rampErrorToString } from '../../model/error';
+import { providerToProviderType } from '../../model/utils';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
     const [currency, setCurrency] = useState<string>("USD");
     const [cryptoAmount, setCryptoAmount] = useState(0);
     const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
+    const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain>({ EVM: { chain_id: BigInt(1) } });
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [loadingRate, setLoadingRate] = useState(false);
@@ -84,6 +86,17 @@ const CreateOrder: React.FC = () => {
         });
     };
 
+    const handleBlockchainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        if (value === "EVM") {
+            setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId!) } });
+        } else if (value === "ICP") {
+            setSelectedBlockchain({ ICP: { subnet_id: "some-subnet-id" } });
+        } else if (value === "Solana") {
+            setSelectedBlockchain({ Solana: null });
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -127,18 +140,18 @@ const CreateOrder: React.FC = () => {
                 return;
             }
 
-            const providerTuples: [PaymentProviderType, string][] = selectedProviders.map((provider) => {
-                const providerType: PaymentProviderType = provider.provider_type;
-                return [providerType, provider.id];
+            const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
+                const providerType: PaymentProviderType = providerToProviderType(provider);
+                return [providerType, provider];
             });
             const result = await backend.create_order(
                 BigInt(Math.ceil(fiatAmount! * 100)),
                 currency,
-                cryptoAmountInWei,
                 providerTuples,
+                selectedBlockchain,
+                selectedToken.isNative ? [] : [selectedToken.address],
+                cryptoAmountInWei,
                 user!.evm_address,
-                BigInt(chainId!),
-                selectedToken.isNative ? [] : [selectedToken.address]
             );
             console.log("result(backend.create_order) = ", result);
 
@@ -210,6 +223,19 @@ const CreateOrder: React.FC = () => {
                         ))}
                     </select>
                 </div>
+                <div className="flex items-center mb-4">
+                    <label className="block text-gray-700 w-24">Blockchain:</label>
+                    <select
+                        value={Object.keys(selectedBlockchain)[0]}
+                        onChange={handleBlockchainChange}
+                        className="flex-grow px-3 py-2 border rounded"
+                        required
+                    >
+                        <option value="EVM">EVM</option>
+                        <option value="ICP">ICP</option>
+                        <option value="Solana">Solana</option>
+                    </select>
+                </div>
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
@@ -218,18 +244,27 @@ const CreateOrder: React.FC = () => {
                 )}
                 <div className="mb-4 items-center text-center">
                     <label className="block text-gray-700">Payment Providers:</label>
-                    {user?.payment_providers.map((provider, index) => (
-                        <div key={index} className="flex items-center mb-2">
-                            <input
-                                type="checkbox"
-                                id={`provider-${index}`}
-                                className="mr-2"
-                                checked={selectedProviders!.includes(provider)}
-                                onChange={() => handleProviderSelection(provider)}
-                            />
-                            <label htmlFor={`provider-${index}`} className="text-gray-700 text-center">{provider.id}</label>
-                        </div>
-                    ))}
+                    {user?.payment_providers.map((provider, index) => {
+                        let label = '';
+                        if ('PayPal' in provider) {
+                            label = `PayPal: ${provider.PayPal.id}`;
+                        } else if ('Revolut' in provider) {
+                            label = `Revolut: ${provider.Revolut.id}, Scheme: ${provider.Revolut.scheme}`;
+                        }
+
+                        return (
+                            <div key={index} className="flex items-center mb-2">
+                                <input
+                                    type="checkbox"
+                                    id={`provider-${index}`}
+                                    className="mr-2"
+                                    checked={selectedProviders!.includes(provider)}
+                                    onChange={() => handleProviderSelection(provider)}
+                                />
+                                <label htmlFor={`provider-${index}`} className="text-gray-700 text-center">{label}</label>
+                            </div>
+                        );
+                    })}
                 </div>
                 <div className="mb-4">
                     {chainId ? (

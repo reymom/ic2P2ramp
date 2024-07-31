@@ -73,9 +73,9 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
         };
 
         if ("ByChainId" in filter) {
-            if ("Created" in order) return order.Created.chain_id === filter.ByChainId;
-            if ("Locked" in order) return order.Locked.base.chain_id === filter.ByChainId;
-            if ("Completed" in order) return order.Completed.chain_id === filter.ByChainId;
+            // if ("Created" in order) return order.Created.crypto.chain_id === filter.ByChainId;
+            // if ("Locked" in order) return order.Locked.base.crypto.chain_id === filter.ByChainId;
+            // if ("Completed" in order) return order.Completed.chain_id === filter.ByChainId;
         }
 
         return false;

@@ -28,9 +28,9 @@ function App() {
 
         switch (userTypeToString(user.user_type)) {
             case "Offramper":
-                return { ByOfframperAddress: user.evm_address } as OrderFilter
+                return { ByOfframperAddress: user.addresses[0] } as OrderFilter
             case "Onramper":
-                return { LockedByOnramper: user.evm_address } as OrderFilter
+                return { LockedByOnramper: user.addresses[0] } as OrderFilter
             default:
                 return { ByState: { Created: null } } as OrderFilter
         }

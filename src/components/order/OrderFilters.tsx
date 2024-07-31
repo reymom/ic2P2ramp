@@ -34,7 +34,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 setFilter(stringToOrderFilter(filterCategory, address));
                 break;
             case "ByChainId":
-                setFilter(stringToOrderFilter(filterCategory, chainId));
+                // setFilter(stringToOrderFilter(filterCategory, chainId));
                 break;
             default:
                 setFilter(null);
