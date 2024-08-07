@@ -82,7 +82,7 @@ pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
 // ---------
 // Addresses
 // ---------
-const MAX_ADDRESS_SIZE: u32 = 100;
+const MAX_ADDRESS_SIZE: u32 = 200;
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash, PartialOrd)]
 pub enum AddressType {

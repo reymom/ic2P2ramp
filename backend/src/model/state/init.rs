@@ -2,6 +2,7 @@ use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::collections::HashMap;
+use std::fmt;
 use std::str::FromStr;
 
 use super::state::{InvalidStateError, State};
@@ -22,7 +23,7 @@ pub struct PaypalConfig {
     pub api_url: String,
 }
 
-#[derive(CandidType, Deserialize, Debug, Clone)]
+#[derive(CandidType, Deserialize, Clone)]
 pub struct RevolutConfig {
     pub client_id: String,
     pub api_url: String,
@@ -30,6 +31,19 @@ pub struct RevolutConfig {
     pub private_key_der: Vec<u8>,
     pub kid: String,
     pub tan: String,
+}
+
+impl fmt::Debug for RevolutConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RevolutConfig")
+            .field("client_id", &self.client_id)
+            .field("api_url", &self.api_url)
+            .field("proxy_url", &self.proxy_url)
+            .field("private_key_der", &"[REDACTED]")
+            .field("kid", &self.kid)
+            .field("tan", &self.tan)
+            .finish()
+    }
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
