@@ -2,17 +2,15 @@ import React, { useState } from 'react';
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
 
-import { Order, OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
+import { Blockchain, Order, OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import PayPalButton from '../PaypalButton';
 import { NetworkIds, getTokenMapping } from '../../constants/tokens';
 import { useUser } from '../../UserContext';
-import { paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
+import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
-import { addresses } from '../../constants/addresses';
-import { icP2PrampABI } from '../../constants/ic2P2ramp';
 import { backend } from '../../declarations/backend';
 import { rampErrorToString } from '../../model/error';
-import { PaymentProviderTypes } from '../../model/types';
+import { withdrawFromVault } from '../../model/evm';
 
 interface OrderProps {
     order: OrderState;
@@ -71,36 +69,34 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const removeOrder = async (order: Order) => {
-        console.log("order = ", order);
         try {
             setIsLoading(true);
             setMessage(`Removing order ${order.id}...`);
 
-            if (!window.ethereum) {
-                throw new Error('No crypto wallet found. Please install it.');
-            }
-
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            await provider.send('eth_requestAccounts', []);
-            const signer = await provider.getSigner();
-
-            const tokenAddress = order.crypto.token[0] ?? addresses[Number(order.crypto.blockchain)].native[1];
-            const vaultContract = new ethers.Contract(tokenAddress, icP2PrampABI, signer);
-
-            const gasEstimate = await vaultContract.uncommitDeposit.estimateGas(order.offramper_address, ethers.ZeroAddress, order.crypto.amount);
-            const transactionResponse = await vaultContract.uncommitDeposit(order.offramper_address, ethers.ZeroAddress, order.crypto.amount, {
-                gasLimit: gasEstimate
-            });
-
-            setMessage('Transaction sent, waiting for confirmation...');
-            const receipt = await transactionResponse.wait();
-            console.log('Transaction receipt:', receipt);
-
-            if (receipt.status === 1) {
-                setMessage('Transaction successful!');
-            } else {
-                setMessage('ICP Transaction failed!');
-                return;
+            switch (blockchainToBlockchainType(order.crypto.blockchain)) {
+                case 'EVM':
+                    try {
+                        const receipt = await withdrawFromVault(order);
+                        console.log('Transaction receipt: ', receipt);
+                        setMessage('Transaction successful!');
+                    } catch (e: any) {
+                        setMessage(`Could not delete order: ${e.message || e}`);
+                        return;
+                    }
+                    break;
+                case 'ICP':
+                    try {
+                        // todo: implement in backend canister
+                        setMessage('Transaction successful!');
+                    } catch (e: any) {
+                        setMessage(`Could not delete order: ${e.message || e}`);
+                        return;
+                    }
+                    break;
+                case 'Solana':
+                    throw new Error("Solana orders are not implemented yet")
+                default:
+                    throw new Error('Blockchain not defined')
             }
 
             const result = await backend.cancel_order(order.id);
@@ -150,8 +146,8 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         return Object.values(NetworkIds).find(network => network.id === chainId)?.name!;
     }
 
-    const getTokenSymbol = (tokenAddress: string, chainId: number): string => {
-        const tokenMapping = getTokenMapping(chainId);
+    const getTokenSymbol = (blockchain: Blockchain, tokenAddress: string, chainId: number): string => {
+        const tokenMapping = getTokenMapping(blockchainToBlockchainType(blockchain), chainId);
         return tokenMapping[tokenAddress] || tokenAddress;
     };
 
@@ -159,13 +155,24 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         return (Number(fiatAmount) / 100).toFixed(2);
     };
 
+    const formatCryptoAmount = (amount: bigint, blockchain: Blockchain) => {
+        switch (blockchainToBlockchainType(blockchain)) {
+            case 'EVM':
+                return ethers.formatEther(amount);
+            case 'ICP':
+                return (Number(amount) / 1_000_000).toFixed(2);
+            case 'Solana':
+                return "Solana not implemented"
+        }
+    }
+
     return (
         <li className="p-4 border rounded shadow-md bg-white">
             {'Created' in order && (
                 <div className="flex flex-col space-y-2">
                     <div><strong>Fiat Amount:</strong> {formatFiatAmount(order.Created.fiat_amount)}</div>
                     <div>
-                        <strong>Crypto Amount:</strong> {ethers.formatEther(order.Created.crypto.amount.toString())} {getTokenSymbol(order.Created.crypto.token?.[0] ?? '', Number(order.Created.crypto.blockchain))}
+                        <strong>Crypto Amount:</strong> {formatCryptoAmount(order.Created.crypto.amount, order.Created.crypto.blockchain)} {getTokenSymbol(order.Created.crypto.blockchain, order.Created.crypto.token?.[0] ?? '', Number(order.Created.crypto.blockchain))}
                     </div>
                     <div><strong>Providers:</strong>
                         {order.Created.offramper_providers.map(provider => (
@@ -181,7 +188,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             </div>
                         ))}
                     </div>
-                    <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address.address, 6, 6)} ({Object.keys(order.Created.offramper_address.address_type)[0]}</div>
+                    <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address.address, 6, 6)} ({Object.keys(order.Created.offramper_address.address_type)[0]})</div>
                     <div><strong>Network:</strong> {getNetworkName(Number(order.Created.crypto.blockchain))}</div>
                     {userType === 'Onramper' && (
                         <div>
@@ -210,7 +217,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <div className="flex flex-col space-y-2">
                     <div><strong>Fiat Amount:</strong> {formatFiatAmount(order.Locked.base.fiat_amount)}</div>
                     <div>
-                        <strong>Crypto Amount:</strong> {ethers.formatEther(order.Locked.base.crypto.amount.toString())} {getTokenSymbol(order.Locked.base.crypto.token?.[0] ?? '', Number(order.Locked.base.crypto.blockchain))}
+                        <strong>Crypto Amount:</strong> {ethers.formatEther(order.Locked.base.crypto.amount.toString())} {getTokenSymbol(order.Locked.base.crypto.blockchain, order.Locked.base.crypto.token?.[0] ?? '', Number(order.Locked.base.crypto.blockchain))}
                     </div>
                     <div><strong>Offramper Provider:</strong>
                         {order.Locked.base.offramper_providers.map(provider => {
