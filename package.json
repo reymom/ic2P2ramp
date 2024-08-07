@@ -17,6 +17,8 @@
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\" \"backend/**/*.mo\""
   },
   "dependencies": {
+    "@dfinity/ledger-icp": "^2.4.0",
+    "@dfinity/auth-client": "1.4.0",
     "@rainbow-me/rainbowkit": "^2.1.2",
     "@tanstack/react-query": "^5.40.0",
     "ethers": "^6.12.1",
@@ -28,9 +30,10 @@
     "wagmi": "^2.9.8"
   },
   "devDependencies": {
-    "@dfinity/agent": "^0.18.1",
-    "@dfinity/candid": "^0.18.1",
-    "@dfinity/principal": "^0.18.1",
+    "@dfinity/agent": "^1.4.0",
+    "@dfinity/candid": "^1.4.0",
+    "@dfinity/principal": "^1.4.0",
+    "@dfinity/utils": "^2.4.0",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^14.0.0",
     "@types/react": "^18.2.14",

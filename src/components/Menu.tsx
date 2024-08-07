@@ -4,12 +4,26 @@ import { Link } from 'react-router-dom';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { userTypeToString } from '../model/utils';
 import logo from '../assets/p2ploan.webp';
+import GetBalanceComponent from './icp/Balance';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [principal, setPrincipal] = useState<string>();
 
-    const { user } = useUser();
+
+    const { user, icpAgent } = useUser();
+
+    useEffect(() => {
+        const getPrincipal = async () => {
+            if (icpAgent) {
+                let p = (await icpAgent?.getPrincipal()).toString()!
+                setPrincipal(p)
+            }
+        }
+
+        getPrincipal()
+    }, [icpAgent])
 
     useEffect(() => {
         const handleResize = () => {
@@ -82,6 +96,12 @@ const Menu: React.FC = () => {
                                 <Link to="/" className="flex items-center">
                                     <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
                                 </Link>
+                            </div>
+                            <div>
+                                Canister Balance: <GetBalanceComponent principal={"be2us-64aaa-aaaaa-qaabq-cai"} />
+                            </div>
+                            <div>
+                                ICP Balance: {principal && <GetBalanceComponent principal={principal} />}
                             </div>
                             <div className="mt-4">
                                 {renderLinks()}
