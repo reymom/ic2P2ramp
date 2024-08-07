@@ -40,21 +40,46 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
 export const addresses =
   process.env.FRONTEND_ENV === 'production' ? prodAddresses : testAddresses;
 
+const tokenCanisters = {
+  ICP: 'ryjl3-tyaaa-aaaaa-aaaba-cai',
+  OpenChat: '',
+  ckBTC:
+    process.env.FRONTEND_ENV === 'production'
+      ? 'mxzaz-hqaaa-aaaar-qaada-cai'
+      : 'mc6ru-gyaaa-aaaar-qaaaq-cai',
+};
+
 export interface TokenOption {
   name: string;
   address: string;
   isNative: boolean;
 }
 
-export const getTokenOptions = (chainId: number): TokenOption[] => {
-  const mapping = addresses[chainId];
+export const getTokenOptions = (
+  blockchain: string,
+  chainId: number | undefined,
+): TokenOption[] => {
+  if (blockchain === 'ICP') {
+    const icpTokens = [
+      { name: 'ICP', address: tokenCanisters.ICP, isNative: true },
+      { name: 'ckBTC', address: tokenCanisters.ckBTC, isNative: false },
+    ];
+    return icpTokens;
+  } else if (blockchain === 'EVM') {
+    if (!chainId) {
+      throw new Error('chain id is not specified');
+    }
 
-  if (!mapping) {
-    throw new Error(`No address mapping found for chainId ${chainId}`);
+    const mapping = addresses[chainId];
+    if (!mapping) {
+      throw new Error(`No address mapping found for chainId ${chainId}`);
+    }
+
+    return [
+      { name: mapping.native[0], address: mapping.native[1], isNative: true },
+      { name: mapping.usdt[0], address: mapping.usdt[1], isNative: false },
+    ];
+  } else {
+    throw new Error('Blockchain not found');
   }
-
-  return [
-    { name: mapping.native[0], address: mapping.native[1], isNative: true },
-    { name: mapping.usdt[0], address: mapping.usdt[1], isNative: false },
-  ];
 };

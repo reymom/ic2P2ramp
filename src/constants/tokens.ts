@@ -1,3 +1,4 @@
+import { BlockchainTypes } from '../model/types';
 import { getTokenOptions } from './addresses';
 
 export enum SepoliaTokens {
@@ -91,14 +92,19 @@ const getNativeTokenForChainId = (chainId: number): string => {
 };
 
 export const getTokenMapping = (
-  chainId: number,
+  blockchain: BlockchainTypes,
+  chainId: number | undefined,
 ): { [address: string]: string } => {
-  const tokenOptions = getTokenOptions(chainId);
-  const nativeToken = getNativeTokenForChainId(chainId);
+  const tokenOptions = getTokenOptions(blockchain, chainId);
+
   const mapping = tokenOptions.reduce((map, token) => {
     map[token.address] = token.name;
     return map;
   }, {} as { [address: string]: string });
-  mapping[''] = nativeToken; // Handle native token case
+
+  if (chainId) {
+    const nativeToken = getNativeTokenForChainId(chainId);
+    mapping[''] = nativeToken; // Handle native token case
+  }
   return mapping;
 };
