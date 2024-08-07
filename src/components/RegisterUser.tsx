@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount } from 'wagmi';
 
 import { backend } from '../declarations/backend';
 import { PaymentProvider } from '../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemes, UserTypes } from '../model/types';
 import { stringToUserType } from '../model/utils';
 import { useUser } from '../UserContext';
+import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
+import { Principal } from '@dfinity/principal';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -18,9 +19,15 @@ const RegisterUser: React.FC = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { address } = useAccount();
-    const { setUser: setGlobalUser } = useUser();
+    const { setUser: setGlobalUser, user, loginMethod, icpAgent } = useUser();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user) {
+            navigate("/")
+            return;
+        }
+    }, [user])
 
     const handleAddProvider = () => {
         let newProvider: PaymentProvider;
@@ -50,13 +57,14 @@ const RegisterUser: React.FC = () => {
             return;
         }
 
+        if (!loginMethod) {
+            navigate("/")
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const loginAddress = {
-                address_type: { EVM: null },
-                address: address as string,
-            };
-            const result = await backend.register_user(stringToUserType(userType), providers, loginAddress);
+            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod);
             if ('Ok' in result) {
                 setGlobalUser(result.Ok);
                 navigate(userType === "Onramper" ? "/view" : "/create");

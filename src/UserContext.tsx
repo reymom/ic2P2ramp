@@ -1,32 +1,36 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { useAccount } from 'wagmi';
-import { User } from './declarations/backend/backend.did';
+import { Address, AddressType, User } from './declarations/backend/backend.did';
 import { backend } from './declarations/backend';
 import { UserTypes } from './model/types';
 import { userTypeToString } from './model/utils';
+import { HttpAgent } from '@dfinity/agent';
 
 interface UserContextProps {
     user: User | null;
     userType: UserTypes;
+    loginMethod: Address | null;
+    icpAgent: HttpAgent | null;
     setUser: (user: User | null) => void;
+    setLoginMethod: (loginMethod: Address | null) => void;
+    setIcpAgent: (agent: HttpAgent | null) => void;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-    const { address, isConnected } = useAccount();
     const [user, setUser] = useState<User | null>(null);
     const [userType, setUserType] = useState<UserTypes>("Visitor");
+    const [loginMethod, setLoginMethod] = useState<Address | null>(null);
+    const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
 
     useEffect(() => {
-        if (!isConnected) {
+        if (loginMethod) {
+            checkUserRegistration(loginMethod);
+        } else {
             setUser(null);
+            setIcpAgent(null);
         }
-
-        if (address) {
-            checkUserRegistration(address);
-        }
-    }, [address, isConnected]);
+    }, [loginMethod]);
 
     useEffect(() => {
         if (!user) {
@@ -36,9 +40,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setUserType(userTypeToString(user!.user_type));
     }, [user])
 
-    const checkUserRegistration = async (evm_address: string) => {
+    const checkUserRegistration = async (loginAddress: Address) => {
         try {
-            const result = await backend.get_user(evm_address);
+            const result = await backend.get_user(loginAddress);
             if ('Ok' in result) {
                 setUser(result.Ok);
             } else {
@@ -50,7 +54,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <UserContext.Provider value={{ user, userType, setUser }}>
+        <UserContext.Provider value={{ user, userType, loginMethod, icpAgent, setUser, setLoginMethod, setIcpAgent }}>
             {children}
         </UserContext.Provider>
     );
