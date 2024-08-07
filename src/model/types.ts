@@ -1,4 +1,5 @@
 import {
+  Blockchain,
   OrderFilter,
   OrderStateFilter,
   PaymentProviderType,
@@ -18,6 +19,8 @@ export type UserTypes = ExtractKeys<UserType> | 'Visitor';
 export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 
 export type OrderStateFilterTypes = ExtractKeys<OrderStateFilter>;
+
+export type BlockchainTypes = ExtractKeys<Blockchain>;
 
 export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];
 

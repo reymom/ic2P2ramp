@@ -1,4 +1,5 @@
 import {
+  Blockchain,
   OrderFilter,
   OrderStateFilter,
   PaymentProvider,
@@ -11,7 +12,18 @@ import {
   UserTypes,
   PaymentProviderTypes,
   candidToEnum,
+  BlockchainTypes,
 } from './types';
+
+// Blockchain
+export const blockchainToBlockchainType = (
+  blockchain: Blockchain,
+): BlockchainTypes => {
+  if ('EVM' in blockchain) return 'EVM';
+  if ('ICP' in blockchain) return 'ICP';
+  if ('Solana' in blockchain) return 'Solana';
+  throw new Error('Unknown blockchain');
+};
 
 // Payment Providers
 export const paymentProviderTypeToString = (
@@ -25,7 +37,7 @@ export const paymentProviderTypeToString = (
 export const providerToProviderType = (
   provider: PaymentProvider,
 ): PaymentProviderType => {
-  if ('Paypal' in provider) return { PayPal: null };
+  if ('PayPal' in provider) return { PayPal: null };
   if ('Revolut' in provider) return { Revolut: null };
   throw new Error('Unkown provider type');
 };
