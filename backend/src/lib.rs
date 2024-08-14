@@ -1,9 +1,14 @@
 mod evm;
+mod icp;
 mod management;
 mod model;
 mod outcalls;
 
+use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
+use icp::vault::Ic2P2ramp as ICPRamp;
+use icrc_ledger_types::icrc1::account::Account;
+use icrc_ledger_types::icrc1::transfer::NumTokens;
 use outcalls::revolut::token;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -132,16 +137,6 @@ async fn test_deposit_funds(
 }
 
 #[ic_cdk::update]
-async fn test_get_revolut_token() -> Result<String> {
-    Ok(revolut::auth::get_revolut_access_token().await?)
-}
-
-#[ic_cdk::update]
-async fn test_get_paypal_token() -> Result<String> {
-    Ok(paypal::auth::get_paypal_access_token().await?)
-}
-
-#[ic_cdk::update]
 async fn test_get_consent_url() -> Result<String> {
     let consent_id = revolut::consent::create_account_access_consent(
         "1.00",
@@ -158,7 +153,7 @@ async fn test_get_consent_url() -> Result<String> {
 }
 
 #[ic_cdk::update]
-async fn test_get_revolut_paymen_token(consent_id: String) -> Result<String> {
+async fn test_get_revolut_payment_token(consent_id: String) -> Result<String> {
     revolut::token::get_revolut_access_token(consent_id).await
 }
 
@@ -172,6 +167,16 @@ async fn test_get_revolut_payment_details(payment_id: String) -> Result<()> {
 // ----------
 // Management
 // ----------
+
+#[ic_cdk::update]
+async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
+    ICPRamp::set_icp_fees(icp_canisters).await
+}
+
+#[ic_cdk::query]
+fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
+    state::get_fee(&ledger_principal)
+}
 
 #[ic_cdk::update]
 async fn approve_token_allowance(chain_id: u64, token_address: String, gas: u32) -> Result<()> {
@@ -260,6 +265,12 @@ fn create_order(
         }
     }
 
+    match blockchain {
+        Blockchain::EVM { chain_id } => state::is_chain_supported(chain_id)?,
+        Blockchain::ICP { ledger_principal } => state::is_token_supported(&ledger_principal)?,
+        _ => (),
+    }
+
     order_management::create_order(
         fiat_amount,
         fiat_symbol,
@@ -290,46 +301,8 @@ async fn lock_order(
         return Err(RampError::InvalidOnramperProvider);
     }
 
-    let mut revolut_consent_id = None;
-    let consent_url = match &onramper_provider {
-        PaymentProvider::Revolut {
-            scheme: onramper_scheme,
-            id: onramper_id,
-            ..
-        } => {
-            let offramper_provider = order
-                .offramper_providers
-                .get(&PaymentProviderType::Revolut)
-                .ok_or_else(|| RampError::ProviderNotInUser(PaymentProviderType::Revolut))?;
-
-            if let PaymentProvider::Revolut {
-                scheme: offramper_scheme,
-                id: offramper_id,
-                name: offramper_name,
-            } = offramper_provider
-            {
-                let consent_id = revolut::consent::create_account_access_consent(
-                    &order.fiat_amount.to_string(),
-                    &order.currency_symbol,
-                    onramper_scheme,
-                    onramper_id,
-                    &offramper_scheme,
-                    &offramper_id,
-                    &offramper_name
-                        .clone()
-                        .ok_or_else(|| RampError::InvalidOfframperProvider)?,
-                )
-                .await?;
-                revolut_consent_id = Some(consent_id.clone());
-                Some(revolut::authorize::get_authorization_url(&consent_id).await?)
-            } else {
-                return Err(RampError::InvalidOrderState(
-                    "Expected Revolut provider".to_string(),
-                ));
-            }
-        }
-        _ => None,
-    };
+    let (revolut_consent_id, consent_url) =
+        payment_management::get_revolut_consent(&order, &onramper_provider).await?;
 
     match order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
@@ -358,7 +331,17 @@ async fn lock_order(
             );
             Ok(tx_hash)
         }
-        _ => todo!(),
+        Blockchain::ICP { .. } => {
+            order_management::lock_order(
+                order_id,
+                onramper_provider.clone(),
+                onramper_address.clone(),
+                revolut_consent_id.clone(),
+                consent_url.clone(),
+            )?;
+            Ok(format!("order {:?} is locked!", order_id))
+        }
+        _ => ic_cdk::trap("blockchain orders are still not implemented"),
     }
 }
 
@@ -396,7 +379,37 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
 }
 
 #[ic_cdk::update]
-fn cancel_order(order_id: u64) -> Result<()> {
+async fn cancel_order(order_id: u64) -> Result<()> {
+    let order_state = storage::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Created(order) => order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+    match &order.crypto.blockchain {
+        Blockchain::ICP { ledger_principal } => {
+            let offramper_principal =
+                Principal::from_text(&order.offramper_address.address).unwrap();
+
+            let amount = NumTokens::from(order.crypto.amount);
+            let fee = state::get_fee(ledger_principal)?;
+
+            let to_account = Account {
+                owner: offramper_principal,
+                subaccount: None,
+            };
+            ic_cdk::println!("[cancel] amount = {:?}", amount);
+            ic_cdk::println!("[cancel] fee = {:?}", fee);
+            ICPRamp::transfer(
+                *ledger_principal,
+                to_account,
+                amount - fee.clone(),
+                Some(fee),
+            )
+            .await?;
+        }
+        _ => (),
+    }
+
     order_management::cancel_order(order_id)
 }
 
@@ -449,15 +462,33 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
                 .map(|capture| capture.amount.value.parse::<f64>().unwrap())
                 .sum();
             ic_cdk::println!("received_amount = {}", received_amount);
+            ic_cdk::println!("expected_amount = {}", total_expected_amount);
 
             let amount_matches = (received_amount - total_expected_amount).abs() < f64::EPSILON;
             let currency_matches = capture_details.purchase_units[0].amount.currency_code
                 == order.base.currency_symbol;
+            ic_cdk::println!(
+                "currency_code = {}",
+                capture_details.purchase_units[0].amount.currency_code
+            );
+            ic_cdk::println!("currency_symbol = {}", order.base.currency_symbol);
 
-            let PaymentProvider::PayPal { id: offramper_id } = order.onramper_provider else {
+            let offramper_provider = order
+                .base
+                .offramper_providers
+                .iter()
+                .find(|(provider_type, _)| *provider_type == &PaymentProviderType::PayPal)
+                .ok_or(RampError::InvalidOfframperProvider)?;
+
+            let PaymentProvider::PayPal { id: offramper_id } = offramper_provider.1 else {
                 return Err(RampError::InvalidOfframperProvider);
             };
 
+            ic_cdk::println!(
+                "offramper pay = {}",
+                capture_details.purchase_units[0].payee.email_address
+            );
+            ic_cdk::println!("offramper_id = {}", offramper_id);
             let offramper_matches =
                 capture_details.purchase_units[0].payee.email_address == *offramper_id;
             let onramper_matches = capture_details.payer.email_address == *onramper_id;
@@ -469,6 +500,7 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
                 && onramper_matches
             {
                 ic_cdk::println!("[verify_transaction] verified is true!!");
+                order_management::set_payment_id(order_id, transaction_id)?;
                 order_management::mark_order_as_paid(order.base.id)?;
             } else {
                 return Err(RampError::PaymentVerificationFailed);
@@ -500,17 +532,26 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
                 && onramper_account.identification == *onramper_id;
 
             let offramper_account = payment_details.data.initiation.creditor_account;
+
+            let offramper_provider = order
+                .base
+                .offramper_providers
+                .iter()
+                .find(|(provider_type, _)| *provider_type == &PaymentProviderType::Revolut)
+                .ok_or(RampError::InvalidOfframperProvider)?;
+
             let PaymentProvider::Revolut {
                 scheme: offramper_scheme,
                 id: offramper_id,
                 name: offramper_name,
-            } = order.onramper_provider
+            } = offramper_provider.1
             else {
                 return Err(RampError::InvalidOfframperProvider);
             };
-            let creditor_matches = offramper_account.scheme_name == offramper_scheme
-                && offramper_account.identification == offramper_id
-                && offramper_account.name == offramper_name;
+
+            let creditor_matches = offramper_account.scheme_name == *offramper_scheme
+                && offramper_account.identification == *offramper_id
+                && offramper_account.name == *offramper_name;
 
             if payment_details.data.status == "AcceptedSettlementCompleted"
                 && amount_matches
@@ -529,6 +570,9 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
             payment_management::handle_evm_payment_completion(order_id, chain_id, gas).await?;
+        }
+        Blockchain::ICP { ledger_principal } => {
+            payment_management::handle_icp_payment_completion(order_id, &ledger_principal).await?;
         }
         _ => todo!(),
     }
