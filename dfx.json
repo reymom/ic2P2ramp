@@ -9,13 +9,13 @@
       "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
     },
     "backend": {
-      "dependencies": ["evm_rpc"],
+      "dependencies": ["evm_rpc", "xrc", "icp_ledger_canister"],
       "candid": "backend/backend.did",
       "package": "backend",
       "type": "rust"
     },
     "frontend": {
-      "dependencies": ["backend"],
+      "dependencies": ["backend", "internet_identity"],
       "type": "assets",
       "source": ["dist/"]
     },
@@ -32,14 +32,25 @@
     },
     "icp_ledger_canister": {
       "type": "custom",
-      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icp_ledger/ledger.did",
-      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ledger-canister.wasm.gz",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/94fd38099f0e63950eb5d5673b7b9d23780ace2d/rs/rosetta-api/icp_ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/94fd38099f0e63950eb5d5673b7b9d23780ace2d/canisters/ledger-canister.wasm.gz",
       "remote": {
         "id": {
           "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
         }
       },
       "specified_id": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+    },
+    "ckbtc_ledger_canister_testnet": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/94fd38099f0e63950eb5d5673b7b9d23780ace2d/rs/rosetta-api/icp_ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/94fd38099f0e63950eb5d5673b7b9d23780ace2d/canisters/ledger-canister.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "mc6ru-gyaaa-aaaar-qaaaq-cai"
+        }
+      },
+      "specified_id": "mc6ru-gyaaa-aaaar-qaaaq-cai"
     },
     "icrc1_ledger_canister": {
       "type": "custom",
