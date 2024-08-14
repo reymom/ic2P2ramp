@@ -2,7 +2,7 @@ type Address = record { address_type : AddressType; address : text };
 type AddressType = variant { EVM; ICP; Email; Solana };
 type Blockchain = variant {
   EVM : record { chain_id : nat64 };
-  ICP : record { subnet_id : text };
+  ICP : record { ledger_principal : principal };
   Solana;
 };
 type ChainConfig = record {
@@ -56,7 +56,7 @@ type HttpHeader = record { value : text; name : text };
 type HttpHeader_1 = record { value : text; name : text };
 type HttpResponse = record {
   status : nat;
-  body : vec nat8;
+  body : blob;
   headers : vec HttpHeader;
 };
 type InitArg = record {
@@ -134,6 +134,7 @@ type RampError = variant {
   TransactionFailed : text;
   ParseFloatError : text;
   MissingDebtorAccount;
+  LedgerPrincipalNotSupported : text;
   OrderNotFound;
   InvalidOfframperProvider;
   ProviderNotInUser : PaymentProviderType;
@@ -166,14 +167,15 @@ type RejectionCode = variant {
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : nat64; Err : RampError };
 type Result_2 = variant { Ok : text; Err : RampError };
-type Result_3 = variant { Ok : User; Err : RampError };
+type Result_3 = variant { Ok : nat; Err : RampError };
+type Result_4 = variant { Ok : User; Err : RampError };
 type RevolutConfig = record {
   kid : text;
   tan : text;
   api_url : text;
   proxy_url : text;
   client_id : text;
-  private_key_der : vec nat8;
+  private_key_der : blob;
 };
 type RpcApi = record { url : text; headers : opt vec HttpHeader_1 };
 type RpcServices = variant {
@@ -181,7 +183,7 @@ type RpcServices = variant {
   Custom : record { chainId : nat64; services : vec RpcApi };
   EthMainnet : opt vec EthMainnetService;
 };
-type TransformArgs = record { context : vec nat8; response : HttpResponse };
+type TransformArgs = record { context : blob; response : HttpResponse };
 type User = record {
   user_type : UserType;
   payment_providers : vec PaymentProvider;
@@ -208,18 +210,18 @@ service : (InitArg) -> {
   execute_revolut_payment : (nat64) -> (Result_2) query;
   get_evm_address : () -> (text) query;
   get_exchange_rate : (text, text) -> (Result_2);
+  get_icp_transaction_fee : (principal) -> (Result_3) query;
   get_orders : (opt OrderFilter) -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
-  get_user : (Address) -> (Result_3) query;
+  get_user : (Address) -> (Result_4) query;
   lock_order : (nat64, PaymentProvider, Address, opt nat32) -> (Result_2);
-  register_user : (UserType, vec PaymentProvider, Address) -> (Result_3);
-  remove_user : (Address) -> (Result_3);
+  register_icp_tokens : (vec text) -> (Result);
+  register_user : (UserType, vec PaymentProvider, Address) -> (Result_4);
+  remove_user : (Address) -> (Result_4);
   test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_2);
   test_get_consent_url : () -> (Result_2);
-  test_get_paypal_token : () -> (Result_2);
-  test_get_revolut_paymen_token : (text) -> (Result_2);
   test_get_revolut_payment_details : (text) -> (Result);
-  test_get_revolut_token : () -> (Result_2);
+  test_get_revolut_payment_token : (text) -> (Result_2);
   transfer_value : (nat64, text, nat, opt int32) -> (Result_2);
   transform_remove_expires_in : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
