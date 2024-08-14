@@ -68,7 +68,7 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
     }
 }
 
-pub async fn lock_order(
+pub fn lock_order(
     order_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: Address,
