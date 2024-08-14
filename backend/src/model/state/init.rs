@@ -2,8 +2,7 @@ use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::collections::HashMap;
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use super::state::{InvalidStateError, State};
 use crate::evm::rpc::RpcServices;
@@ -104,6 +103,7 @@ impl TryFrom<InitArg> for State {
                 kid: revolut.kid,
                 tan: revolut.tan,
             },
+            icp_fees: HashMap::new(),
         };
         Ok(state)
     }

@@ -1,6 +1,8 @@
+use candid::Principal;
 use ethers_core::types::U256;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use ic_cdk_timers::{clear_timer, set_timer, TimerId};
+use icrc_ledger_types::icrc1::transfer::NumTokens;
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
 use crate::{
@@ -26,6 +28,7 @@ pub struct State {
     pub evm_address: Option<String>,
     pub paypal: PayPalState,
     pub revolut: RevolutState,
+    pub icp_fees: HashMap<Principal, NumTokens>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -89,5 +92,37 @@ pub fn clear_order_timer(order_id: u64) -> Result<()> {
             Ok(())
         }
         None => Err(RampError::OrderTimerNotFound),
+    })
+}
+
+pub fn get_fee(ledger_principal: &Principal) -> Result<NumTokens> {
+    read_state(|state| {
+        state
+            .icp_fees
+            .get(ledger_principal)
+            .cloned()
+            .ok_or_else(|| RampError::LedgerPrincipalNotSupported(ledger_principal.to_string()))
+    })
+}
+
+pub fn is_token_supported(ledger_principal: &Principal) -> Result<()> {
+    read_state(|state| {
+        if state.icp_fees.contains_key(ledger_principal) {
+            Ok(())
+        } else {
+            Err(RampError::LedgerPrincipalNotSupported(
+                ledger_principal.to_string(),
+            ))
+        }
+    })
+}
+
+pub fn is_chain_supported(chain_id: u64) -> Result<()> {
+    read_state(|state| {
+        if state.chains.contains_key(&chain_id) {
+            Ok(())
+        } else {
+            Err(RampError::ChainIdNotFound(chain_id))
+        }
     })
 }

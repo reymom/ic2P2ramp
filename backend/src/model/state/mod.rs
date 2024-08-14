@@ -4,6 +4,6 @@ pub mod storage;
 
 pub use init::InitArg;
 pub use state::{
-    clear_order_timer, generate_order_id, increment_nonce, initialize_state, mutate_state,
-    read_state, set_order_timer, State,
+    clear_order_timer, generate_order_id, get_fee, increment_nonce, initialize_state,
+    is_chain_supported, is_token_supported, mutate_state, read_state, set_order_timer, State,
 };
