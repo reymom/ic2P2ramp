@@ -129,6 +129,18 @@ pub async fn wait_for_revolut_access_token(
 
                 order::set_payment_id(order_id, payment_id.clone())?;
 
+                // Automatically verify the transaction after setting the payment ID
+                ic_cdk::println!("[wait_for_access_token] Verifying transaction...");
+                match crate::verify_transaction(order_id, payment_id.clone(), None).await {
+                    Ok(_) => ic_cdk::println!(
+                        "[wait_for_access_token] Transaction verified successfully."
+                    ),
+                    Err(e) => ic_cdk::println!(
+                        "[wait_for_access_token] Failed to verify transaction: {:?}",
+                        e
+                    ),
+                }
+
                 return Ok(payment_id);
             }
             Err(_) => {
