@@ -5,12 +5,13 @@ import { ethers } from 'ethers';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
-import { TokenOption, getTokenOptions } from '../../constants/addresses';
+import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, tokenCanisters } from '../../constants/addresses';
 import { useUser } from '../../UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
-import { transferICPTokensToCanister } from '../../model/icp';
+import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
 import { depositInVault } from '../../model/evm';
+import { Principal } from '@dfinity/principal';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
@@ -31,16 +32,19 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         if (selectedBlockchain) {
-            const blockchainType = blockchainToBlockchainType(selectedBlockchain)
-            if (blockchainType === 'EVM' && !chainId) {
-                return
-            }
-            const fetchTokens = () => {
-                const tokens = getTokenOptions(blockchainType, chainId);
-                setTokenOptions(tokens);
-            };
+            const blockchainType = blockchainToBlockchainType(selectedBlockchain);
+            let tokens: TokenOption[] = [];
 
-            fetchTokens();
+            if (blockchainType === 'EVM') {
+                if (!chainId) {
+                    return;
+                }
+                tokens = getEvmTokenOptions(chainId);
+            } else if (blockchainType === 'ICP') {
+                tokens = getIcpTokenOptions();
+            }
+
+            setTokenOptions(tokens);
         }
     }, [selectedBlockchain, chainId]);
 
@@ -52,7 +56,7 @@ const CreateOrder: React.FC = () => {
             }
             setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
         } else if (value === "ICP") {
-            setSelectedBlockchain({ ICP: { subnet_id: "" } });
+            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(tokenCanisters.ICP) } });
         } else if (value === "Solana") {
             setSelectedBlockchain({ Solana: null });
         }
@@ -63,6 +67,9 @@ const CreateOrder: React.FC = () => {
     const handleTokenChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selected = tokenOptions.find(token => token.address === e.target.value);
         setSelectedToken(selected || null);
+        if (selected && selectedBlockchain && blockchainToBlockchainType(selectedBlockchain) === 'ICP') {
+            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address) } })
+        }
     };
 
     const getExchangeRateFromXRC = async (token: string) => {
@@ -75,7 +82,8 @@ const CreateOrder: React.FC = () => {
                 const rate = parseFloat(result.Ok);
                 setExchangeRate(rate);
             } else {
-                console.error(result.Err);
+                const errorMessage = rampErrorToString(result.Err);
+                console.error(errorMessage);
                 setExchangeRate(null);
             }
         } catch (error) {
@@ -88,7 +96,7 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         if (selectedToken) {
-            getExchangeRateFromXRC(selectedToken.name);
+            getExchangeRateFromXRC(selectedToken.symbol);
         }
     }, [selectedToken]);
 
@@ -99,7 +107,6 @@ const CreateOrder: React.FC = () => {
     }, [cryptoAmount, exchangeRate]);
 
     const handleProviderSelection = (provider: PaymentProvider) => {
-        console.log("selectedPRoviders before = ", selectedProviders);
         if (selectedProviders.length === 0) {
             setSelectedProviders([provider]);
             return
@@ -111,7 +118,6 @@ const CreateOrder: React.FC = () => {
                 return [...prevSelected, provider];
             }
         });
-        console.log("selectedPRoviders after = ", selectedProviders);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -152,10 +158,13 @@ const CreateOrder: React.FC = () => {
                     return;
                 }
             } else if (blockchain === 'ICP') {
-                cryptoAmountUnits = BigInt(cryptoAmount * 1_000_000);
-                const fee = BigInt(10_000); // in e8s
+                cryptoAmountUnits = BigInt(cryptoAmount * 100_000_000);
                 try {
-                    const result = await transferICPTokensToCanister(icpAgent!, selectedToken?.address!, cryptoAmountUnits, fee);
+                    const ledgerCanister = Principal.fromText(selectedToken.address);
+                    const fees = await fetchIcpTransactionFee(ledgerCanister);
+                    console.log("fees = ", fees);
+
+                    const result = await transferICPTokensToCanister(icpAgent!, ledgerCanister, cryptoAmountUnits, fees);
                     console.log('Transaction result:', result);
                     setMessage('Transaction successful!');
                 } catch (e: any) {
@@ -175,7 +184,6 @@ const CreateOrder: React.FC = () => {
                 cryptoAmountUnits,
                 selectedAddress,
             );
-            console.log("result(backend.create_order) = ", result);
 
             if ('Ok' in result) {
                 setMessage(`Order with ID=${result.Ok} created!`);

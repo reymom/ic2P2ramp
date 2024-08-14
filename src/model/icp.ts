@@ -1,15 +1,30 @@
 import { HttpAgent } from '@dfinity/agent';
 import { LedgerCanister, AccountIdentifier } from '@dfinity/ledger-icp';
 import { Principal } from '@dfinity/principal';
+import { backend } from '../declarations/backend';
+import { rampErrorToString } from './error';
+
+export const fetchIcpTransactionFee = async (ledgerPrincipal: Principal) => {
+  try {
+    const feeResult = await backend.get_icp_transaction_fee(ledgerPrincipal);
+    if ('Ok' in feeResult) {
+      return BigInt(feeResult.Ok);
+    } else {
+      throw new Error(rampErrorToString(feeResult.Err));
+    }
+  } catch (error) {
+    console.error('Failed to fetch ICP transaction fee:', error);
+    throw error;
+  }
+};
 
 export const transferICPTokensToCanister = async (
   agent: HttpAgent,
-  canisterId: string,
+  canisterId: Principal,
   amount: bigint,
   fee: bigint,
 ) => {
-  const ledgerCanister = Principal.fromText(canisterId);
-  const ledger = LedgerCanister.create({ agent, canisterId: ledgerCanister });
+  const ledger = LedgerCanister.create({ agent, canisterId });
 
   if (!process.env.CANISTER_ID_BACKEND) {
     throw new Error('Backend Canister ID not defined in env variables');
@@ -21,7 +36,7 @@ export const transferICPTokensToCanister = async (
   try {
     const result = await ledger.transfer({
       to: toAccountIdentifier,
-      amount,
+      amount: amount + fee,
       fee,
     });
 
