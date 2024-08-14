@@ -14,7 +14,7 @@ use super::{
     common::{calculate_fees, AddressType, PaymentProvider, PaymentProviderType},
 };
 
-const MAX_ORDER_SIZE: u32 = 500;
+const MAX_ORDER_SIZE: u32 = 8000;
 
 #[derive(CandidType, Deserialize, Clone)]
 pub enum OrderState {
@@ -50,7 +50,7 @@ impl Storable for OrderState {
     };
 }
 
-#[derive(CandidType, Deserialize, Clone)]
+#[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Order {
     pub id: u64,
     pub created_at: u64,
@@ -67,11 +67,9 @@ impl Order {
         fiat_amount: u64,
         currency_symbol: String,
         offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
-
         blockchain: Blockchain,
         token: Option<String>,
         crypto_amount: u64,
-
         offramper_address: Address,
     ) -> Result<Self> {
         offramper_address.validate()?;
@@ -101,6 +99,7 @@ impl Order {
             crypto: Crypto::new(blockchain, token, crypto_amount, crypto_fee),
             offramper_address,
         };
+        ic_cdk::println!("[new order] order = {:?}", order);
 
         Ok(order)
     }

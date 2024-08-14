@@ -1,9 +1,9 @@
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Principal};
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Blockchain {
     EVM { chain_id: u64 },
-    ICP { subnet_id: String },
+    ICP { ledger_principal: Principal },
     Solana,
 }
 

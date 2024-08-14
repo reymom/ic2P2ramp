@@ -114,6 +114,9 @@ pub enum RampError {
 
     #[error("IC Rejection Code: {0:?}, Error: {1}")]
     ICRejectionError(RejectionCode, String),
+
+    #[error("Ledger principal {0} not supported")]
+    LedgerPrincipalNotSupported(String),
 }
 
 impl From<ParseFloatError> for RampError {
