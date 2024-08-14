@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { Address, AddressType, User } from './declarations/backend/backend.did';
+import { Address, User } from './declarations/backend/backend.did';
 import { backend } from './declarations/backend';
 import { UserTypes } from './model/types';
 import { userTypeToString } from './model/utils';

@@ -18,7 +18,6 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
     useEffect(() => {
         const clientId = process.env.FRONTEND_PAYPAL_CLIENT_ID;
-        console.log("clientId = ", clientId);
         if (!clientId) return;
 
         // Load PayPal SDK script only once

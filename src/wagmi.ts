@@ -16,7 +16,6 @@ const testChains = [polygonZkEvmTestnet, optimismSepolia, baseSepolia, sepolia];
 const prodChains = [mainnet, polygon, optimism, arbitrum];
 
 const getChains = () => {
-  console.log('process.env.FRONTEND_ENV = ', process.env.FRONTEND_ENV);
   if (process.env.FRONTEND_ENV === 'production') {
     return prodChains;
   }

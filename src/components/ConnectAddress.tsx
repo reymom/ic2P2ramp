@@ -40,7 +40,7 @@ const ConnectAddress: React.FC = () => {
             onSuccess: async () => {
                 const identity = authClient.getIdentity();
                 const principal = identity.getPrincipal();
-                console.log("principal connected = ", principal.toString());
+                console.log("Principal connected = ", principal.toString());
                 setLoginMethod({ address_type: { ICP: null }, address: principal.toText() });
                 const agent = new HttpAgent({ identity, host });
                 if (process.env.FRONTEND_ENV === 'test') {
