@@ -40,7 +40,7 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
 export const addresses =
   process.env.FRONTEND_ENV === 'production' ? prodAddresses : testAddresses;
 
-const tokenCanisters = {
+export const tokenCanisters = {
   ICP: 'ryjl3-tyaaa-aaaaa-aaaba-cai',
   OpenChat: '',
   ckBTC:
@@ -53,33 +53,39 @@ export interface TokenOption {
   name: string;
   address: string;
   isNative: boolean;
+  symbol: string;
 }
 
-export const getTokenOptions = (
-  blockchain: string,
-  chainId: number | undefined,
-): TokenOption[] => {
-  if (blockchain === 'ICP') {
-    const icpTokens = [
-      { name: 'ICP', address: tokenCanisters.ICP, isNative: true },
-      { name: 'ckBTC', address: tokenCanisters.ckBTC, isNative: false },
-    ];
-    return icpTokens;
-  } else if (blockchain === 'EVM') {
-    if (!chainId) {
-      throw new Error('chain id is not specified');
-    }
-
-    const mapping = addresses[chainId];
-    if (!mapping) {
-      throw new Error(`No address mapping found for chainId ${chainId}`);
-    }
-
-    return [
-      { name: mapping.native[0], address: mapping.native[1], isNative: true },
-      { name: mapping.usdt[0], address: mapping.usdt[1], isNative: false },
-    ];
-  } else {
-    throw new Error('Blockchain not found');
+export const getEvmTokenOptions = (chainId: number): TokenOption[] => {
+  const mapping = addresses[chainId];
+  if (!mapping) {
+    throw new Error(`No address mapping found for chainId ${chainId}`);
   }
+
+  return [
+    {
+      name: mapping.native[0],
+      address: mapping.native[1],
+      isNative: true,
+      symbol: mapping.native[0],
+    },
+    {
+      name: mapping.usdt[0],
+      address: mapping.usdt[1],
+      isNative: false,
+      symbol: mapping.native[0],
+    },
+  ];
+};
+
+export const getIcpTokenOptions = (): TokenOption[] => {
+  return [
+    { name: 'ICP', address: tokenCanisters.ICP, isNative: true, symbol: 'ICP' },
+    {
+      name: 'ckBTC',
+      address: tokenCanisters.ckBTC,
+      isNative: false,
+      symbol: 'BTC',
+    },
+  ];
 };

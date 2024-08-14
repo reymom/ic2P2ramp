@@ -1,5 +1,9 @@
 import { BlockchainTypes } from '../model/types';
-import { getTokenOptions } from './addresses';
+import {
+  getEvmTokenOptions,
+  getIcpTokenOptions,
+  TokenOption,
+} from './addresses';
 
 export enum SepoliaTokens {
   USDT = 'USDT',
@@ -95,7 +99,18 @@ export const getTokenMapping = (
   blockchain: BlockchainTypes,
   chainId: number | undefined,
 ): { [address: string]: string } => {
-  const tokenOptions = getTokenOptions(blockchain, chainId);
+  let tokenOptions: TokenOption[];
+
+  if (blockchain === 'EVM') {
+    if (!chainId) {
+      throw new Error('Chain ID is not specified');
+    }
+    tokenOptions = getEvmTokenOptions(chainId);
+  } else if (blockchain === 'ICP') {
+    tokenOptions = getIcpTokenOptions();
+  } else {
+    throw new Error('Unsupported blockchain');
+  }
 
   const mapping = tokenOptions.reduce((map, token) => {
     map[token.address] = token.name;
@@ -104,7 +119,7 @@ export const getTokenMapping = (
 
   if (chainId) {
     const nativeToken = getNativeTokenForChainId(chainId);
-    mapping[''] = nativeToken; // Handle native token case
+    mapping[''] = nativeToken; // evm native token case
   }
   return mapping;
 };
