@@ -17,8 +17,11 @@
     "format": "prettier --write \"src/**/*.{json,js,jsx,ts,tsx,css,scss}\" \"backend/**/*.mo\""
   },
   "dependencies": {
-    "@dfinity/ledger-icp": "^2.4.0",
     "@dfinity/auth-client": "1.4.0",
+    "@dfinity/ledger-icp": "^2.4.0",
+    "@fortawesome/fontawesome-svg-core": "^6.6.0",
+    "@fortawesome/free-solid-svg-icons": "^6.6.0",
+    "@fortawesome/react-fontawesome": "^0.2.2",
     "@rainbow-me/rainbowkit": "^2.1.2",
     "@tanstack/react-query": "^5.40.0",
     "ethers": "^6.12.1",

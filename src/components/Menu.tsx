@@ -1,18 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { useUser } from '../UserContext';
-import { Link } from 'react-router-dom';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { userTypeToString } from '../model/utils';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faUserCircle, faSignOutAlt, faHome, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+
 import logo from '../assets/p2ploan.webp';
+import { useUser } from '../UserContext';
+import { userTypeToString } from '../model/utils';
 import GetBalanceComponent from './icp/Balance';
+import { truncate } from '../model/helper';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
     const [principal, setPrincipal] = useState<string>();
 
+    const { user, icpAgent, logout } = useUser();
+    const navigate = useNavigate();
 
-    const { user, icpAgent } = useUser();
+    const profileDropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const getPrincipal = async () => {
@@ -37,6 +44,34 @@ const Menu: React.FC = () => {
         setIsMenuOpen(!isMenuOpen);
     };
 
+    const toggleProfileDropdown = () => {
+        setIsProfileDropdownOpen(!isProfileDropdownOpen);
+    };
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+                setIsProfileDropdownOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [profileDropdownRef]);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                closeMenu();
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [menuRef]);
+
     const closeMenu = () => {
         setIsMenuOpen(false);
     };
@@ -45,8 +80,14 @@ const Menu: React.FC = () => {
         if (!user) {
             return (
                 <>
-                    <Link to="/" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">Register</Link>
-                    <Link to="/view" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">View Orders</Link>
+                    <Link to="/" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
+                        <FontAwesomeIcon icon={faHome} />
+                        <span>Register</span>
+                    </Link>
+                    <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
+                        <FontAwesomeIcon icon={faFileAlt} />
+                        <span>View Orders</span>
+                    </Link>
                 </>
             );
         }
@@ -54,17 +95,22 @@ const Menu: React.FC = () => {
         switch (userTypeToString(user.user_type)) {
             case "Onramper":
                 return (
-                    <>
-                        <Link to="/profile" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">View Profile</Link>
-                        <Link to="/view" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">View Orders</Link>
-                    </>
+                    <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
+                        <FontAwesomeIcon icon={faFileAlt} />
+                        <span>View Orders</span>
+                    </Link>
                 );
             case "Offramper":
                 return (
                     <>
-                        <Link to="/profile" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">View Profile</Link>
-                        <Link to="/view" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">My Orders</Link>
-                        <Link to="/create" onClick={closeMenu} className="block py-2 px-4 lg:inline-block lg:py-0">Create Order</Link>
+                        <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
+                            <FontAwesomeIcon icon={faFileAlt} />
+                            <span>My Orders</span>
+                        </Link>
+                        <Link to="/create" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
+                            <FontAwesomeIcon icon={faPlusCircle} />
+                            <span>Create Order</span>
+                        </Link>
                     </>
                 );
             default:
@@ -73,43 +119,37 @@ const Menu: React.FC = () => {
     };
 
     return (
-        <nav className="bg-white p-4 shadow-md flex justify-between items-center">
+        <nav className="p-6 flex justify-between items-center rounded-lg" style={{ backgroundColor: 'transparent' }}>
             {isMobile &&
-                <div className="flex items-center justify-between w-full">
-                    <button onClick={toggleMenu} className="p-4">
-                        ☰
-                    </button>
-                    <ConnectButton accountStatus='full' chainStatus="icon" showBalance={false} />
-                </div>
-            }
-            {isMobile && isMenuOpen && (
-                <div className="fixed inset-0 bg-gray-800 bg-opacity-75 z-50 lg:hidden">
-                    <div className="absolute top-0 left-0 w-64 bg-white h-full shadow-md">
-                        <div className="p-4 flex items-center justify-between">
-                            <h2 className="text-xl font-bold">Menu</h2>
-                            <button onClick={toggleMenu} className="p-2">
-                                ✖
-                            </button>
-                        </div>
-                        <div className="p-4">
-                            <div>
-                                <Link to="/" className="flex items-center">
-                                    <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
-                                </Link>
+                <>
+                    <div className="flex items-center justify-between w-full">
+                        <button onClick={toggleMenu} className="p-4">
+                            <FontAwesomeIcon icon={faBars} size="2x" />
+                        </button>
+                    </div>
+                    <div className={`fixed inset-0 bg-gray-800 bg-opacity-75 z-50 lg:hidden ${isMenuOpen ? 'block' : 'hidden'}`}>
+                        <div className="absolute top-0 left-0 w-64 bg-white h-full shadow-md" ref={menuRef}>
+                            <div className="p-4 flex items-center justify-between">
+                                <div>
+                                    <Link to="/" className="flex items-center" onClick={closeMenu}>
+                                        <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
+                                    </Link>
+                                </div>
+                                <button onClick={toggleMenu} className="p-2">
+                                    <FontAwesomeIcon icon={faTimes} size="lg" className="text-gray-600" />
+                                </button>
                             </div>
-                            <div>
-                                Canister Balance: <GetBalanceComponent principal={"be2us-64aaa-aaaaa-qaabq-cai"} />
-                            </div>
-                            <div>
-                                ICP Balance: {principal && <GetBalanceComponent principal={principal} />}
-                            </div>
-                            <div className="mt-4">
+                            <div className="p-4 flex-grow">
                                 {renderLinks()}
+                            </div>
+                            <div className="p-4">
+                                {principal && <GetBalanceComponent principal={principal} />}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                </>
+            }
+
             {!isMobile &&
                 <div className="flex justify-between w-full">
                     <Link to="/" className="flex items-center w-72">
@@ -121,12 +161,50 @@ const Menu: React.FC = () => {
                             {renderLinks()}
                         </div>
                     </div>
-                    <div className="w-72 justify-end items-end justify-items-end mr-0">
-                        <ConnectButton accountStatus='full' chainStatus="icon" showBalance={false} />
-                    </div>
                 </div>
             }
-        </nav>
+
+            <div className="w-72 flex justify-end items-center relative">
+                {!user ? (
+                    <div className="relative">
+                        <button onClick={() => navigate('/')} className="bg-blue-500 flex items-center space-x-4 p-2 text-white rounded-full">
+                            <FontAwesomeIcon icon={faRightToBracket} size="3x" className="text-gray-600" />
+                            <span>Log in</span>
+                        </button>
+                    </div>
+                ) : (
+                    <div className="relative" ref={profileDropdownRef}>
+                        <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 bg-gray-600 text-white rounded-full">
+                            <FontAwesomeIcon icon={faUserCircle} size="3x" className="text-white" />
+                            <svg className={`w-4 h-4 ml-1 transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        {isProfileDropdownOpen && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg z-10">
+                                <div className="px-4 py-4 text-gray-700 border-b border-gray-200">
+                                    <div className="flex items-center text-center">
+                                        <span className="flex-1 text-sm font-semibold text-blue-600">{truncate(user.login_method.address, 6, 6)}</span>
+                                        <span className="text-gray-500">({Object.keys(user.login_method.address_type)[0]})</span>
+                                    </div>
+                                    <div className="items-center text-center">
+                                        {principal && <GetBalanceComponent principal={principal} />}
+                                    </div>
+                                </div>
+                                <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                    <FontAwesomeIcon icon={faUserCircle} size="lg" className='mr-2' />
+                                    <span>Profile</span>
+                                </Link>
+                                <button onClick={logout} className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                    <FontAwesomeIcon icon={faSignOutAlt} size="lg" className='mr-2' />
+                                    <span>Logout</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </nav >
     );
 };
 
