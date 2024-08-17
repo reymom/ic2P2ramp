@@ -326,7 +326,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             )}
             {'Completed' in order && (
                 <div className="flex flex-col space-y-2">
-                    <div><strong>Fiat Amount:</strong> {formatFiatAmount()}</div>
+                    <div><strong>Fiat Amount:</strong> {formatFiatAmount()} $</div>
                     <div><strong>Onramper:</strong> {truncate(order.Completed.onramper.address, 6, 6)}</div>
                     <div><strong>Offramper:</strong> {truncate(order.Completed.offramper.address, 6, 6)}</div>
                     {'EVM' in order.Completed.blockchain && (
