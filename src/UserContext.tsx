@@ -9,6 +9,7 @@ interface UserContextProps {
     user: User | null;
     userType: UserTypes;
     loginMethod: Address | null;
+    logout: () => void;
     icpAgent: HttpAgent | null;
     setUser: (user: User | null) => void;
     setLoginMethod: (loginMethod: Address | null) => void;
@@ -53,8 +54,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const logout = () => {
+        setUser(null);
+        setLoginMethod(null);
+        setIcpAgent(null);
+        setUserType("Visitor");
+    };
+
     return (
-        <UserContext.Provider value={{ user, userType, loginMethod, icpAgent, setUser, setLoginMethod, setIcpAgent }}>
+        <UserContext.Provider value={{ user, userType, loginMethod, logout, icpAgent, setUser, setLoginMethod, setIcpAgent }}>
             {children}
         </UserContext.Provider>
     );
