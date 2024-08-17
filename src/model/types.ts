@@ -1,4 +1,5 @@
 import {
+  AddressType,
   Blockchain,
   OrderFilter,
   OrderStateFilter,
@@ -16,6 +17,8 @@ export type PaymentProviderTypes = ExtractKeys<PaymentProviderType>;
 
 export type UserTypes = ExtractKeys<UserType> | 'Visitor';
 
+export type AddressTypes = ExtractKeys<AddressType>;
+
 export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 
 export type OrderStateFilterTypes = ExtractKeys<OrderStateFilter>;
@@ -24,8 +27,15 @@ export type BlockchainTypes = ExtractKeys<Blockchain>;
 
 export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];
 
-export type revolutSchemes =
+export type revolutScheme =
   | 'UK.OBIE.IBAN'
   | 'UK.OBIE.SortCodeAccountNumber'
   | 'US.RoutingNumberAccountNumber'
   | 'US.BranchCodeAccountNumber';
+
+export const revolutSchemes: revolutScheme[] = [
+  'UK.OBIE.IBAN',
+  'UK.OBIE.SortCodeAccountNumber',
+  'US.RoutingNumberAccountNumber',
+  'US.BranchCodeAccountNumber',
+];

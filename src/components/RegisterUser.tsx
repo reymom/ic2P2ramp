@@ -3,18 +3,16 @@ import { useNavigate } from 'react-router-dom';
 
 import { backend } from '../declarations/backend';
 import { PaymentProvider } from '../declarations/backend/backend.did';
-import { PaymentProviderTypes, providerTypes, revolutSchemes, UserTypes } from '../model/types';
+import { PaymentProviderTypes, providerTypes, revolutScheme, revolutSchemes, UserTypes } from '../model/types';
 import { stringToUserType } from '../model/utils';
 import { useUser } from '../UserContext';
-import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
-import { Principal } from '@dfinity/principal';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
     const [providers, setProviders] = useState<PaymentProvider[]>([]);
     const [providerType, setProviderType] = useState<PaymentProviderTypes>("PayPal");
     const [providerId, setProviderId] = useState('');
-    const [revolutScheme, setRevolutScheme] = useState<revolutSchemes>('UK.OBIE.SortCodeAccountNumber');
+    const [revolutScheme, setRevolutScheme] = useState<revolutScheme>('UK.OBIE.SortCodeAccountNumber');
     const [revolutName, setRevolutName] = useState('');
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -117,13 +115,17 @@ const RegisterUser: React.FC = () => {
             {providerType === 'Revolut' && (
                 <>
                     <div className="flex items-center mb-4">
-                        <label className="block text-gray-700 w-24">Scheme:</label>
-                        <input
-                            type="text"
-                            value={revolutScheme}
-                            onChange={(e) => setRevolutScheme(e.target.value as revolutSchemes)}
+                        <label className="block text-gray-700 w-24">Provider:</label>
+                        <select
+                            value={providerType}
+                            onChange={(e) => setRevolutScheme(e.target.value as revolutScheme)}
                             className="flex-grow px-3 py-2 border rounded"
-                        />
+                        >
+                            <option value="" selected>Select Scheme</option>
+                            {revolutSchemes.map(type => (
+                                <option value={type}>{type}</option>
+                            ))}
+                        </select>
                     </div>
                     {userType === 'Offramper' && (
                         <div className="flex items-center mb-4">

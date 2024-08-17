@@ -1,4 +1,5 @@
 import {
+  AddressType,
   Blockchain,
   OrderFilter,
   OrderStateFilter,
