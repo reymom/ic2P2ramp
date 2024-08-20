@@ -2,11 +2,17 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    management::random,
+};
 
-use super::common::{Address, PaymentProvider};
+use super::{
+    common::{Address, PaymentProvider},
+    AddressType,
+};
 
-const MAX_USER_SIZE: u32 = 350;
+const MAX_USER_SIZE: u32 = 1000;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub enum UserType {
@@ -21,14 +27,21 @@ pub struct User {
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login_method: Address,
+    pub hashed_password: Option<String>,
     pub addresses: HashSet<Address>,
 }
 
 impl User {
-    pub fn new(user_type: UserType, initial_address: Address) -> Result<Self> {
+    pub fn new(
+        user_type: UserType,
+        initial_address: Address,
+        hashed_password: Option<String>,
+    ) -> Result<Self> {
         let mut addresses = HashSet::new();
         initial_address.validate()?;
-        addresses.insert(initial_address.clone());
+        if initial_address.address_type != AddressType::Email {
+            addresses.insert(initial_address.clone());
+        }
 
         Ok(Self {
             user_type,
@@ -36,6 +49,7 @@ impl User {
             fiat_amount: 0,
             score: 1,
             login_method: initial_address,
+            hashed_password,
             addresses,
         })
     }
@@ -52,6 +66,32 @@ impl User {
             UserType::Onramper => Ok(()),
             UserType::Offramper => Err(RampError::UserNotOnramper),
         }
+    }
+
+    pub fn verify_user_password(&self, password: Option<String>) -> Result<()> {
+        if self.login_method.address_type == AddressType::Email {
+            let password = password.ok_or(RampError::PasswordRequired)?;
+
+            if let Some(ref stored_password) = &self.hashed_password {
+                match random::verify_password(&password, &stored_password) {
+                    Ok(true) => {
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        return Err(RampError::InvalidPassword);
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            } else {
+                return Err(RampError::InternalError(
+                    "No stored password found for verification.".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn update_fiat_amount(&mut self, amount: u64) {

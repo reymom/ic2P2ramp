@@ -25,12 +25,6 @@ pub enum PaymentProvider {
     },
 }
 
-// #[derive(CandidType, Deserialize, Clone, Debug, Eq, Hash)]
-// pub struct PaymentProvider {
-//     pub provider_type: PaymentProviderType,
-//     pub details: PaymentProviderDetails,
-// }
-
 impl PartialEq for PaymentProvider {
     fn eq(&self, other: &Self) -> bool {
         self.provider_type() == other.provider_type()
@@ -175,7 +169,7 @@ mod tests {
             address: format!("{:#x}", EthAddress::random()),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
         map.insert(login_address.clone(), user.clone());
 
         let retrieved_user = map.get(&login_address).unwrap();
@@ -229,7 +223,7 @@ mod tests {
             address: format!("{:#x}", EthAddress::random()),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
 
         let new_address = Address {
             address_type: AddressType::ICP,
@@ -281,8 +275,8 @@ mod tests {
             address: format!("{:#x}", EthAddress::random()),
         };
 
-        let user1 = User::new(UserType::Offramper, login_address1.clone()).unwrap();
-        let user2 = User::new(UserType::Onramper, login_address2.clone()).unwrap();
+        let user1 = User::new(UserType::Offramper, login_address1.clone(), None).unwrap();
+        let user2 = User::new(UserType::Onramper, login_address2.clone(), None).unwrap();
 
         map.insert(login_address1.clone(), user1.clone());
         map.insert(login_address2.clone(), user2.clone());

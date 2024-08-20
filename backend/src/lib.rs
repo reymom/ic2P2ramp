@@ -6,14 +6,12 @@ mod outcalls;
 
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
-use icp::vault::Ic2P2ramp as ICPRamp;
-use icrc_ledger_types::icrc1::account::Account;
-use icrc_ledger_types::icrc1::transfer::NumTokens;
-use outcalls::revolut::token;
+use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use evm::{helpers, providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
+use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, user as user_management,
 };
@@ -25,7 +23,11 @@ use model::types::{
     user::{User, UserType},
     Address, Blockchain, PaymentProvider, PaymentProviderType,
 };
-use outcalls::{paypal, revolut, xrc_rates};
+use outcalls::{
+    paypal,
+    revolut::{self, token},
+    xrc_rates,
+};
 
 fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::ZERO, || {
@@ -205,17 +207,20 @@ async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result
 // -----
 
 #[ic_cdk::update]
-fn register_user(
+async fn register_user(
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
     login_address: Address,
+    password: Option<String>,
 ) -> Result<User> {
-    user_management::register_user(user_type, payment_providers, login_address)
+    user_management::register_user(user_type, payment_providers, login_address, password).await
 }
 
-#[ic_cdk::query]
-fn get_user(address: Address) -> Result<User> {
-    storage::get_user(&address)
+#[ic_cdk::update]
+async fn get_user(address: Address, password: Option<String>) -> Result<User> {
+    let user = storage::get_user(&address)?;
+    user.verify_user_password(password)?;
+    Ok(user)
 }
 
 #[ic_cdk::update]

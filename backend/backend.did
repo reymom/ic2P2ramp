@@ -141,6 +141,7 @@ type RampError = variant {
   MissingAccessToken;
   EthersAbiError : text;
   Pkcs8Error : text;
+  PasswordRequired;
   ChainIdNotFound : nat64;
   TokenUnregistered;
   ParseError : text;
@@ -150,9 +151,11 @@ type RampError = variant {
   NonceTooHigh;
   RsaError : text;
   CanisterCallError : text;
+  InternalError : text;
   Utf8Error;
   VaultManagerAddressNotFound : nat64;
   UserNotFound;
+  InvalidPassword;
   InsufficientFunds;
 };
 type RejectionCode = variant {
@@ -191,6 +194,7 @@ type User = record {
   score : int32;
   login_method : Address;
   addresses : vec Address;
+  hashed_password : opt text;
 };
 type UserType = variant { Offramper; Onramper };
 service : (InitArg) -> {
@@ -213,10 +217,12 @@ service : (InitArg) -> {
   get_icp_transaction_fee : (principal) -> (Result_3) query;
   get_orders : (opt OrderFilter) -> (vec OrderState) query;
   get_rpc_providers : () -> (vec ProviderView) query;
-  get_user : (Address) -> (Result_4) query;
+  get_user : (Address, opt text) -> (Result_4);
   lock_order : (nat64, PaymentProvider, Address, opt nat32) -> (Result_2);
   register_icp_tokens : (vec text) -> (Result);
-  register_user : (UserType, vec PaymentProvider, Address) -> (Result_4);
+  register_user : (UserType, vec PaymentProvider, Address, opt text) -> (
+      Result_4,
+    );
   remove_user : (Address) -> (Result_4);
   test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_2);
   test_get_consent_url : () -> (Result_2);

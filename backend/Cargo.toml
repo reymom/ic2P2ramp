@@ -28,3 +28,4 @@ rsa = "0.6"
 sha2 = "0.10"
 rand = "0.8"
 num-traits = "0.2.19"
+pbkdf2 = { version="0.12.2", features = ["simple"] }

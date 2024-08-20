@@ -43,8 +43,17 @@ pub enum RampError {
     #[error("User score below zero")]
     UserBanned,
 
+    #[error("Password is Invalid")]
+    InvalidPassword,
+
+    #[error("Password is Required")]
+    PasswordRequired,
+
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
+
+    #[error("Internal Error: {0}")]
+    InternalError(String),
 
     #[error("Missing Debtor Account")]
     MissingDebtorAccount,

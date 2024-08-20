@@ -5,6 +5,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::errors::Result;
+use crate::management::random;
 use crate::model::errors::RampError;
 use crate::model::state::read_state;
 
@@ -38,21 +39,6 @@ impl JWSHeader {
     }
 }
 
-async fn get_random_bytes() -> Result<[u8; 32]> {
-    let management_canister = candid::Principal::management_canister();
-    let rnd_buffer: (Vec<u8>,) = match ic_cdk::call(management_canister, "raw_rand", ()).await {
-        Ok(result) => result,
-        Err((code, msg)) => {
-            ic_cdk::println!("Error invoking raw_rand: {:?} {}", code, msg);
-            return Err(RampError::ICRejectionError(code, msg));
-        }
-    };
-
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&rnd_buffer.0[..32]);
-    Ok(seed)
-}
-
 pub async fn create_jws_signature(payload: &str, jws_header: &JWSHeader) -> Result<String> {
     let private_key_der = read_state(|s| s.revolut.private_key_der.clone());
 
@@ -68,7 +54,7 @@ pub async fn create_jws_signature(payload: &str, jws_header: &JWSHeader) -> Resu
     hasher.update(signing_input.as_bytes());
     let hashed = hasher.finalize();
 
-    let seed = get_random_bytes().await?; // onchain pseudorandom seed from raw_rand
+    let seed = random::get_random_bytes().await?; // onchain pseudorandom seed from raw_rand
     let mut rng = StdRng::from_seed(seed);
     let mut salt = [0u8; 32];
     rng.fill_bytes(&mut salt);

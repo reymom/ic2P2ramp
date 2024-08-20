@@ -1,19 +1,36 @@
 use std::collections::HashSet;
 
-use crate::types::{
-    user::{User, UserType},
-    Address, PaymentProvider,
-};
+use super::random;
 use crate::{
     errors::{RampError, Result},
     state::storage,
 };
+use crate::{
+    model::types::AddressType,
+    types::{
+        user::{User, UserType},
+        Address, PaymentProvider,
+    },
+};
 
-pub fn register_user(
+pub async fn register_user(
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
     login_address: Address,
+    password: Option<String>,
 ) -> Result<User> {
+    login_address.validate()?;
+
+    if login_address.address_type == AddressType::Email && password == None {
+        return Err(RampError::PasswordRequired);
+    }
+
+    let hashed_password = if let Some(plaintext_password) = password {
+        Some(random::hash_password(&plaintext_password).await?)
+    } else {
+        None
+    };
+
     if payment_providers.is_empty() {
         return Err(RampError::InvalidInput(
             "Provider list is empty.".to_string(),
@@ -24,9 +41,7 @@ pub fn register_user(
         .into_iter()
         .try_for_each(|p| p.validate())?;
 
-    login_address.validate()?;
-
-    let mut user = User::new(user_type, login_address)?;
+    let mut user = User::new(user_type, login_address, hashed_password)?;
     user.payment_providers = payment_providers;
 
     storage::insert_user(&user);
