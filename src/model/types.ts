@@ -27,13 +27,13 @@ export type BlockchainTypes = ExtractKeys<Blockchain>;
 
 export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];
 
-export type revolutScheme =
+export type revolutSchemeTypes =
   | 'UK.OBIE.IBAN'
   | 'UK.OBIE.SortCodeAccountNumber'
   | 'US.RoutingNumberAccountNumber'
   | 'US.BranchCodeAccountNumber';
 
-export const revolutSchemes: revolutScheme[] = [
+export const revolutSchemes: revolutSchemeTypes[] = [
   'UK.OBIE.IBAN',
   'UK.OBIE.SortCodeAccountNumber',
   'US.RoutingNumberAccountNumber',
