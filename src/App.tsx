@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Route, Routes, Link } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
@@ -40,7 +40,7 @@ function App() {
         <div className="min-h-screen bg-gray-50">
             <Menu />
             <div className="flex flex-col items-center mt-8">
-                <div className="bg-white p-4 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-1/3">
+                <div className="bg-white p-8 space-x-2 space-y-2 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3">
                     <Routes>
                         <Route path="/" element={<ConnectAddress />} />
                         <Route path="/login" element={<RegisterUser />} />
