@@ -3,21 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '../UserContext';
 import { userTypeToString } from '../model/utils';
 import { backend } from '../declarations/backend';
-import { AddressTypes, PaymentProviderTypes, providerTypes, revolutScheme, revolutSchemes } from '../model/types';
+import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../model/types';
 import { truncate } from '../model/helper';
 import { Address, PaymentProvider } from '../declarations/backend/backend.did';
 import { rampErrorToString } from '../model/error';
+import { useAccount } from 'wagmi';
+import { AuthClient } from '@dfinity/auth-client';
+import { icpHost, iiUrl } from '../model/icp';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { HttpAgent } from '@dfinity/agent';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
     const [providerId, setProviderId] = useState('');
     const [newAddress, setNewAddress] = useState('');
-    const [selectedAddressType, setSelectedAddressType] = useState<AddressTypes>();
-    const [revolutScheme, setRevolutScheme] = useState<revolutScheme>('UK.OBIE.SortCodeAccountNumber');
+    const [selectedAddressType, setSelectedAddressType] = useState<'ICP' | 'EVM'>('EVM');
+    const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>('UK.OBIE.SortCodeAccountNumber');
     const [revolutName, setRevolutName] = useState('');
     const [message, setMessage] = useState('');
+    const [loadingAddAddress, setLoadingAddAddress] = useState(false);
+    const [loadingAddProvider, setLoadingAddProvider] = useState(false);
 
-    const { user, setUser } = useUser();
+    const { address, isConnected } = useAccount();
+
+    const { user, setUser, icpAgent, setIcpAgent, setPrincipal } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -31,8 +40,31 @@ const UserProfile: React.FC = () => {
         return null;
     }
 
+    const handleInternetIdentityLogin = async () => {
+        const authClient = await AuthClient.create();
+        await authClient.login({
+            identityProvider: iiUrl,
+            onSuccess: async () => {
+                const identity = authClient.getIdentity();
+                const principal = identity.getPrincipal();
+                setNewAddress(principal.toText());
+                setPrincipal(principal);
+
+                const agent = new HttpAgent({ identity, host: icpHost });
+                if (process.env.FRONTEND_ENV === 'test') {
+                    agent.fetchRootKey();
+                }
+                setIcpAgent(agent);
+            },
+            onError: (error) => {
+                console.error("Internet Identity login failed:", error);
+            },
+        });
+    };
+
     const handleAddProvider = async () => {
         if (!providerType) return;
+        setLoadingAddProvider(true);
 
         let newProvider: PaymentProvider;
         if (providerType === 'PayPal') {
@@ -40,6 +72,7 @@ const UserProfile: React.FC = () => {
         } else if (providerType === 'Revolut') {
             if (userTypeToString(user.user_type) === 'Offramper' && !revolutName) {
                 setMessage('Name is required.');
+                setLoadingAddProvider(false);
                 return;
             }
             newProvider = { Revolut: { id: providerId, scheme: revolutScheme, name: revolutName ? [revolutName] : [] } };
@@ -53,17 +86,19 @@ const UserProfile: React.FC = () => {
             if ('Ok' in result) {
                 const updatedProviders = [...user.payment_providers, newProvider]
                 setUser({ ...user, payment_providers: updatedProviders });
-                setMessage('Provider updated successfully');
             } else {
                 setMessage(rampErrorToString(result.Err));
             }
         } catch (error) {
             setMessage(`Failed to update provider: ${error}`);
+        } finally {
+            setLoadingAddProvider(false);
         }
     };
 
     const handleAddAddress = async () => {
         if (!selectedAddressType) return;
+        setLoadingAddAddress(true);
 
         const address = {
             address_type: { [selectedAddressType]: null },
@@ -75,13 +110,18 @@ const UserProfile: React.FC = () => {
             if ('Ok' in result) {
                 const updatedAddresses = [...user.addresses, address];
                 setUser({ ...user, addresses: updatedAddresses });
-                setMessage('Address updated successfully');
             } else {
-                setMessage(result.Err.toString());
+                setMessage(`Failed to update address: ${rampErrorToString(result.Err)}`)
             }
         } catch (error) {
             setMessage(`Failed to update address: ${error}`);
+        } finally {
+            setLoadingAddAddress(false);
         }
+    };
+
+    const isAddressInUserAddresses = (addressToCheck: string): boolean => {
+        return user.addresses.some(addr => addr.address === addressToCheck);
     };
 
     return (
@@ -103,7 +143,7 @@ const UserProfile: React.FC = () => {
                 </div>
             </div>
 
-            <hr />
+            <hr className="border-t border-gray-300 w-full my-4" />
 
             <div className="my-4">
                 <div className="flex justify-between items-center">
@@ -115,7 +155,7 @@ const UserProfile: React.FC = () => {
                             color: addr.address === user.login_method.address ? 'blue' : ''
                         }}>
                             <span className="flex-1 text-sm text-gray-500">({Object.keys(addr.address_type)[0]})</span>
-                            <span className="ml-2">{truncate(addr.address, 8, 8)}</span>
+                            <span className="ml-2">{addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address}</span>
                         </li>
                     ))}
                 </ul>
@@ -124,27 +164,58 @@ const UserProfile: React.FC = () => {
             <div className="flex mb-4 gap-2">
                 <select
                     value={selectedAddressType}
-                    onChange={(e) => setSelectedAddressType(e.target.value as AddressTypes)}
+                    onChange={(e) => setSelectedAddressType(e.target.value as 'ICP' | 'EVM')}
                     className="w-1/3 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                    <option value="" selected>Select Address Type</option>
                     <option value="EVM">EVM</option>
                     <option value="ICP">ICP</option>
-                    <option value="Solana">Solana</option>
+                    {/* <option value="Solana">Solana</option> */}
                 </select>
-                <input
-                    type="text"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    placeholder="Enter Address"
-                    className="w-2/3 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button onClick={handleAddAddress} className="ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
+                {selectedAddressType === 'EVM' ? (
+                    isConnected ? (
+                        <input
+                            type="text"
+                            value={address}
+                            readOnly
+                            className="px-3 py-2 border rounded w-full bg-gray-100"
+                        />
+                    ) : (
+                        <div className="mb-2">
+                            <ConnectButton />
+                        </div>
+                    )
+                ) : selectedAddressType === 'ICP' ? (
+                    newAddress ? (
+                        <input
+                            type="text"
+                            value={newAddress}
+                            readOnly
+                            className="px-3 py-2 border rounded w-full bg-gray-100"
+                        />
+                    ) : (
+                        <button
+                            onClick={handleInternetIdentityLogin}
+                            className="px-4 py-2 bg-blue-500 text-white rounded w-full"
+                        >
+                            Connect ICP
+                        </button>
+                    )
+                ) : null}
+                <button
+                    disabled={!newAddress || isAddressInUserAddresses(newAddress)}
+                    onClick={handleAddAddress}
+                    className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!newAddress || isAddressInUserAddresses(newAddress) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                     Add
                 </button>
             </div>
+            {loadingAddAddress && (
+                <div className="flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-700">Adding Address...</div>
+                </div>
+            )}
 
-            <hr />
+            <hr className="border-t border-gray-300 w-full my-4" />
 
             <div className="my-4">
                 <div className="flex justify-between items-center">
@@ -201,7 +272,7 @@ const UserProfile: React.FC = () => {
                     <>
                         <select
                             value={revolutScheme}
-                            onChange={(e) => setRevolutScheme(e.target.value as revolutScheme)}
+                            onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
                             className="w-full px-3 py-2 border rounded"
                         >
                             <option value="" selected>Scheme</option>
@@ -226,9 +297,16 @@ const UserProfile: React.FC = () => {
                 </button>
             </div>
 
-            <hr />
+            {loadingAddProvider && (
+                <div className="flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-700">Adding Provider...</div>
+                </div>
+            )}
 
-            {message && <p className="mt-4 text-sm font-medium text-grey-600">{message}</p>}
+            <hr className="border-t border-gray-300 w-full my-4" />
+
+            {message && <p className="mt-4 text-sm font-medium text-grey-600 break-all">{message}</p>}
         </div >
     );
 };

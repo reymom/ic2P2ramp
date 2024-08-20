@@ -5,7 +5,7 @@ import { Principal } from '@dfinity/principal';
 import { tokenCanisters } from '../../constants/addresses';
 
 interface GetBalanceComponentProps {
-    principal: string;
+    principal: Principal;
 }
 
 const GetBalanceComponent: React.FC<GetBalanceComponentProps> = ({ principal }) => {
@@ -14,7 +14,7 @@ const GetBalanceComponent: React.FC<GetBalanceComponentProps> = ({ principal }) 
 
     const { icpAgent } = useUser();
 
-    const balanceCache = useRef<{ principal: string, balance: string } | null>(null);
+    const balanceCache = useRef<{ principal: Principal, balance: string } | null>(null);
 
     useEffect(() => {
         const fetchBalance = async () => {
@@ -29,10 +29,7 @@ const GetBalanceComponent: React.FC<GetBalanceComponentProps> = ({ principal }) 
                 const ledgerTokenCanister = Principal.fromText(tokenCanisters.ICP);
                 const ledger = LedgerCanister.create({ agent: icpAgent!, canisterId: ledgerTokenCanister });
 
-                const accountIdentifier = AccountIdentifier.fromPrincipal({
-                    principal: Principal.fromText(principal)
-                });
-
+                const accountIdentifier = AccountIdentifier.fromPrincipal({ principal });
                 const balanceResult = await ledger.accountBalance({
                     accountIdentifier: accountIdentifier,
                     certified: true
@@ -60,7 +57,7 @@ const GetBalanceComponent: React.FC<GetBalanceComponentProps> = ({ principal }) 
         <div>
             {error && <div className="text-red-500">Error: {error}</div>}
             {balance !== null ? (
-                <div className="text-green-500">{balance} tICP</div>
+                <div className="text-green-500">{balance} ICP</div>
             ) : (
                 <div>Loading...</div>
             )}
