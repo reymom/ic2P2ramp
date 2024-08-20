@@ -3,21 +3,23 @@ import { useNavigate } from 'react-router-dom';
 
 import { backend } from '../declarations/backend';
 import { PaymentProvider } from '../declarations/backend/backend.did';
-import { PaymentProviderTypes, providerTypes, revolutScheme, revolutSchemes, UserTypes } from '../model/types';
+import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../model/types';
 import { stringToUserType } from '../model/utils';
 import { useUser } from '../UserContext';
+import { rampErrorToString } from '../model/error';
+import { truncate } from '../model/helper';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
     const [providers, setProviders] = useState<PaymentProvider[]>([]);
     const [providerType, setProviderType] = useState<PaymentProviderTypes>("PayPal");
     const [providerId, setProviderId] = useState('');
-    const [revolutScheme, setRevolutScheme] = useState<revolutScheme>('UK.OBIE.SortCodeAccountNumber');
+    const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>();
     const [revolutName, setRevolutName] = useState('');
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { setUser: setGlobalUser, user, loginMethod, icpAgent } = useUser();
+    const { setUser: setGlobalUser, user, loginMethod, password } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -27,6 +29,13 @@ const RegisterUser: React.FC = () => {
         }
     }, [user])
 
+    useEffect(() => {
+        if (!loginMethod) {
+            navigate("/")
+            return;
+        }
+    }, [loginMethod])
+
     const handleAddProvider = () => {
         let newProvider: PaymentProvider;
         if (providerType === 'PayPal') {
@@ -34,6 +43,10 @@ const RegisterUser: React.FC = () => {
         } else if (providerType === 'Revolut') {
             if (userType === 'Offramper' && !revolutName) {
                 setMessage('Name is required.');
+                return;
+            }
+            if (!revolutScheme) {
+                setMessage('Select a Revolut Scheme');
                 return;
             }
             newProvider = { Revolut: { id: providerId, scheme: revolutScheme, name: revolutName ? [revolutName] : [] } };
@@ -50,6 +63,8 @@ const RegisterUser: React.FC = () => {
     };
 
     const handleSubmit = async () => {
+        console.log("password = ", password);
+
         if (providers.length === 0) {
             setMessage('Please add at least one payment provider.');
             return;
@@ -62,13 +77,14 @@ const RegisterUser: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod);
+            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod, password ? [password] : []);
             if ('Ok' in result) {
+                console.log("register is Ok = ", result.Ok)
                 setGlobalUser(result.Ok);
                 navigate(userType === "Onramper" ? "/view" : "/create");
             } else {
                 setGlobalUser(null);
-                setMessage(result.Err.toString());
+                setMessage(rampErrorToString(result.Err));
             }
         } catch (error) {
             setMessage(`Failed to register user: ${error}`);
@@ -78,10 +94,10 @@ const RegisterUser: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
+        <div className="max-w-md mx-auto rounded-xl">
             <h2 className="text-lg font-bold mb-4">Register</h2>
             <div className="flex items-center mb-6">
-                <label className="block text-gray-400 w-24">User Type:</label>
+                <label className="block text-gray-400 w-32">User Type:</label>
                 <select
                     value={userType}
                     onChange={(e) => setUserType(e.target.value as 'Offramper' | 'Onramper')}
@@ -91,8 +107,19 @@ const RegisterUser: React.FC = () => {
                     <option value="Onramper">Onramper</option>
                 </select>
             </div>
-            <div className="flex items-center mb-4">
-                <label className="block text-gray-700 w-24">Provider:</label>
+            {loginMethod && (
+                <div className="flex items-center mb-4">
+                    <label className="block text-gray-700 w-32">Login Address:</label>
+                    <span className="flex-grow px-3 py-2 border rounded bg-gray-100 truncate text-left">
+                        {truncate(loginMethod.address, 12, 10)}
+                    </span>
+                </div>
+            )}
+
+            <hr className="border-t border-gray-300 w-full my-4" />
+
+            <div className="flex items-center">
+                <label className="block text-gray-700 w-32">Provider:</label>
                 <select
                     value={providerType}
                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
@@ -103,8 +130,8 @@ const RegisterUser: React.FC = () => {
                     ))}
                 </select>
             </div>
-            <div className="flex items-center mb-4">
-                <label className="block text-gray-700 w-24">Provider ID:</label>
+            <div className="flex items-center mt-1">
+                <label className="block text-gray-700 w-32">Provider ID:</label>
                 <input
                     type="text"
                     value={providerId}
@@ -112,13 +139,14 @@ const RegisterUser: React.FC = () => {
                     className="flex-grow px-3 py-2 border rounded"
                 />
             </div>
+
             {providerType === 'Revolut' && (
                 <>
-                    <div className="flex items-center mb-4">
-                        <label className="block text-gray-700 w-24">Provider:</label>
+                    <div className="flex items-center mt-1">
+                        <label className="block text-gray-700 w-32">Scheme:</label>
                         <select
-                            value={providerType}
-                            onChange={(e) => setRevolutScheme(e.target.value as revolutScheme)}
+                            value={revolutScheme}
+                            onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
                             className="flex-grow px-3 py-2 border rounded"
                         >
                             <option value="" selected>Select Scheme</option>
@@ -128,8 +156,8 @@ const RegisterUser: React.FC = () => {
                         </select>
                     </div>
                     {userType === 'Offramper' && (
-                        <div className="flex items-center mb-4">
-                            <label className="block text-gray-700 w-24">Name:</label>
+                        <div className="flex items-center mt-1">
+                            <label className="block text-gray-700 w-32 mt-1">Name:</label>
                             <input
                                 type="text"
                                 value={revolutName}
@@ -140,7 +168,7 @@ const RegisterUser: React.FC = () => {
                     )}
                 </>
             )}
-            <button onClick={handleAddProvider} className="px-4 py-2 bg-blue-500 text-white rounded">
+            <button onClick={handleAddProvider} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded w-full">
                 Add Provider
             </button>
             <div className="mt-4">
@@ -168,7 +196,10 @@ const RegisterUser: React.FC = () => {
                     })}
                 </ul>
             </div>
-            <div className="flex justify-between mt-4">
+
+            <hr className="border-t border-gray-300 w-full my-4" />
+
+            <div className="flex justify-between">
                 <button
                     onClick={() => navigate("/view")}
                     className="px-4 py-2 bg-gray-400 text-white rounded"
@@ -185,7 +216,7 @@ const RegisterUser: React.FC = () => {
                     <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
                 </div>
             ) : (
-                message && <p className="mt-4 text-sm font-medium text-gray-700">{message}</p>
+                message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>
             )}
         </div>
     );
