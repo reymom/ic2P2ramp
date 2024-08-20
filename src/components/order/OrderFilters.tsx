@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { OrderFilter } from '../../declarations/backend/backend.did';
+import { Address, OrderFilter } from '../../declarations/backend/backend.did';
 import { stringToOrderFilter, stringToOrderStateFilter } from '../../model/utils';
 import { OrderFilterTypes, OrderStateFilterTypes, UserTypes } from '../../model/types';
 import { useAccount } from 'wagmi';
@@ -13,7 +13,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
     const [filterType, setFilterType] = useState<OrderFilterTypes | null>(null);
 
     const { address, chainId } = useAccount();
-    const { userType } = useUser();
+    const { userType, loginMethod } = useUser();
 
     useEffect(() => {
         constructFilter();
@@ -31,7 +31,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 setFilter(stringToOrderFilter(filterCategory, stringToOrderStateFilter(filterValue as OrderStateFilterTypes)));
                 break;
             case "ByOfframperAddress": case "LockedByOnramper":
-                setFilter(stringToOrderFilter(filterCategory, address));
+                setFilter(stringToOrderFilter(filterCategory, loginMethod));
                 break;
             case "ByChainId":
                 // setFilter(stringToOrderFilter(filterCategory, chainId));

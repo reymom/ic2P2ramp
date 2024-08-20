@@ -12,6 +12,7 @@ import { blockchainToBlockchainType, providerToProviderType } from '../../model/
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
 import { depositInVault } from '../../model/evm';
 import { Principal } from '@dfinity/principal';
+import { NetworkIds } from '../../constants/tokens';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
@@ -199,6 +200,13 @@ const CreateOrder: React.FC = () => {
         }
     };
 
+    const isValidChainId = (chainId: number | undefined): boolean => {
+        if (!chainId) return false;
+
+        const validChainIds = Object.values(NetworkIds).map((network) => network.id);
+        return validChainIds.includes(chainId);
+    };
+
     return (
         <>
             <h2 className="text-lg font-bold mb-4 text-center">Create Offramping Order</h2>
@@ -260,7 +268,9 @@ const CreateOrder: React.FC = () => {
                         <div className="text-sm font-medium text-gray-700">Fetching Rates...</div>
                     </div>
                 )}
-                <hr />
+
+                <hr className="border-t border-gray-300 w-full my-4" />
+
                 <div className="my-4 mx-auto">
                     <label className="block text-gray-700 mb-2">Payment Providers:</label>
                     {user?.payment_providers.map((provider, index) => {
@@ -291,13 +301,14 @@ const CreateOrder: React.FC = () => {
                         );
                     })}
                 </div>
-                <div className="mb-4">
-                    {selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
-                        <div className={`mb-4 ${chainId ? 'text-green-500' : 'text-red-500'}`}>
-                            {chainId ? `On chain: ${chain?.name}` : 'Please connect to a network'}
-                        </div>
-                    )}
-                </div>
+
+                <hr className="border-t border-gray-300 w-full my-4" />
+
+                {selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
+                    <div className={`mb-4 ${isValidChainId(chainId) ? 'text-green-500' : 'text-red-500'}`}>
+                        {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
+                    </div>
+                )}
                 <button
                     type="submit"
                     className={`px-4 py-2 rounded ${selectedBlockchain ? 'bg-blue-500 text-white' : 'bg-gray-500 text-white cursor-not-allowed'}`}
@@ -313,7 +324,7 @@ const CreateOrder: React.FC = () => {
                     <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
                 </div>
             ) : (
-                message && <p className="mt-4 text-sm font-medium text-gray-700">{message}</p>
+                message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>
             )}
         </>
     );
