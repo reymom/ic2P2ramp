@@ -1,36 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUserCircle, faSignOutAlt, faHome, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
 
 import logo from '../assets/p2ploan.webp';
 import { useUser } from '../UserContext';
 import { userTypeToString } from '../model/utils';
 import GetBalanceComponent from './icp/Balance';
 import { truncate } from '../model/helper';
+import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-    const [principal, setPrincipal] = useState<string>();
 
-    const { user, icpAgent, logout } = useUser();
+    const { isConnected } = useAccount();
+    const { user, principal, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const getPrincipal = async () => {
-            if (icpAgent) {
-                let p = (await icpAgent?.getPrincipal()).toString()!
-                setPrincipal(p)
-            }
-        }
-
-        getPrincipal()
-    }, [icpAgent])
 
     useEffect(() => {
         const handleResize = () => {
@@ -80,10 +72,6 @@ const Menu: React.FC = () => {
         if (!user) {
             return (
                 <>
-                    <Link to="/" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
-                        <FontAwesomeIcon icon={faHome} />
-                        <span>Register</span>
-                    </Link>
                     <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
                         <FontAwesomeIcon icon={faFileAlt} />
                         <span>View Orders</span>
@@ -167,9 +155,9 @@ const Menu: React.FC = () => {
             <div className="w-72 flex justify-end items-center relative">
                 {!user ? (
                     <div className="relative">
-                        <button onClick={() => navigate('/')} className="bg-blue-500 flex items-center space-x-4 p-2 text-white rounded-full">
-                            <FontAwesomeIcon icon={faRightToBracket} size="3x" className="text-gray-600" />
-                            <span>Log in</span>
+                        <button onClick={() => navigate('/')} className="bg-blue-500 flex items-center p-2 text-white rounded-full">
+                            <FontAwesomeIcon icon={faRightToBracket} size="2x" className="text-gray-800 mr-2" />
+                            <span>Login</span>
                         </button>
                     </div>
                 ) : (
@@ -181,15 +169,35 @@ const Menu: React.FC = () => {
                             </svg>
                         </button>
                         {isProfileDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-lg z-10">
-                                <div className="px-4 py-4 text-gray-700 border-b border-gray-200">
+                            <div className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg z-10">
+                                <div className="p-4 text-gray-700 border-b border-gray-200">
+
                                     <div className="flex items-center text-center">
-                                        <span className="flex-1 text-sm font-semibold text-blue-600">{truncate(user.login_method.address, 6, 6)}</span>
-                                        <span className="text-gray-500">({Object.keys(user.login_method.address_type)[0]})</span>
+                                        <span className="flex-grow text-sm font-semibold text-blue-600 truncate">{truncate(user.login_method.address, 10, 10)}</span>
+                                        <span className="ml-2 text-gray-500">({Object.keys(user.login_method.address_type)[0]})</span>
                                     </div>
-                                    <div className="items-center text-center">
-                                        {principal && <GetBalanceComponent principal={principal} />}
-                                    </div>
+
+                                    {principal && (
+                                        <div className="items-center text-center">
+                                            <>
+                                                <hr className="border-t border-gray-300 w-full my-2" />
+                                                <GetBalanceComponent principal={principal} />
+                                            </>
+                                        </div>
+                                    )}
+
+                                    {isConnected && (
+                                        <>
+                                            <hr className="border-t border-gray-300 w-full my-2" />
+
+                                            <div className="w-full flex justify-center">
+                                                <div className="inline-block">
+                                                    <ConnectButton chainStatus="icon" accountStatus="avatar" />
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+
                                 </div>
                                 <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100">
                                     <FontAwesomeIcon icon={faUserCircle} size="lg" className='mr-2' />
