@@ -72,7 +72,7 @@ export const NetworkIds =
         },
       };
 
-const getNativeTokenForChainId = (chainId: number): string => {
+export const getNativeTokenForChainId = (chainId: number): string => {
   switch (chainId) {
     case NetworkIds.SEPOLIA?.id:
       return 'ETH';
