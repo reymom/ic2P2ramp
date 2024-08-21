@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::management::user as user_management;
+use crate::model::types::TransactionAddress;
 use crate::types::{
     order::{Order, OrderFilter, OrderState, OrderStateFilter},
-    Address, Blockchain, PaymentProvider, PaymentProviderType,
+    Blockchain, PaymentProvider, PaymentProviderType,
 };
 use crate::{
     errors::{RampError, Result},
@@ -11,15 +12,17 @@ use crate::{
 };
 
 pub fn create_order(
+    offramper_user_id: u64,
     fiat_amount: u64,
     currency_symbol: String,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
     token: Option<String>,
     crypto_amount: u64,
-    offramper_address: Address,
+    offramper_address: TransactionAddress,
 ) -> Result<u64> {
     let order = Order::new(
+        offramper_user_id,
         fiat_amount,
         currency_symbol,
         offramper_providers,
@@ -70,14 +73,16 @@ pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
 
 pub fn lock_order(
     order_id: u64,
+    onramper_user_id: u64,
     onramper_provider: PaymentProvider,
-    onramper_address: Address,
+    onramper_address: TransactionAddress,
     consent_id: Option<String>,
     consent_url: Option<String>,
 ) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(order) => {
             *order_state = OrderState::Locked(order.clone().lock(
+                onramper_user_id,
                 onramper_provider,
                 onramper_address,
                 consent_id,
@@ -96,7 +101,7 @@ pub fn lock_order(
 pub fn unlock_order(order_id: u64) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            let score = user_management::decrease_user_score(&order.onramper_address)?;
+            let score = user_management::decrease_user_score(order.onramper_user_id)?;
             ic_cdk::println!("[unlock_order] user score decreased = {:?}", score);
             *order_state = OrderState::Created(order.base.clone());
             Ok(())
@@ -111,12 +116,12 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
             let score = user_management::update_onramper_payment(
-                &order.onramper_address,
+                order.onramper_user_id,
                 order.base.fiat_amount,
             )?;
             ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
             user_management::update_offramper_payment(
-                &order.base.offramper_address,
+                order.base.offramper_user_id,
                 order.base.fiat_amount,
             )?;
             order.payment_done = true;
