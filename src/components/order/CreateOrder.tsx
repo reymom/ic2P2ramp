@@ -123,6 +123,12 @@ const CreateOrder: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!user) {
+            setMessage('User Not Found');
+            return;
+        }
+
         try {
             setIsLoading(true);
             setMessage('Creating offramping order...');
@@ -183,7 +189,7 @@ const CreateOrder: React.FC = () => {
                 selectedBlockchain,
                 selectedToken.isNative ? [] : [selectedToken.address],
                 cryptoAmountUnits,
-                selectedAddress,
+                user.login_method,
             );
 
             if ('Ok' in result) {

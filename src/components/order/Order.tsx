@@ -237,14 +237,13 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         <strong>Crypto Amount:</strong> {formatCryptoAmount()} {getTokenSymbol()}
                     </div>
                     <div><strong>Providers:</strong>
-                        {order.Created.offramper_providers.map(provider => {
+                        {order.Created.offramper_providers.map((provider, index) => {
                             let providerType = paymentProviderTypeToString(provider[0])
                             return (
-                                <div key={providerType}>
+                                <div key={index}>
                                     <input
                                         type="checkbox"
-                                        id={providerType}
-                                        name={providerType}
+                                        id={`provider-${index}`}
                                         onChange={() => handleProviderSelection(providerType)}
                                         checked={committedProvider && paymentProviderTypeToString(committedProvider[0]) === providerType}
                                     />

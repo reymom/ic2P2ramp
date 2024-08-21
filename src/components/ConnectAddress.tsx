@@ -166,7 +166,7 @@ const ConnectAddress: React.FC = () => {
                 {!isConnected && <ConnectButton label={"Connect Wallet"} />}
                 {isConnected && (
                     <button onClick={handleEvmLogin} className="px-4 py-2 bg-blue-500 text-white rounded">
-                        Register with Ethereum
+                        Login with Ethereum
                     </button>
                 )}
                 {loadingEvm && (
