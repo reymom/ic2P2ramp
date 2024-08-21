@@ -15,6 +15,8 @@ use crate::types::{paypal::PayPalState, revolut::RevolutState, ChainState};
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();
 
+    static USER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
+
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
 
     static LOCKED_ORDER_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::default();
@@ -64,6 +66,14 @@ pub fn increment_nonce(chain_id: u64) {
 
 pub fn generate_order_id() -> u64 {
     ORDER_ID_COUNTER.with(|counter| {
+        let mut counter = counter.borrow_mut();
+        *counter += 1;
+        *counter
+    })
+}
+
+pub fn generate_user_id() -> u64 {
+    USER_ID_COUNTER.with(|counter| {
         let mut counter = counter.borrow_mut();
         *counter += 1;
         *counter
@@ -125,4 +135,28 @@ pub fn is_chain_supported(chain_id: u64) -> Result<()> {
             Err(RampError::ChainIdNotFound(chain_id))
         }
     })
+}
+
+pub(crate) fn get_user_id_counter() -> u64 {
+    USER_ID_COUNTER.with(|counter| *counter.borrow())
+}
+
+pub(crate) fn set_user_id_counter(value: u64) {
+    USER_ID_COUNTER.with(|counter| *counter.borrow_mut() = value);
+}
+
+pub(crate) fn get_order_id_counter() -> u64 {
+    ORDER_ID_COUNTER.with(|counter| *counter.borrow())
+}
+
+pub(crate) fn set_order_id_counter(value: u64) {
+    ORDER_ID_COUNTER.with(|counter| *counter.borrow_mut() = value);
+}
+
+pub(crate) fn get_locked_order_timers() -> HashMap<u64, TimerId> {
+    LOCKED_ORDER_TIMERS.with(|timers| timers.borrow().clone())
+}
+
+pub(crate) fn set_locked_order_timers(timers: HashMap<u64, TimerId>) {
+    LOCKED_ORDER_TIMERS.with(|map| *map.borrow_mut() = timers);
 }
