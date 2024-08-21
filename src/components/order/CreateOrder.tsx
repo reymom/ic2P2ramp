@@ -189,7 +189,8 @@ const CreateOrder: React.FC = () => {
                 selectedBlockchain,
                 selectedToken.isNative ? [] : [selectedToken.address],
                 cryptoAmountUnits,
-                user.login_method,
+                selectedAddress,
+                user.id,
             );
 
             if ('Ok' in result) {

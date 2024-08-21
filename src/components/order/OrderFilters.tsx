@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Address, OrderFilter } from '../../declarations/backend/backend.did';
+import { TransactionAddress, OrderFilter } from '../../declarations/backend/backend.did';
 import { stringToOrderFilter, stringToOrderStateFilter } from '../../model/utils';
 import { OrderFilterTypes, OrderStateFilterTypes, UserTypes } from '../../model/types';
 import { useAccount } from 'wagmi';

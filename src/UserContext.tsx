@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { Address, RampError, Result_4, User } from './declarations/backend/backend.did';
+import { LoginAddress, Result_1, User } from './declarations/backend/backend.did';
 import { backend } from './declarations/backend';
 import { UserTypes } from './model/types';
 import { userTypeToString } from './model/utils';
@@ -9,16 +9,16 @@ import { Principal } from '@dfinity/principal';
 interface UserContextProps {
     user: User | null;
     userType: UserTypes;
-    loginMethod: Address | null;
+    loginMethod: LoginAddress | null;
     password: string | null;
     logout: () => void;
     icpAgent: HttpAgent | null;
     principal: Principal | null;
     setUser: (user: User | null) => void;
-    setLoginMethod: (loginMethod: Address | null, password?: string) => void;
+    setLoginMethod: (loginMethod: LoginAddress | null, password?: string) => void;
     setIcpAgent: (agent: HttpAgent | null) => void;
     setPrincipal: (principal: Principal | null) => void;
-    getUser: (loginAddress: Address, password?: string) => Promise<Result_4>;
+    authenticateUser: (loginAddress: LoginAddress, password?: string) => Promise<Result_1>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -26,7 +26,7 @@ const UserContext = createContext<UserContextProps | undefined>(undefined);
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userType, setUserType] = useState<UserTypes>("Visitor");
-    const [loginMethod, setLoginMethod] = useState<Address | null>(null);
+    const [loginMethod, setLoginMethod] = useState<LoginAddress | null>(null);
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [principal, setPrincipal] = useState<Principal | null>(null);
@@ -39,9 +39,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setUserType(userTypeToString(user!.user_type));
     }, [user])
 
-    const getUser = async (loginAddress: Address, password?: string): Promise<Result_4> => {
+    const authenticateUser = async (loginAddress: LoginAddress): Promise<Result_1> => {
         try {
-            return await backend.get_user(loginAddress, password ? [password] : []);
+            return await backend.authenticate_user(loginAddress, password ? [password] : []);
         } catch (error) {
             console.error('Failed to fetch user: ', error);
             throw error;
@@ -51,7 +51,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         setUser(null);
         setLoginMethod(null);
-        setPassword(null);
         setIcpAgent(null);
         setPrincipal(null);
         setUserType("Visitor");
@@ -67,13 +66,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             icpAgent,
             principal,
             setUser,
-            setLoginMethod: (loginMethod: Address | null, password?: string) => {
+            setLoginMethod: (loginMethod: LoginAddress | null, password?: string) => {
                 setLoginMethod(loginMethod);
                 setPassword(password || null);
             },
             setIcpAgent,
             setPrincipal,
-            getUser
+            authenticateUser
         }}>
             {children}
         </UserContext.Provider>

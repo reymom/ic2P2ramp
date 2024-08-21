@@ -173,8 +173,34 @@ const Menu: React.FC = () => {
                                 <div className="p-4 text-gray-700 border-b border-gray-200">
 
                                     <div className="flex items-center text-center">
-                                        <span className="flex-grow text-sm font-semibold text-blue-600 truncate">{truncate(user.login_method.address, 10, 10)}</span>
-                                        <span className="ml-2 text-gray-500">({Object.keys(user.login_method.address_type)[0]})</span>
+                                        <span className="flex-grow text-sm font-semibold text-blue-600 truncate">
+                                            {(() => {
+                                                if ('EVM' in user.login) {
+                                                    return truncate(user.login.EVM.address, 10, 10);
+                                                } else if ('ICP' in user.login) {
+                                                    return truncate(user.login.ICP.principal_id, 10, 10);
+                                                } else if ('Solana' in user.login) {
+                                                    return truncate(user.login.Solana.address, 10, 10);
+                                                } else if ('Email' in user.login) {
+                                                    return truncate(user.login.Email.email, 10, 10);
+                                                }
+                                                return '';
+                                            })()}
+                                        </span>
+                                        <span className="ml-2 text-gray-500">
+                                            {(() => {
+                                                if ('EVM' in user.login) {
+                                                    return 'EVM';
+                                                } else if ('ICP' in user.login) {
+                                                    return 'ICP';
+                                                } else if ('Solana' in user.login) {
+                                                    return 'Solana';
+                                                } else if ('Email' in user.login) {
+                                                    return 'Email';
+                                                }
+                                                return '';
+                                            })()}
+                                        </span>
                                     </div>
 
                                     {principal && (

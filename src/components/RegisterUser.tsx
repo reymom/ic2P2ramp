@@ -111,7 +111,18 @@ const RegisterUser: React.FC = () => {
                 <div className="flex items-center mb-4">
                     <label className="block text-gray-700 w-32">Login Address:</label>
                     <span className="flex-grow px-3 py-2 border rounded bg-gray-100 truncate text-left">
-                        {truncate(loginMethod.address, 12, 10)}
+                        {(() => {
+                            if ('EVM' in loginMethod) {
+                                return truncate(loginMethod.EVM.address, 12, 10);
+                            } else if ('ICP' in loginMethod) {
+                                return truncate(loginMethod.ICP.principal_id, 12, 10);
+                            } else if ('Email' in loginMethod) {
+                                return truncate(loginMethod.Email.email, 16, 14);
+                            } else if ('Solana' in loginMethod) {
+                                return truncate(loginMethod.Solana.address, 12, 10);
+                            }
+                            return '';
+                        })()}
                     </span>
                 </div>
             )}

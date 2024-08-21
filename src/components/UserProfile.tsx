@@ -5,7 +5,7 @@ import { userTypeToString } from '../model/utils';
 import { backend } from '../declarations/backend';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../model/types';
 import { truncate } from '../model/helper';
-import { Address, PaymentProvider } from '../declarations/backend/backend.did';
+import { PaymentProvider, TransactionAddress } from '../declarations/backend/backend.did';
 import { rampErrorToString } from '../model/error';
 import { useAccount } from 'wagmi';
 import { AuthClient } from '@dfinity/auth-client';
@@ -82,7 +82,7 @@ const UserProfile: React.FC = () => {
         }
 
         try {
-            const result = await backend.add_payment_provider_for_user(user.login_method, newProvider);
+            const result = await backend.add_user_payment_provider(user.id, newProvider);
             if ('Ok' in result) {
                 const updatedProviders = [...user.payment_providers, newProvider]
                 setUser({ ...user, payment_providers: updatedProviders });
@@ -103,10 +103,10 @@ const UserProfile: React.FC = () => {
         const address = {
             address_type: { [selectedAddressType]: null },
             address: newAddress
-        } as Address;
+        } as TransactionAddress;
 
         try {
-            const result = await backend.add_address_for_user(user.login_method, address);
+            const result = await backend.add_user_transaction_address(user.id, address);
             if ('Ok' in result) {
                 const updatedAddresses = [...user.addresses, address];
                 setUser({ ...user, addresses: updatedAddresses });
@@ -122,6 +122,17 @@ const UserProfile: React.FC = () => {
 
     const isAddressInUserAddresses = (addressToCheck: string): boolean => {
         return user.addresses.some(addr => addr.address === addressToCheck);
+    };
+
+    const isSameAddress = (addr: TransactionAddress) => {
+        if ('EVM' in user.login && 'EVM' in addr.address_type) {
+            return user.login.EVM.address === addr.address;
+        } else if ('ICP' in user.login && 'ICP' in addr.address_type) {
+            return user.login.ICP.principal_id === addr.address;
+        } else if ('Solana' in user.login && 'Solana' in addr.address_type) {
+            return user.login.Solana.address === addr.address;
+        }
+        return false;
     };
 
     return (
@@ -150,14 +161,16 @@ const UserProfile: React.FC = () => {
                     <span className="font-medium">Addresses:</span>
                 </div>
                 <ul className="pl-4 mt-2">
-                    {user.addresses.map((addr, index) => (
-                        <li key={index} className="py-1 text-gray-700" style={{
-                            color: addr.address === user.login_method.address ? 'blue' : ''
-                        }}>
-                            <span className="flex-1 text-sm text-gray-500">({Object.keys(addr.address_type)[0]})</span>
-                            <span className="ml-2">{addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address}</span>
-                        </li>
-                    ))}
+                    {user.addresses.map((addr, index) => {
+                        return (
+                            <li key={index} className="py-1 text-gray-700" style={{
+                                color: isSameAddress(addr) ? 'blue' : ''
+                            }}>
+                                <span className="flex-1 text-sm text-gray-500">({Object.keys(addr.address_type)[0]})</span>
+                                <span className="ml-2">{addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address}</span>
+                            </li>
+                        );
+                    })}
                 </ul>
             </div >
 

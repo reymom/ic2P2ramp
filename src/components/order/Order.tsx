@@ -52,7 +52,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const commitToOrder = async (provider: PaymentProvider) => {
-        if (!user || !('Created' in order) || !(orderBlockchain) || !orderId) return;
+        if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
         setMessage(`Commiting to loan order ${orderId}...`);
@@ -73,7 +73,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             if (!orderAddress) throw new Error("No address matches for user");
 
-            const result = await backend.lock_order(orderId, provider, orderAddress, [100000]);
+            const result = await backend.lock_order(orderId, user.id, provider, orderAddress, [100000]);
 
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
@@ -117,13 +117,7 @@ const OrderActions: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     }
                     break;
                 case 'ICP':
-                    try {
-                        // todo: implement in backend canister
-                        setMessage('Transaction successful!');
-                    } catch (e: any) {
-                        setMessage(`Could not delete order: ${e.message || e}`);
-                        return;
-                    }
+                    // funds are transfered to the offramper from the backend
                     break;
                 case 'Solana':
                     throw new Error("Solana orders are not implemented yet")

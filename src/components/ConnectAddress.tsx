@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useUser } from '../UserContext';
-import { Address, RampError } from '../declarations/backend/backend.did';
+import { LoginAddress, RampError } from '../declarations/backend/backend.did';
 import { useNavigate } from 'react-router-dom';
 import { AuthClient } from '@dfinity/auth-client';
 import { HttpAgent } from '@dfinity/agent';
@@ -17,7 +17,7 @@ const ConnectAddress: React.FC = () => {
     const [loadingIcp, setLoadingIcp] = useState(false);
 
     const { isConnected, address } = useAccount();
-    const { userType, setLoginMethod, setIcpAgent, getUser, setUser, setPrincipal } = useUser();
+    const { userType, setLoginMethod, setIcpAgent, authenticateUser, setUser, setPrincipal } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -32,14 +32,13 @@ const ConnectAddress: React.FC = () => {
         if (address) {
             setLoadingEvm(true);
 
-            const loginAddress = {
-                address_type: { EVM: null },
-                address
-            } as Address;
+            const loginAddress: LoginAddress = {
+                EVM: { address }
+            };
             setLoginMethod(loginAddress)
 
             try {
-                const result = await getUser(loginAddress);
+                const result = await authenticateUser(loginAddress);
                 if ('Ok' in result) {
                     setUser(result.Ok);
 
@@ -67,14 +66,13 @@ const ConnectAddress: React.FC = () => {
         if (email && password) {
             setIsLoading(true);
 
-            const loginAddress = {
-                address_type: { Email: null },
-                address: email,
-            } as Address;
-            setLoginMethod(loginAddress, password);
+            const loginAddress: LoginAddress = {
+                Email: { email }
+            };
+            setLoginMethod(loginAddress);
 
             try {
-                const result = await getUser(loginAddress, password);
+                const result = await authenticateUser(loginAddress, password);
                 if ('Ok' in result) {
                     setUser(result.Ok)
                     if ('Offramper' in result.Ok.user_type) {
@@ -115,14 +113,13 @@ const ConnectAddress: React.FC = () => {
                 }
                 setIcpAgent(agent);
 
-                const loginAddress = {
-                    address_type: { ICP: null },
-                    address: principal.toText()
+                const loginAddress: LoginAddress = {
+                    ICP: { principal_id: principal.toText() }
                 };
                 setLoginMethod(loginAddress);
 
                 try {
-                    const result = await getUser(loginAddress);
+                    const result = await authenticateUser(loginAddress);
                     if ('Ok' in result) {
                         setUser(result.Ok)
                         if ('Offramper' in result.Ok.user_type) {
