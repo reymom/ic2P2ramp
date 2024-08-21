@@ -7,6 +7,7 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
+use model::types::{LoginAddress, TransactionAddress};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -16,12 +17,14 @@ use management::{
     order as order_management, payment as payment_management, user as user_management,
 };
 use model::errors::{self, RampError, Result};
-use model::state::{self, initialize_state, mutate_state, read_state, storage, InitArg, State};
+use model::state::{
+    self, initialize_state, mutate_state, read_state, storage, upgrade, InitArg, State,
+};
 use model::types::{
     self,
     order::{OrderFilter, OrderState},
     user::{User, UserType},
-    Address, Blockchain, PaymentProvider, PaymentProviderType,
+    Blockchain, PaymentProvider, PaymentProviderType,
 };
 use outcalls::{
     paypal,
@@ -42,64 +45,15 @@ fn setup_timers() {
     });
 }
 
-// #[ic_cdk::pre_upgrade]
-// fn pre_upgrade() {
-//     fn pre_upgrade() {
-//         let order_id_counter = ORDER_ID_COUNTER.with(|counter| *counter.borrow());
-//         let locked_order_timers = LOCKED_ORDER_TIMERS.with(|timers| {
-//             timers
-//                 .borrow()
-//                 .iter()
-//                 .map(|(&order_id, _)| {
-//                     (order_id, ic_cdk::api::time() + 3600) // Example: Timer set for 1 hour from current time
-//                 })
-//                 .collect::<HashMap<u64, u64>>()
-//         });
-//         let serializable_state = SerializableState {
-//             order_id_counter,
-//             locked_order_timers,
-//         };
-//         let mut state_bytes = vec![];
-//         ciborium::ser::into_writer(&serializable_state, &mut state_bytes)
-//             .expect("failed to encode state");
-//         let len = state_bytes.len() as u32;
-//         let mut memory = memory::get_upgrades_memory();
-//         let mut writer = Writer::new(&mut memory, 0);
-//         writer.write(&len.to_le_bytes()).unwrap();
-//         writer.write(&state_bytes).unwrap();
-//     }
-// }
+#[ic_cdk::pre_upgrade]
+fn pre_upgrade() {
+    upgrade::pre_upgrade()
+}
 
-// #[ic_cdk::post_upgrade]
-// fn post_upgrade() {
-//     let memory = memory::get_upgrades_memory();
-//     let mut state_len_bytes = [0; 4];
-//     memory.read(0, &mut state_len_bytes);
-//     let state_len = u32::from_le_bytes(state_len_bytes) as usize;
-//     let mut state_bytes = vec![0; state_len];
-//     memory.read(4, &mut state_bytes);
-//     let serializable_state: SerializableState =
-//         ciborium::de::from_reader(&*state_bytes).expect("failed to decode state");
-//     ORDER_ID_COUNTER.with(|counter| {
-//         *counter.borrow_mut() = serializable_state.order_id_counter;
-//     });
-//     LOCKED_ORDER_TIMERS.with(|timers| {
-//         let mut timers = timers.borrow_mut();
-//         for (order_id, expiration_time) in serializable_state.locked_order_timers {
-//             let remaining_duration = expiration_time - ic_cdk::api::time();
-//             if remaining_duration > 0 {
-//                 let timer_id = set_timer(Duration::from_secs(remaining_duration), move || {
-//                     ic_cdk::spawn(async move {
-//                         if let Err(e) = management::order::unlock_order(order_id) {
-//                             ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
-//                         }
-//                     });
-//                 });
-//                 timers.insert(order_id, timer_id);
-//             }
-//         }
-//     });
-// }
+#[ic_cdk::post_upgrade]
+fn post_upgrade() {
+    upgrade::post_upgrade()
+}
 
 #[ic_cdk::init]
 fn init(arg: InitArg) {
@@ -210,35 +164,32 @@ async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result
 async fn register_user(
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
-    login_address: Address,
-    password: Option<String>,
+    login_address: LoginAddress,
 ) -> Result<User> {
-    user_management::register_user(user_type, payment_providers, login_address, password).await
+    user_management::register_user(user_type, payment_providers, login_address).await
 }
 
 #[ic_cdk::update]
-async fn get_user(address: Address, password: Option<String>) -> Result<User> {
-    let user = storage::get_user(&address)?;
+async fn authenticate_user(login_address: LoginAddress, password: Option<String>) -> Result<User> {
+    let user_id = storage::find_user_by_login_address(&login_address)?;
+    let user = storage::get_user(&user_id)?;
     user.verify_user_password(password)?;
     Ok(user)
 }
 
 #[ic_cdk::update]
-fn remove_user(address: Address) -> Result<User> {
-    storage::remove_user(&address)
+fn remove_user(user_id: u64) -> Result<User> {
+    storage::remove_user(&user_id)
 }
 
 #[ic_cdk::update]
-fn add_address_for_user(login_address: Address, address: Address) -> Result<()> {
-    user_management::add_address(&login_address, address)
+fn add_user_transaction_address(user_id: u64, address: TransactionAddress) -> Result<()> {
+    user_management::add_transaction_address(user_id, address)
 }
 
 #[ic_cdk::update]
-fn add_payment_provider_for_user(
-    address: Address,
-    payment_provider: PaymentProvider,
-) -> Result<()> {
-    user_management::add_payment_provider(&address, payment_provider)
+fn add_user_payment_provider(user_id: u64, payment_provider: PaymentProvider) -> Result<()> {
+    user_management::add_payment_provider(user_id, payment_provider)
 }
 
 // ------------------
@@ -258,11 +209,12 @@ fn create_order(
     blockchain: Blockchain,
     token_address: Option<String>,
     crypto_amount: u64,
-    offramper_address: Address,
+    offramper_address: TransactionAddress,
+    offramper_user_id: u64,
 ) -> Result<u64> {
-    let user = storage::get_user(&offramper_address)?;
+    let user = storage::get_user(&offramper_user_id)?;
     user.is_banned()?;
-    user.validate_offramper()?;
+    user.is_offramper()?;
 
     for (provider_type, provider) in &offramper_providers {
         if !user.payment_providers.contains(&provider) {
@@ -277,6 +229,7 @@ fn create_order(
     }
 
     order_management::create_order(
+        offramper_user_id,
         fiat_amount,
         fiat_symbol,
         offramper_providers,
@@ -290,11 +243,12 @@ fn create_order(
 #[ic_cdk::update]
 async fn lock_order(
     order_id: u64,
+    onramper_user_id: u64,
     onramper_provider: PaymentProvider,
-    onramper_address: Address,
+    onramper_address: TransactionAddress,
     gas: Option<u32>,
 ) -> Result<String> {
-    user_management::can_commit_orders(&onramper_address)?;
+    user_management::can_commit_orders(&onramper_user_id)?;
 
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
@@ -327,6 +281,7 @@ async fn lock_order(
                 move || {
                     let _ = order_management::lock_order(
                         order_id,
+                        onramper_user_id,
                         onramper_provider.clone(),
                         onramper_address.clone(),
                         revolut_consent_id.clone(),
@@ -339,6 +294,7 @@ async fn lock_order(
         Blockchain::ICP { .. } => {
             order_management::lock_order(
                 order_id,
+                onramper_user_id,
                 onramper_provider.clone(),
                 onramper_address.clone(),
                 revolut_consent_id.clone(),
