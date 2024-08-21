@@ -2,14 +2,11 @@ use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
+use super::common::{LoginAddress, PaymentProvider, TransactionAddress};
 use crate::{
     errors::{RampError, Result},
     management::random,
-};
-
-use super::{
-    common::{Address, PaymentProvider},
-    AddressType,
+    model::state,
 };
 
 const MAX_USER_SIZE: u32 = 1000;
@@ -22,39 +19,37 @@ pub enum UserType {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct User {
+    pub id: u64,
     pub user_type: UserType,
     pub payment_providers: HashSet<PaymentProvider>,
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
-    pub login_method: Address,
-    pub hashed_password: Option<String>,
-    pub addresses: HashSet<Address>,
+    pub login: LoginAddress,
+    pub addresses: HashSet<TransactionAddress>,
 }
 
 impl User {
-    pub fn new(
-        user_type: UserType,
-        initial_address: Address,
-        hashed_password: Option<String>,
-    ) -> Result<Self> {
+    pub fn new(user_type: UserType, login_address: LoginAddress) -> Result<Self> {
+        login_address.validate()?;
+
         let mut addresses = HashSet::new();
-        initial_address.validate()?;
-        if initial_address.address_type != AddressType::Email {
-            addresses.insert(initial_address.clone());
-        }
+        if let LoginAddress::Email { .. } = login_address {
+        } else {
+            addresses.insert(login_address.to_transaction_address()?);
+        };
 
         Ok(Self {
+            id: state::generate_user_id(),
             user_type,
             payment_providers: HashSet::new(),
             fiat_amount: 0,
             score: 1,
-            login_method: initial_address,
-            hashed_password,
+            login: login_address,
             addresses,
         })
     }
 
-    pub fn validate_offramper(&self) -> Result<()> {
+    pub fn is_offramper(&self) -> Result<()> {
         match self.user_type {
             UserType::Offramper => Ok(()),
             UserType::Onramper => Err(RampError::UserNotOfframper),
@@ -69,25 +64,22 @@ impl User {
     }
 
     pub fn verify_user_password(&self, password: Option<String>) -> Result<()> {
-        if self.login_method.address_type == AddressType::Email {
+        if let LoginAddress::Email {
+            password: hashed_password,
+            ..
+        } = &self.login
+        {
             let password = password.ok_or(RampError::PasswordRequired)?;
-
-            if let Some(ref stored_password) = &self.hashed_password {
-                match random::verify_password(&password, &stored_password) {
-                    Ok(true) => {
-                        return Ok(());
-                    }
-                    Ok(false) => {
-                        return Err(RampError::InvalidPassword);
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
+            match random::verify_password(&password, &hashed_password) {
+                Ok(true) => {
+                    return Ok(());
                 }
-            } else {
-                return Err(RampError::InternalError(
-                    "No stored password found for verification.".to_string(),
-                ));
+                Ok(false) => {
+                    return Err(RampError::InvalidPassword);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
         }
 

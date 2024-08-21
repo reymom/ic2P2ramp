@@ -1,6 +1,5 @@
-use candid::{CandidType, Decode, Deserialize, Encode};
-use ic_stable_structures::{storable::Bound, Storable};
-use std::{borrow::Cow, cmp::Ordering, collections::HashMap, hash::Hash};
+use candid::{CandidType, Deserialize};
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     errors::{RampError, Result},
@@ -76,35 +75,97 @@ pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
 // ---------
 // Addresses
 // ---------
-const MAX_ADDRESS_SIZE: u32 = 200;
+
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+pub enum LoginAddress {
+    Email { email: String, password: String },
+    EVM { address: String },
+    ICP { principal_id: String },
+    Solana { address: String },
+}
+
+impl LoginAddress {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            LoginAddress::Email { email, .. } => {
+                if email.is_empty() {
+                    return Err(RampError::InvalidInput("Email is empty".to_string()));
+                }
+                helpers::validate_email(email)?
+            }
+            LoginAddress::EVM { address } => {
+                if address.is_empty() {
+                    return Err(RampError::InvalidInput("EVM address is empty".to_string()));
+                }
+                helpers::validate_evm_address(address)?;
+            }
+            LoginAddress::ICP { principal_id } => {
+                if principal_id.is_empty() {
+                    return Err(RampError::InvalidInput(
+                        "ICP principal ID is empty".to_string(),
+                    ));
+                }
+                helpers::validate_icp_address(principal_id)?;
+            }
+            LoginAddress::Solana { address } => {
+                if address.is_empty() {
+                    return Err(RampError::InvalidInput(
+                        "Solana address is empty".to_string(),
+                    ));
+                }
+                helpers::validate_solana_address(address)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn to_transaction_address(&self) -> Result<TransactionAddress> {
+        match self {
+            LoginAddress::Email { .. } => Err(RampError::InvalidInput(
+                "Cannot convert Email to TransactionAddress".to_string(),
+            )),
+            LoginAddress::EVM { address } => Ok(TransactionAddress {
+                address_type: AddressType::EVM,
+                address: address.clone(),
+            }),
+            LoginAddress::ICP { principal_id } => Ok(TransactionAddress {
+                address_type: AddressType::ICP,
+                address: principal_id.clone(),
+            }),
+            LoginAddress::Solana { address } => Ok(TransactionAddress {
+                address_type: AddressType::Solana,
+                address: address.clone(),
+            }),
+        }
+    }
+}
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash, PartialOrd)]
 pub enum AddressType {
-    Email,
     EVM,
     ICP,
     Solana,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialOrd)]
-pub struct Address {
+#[derive(CandidType, Deserialize, Clone, Debug, Eq)]
+pub struct TransactionAddress {
     pub address_type: AddressType,
     pub address: String,
 }
 
-impl PartialEq for Address {
+impl PartialEq for TransactionAddress {
     fn eq(&self, other: &Self) -> bool {
         self.address_type == other.address_type
     }
 }
 
-impl Hash for Address {
+impl Hash for TransactionAddress {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.address_type.hash(state);
     }
 }
 
-impl Address {
+impl TransactionAddress {
     pub fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
             return Err(RampError::InvalidInput("Address is empty".to_string()));
@@ -113,7 +174,6 @@ impl Address {
         match self.address_type {
             AddressType::EVM => helpers::validate_evm_address(&self.address),
             AddressType::ICP => helpers::validate_icp_address(&self.address),
-            AddressType::Email => helpers::validate_email(&self.address),
             AddressType::Solana => helpers::validate_solana_address(&self.address),
         }?;
 
@@ -121,31 +181,11 @@ impl Address {
     }
 }
 
-impl Storable for Address {
-    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
-        Cow::Owned(Encode!(self).unwrap())
-    }
-
-    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
-    }
-
-    const BOUND: Bound = Bound::Bounded {
-        max_size: MAX_ADDRESS_SIZE,
-        is_fixed_size: false,
-    };
-}
-
-impl std::cmp::Ord for Address {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.address.cmp(&other.address)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::model::types::common::{LoginAddress, TransactionAddress};
     use crate::model::types::user::User;
-    use crate::types::{common::AddressType, user::UserType, Address, PaymentProvider};
+    use crate::types::{common::AddressType, user::UserType, PaymentProvider};
 
     use candid::Principal;
     use ethers_core::types::Address as EthAddress;
@@ -156,7 +196,7 @@ mod tests {
     #[test]
     fn test_stable_btree_map() {
         let memory_manager = MemoryManager::init(DefaultMemoryImpl::default());
-        let mut map: StableBTreeMap<Address, User, _> =
+        let mut map: StableBTreeMap<u64, User, _> =
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
         let mut payment_providers = HashSet::new();
@@ -164,15 +204,14 @@ mod tests {
             id: "paypal_id".to_string(),
         });
 
-        let login_address = Address {
-            address_type: AddressType::EVM,
-            address: format!("{:#x}", EthAddress::random()),
+        let login_address = LoginAddress::EVM {
+            address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
-        map.insert(login_address.clone(), user.clone());
+        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        map.insert(0, user.clone());
 
-        let retrieved_user = map.get(&login_address).unwrap();
+        let retrieved_user = map.get(&0).unwrap();
         assert_eq!(user.payment_providers, retrieved_user.payment_providers);
         assert_eq!(user.fiat_amount, retrieved_user.fiat_amount);
         assert_eq!(user.score, retrieved_user.score);
@@ -186,16 +225,16 @@ mod tests {
                 scheme: "scheme".to_string(),
                 name: Some("name".to_string()),
             });
-        map.insert(updated_user.login_method.clone(), updated_user.clone());
+        map.insert(updated_user.id, updated_user.clone());
 
-        let retrieved_updated_user = map.get(&login_address).unwrap();
+        let retrieved_updated_user = map.get(&updated_user.id).unwrap();
         assert_eq!(
             updated_user.payment_providers,
             retrieved_updated_user.payment_providers
         );
 
         // Add address
-        let new_address = Address {
+        let new_address = TransactionAddress {
             address_type: AddressType::ICP,
             address: Principal::anonymous().to_string(),
         };
@@ -208,9 +247,9 @@ mod tests {
         }
         updated_user.addresses.insert(new_address.clone());
 
-        map.insert(updated_user.login_method.clone(), updated_user.clone());
+        map.insert(updated_user.id, updated_user.clone());
 
-        let retrieved_user_with_new_address = map.get(&login_address).unwrap();
+        let retrieved_user_with_new_address = map.get(&updated_user.id).unwrap();
         assert!(retrieved_user_with_new_address
             .addresses
             .contains(&new_address));
@@ -218,14 +257,13 @@ mod tests {
 
     #[test]
     fn test_add_address() {
-        let login_address = Address {
-            address_type: AddressType::EVM,
-            address: format!("{:#x}", EthAddress::random()),
+        let login_address = LoginAddress::EVM {
+            address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
 
-        let new_address = Address {
+        let new_address = TransactionAddress {
             address_type: AddressType::ICP,
             address: "2chl6-4hpzw-vqaaa-aaaaa-c".to_string(),
         };
@@ -240,7 +278,7 @@ mod tests {
         assert!(user.addresses.contains(&new_address));
 
         // Attempt to add the same address type should replace the old one
-        let updated_address = Address {
+        let updated_address = TransactionAddress {
             address_type: AddressType::ICP,
             address: Principal::anonymous().to_string(),
         };
@@ -263,40 +301,26 @@ mod tests {
     #[test]
     fn test_multiple_users_same_address_type() {
         let memory_manager = MemoryManager::init(DefaultMemoryImpl::default());
-        let mut map: StableBTreeMap<Address, User, _> =
+        let mut map: StableBTreeMap<u64, User, _> =
             StableBTreeMap::init(memory_manager.get(MemoryId::new(0)));
 
-        let login_address1 = Address {
-            address_type: AddressType::EVM,
-            address: format!("{:#x}", EthAddress::random()),
+        let login_address1 = LoginAddress::EVM {
+            address: (format!("{:#x}", EthAddress::random())),
         };
-        let login_address2 = Address {
-            address_type: AddressType::EVM,
-            address: format!("{:#x}", EthAddress::random()),
+        let login_address2 = LoginAddress::EVM {
+            address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let user1 = User::new(UserType::Offramper, login_address1.clone(), None).unwrap();
-        let user2 = User::new(UserType::Onramper, login_address2.clone(), None).unwrap();
+        let user1 = User::new(UserType::Offramper, login_address1.clone()).unwrap();
+        let user2 = User::new(UserType::Onramper, login_address2.clone()).unwrap();
 
-        map.insert(login_address1.clone(), user1.clone());
-        map.insert(login_address2.clone(), user2.clone());
+        map.insert(1, user1.clone());
+        map.insert(2, user2.clone());
 
-        let retrieved_user1 = map.get(&login_address1).unwrap();
-        let retrieved_user2 = map.get(&login_address2).unwrap();
+        let retrieved_user1 = map.get(&1).unwrap();
+        let retrieved_user2 = map.get(&2).unwrap();
 
         assert_eq!(user1.addresses, retrieved_user1.addresses);
         assert_eq!(user2.addresses, retrieved_user2.addresses);
-        assert_ne!(
-            retrieved_user1
-                .addresses
-                .get(&login_address1)
-                .unwrap()
-                .address,
-            retrieved_user2
-                .addresses
-                .get(&login_address2)
-                .unwrap()
-                .address,
-        )
     }
 }

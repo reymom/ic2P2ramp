@@ -6,15 +6,17 @@ use std::{borrow::Cow, collections::HashMap, fmt};
 use crate::{
     errors::{RampError, Result},
     state,
-    types::Address,
 };
 
 use super::{
     blockchain::{Blockchain, Crypto},
     common::{calculate_fees, AddressType, PaymentProvider, PaymentProviderType},
+    TransactionAddress,
 };
 
 const MAX_ORDER_SIZE: u32 = 8000;
+
+pub type OrderId = u64;
 
 #[derive(CandidType, Deserialize, Clone)]
 pub enum OrderState {
@@ -53,24 +55,26 @@ impl Storable for OrderState {
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Order {
     pub id: u64,
+    pub offramper_user_id: u64,
     pub created_at: u64,
     pub fiat_amount: u64,
     pub offramper_fee: u64,
     pub currency_symbol: String,
     pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     pub crypto: Crypto,
-    pub offramper_address: Address,
+    pub offramper_address: TransactionAddress,
 }
 
 impl Order {
     pub fn new(
+        offramper_user_id: u64,
         fiat_amount: u64,
         currency_symbol: String,
         offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
         blockchain: Blockchain,
         token: Option<String>,
         crypto_amount: u64,
-        offramper_address: Address,
+        offramper_address: TransactionAddress,
     ) -> Result<Self> {
         offramper_address.validate()?;
 
@@ -91,6 +95,7 @@ impl Order {
 
         let order = Order {
             id: order_id.clone(),
+            offramper_user_id,
             created_at: time(),
             fiat_amount,
             offramper_fee,
@@ -106,8 +111,9 @@ impl Order {
 
     pub fn lock(
         self,
+        onramper_user_id: u64,
         onramper_provider: PaymentProvider,
-        onramper_address: Address,
+        onramper_address: TransactionAddress,
         consent_id: Option<String>,
         consent_url: Option<String>,
     ) -> Result<LockedOrder> {
@@ -128,6 +134,7 @@ impl Order {
 
         Ok(LockedOrder {
             base: self,
+            onramper_user_id,
             onramper_address,
             onramper_provider,
             consent_id,
@@ -142,8 +149,9 @@ impl Order {
 #[derive(CandidType, Deserialize, Clone)]
 pub struct LockedOrder {
     pub base: Order,
+    pub onramper_user_id: u64,
     pub onramper_provider: PaymentProvider,
-    pub onramper_address: Address,
+    pub onramper_address: TransactionAddress,
     pub consent_id: Option<String>,
     pub consent_url: Option<String>,
     pub payment_done: bool,
@@ -159,8 +167,8 @@ impl LockedOrder {
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct CompletedOrder {
-    pub onramper: Address,
-    pub offramper: Address,
+    pub onramper: TransactionAddress,
+    pub offramper: TransactionAddress,
     pub fiat_amount: u64,
     pub offramper_fee: u64,
     pub blockchain: Blockchain,
@@ -183,8 +191,8 @@ impl From<LockedOrder> for CompletedOrder {
 
 #[derive(CandidType, Clone, Deserialize)]
 pub enum OrderFilter {
-    ByOfframperAddress(Address),
-    LockedByOnramper(Address),
+    ByOfframperAddress(TransactionAddress),
+    LockedByOnramper(TransactionAddress),
     ByState(OrderStateFilter),
     ByBlockchain(Blockchain),
 }
