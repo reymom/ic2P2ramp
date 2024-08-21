@@ -3,10 +3,10 @@ use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::cell::RefCell;
 
 use crate::errors::{RampError, Result};
+use crate::model::types::LoginAddress;
 use crate::types::{
-    order::{Order, OrderState},
+    order::{Order, OrderId, OrderState},
     user::User,
-    Address,
 };
 
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
@@ -15,13 +15,13 @@ thread_local! {
     static MEMORY_MANAGER: RefCell<MemoryManager<DefaultMemoryImpl>> =
         RefCell::new(MemoryManager::init(DefaultMemoryImpl::default()));
 
-    pub static USERS: RefCell<StableBTreeMap<Address, User, Memory>> = RefCell::new(
+    pub static USERS: RefCell<StableBTreeMap<u64, User, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))),
         )
     );
 
-    pub static ORDERS: RefCell<StableBTreeMap<u64, OrderState, Memory>> = RefCell::new(
+    pub static ORDERS: RefCell<StableBTreeMap<OrderId, OrderState, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
         )
@@ -32,14 +32,14 @@ thread_local! {
 // USERS
 // -----
 
-pub fn mutate_user<F, R>(address: &Address, f: F) -> Result<R>
+pub fn mutate_user<F, R>(user_id: u64, f: F) -> Result<R>
 where
     F: FnOnce(&mut User) -> R,
 {
     USERS.with_borrow_mut(|users| {
-        if let Some(mut user) = users.get(&address) {
+        if let Some(mut user) = users.get(&user_id) {
             let result = f(&mut user);
-            users.insert(address.clone(), user);
+            users.insert(user_id, user);
             Ok(result)
         } else {
             Err(RampError::UserNotFound)
@@ -48,19 +48,30 @@ where
 }
 
 pub fn insert_user(user: &User) -> Option<User> {
-    USERS.with_borrow_mut(|p| p.insert(user.login_method.clone(), user.clone()))
+    USERS.with_borrow_mut(|p| p.insert(user.id, user.clone()))
 }
 
-pub fn remove_user(address: &Address) -> Result<User> {
+pub fn remove_user(user_id: &u64) -> Result<User> {
     USERS
-        .with_borrow_mut(|p| p.remove(&address))
+        .with_borrow_mut(|p| p.remove(&user_id))
         .ok_or_else(|| RampError::UserNotFound)
 }
 
-pub fn get_user(address: &Address) -> Result<User> {
+pub fn get_user(user_id: &u64) -> Result<User> {
     USERS
-        .with_borrow(|users| users.get(&address))
+        .with_borrow(|users| users.get(&user_id))
         .ok_or_else(|| RampError::UserNotFound)
+}
+
+pub fn find_user_by_login_address(login_address: &LoginAddress) -> Result<u64> {
+    USERS.with(|users| {
+        for (id, user) in users.borrow().iter() {
+            if user.login == *login_address {
+                return Ok(id);
+            }
+        }
+        Err(RampError::UserNotFound)
+    })
 }
 
 // ------
