@@ -13,17 +13,17 @@ use crate::{
 pub async fn register_user(
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
-    mut login_address: LoginAddress,
+    login_address: LoginAddress,
+    password: Option<String>,
 ) -> Result<User> {
     login_address.validate()?;
 
-    if let LoginAddress::Email {
-        ref mut password, ..
-    } = login_address
-    {
-        let hashed_password = random::hash_password(password).await?;
-        *password = hashed_password; // Replace the plaintext password with the hashed one
-    }
+    let hashed_password = if let LoginAddress::Email { .. } = login_address {
+        let password = password.ok_or(RampError::PasswordRequired)?;
+        Some(random::hash_password(&password).await?)
+    } else {
+        None
+    };
 
     if payment_providers.is_empty() {
         return Err(RampError::InvalidInput(
@@ -35,7 +35,7 @@ pub async fn register_user(
         .into_iter()
         .try_for_each(|p| p.validate())?;
 
-    let mut user = User::new(user_type, login_address)?;
+    let mut user = User::new(user_type, login_address, hashed_password)?;
     user.payment_providers = payment_providers;
 
     storage::insert_user(&user);

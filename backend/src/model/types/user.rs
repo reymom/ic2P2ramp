@@ -25,11 +25,16 @@ pub struct User {
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login: LoginAddress,
+    pub hashed_password: Option<String>,
     pub addresses: HashSet<TransactionAddress>,
 }
 
 impl User {
-    pub fn new(user_type: UserType, login_address: LoginAddress) -> Result<Self> {
+    pub fn new(
+        user_type: UserType,
+        login_address: LoginAddress,
+        hashed_password: Option<String>,
+    ) -> Result<Self> {
         login_address.validate()?;
 
         let mut addresses = HashSet::new();
@@ -45,6 +50,7 @@ impl User {
             fiat_amount: 0,
             score: 1,
             login: login_address,
+            hashed_password,
             addresses,
         })
     }
@@ -64,12 +70,12 @@ impl User {
     }
 
     pub fn verify_user_password(&self, password: Option<String>) -> Result<()> {
-        if let LoginAddress::Email {
-            password: hashed_password,
-            ..
-        } = &self.login
-        {
+        if let LoginAddress::Email { .. } = &self.login {
             let password = password.ok_or(RampError::PasswordRequired)?;
+            let hashed_password = self
+                .hashed_password
+                .clone()
+                .ok_or(RampError::InternalError("Password not in User".to_string()))?;
             match random::verify_password(&password, &hashed_password) {
                 Ok(true) => {
                     return Ok(());

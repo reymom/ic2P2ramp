@@ -78,7 +78,7 @@ type LockedOrder = record {
 type LoginAddress = variant {
   EVM : record { address : text };
   ICP : record { principal_id : text };
-  Email : record { password : text; email : text };
+  Email : record { email : text };
   Solana : record { address : text };
 };
 type Order = record {
@@ -203,6 +203,7 @@ type User = record {
   score : int32;
   login : LoginAddress;
   addresses : vec TransactionAddress;
+  hashed_password : opt text;
 };
 type UserType = variant { Offramper; Onramper };
 service : (InitArg) -> {
@@ -235,7 +236,9 @@ service : (InitArg) -> {
       opt nat32,
     ) -> (Result_3);
   register_icp_tokens : (vec text) -> (Result);
-  register_user : (UserType, vec PaymentProvider, LoginAddress) -> (Result_1);
+  register_user : (UserType, vec PaymentProvider, LoginAddress, opt text) -> (
+      Result_1,
+    );
   remove_user : (nat64) -> (Result_1);
   test_deposit_funds : (nat64, nat64, opt text, opt nat32) -> (Result_3);
   test_get_consent_url : () -> (Result_3);

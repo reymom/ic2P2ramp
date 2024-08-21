@@ -78,7 +78,7 @@ pub fn calculate_fees(fiat_amount: u64, crypto_amount: u64) -> (u64, u64) {
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
 pub enum LoginAddress {
-    Email { email: String, password: String },
+    Email { email: String },
     EVM { address: String },
     ICP { principal_id: String },
     Solana { address: String },
@@ -208,7 +208,7 @@ mod tests {
             address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
         map.insert(0, user.clone());
 
         let retrieved_user = map.get(&0).unwrap();
@@ -261,7 +261,7 @@ mod tests {
             address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let mut user = User::new(UserType::Offramper, login_address.clone()).unwrap();
+        let mut user = User::new(UserType::Offramper, login_address.clone(), None).unwrap();
 
         let new_address = TransactionAddress {
             address_type: AddressType::ICP,
@@ -311,8 +311,8 @@ mod tests {
             address: (format!("{:#x}", EthAddress::random())),
         };
 
-        let user1 = User::new(UserType::Offramper, login_address1.clone()).unwrap();
-        let user2 = User::new(UserType::Onramper, login_address2.clone()).unwrap();
+        let user1 = User::new(UserType::Offramper, login_address1.clone(), None).unwrap();
+        let user2 = User::new(UserType::Onramper, login_address2.clone(), None).unwrap();
 
         map.insert(1, user1.clone());
         map.insert(2, user2.clone());

@@ -165,8 +165,9 @@ async fn register_user(
     user_type: UserType,
     payment_providers: HashSet<PaymentProvider>,
     login_address: LoginAddress,
+    password: Option<String>,
 ) -> Result<User> {
-    user_management::register_user(user_type, payment_providers, login_address).await
+    user_management::register_user(user_type, payment_providers, login_address, password).await
 }
 
 #[ic_cdk::update]
