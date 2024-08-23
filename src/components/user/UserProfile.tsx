@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../UserContext';
-import { userTypeToString } from '../model/utils';
-import { backend } from '../declarations/backend';
-import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../model/types';
-import { truncate } from '../model/helper';
-import { PaymentProvider, TransactionAddress } from '../declarations/backend/backend.did';
-import { rampErrorToString } from '../model/error';
+import { useUser } from '../../UserContext';
+import { userTypeToString } from '../../model/utils';
+import { backend } from '../../declarations/backend';
+import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';
+import { truncate } from '../../model/helper';
+import { PaymentProvider, TransactionAddress } from '../../declarations/backend/backend.did';
+import { rampErrorToString } from '../../model/error';
 import { useAccount } from 'wagmi';
 import { AuthClient } from '@dfinity/auth-client';
-import { icpHost, iiUrl } from '../model/icp';
+import { icpHost, iiUrl } from '../../model/icp';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { HttpAgent } from '@dfinity/agent';
 
@@ -26,7 +26,7 @@ const UserProfile: React.FC = () => {
 
     const { address, isConnected } = useAccount();
 
-    const { user, setUser, icpAgent, setIcpAgent, setPrincipal } = useUser();
+    const { user, setUser, setIcpAgent, setPrincipal } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -96,19 +96,19 @@ const UserProfile: React.FC = () => {
         }
     };
 
-    const handleAddAddress = async () => {
+    const handleAddAddress = async (addressToAdd: string) => {
         if (!selectedAddressType) return;
         setLoadingAddAddress(true);
 
-        const address = {
+        const addingAddress = {
             address_type: { [selectedAddressType]: null },
-            address: newAddress
+            address: addressToAdd
         } as TransactionAddress;
 
         try {
-            const result = await backend.add_user_transaction_address(user.id, address);
+            const result = await backend.add_user_transaction_address(user.id, addingAddress);
             if ('Ok' in result) {
-                const updatedAddresses = [...user.addresses, address];
+                const updatedAddresses = [...user.addresses, addingAddress];
                 setUser({ ...user, addresses: updatedAddresses });
             } else {
                 setMessage(`Failed to update address: ${rampErrorToString(result.Err)}`)
@@ -186,12 +186,21 @@ const UserProfile: React.FC = () => {
                 </select>
                 {selectedAddressType === 'EVM' ? (
                     isConnected ? (
-                        <input
-                            type="text"
-                            value={address}
-                            readOnly
-                            className="px-3 py-2 border rounded w-full bg-gray-100"
-                        />
+                        <>
+                            <input
+
+                                type="text"
+                                value={address}
+                                readOnly
+                                className="px-3 py-2 border rounded w-full bg-gray-100"
+                            />
+                            <button
+                                disabled={!address || isAddressInUserAddresses(address)}
+                                onClick={() => handleAddAddress(address!)}
+                                className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!address || isAddressInUserAddresses(address) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                Add
+                            </button>
+                        </>
                     ) : (
                         <div className="mb-2">
                             <ConnectButton />
@@ -199,12 +208,20 @@ const UserProfile: React.FC = () => {
                     )
                 ) : selectedAddressType === 'ICP' ? (
                     newAddress ? (
-                        <input
-                            type="text"
-                            value={newAddress}
-                            readOnly
-                            className="px-3 py-2 border rounded w-full bg-gray-100"
-                        />
+                        <>
+                            <input
+                                type="text"
+                                value={newAddress}
+                                readOnly
+                                className="px-3 py-2 border rounded w-full bg-gray-100"
+                            />
+                            <button
+                                disabled={!newAddress || isAddressInUserAddresses(newAddress)}
+                                onClick={() => handleAddAddress(newAddress)}
+                                className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!newAddress || isAddressInUserAddresses(newAddress) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                Add
+                            </button>
+                        </>
                     ) : (
                         <button
                             onClick={handleInternetIdentityLogin}
@@ -214,12 +231,6 @@ const UserProfile: React.FC = () => {
                         </button>
                     )
                 ) : null}
-                <button
-                    disabled={!newAddress || isAddressInUserAddresses(newAddress)}
-                    onClick={handleAddAddress}
-                    className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!newAddress || isAddressInUserAddresses(newAddress) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                    Add
-                </button>
             </div>
             {loadingAddAddress && (
                 <div className="flex justify-center items-center space-x-2">
