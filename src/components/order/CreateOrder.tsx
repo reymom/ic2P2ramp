@@ -28,7 +28,7 @@ const CreateOrder: React.FC = () => {
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { chain, chainId } = useAccount();
-    const { user, icpAgent } = useUser();
+    const { user, icpAgent, fetchIcpBalance } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -174,6 +174,7 @@ const CreateOrder: React.FC = () => {
                     const result = await transferICPTokensToCanister(icpAgent!, ledgerCanister, cryptoAmountUnits, fees);
                     console.log('Transaction result:', result);
                     setMessage('Transaction successful!');
+                    fetchIcpBalance();
                 } catch (e: any) {
                     setMessage(`Transaction failed: ${e.message || e}`);
                     return;
