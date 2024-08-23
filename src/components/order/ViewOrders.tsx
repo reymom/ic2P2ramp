@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { backend } from '../../declarations/backend';
 import { OrderFilter, OrderState } from '../../declarations/backend/backend.did';
 import OrderFilters from './OrderFilters';
-import OrderActions from './Order';
+import Order from './Order';
 import { filterStateToFilterStateType } from '../../model/utils';
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
@@ -38,10 +38,11 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     }, []);
 
     const fetchOrders = async (refetch: Boolean) => {
+        if (!refetch && cachedAll) return;
         try {
             setLoading(true);
             let orders: OrderState[] = [];
-            if ((!filter && !cachedAll) || refetch) {
+            if (!filter || !cachedAll) {
                 orders = await backend.get_orders([]);
                 setCachedAll(true);
             } else if (filter) {
@@ -56,40 +57,61 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     const filteredOrders = orders.filter(order => {
-        if (!filter) return true;
+        if (filter === null) return true;
 
         if ("ByState" in filter) {
             return (filterStateToFilterStateType(filter.ByState)) in order;
         };
 
         if ("ByOfframperAddress" in filter) {
-            return ("Created" in order && order.Created.offramper_address == filter.ByOfframperAddress) ||
-                ("Locked" in order && order.Locked.base.offramper_address == filter.ByOfframperAddress)
+            const offramperAddress = "Created" in order ? order.Created.offramper_address :
+                "Locked" in order ? order.Locked.base.offramper_address : null;
+
+            return offramperAddress &&
+                (offramperAddress.address == filter.ByOfframperAddress.address)
         };
 
         if ("LockedByOnramper" in filter) {
-            return "Locked" in order && order.Locked.onramper_address === filter.LockedByOnramper
+            return "Locked" in order &&
+                order.Locked.onramper_address.address === filter.LockedByOnramper.address
         };
 
-        if ("ByChainId" in filter) {
-            // if ("Created" in order) return order.Created.crypto.chain_id === filter.ByChainId;
-            // if ("Locked" in order) return order.Locked.base.crypto.chain_id === filter.ByChainId;
-            // if ("Completed" in order) return order.Completed.chain_id === filter.ByChainId;
+        if ("ByBlockchain" in filter) {
+            const orderBlockchain = "Created" in order ? order.Created.crypto.blockchain :
+                "Locked" in order ? order.Locked.base.crypto.blockchain :
+                    "Completed" in order ? order.Completed.blockchain : null;
+
+            return orderBlockchain && (
+                ('EVM' in orderBlockchain && 'EVM' in filter.ByBlockchain &&
+                    orderBlockchain.EVM.chain_id === filter.ByBlockchain.EVM.chain_id
+                ) || ('ICP' in orderBlockchain && 'ICP' in filter.ByBlockchain &&
+                    orderBlockchain.ICP.ledger_principal.toString() === filter.ByBlockchain.ICP.ledger_principal.toString()
+                )
+            );
+        }
+
+        if ("ByOfframperId" in filter) {
+            return ("Created" in order && order.Created.offramper_user_id == filter.ByOfframperId) ||
+                ("Locked" in order && order.Locked.base.offramper_user_id == filter.ByOfframperId)
+        }
+
+        if ("ByOnramperId" in filter) {
+            return "Locked" in order && order.Locked.onramper_user_id == filter.ByOnramperId
         }
 
         return false;
     });
 
     return (
-        <div>
-            <h2 className="text-lg font-bold mb-4">View Orders</h2>
+        <div className="container mx-auto p-4">
+            <h2 className="text-xl font-semibold mb-4">View Orders</h2>
             <OrderFilters setFilter={setFilter} />
             {loading ? (
                 <div className="loader" />
             ) : (
                 <ul className="space-y-4">
                     {filteredOrders.map((order, index) => (
-                        <OrderActions key={index} order={order} refetchOrders={() => fetchOrders(true)} />
+                        <Order key={index} order={order} refetchOrders={() => fetchOrders(true)} />
                     ))}
                 </ul>
             )}
