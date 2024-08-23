@@ -6,7 +6,6 @@ import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, 
 import logo from '../assets/p2ploan.webp';
 import { useUser } from '../UserContext';
 import { userTypeToString } from '../model/utils';
-import GetBalanceComponent from './icp/Balance';
 import { truncate } from '../model/helper';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -17,7 +16,7 @@ const Menu: React.FC = () => {
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
     const { isConnected } = useAccount();
-    const { user, principal, logout } = useUser();
+    const { user, principal, icpBalance, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -130,9 +129,13 @@ const Menu: React.FC = () => {
                             <div className="p-4 flex-grow">
                                 {renderLinks()}
                             </div>
-                            <div className="p-4">
-                                {principal && <GetBalanceComponent principal={principal} />}
-                            </div>
+                            {icpBalance && (
+                                <div className="p-4">
+                                    <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
+                                        {icpBalance} ICP
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>
@@ -163,7 +166,7 @@ const Menu: React.FC = () => {
                 ) : (
                     <div className="relative" ref={profileDropdownRef}>
                         <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 bg-gray-600 text-white rounded-full">
-                            <FontAwesomeIcon icon={faUserCircle} size="3x" className="text-white" />
+                            <FontAwesomeIcon icon={faUserCircle} size="2x" className="text-white" />
                             <svg className={`w-4 h-4 ml-1 transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
@@ -203,11 +206,13 @@ const Menu: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {principal && (
+                                    {icpBalance && (
                                         <div className="items-center text-center">
                                             <>
                                                 <hr className="border-t border-gray-300 w-full my-2" />
-                                                <GetBalanceComponent principal={principal} />
+                                                <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
+                                                    {icpBalance} ICP
+                                                </div>
                                             </>
                                         </div>
                                     )}

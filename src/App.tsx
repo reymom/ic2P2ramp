@@ -6,9 +6,9 @@ import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 import { useUser } from './UserContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Menu from './components/Menu';
-import UserProfile from './components/UserProfile';
+import UserProfile from './components/user/UserProfile';
 import ConnectAddress from './components/ConnectAddress';
-import RegisterUser from './components/RegisterUser';
+import RegisterUser from './components/user/RegisterUser';
 import CreateOrder from './components/order/CreateOrder';
 import ViewOrders from './components/order/ViewOrders';
 import { userTypeToString } from './model/utils';
@@ -28,9 +28,9 @@ function App() {
 
         switch (userTypeToString(user.user_type)) {
             case "Offramper":
-                return { ByOfframperAddress: user.addresses[0] } as OrderFilter
+                return { ByOfframperId: user.id } as OrderFilter
             case "Onramper":
-                return { LockedByOnramper: user.addresses[0] } as OrderFilter
+                return { ByOnramperId: user.id } as OrderFilter
             default:
                 return { ByState: { Created: null } } as OrderFilter
         }
