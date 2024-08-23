@@ -5,6 +5,8 @@ import { UserTypes } from './model/types';
 import { userTypeToString } from './model/utils';
 import { HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
+import { tokenCanisters } from './constants/addresses';
+import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
 
 interface UserContextProps {
     user: User | null;
@@ -14,6 +16,8 @@ interface UserContextProps {
     logout: () => void;
     icpAgent: HttpAgent | null;
     principal: Principal | null;
+    icpBalance: string | null;
+    fetchIcpBalance: () => void;
     setUser: (user: User | null) => void;
     setLoginMethod: (loginMethod: LoginAddress | null, password?: string) => void;
     setIcpAgent: (agent: HttpAgent | null) => void;
@@ -30,6 +34,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [principal, setPrincipal] = useState<Principal | null>(null);
+    const [icpBalance, setIcpBalance] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user) {
@@ -37,7 +42,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
         setUserType(userTypeToString(user!.user_type));
-    }, [user])
+    }, [user]);
+
+    useEffect(() => {
+        fetchIcpBalance();
+    }, [principal, icpAgent]);
 
     const authenticateUser = async (loginAddress: LoginAddress): Promise<Result_1> => {
         try {
@@ -56,6 +65,29 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setUserType("Visitor");
     };
 
+    const fetchIcpBalance = async () => {
+        if (!icpAgent || !principal) return;
+
+        try {
+            const ledgerTokenCanister = Principal.fromText(tokenCanisters.ICP);
+            const ledger = LedgerCanister.create({ agent: icpAgent, canisterId: ledgerTokenCanister });
+
+            const accountIdentifier = AccountIdentifier.fromPrincipal({ principal });
+            const balanceResult = await ledger.accountBalance({
+                accountIdentifier: accountIdentifier,
+                certified: true
+            });
+
+            const balanceFloat = Number(balanceResult) / 100_000_000;
+            const balanceString = balanceFloat.toFixed(2);
+
+            setIcpBalance(balanceString);
+        } catch (err: any) {
+            console.error('Failed to fetch ICP balance:', err);
+            setIcpBalance(null);
+        }
+    };
+
     return (
         <UserContext.Provider value={{
             user,
@@ -65,6 +97,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             logout,
             icpAgent,
             principal,
+            icpBalance,
+            fetchIcpBalance,
             setUser,
             setLoginMethod: (loginMethod: LoginAddress | null, password?: string) => {
                 setLoginMethod(loginMethod);
