@@ -39,6 +39,19 @@ pub fn create_order(
 pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
     match filter {
         None => storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect()),
+        Some(OrderFilter::ByOfframperId(offramper_id)) => {
+            storage::filter_orders(|order_state| match order_state {
+                OrderState::Created(order) => order.offramper_user_id == offramper_id,
+                OrderState::Locked(order) => order.base.offramper_user_id == offramper_id,
+                _ => false,
+            })
+        }
+        Some(OrderFilter::ByOnramperId(onramper_id)) => {
+            storage::filter_orders(|order_state| match order_state {
+                OrderState::Locked(order) => order.onramper_user_id == onramper_id,
+                _ => false,
+            })
+        }
         Some(OrderFilter::ByOfframperAddress(address)) => {
             storage::filter_orders(|order_state| match order_state {
                 OrderState::Created(order) => order.offramper_address == address,

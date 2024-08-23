@@ -93,9 +93,11 @@ type Order = record {
   offramper_address : TransactionAddress;
 };
 type OrderFilter = variant {
+  ByOfframperId : nat64;
   ByOfframperAddress : TransactionAddress;
   ByState : OrderStateFilter;
   ByBlockchain : Blockchain;
+  ByOnramperId : nat64;
   LockedByOnramper : TransactionAddress;
 };
 type OrderState = variant {

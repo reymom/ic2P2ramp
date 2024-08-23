@@ -191,6 +191,8 @@ impl From<LockedOrder> for CompletedOrder {
 
 #[derive(CandidType, Clone, Deserialize)]
 pub enum OrderFilter {
+    ByOfframperId(u64),
+    ByOnramperId(u64),
     ByOfframperAddress(TransactionAddress),
     LockedByOnramper(TransactionAddress),
     ByState(OrderStateFilter),
