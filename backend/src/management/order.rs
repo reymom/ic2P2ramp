@@ -128,11 +128,10 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            let score = user_management::update_onramper_payment(
+            user_management::update_onramper_payment(
                 order.onramper_user_id,
                 order.base.fiat_amount,
             )?;
-            ic_cdk::println!("[mark_order_as_paid] user score increased = {:?}", score);
             user_management::update_offramper_payment(
                 order.base.offramper_user_id,
                 order.base.fiat_amount,

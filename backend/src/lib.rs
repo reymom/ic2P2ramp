@@ -423,17 +423,10 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
                 .flat_map(|unit| &unit.payments.captures)
                 .map(|capture| capture.amount.value.parse::<f64>().unwrap())
                 .sum();
-            ic_cdk::println!("received_amount = {}", received_amount);
-            ic_cdk::println!("expected_amount = {}", total_expected_amount);
 
             let amount_matches = (received_amount - total_expected_amount).abs() < f64::EPSILON;
             let currency_matches = capture_details.purchase_units[0].amount.currency_code
                 == order.base.currency_symbol;
-            ic_cdk::println!(
-                "currency_code = {}",
-                capture_details.purchase_units[0].amount.currency_code
-            );
-            ic_cdk::println!("currency_symbol = {}", order.base.currency_symbol);
 
             let offramper_provider = order
                 .base
@@ -446,11 +439,6 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
                 return Err(RampError::InvalidOfframperProvider);
             };
 
-            ic_cdk::println!(
-                "offramper pay = {}",
-                capture_details.purchase_units[0].payee.email_address
-            );
-            ic_cdk::println!("offramper_id = {}", offramper_id);
             let offramper_matches =
                 capture_details.purchase_units[0].payee.email_address == *offramper_id;
             let onramper_matches = capture_details.payer.email_address == *onramper_id;

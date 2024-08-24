@@ -72,11 +72,10 @@ pub fn can_commit_orders(user_id: &u64) -> Result<()> {
     Ok(())
 }
 
-pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<i32> {
+pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
     storage::mutate_user(user_id, |user| {
-        user.increase_score(fiat_amount);
         user.update_fiat_amount(fiat_amount);
-        user.score
+        user.increase_score();
     })
 }
 
@@ -84,9 +83,8 @@ pub fn update_offramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
     storage::mutate_user(user_id, |user| user.update_fiat_amount(fiat_amount))
 }
 
-pub fn decrease_user_score(user_id: u64) -> Result<i32> {
+pub fn decrease_user_score(user_id: u64) -> Result<()> {
     storage::mutate_user(user_id, |user| {
         user.decrease_score();
-        user.score
     })
 }
