@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
+import { Principal } from '@dfinity/principal';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
-import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, tokenCanisters } from '../../constants/addresses';
-import { useUser } from '../../UserContext';
+import { TokenOption, getIcpTokenOptions, getEvmTokenOptions } from '../../constants/tokens';
+import { tokenCanisters } from '../../constants/addresses';
+import { NetworkIds } from '../../constants/networks';
+import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
 import { depositInVault } from '../../model/evm';
-import { Principal } from '@dfinity/principal';
-import { NetworkIds } from '../../constants/tokens';
+import { BlockchainTypes } from '../../model/types';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
@@ -21,40 +23,39 @@ const CreateOrder: React.FC = () => {
     const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
     const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
     const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain>();
+    const [blockchainType, setBlockchainType] = useState<BlockchainTypes>();
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [loadingRate, setLoadingRate] = useState(false);
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
-    const { chain, chainId } = useAccount();
-    const { user, icpAgent, fetchIcpBalance } = useUser();
+    const { chain, chainId, address } = useAccount();
+    const { user, icpAgent, principal, fetchIcpBalance } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (selectedBlockchain) {
-            const blockchainType = blockchainToBlockchainType(selectedBlockchain);
+        if (blockchainType) {
             let tokens: TokenOption[] = [];
 
             if (blockchainType === 'EVM') {
-                if (!chainId) {
-                    return;
-                }
+                if (!chainId || !isValidChainId(chainId)) return;
                 tokens = getEvmTokenOptions(chainId);
             } else if (blockchainType === 'ICP') {
+                if (!icpAgent) return;
                 tokens = getIcpTokenOptions();
             }
 
+            console.log("[setTokenOptions] tokens = ", tokens);
             setTokenOptions(tokens);
         }
-    }, [selectedBlockchain, chainId]);
+    }, [blockchainType, chainId]);
 
     const handleBlockchainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
+        setBlockchainType(value as BlockchainTypes);
         if (value === "EVM") {
-            if (!chainId) {
-                throw new Error("chainId is null")
-            }
+            if (!chainId) return;
             setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
         } else if (value === "ICP") {
             setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(tokenCanisters.ICP) } });
@@ -68,8 +69,9 @@ const CreateOrder: React.FC = () => {
     const handleTokenChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selected = tokenOptions.find(token => token.address === e.target.value);
         setSelectedToken(selected || null);
+
         if (selected && selectedBlockchain && blockchainToBlockchainType(selectedBlockchain) === 'ICP') {
-            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address) } })
+            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address!) } })
         }
     };
 
@@ -97,7 +99,12 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         if (selectedToken) {
-            getExchangeRateFromXRC(selectedToken.symbol);
+            let symbol = selectedToken.rateSymbol;
+            if (symbol.includes("USD")) {
+                setExchangeRate(1);
+                return;
+            }
+            getExchangeRateFromXRC(symbol);
         }
     }, [selectedToken]);
 
@@ -129,24 +136,21 @@ const CreateOrder: React.FC = () => {
             return;
         }
 
+        if (!chainId) throw new Error('Chain id is not available')
+        if (!selectedBlockchain) throw new Error('No blockchain selected');
+        if (!selectedToken) throw new Error('No token selected');
+
         try {
             setIsLoading(true);
             setMessage('Creating offramping order...');
 
-            if (!selectedBlockchain) {
-                throw new Error('No blockchain selected');
-            }
-
-            if (!selectedToken) {
-                throw new Error('No token selected');
-            }
 
             const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
                 const providerType: PaymentProviderType = providerToProviderType(provider);
                 return [providerType, provider];
             });
 
-            const selectedAddress = user!.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
+            const selectedAddress = user.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
             if (!selectedAddress) {
                 setMessage('No address available for the selected blockchain');
                 return;
@@ -157,7 +161,7 @@ const CreateOrder: React.FC = () => {
             if (blockchain === 'EVM') {
                 cryptoAmountUnits = ethers.parseEther(cryptoAmount.toString());
                 try {
-                    const receipt = await depositInVault(selectedToken, cryptoAmountUnits);
+                    const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
                     console.log('Transaction receipt: ', receipt);
                     setMessage('Transaction successful!');
                 } catch (e: any) {
@@ -215,6 +219,36 @@ const CreateOrder: React.FC = () => {
         return validChainIds.includes(chainId);
     };
 
+    const isValidAddressMessage = () => {
+        if (blockchainType === 'EVM') {
+            if (!chainId || !address) return (
+                <div className="my-2 text-red-400">
+                    Please connect your Wallet.
+                </div>
+            );
+            return address && user?.addresses.some(
+                addr => 'EVM' in addr.address_type && addr.address !== address) &&
+                <div className="my-2 text-red-400">
+                    Wallet address is not registered in your profile.
+                </div>
+        } else if (blockchainType === 'ICP') {
+            if (!icpAgent || !principal) return (
+                <div className="my-2 text-red-400">
+                    Please connect your Internet Identity.
+                </div>
+            );
+            return principal && user?.addresses.some(
+                addr => 'ICP' in addr.address_type && addr.address !== principal?.toString()) &&
+                <div className="my-2 text-red-400">
+                    Principal connected is not registered in your profile.
+                </div>
+        }
+    }
+
+    const validInputs = user !== null && selectedBlockchain !== undefined && fiatAmount !== undefined && fiatAmount > 0
+        && (isValidAddressMessage() === undefined || isValidAddressMessage() === false)
+        && selectedProviders.length > 0 && selectedToken !== null;
+
     return (
         <>
             <h2 className="text-lg font-bold mb-4 text-center">Create Offramping Order</h2>
@@ -245,7 +279,7 @@ const CreateOrder: React.FC = () => {
                 <div className="flex justify-between items-center mb-4">
                     <label className="text-gray-700 w-24">Blockchain:</label>
                     <select
-                        value={selectedBlockchain ? Object.keys(selectedBlockchain)[0] : undefined}
+                        value={blockchainType}
                         onChange={handleBlockchainChange}
                         className="flex-grow py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
@@ -259,7 +293,7 @@ const CreateOrder: React.FC = () => {
                 <div className="flex justify-between items-center mb-4">
                     <label className="text-gray-700 w-24">Token:</label>
                     <select
-                        value={selectedToken?.address || ""}
+                        value={selectedToken?.address || undefined}
                         onChange={handleTokenChange}
                         className="flex-grow py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
@@ -276,6 +310,8 @@ const CreateOrder: React.FC = () => {
                         <div className="text-sm font-medium text-gray-700">Fetching Rates...</div>
                     </div>
                 )}
+
+                {isValidAddressMessage()}
 
                 <hr className="border-t border-gray-300 w-full my-4" />
 
@@ -312,15 +348,16 @@ const CreateOrder: React.FC = () => {
 
                 <hr className="border-t border-gray-300 w-full my-4" />
 
-                {selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
+                {chainId && selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
                     <div className={`mb-4 ${isValidChainId(chainId) ? 'text-green-500' : 'text-red-500'}`}>
                         {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
                     </div>
                 )}
                 <button
                     type="submit"
-                    className={`px-4 py-2 rounded ${selectedBlockchain ? 'bg-blue-500 text-white' : 'bg-gray-500 text-white cursor-not-allowed'}`}
-                    disabled={!selectedBlockchain || !fiatAmount}
+                    className={`px-4 py-2 rounded 
+                        ${validInputs ? 'bg-blue-500 text-white' : 'bg-gray-500 text-white cursor-not-allowed'}`}
+                    disabled={!validInputs}
                 >
                     Create Order
                 </button>
