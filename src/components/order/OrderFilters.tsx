@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { TransactionAddress, OrderFilter, Blockchain } from '../../declarations/backend/backend.did';
 import { stringToOrderFilter, stringToOrderStateFilter } from '../../model/utils';
 import { BlockchainTypes, OrderFilterTypes, OrderStateFilterTypes } from '../../model/types';
-import { useUser } from '../../UserContext';
-import { getIcpTokenOptions } from '../../constants/addresses';
+import { useUser } from '../user/UserContext';
+import { getIcpTokenOptions } from '../../constants/tokens';
 import { Principal } from '@dfinity/principal';
-import { NetworkIds } from '../../constants/tokens';
+import { NetworkIds } from '../../constants/networks';
 import { truncate } from '../../model/helper';
 
 interface OrderFiltersProps {

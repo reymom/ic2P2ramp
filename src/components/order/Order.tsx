@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
 
+import icpLogo from "../../assets/icp-logo.svg";
+import ethereumLogo from "../../assets/ethereum-logo.png";
+
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
-import { NetworkIds } from '../../constants/tokens';
+import { NetworkIds } from '../../constants/networks';
+import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
 import { withdrawFromVault } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
-import { useUser } from '../../UserContext';
-import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/addresses';
-import icpLogo from "../../assets/icp-logo.svg";
-import ethereumLogo from "../../assets/ethereum-logo.jpg";
+import { useUser } from '../user/UserContext';
+import { useAccount } from 'wagmi';
 
 interface OrderProps {
     order: OrderState;
@@ -25,6 +27,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState('');
 
+    const { chainId } = useAccount();
     const { user, userType, fetchIcpBalance } = useUser();
 
     const orderId = 'Created' in order ? order.Created.id
@@ -86,13 +89,16 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 if ('EVM' in orderBlockchain) {
                     const explorerUrl = Object.values(NetworkIds).find(network => network.id === orderBlockchain.EVM.chain_id)?.explorer;
                     const txLink = `${explorerUrl}${result.Ok}`;
-                    setMessage(`Order Locked! tx = <a href="${txLink}" target="_blank">${truncate(result.Ok, 8, 8)}</a>`);
+                    setMessage(`EVM transaction sent. Wait for confirmation! tx = <a href="${txLink}" target="_blank">${truncate(result.Ok, 8, 8)}</a>`);
+                    setTimeout(() => {
+                        refetchOrders();
+                    }, 20000);
                 } else {
                     setMessage(`Order Locked!`)
+                    setTimeout(() => {
+                        refetchOrders();
+                    }, 1000);
                 }
-                setTimeout(() => {
-                    refetchOrders();
-                }, 1000);
             } else {
                 const errorMessage = rampErrorToString(result.Err);
                 setMessage(errorMessage);
@@ -114,8 +120,10 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             switch (blockchainToBlockchainType(orderBlockchain)) {
                 case 'EVM':
+                    const orderChainId = 'EVM' in order.Created.crypto.blockchain ? order.Created.crypto.blockchain.EVM.chain_id : undefined;
+                    if (!chainId || chainId !== Number(orderChainId)) throw new Error('Connect to same network than the order crypto');
                     try {
-                        const receipt = await withdrawFromVault(order.Created);
+                        const receipt = await withdrawFromVault(chainId, order.Created);
                         console.log('Transaction receipt: ', receipt);
                         setMessage('Transaction successful!');
                     } catch (e: any) {
@@ -161,6 +169,18 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             const response = await backend.verify_transaction(orderId, transactionId, [100000]);
             if ('Ok' in response) {
                 setMessage(`Order Verified and Funds Transferred successfully!`);
+                if ('EVM' in orderBlockchain!) {
+                    setMessage("EVM transaction sent. Wait for confirmation!");
+                    setTimeout(() => {
+                        refetchOrders();
+                    }, 20000);
+                } else {
+                    setMessage(`Order Locked!`)
+                    setTimeout(() => {
+                        refetchOrders();
+                        fetchIcpBalance();
+                    }, 1000);
+                }
             } else {
                 const errorMessage = rampErrorToString(response.Err);
                 setMessage(errorMessage);
@@ -170,10 +190,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             setMessage(`Error verifying payment for order ${orderId.toString()}.`);
         } finally {
             setIsLoading(false);
-            setTimeout(() => {
-                refetchOrders();
-                fetchIcpBalance();
-            }, 1000);
         }
     };
 
@@ -211,10 +227,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             'ICP' in crypto.blockchain ? crypto.blockchain.ICP.ledger_principal.toString() : '';
 
         const token = tokens.find(token => {
-            if (tokenAddress === "") return token.isNative;
             return token.address === tokenAddress;
         });
-        return token ? token.symbol : "Unknown";
+        return token ? token.rateSymbol : "Unknown";
     };
 
     const formatFiatAmount = () => {
@@ -241,13 +256,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         'EVM' in orderBlockchain ? ethereumLogo : 'ICP' in orderBlockchain ? icpLogo : null;
     let backgroundColor = 'Created' in order ? "bg-gray-100" : 'Locked' in order ? "bg-gray-300"
         : 'Completed' in order ? "bg-green-100" : 'Cancelled' in order ? "bg-red-100" : "bg-white";
+
     return (
         <li className={`p-4 border rounded-xl shadow-md ${backgroundColor} relative`}>
             {blockchainLogo && (
                 <img
                     src={blockchainLogo}
                     alt="Blockchain Logo"
-                    className="absolute top-2 left-2 h-6 w-6 opacity-75"
+                    className="absolute top-2 left-2 h-6 w-6 opacity-90"
                 />
             )}
             {'Created' in order && (
@@ -279,26 +295,29 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             };
                         })}
                     </div>
-                    <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address.address, 6, 6)}
-                        {'ICP' in order.Created.crypto.blockchain && (
-                            <span>({Object.keys(order.Created.offramper_address.address_type)[0]})</span>
-                        )}
-                    </div>
+                    <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address.address, 6, 6)}</div>
                     {'EVM' in order.Created.crypto.blockchain && (
                         <div><strong>Network:</strong> {getNetworkName()}</div>
                     )}
-                    {userType === 'Onramper' && (
-                        <div>
-                            <button
-                                onClick={() => commitToOrder(committedProvider![1])}
-                                className="mt-2 px-4 py-2 bg-green-500 text-white rounded"
-                                disabled={!committedProvider}
-                            >
-                                Commit
-                            </button>
-                        </div>
-                    )}
-                    {userType === 'Offramper' && (
+                    {user && userType === 'Onramper' && (() => {
+                        const disabled = !committedProvider ||
+                            !user.addresses.some(addr =>
+                                Object.keys(addr.address_type)[0] === Object.keys(order.Created.offramper_address.address_type)[0]
+                            )
+                        return (
+                            <div>
+                                <button
+                                    onClick={() => commitToOrder(committedProvider![1])}
+                                    className={`mt-2 px-4 py-2 rounded text-white ${disabled ?
+                                        'bg-gray-400 cursor-not-allowed' : 'bg-green-500'}`}
+                                    disabled={disabled}
+                                >
+                                    Commit
+                                </button>
+                            </div>
+                        );
+                    })()}
+                    {user && userType === 'Offramper' && order.Created.offramper_user_id === user.id && (
                         <div>
                             <button
                                 onClick={removeOrder}
@@ -325,7 +344,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     {'EVM' in order.Locked.base.crypto.blockchain && (
                         <div><strong>Network:</strong> {getNetworkName()}</div>
                     )}
-                    {userType === 'Onramper' && (
+                    {user && userType === 'Onramper' && order.Locked.onramper_user_id === user.id && (
                         <div>
                             {order.Locked.onramper_provider.hasOwnProperty('PayPal') ? (
                                 <PayPalButton
