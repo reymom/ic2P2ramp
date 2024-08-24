@@ -1,44 +1,55 @@
 interface AddressMapping {
-  native: [string, string];
+  vault: string;
+  native: string;
   usdt: [string, string];
 }
 
 const testAddresses: { [chainId: number]: AddressMapping } = {
   // Sepolia
   11155111: {
-    native: ['ETH', '0x42ad57ab757ea55960f7d9805d82fa818683096b'],
+    vault: '0x42ad57ab757ea55960f7d9805d82fa818683096b',
+    native: 'ETH',
     usdt: ['USDT', '0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF'],
   },
   // Base Sepolia
   84532: {
-    native: ['ETH', '0xfa29381958DD8a2dD86246FC0Ab2932972640580'],
+    vault: '0xfa29381958DD8a2dD86246FC0Ab2932972640580',
+    native: 'ETH',
     usdt: ['USDT', '0x67d2d3a45457b69259FB1F8d8178bAE4F6B11b4d'],
   },
   // Polyzon zkEVM Cardona
   2442: {
-    native: ['MATIC', '0x9025e74D23384f664CfEB07F1d8ABd19570758B5'],
+    vault: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
+    native: 'MATIC',
     usdt: ['USDT', ''],
   },
   // OP Sepolia
   11155420: {
-    native: ['OP', '0x9025e74D23384f664CfEB07F1d8ABd19570758B5'],
+    vault: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
+    native: 'OP',
     usdt: ['USDT', ''],
   },
 };
 
 const prodAddresses: { [chainId: number]: AddressMapping } = {
   1: {
-    native: ['ETH', '0x...'],
+    vault: '0x...',
+    native: 'ETH',
     usdt: ['USDT', '0x...'],
   },
   137: {
-    native: ['MATIC', '0x...'],
+    vault: '0x...',
+    native: 'MATIC',
     usdt: ['USDT', '0x...'],
   },
 };
 
 export const addresses =
   process.env.FRONTEND_ENV === 'production' ? prodAddresses : testAddresses;
+
+export const getVaultAddress = (chainId: number): string => {
+  return addresses[chainId].vault;
+};
 
 export const tokenCanisters = {
   ICP: 'ryjl3-tyaaa-aaaaa-aaaba-cai',
@@ -47,45 +58,4 @@ export const tokenCanisters = {
     process.env.FRONTEND_ENV === 'production'
       ? 'mxzaz-hqaaa-aaaar-qaada-cai'
       : 'mc6ru-gyaaa-aaaar-qaaaq-cai',
-};
-
-export interface TokenOption {
-  name: string;
-  address: string;
-  isNative: boolean;
-  symbol: string;
-}
-
-export const getEvmTokenOptions = (chainId: number): TokenOption[] => {
-  const mapping = addresses[chainId];
-  if (!mapping) {
-    throw new Error(`No address mapping found for chainId ${chainId}`);
-  }
-
-  return [
-    {
-      name: mapping.native[0],
-      address: mapping.native[1],
-      isNative: true,
-      symbol: mapping.native[0],
-    },
-    {
-      name: mapping.usdt[0],
-      address: mapping.usdt[1],
-      isNative: false,
-      symbol: mapping.native[0],
-    },
-  ];
-};
-
-export const getIcpTokenOptions = (): TokenOption[] => {
-  return [
-    { name: 'ICP', address: tokenCanisters.ICP, isNative: true, symbol: 'ICP' },
-    {
-      name: 'ckBTC',
-      address: tokenCanisters.ckBTC,
-      isNative: false,
-      symbol: 'BTC',
-    },
-  ];
 };
