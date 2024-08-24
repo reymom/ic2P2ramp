@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../../UserContext';
+import { useUser } from './UserContext';
 import { userTypeToString } from '../../model/utils';
 import { backend } from '../../declarations/backend';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';
@@ -174,7 +174,7 @@ const UserProfile: React.FC = () => {
                 </ul>
             </div >
 
-            <div className="flex mb-4 gap-2">
+            <div className="flex mb-4 gap-2 items-center justify-between">
                 <select
                     value={selectedAddressType}
                     onChange={(e) => setSelectedAddressType(e.target.value as 'ICP' | 'EVM')}
@@ -188,11 +188,10 @@ const UserProfile: React.FC = () => {
                     isConnected ? (
                         <>
                             <input
-
                                 type="text"
                                 value={address}
                                 readOnly
-                                className="px-3 py-2 border rounded w-full bg-gray-100"
+                                className="ml-2 px-3 py-2 border rounded w-full bg-gray-100"
                             />
                             <button
                                 disabled={!address || isAddressInUserAddresses(address)}
@@ -202,9 +201,10 @@ const UserProfile: React.FC = () => {
                             </button>
                         </>
                     ) : (
-                        <div className="mb-2">
+                        <div>
                             <ConnectButton />
                         </div>
+
                     )
                 ) : selectedAddressType === 'ICP' ? (
                     newAddress ? (
@@ -213,7 +213,7 @@ const UserProfile: React.FC = () => {
                                 type="text"
                                 value={newAddress}
                                 readOnly
-                                className="px-3 py-2 border rounded w-full bg-gray-100"
+                                className="ml-2 px-3 py-2 border rounded w-full bg-gray-100"
                             />
                             <button
                                 disabled={!newAddress || isAddressInUserAddresses(newAddress)}
@@ -225,13 +225,14 @@ const UserProfile: React.FC = () => {
                     ) : (
                         <button
                             onClick={handleInternetIdentityLogin}
-                            className="px-4 py-2 bg-blue-500 text-white rounded w-full"
+                            className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl"
                         >
                             Connect ICP
                         </button>
                     )
                 ) : null}
             </div>
+
             {loadingAddAddress && (
                 <div className="flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>

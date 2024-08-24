@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useUser } from '../UserContext';
+import { useUser } from './user/UserContext';
 import { userTypeToString } from '../model/utils';
 
 export type ProtectedRouteProps = {

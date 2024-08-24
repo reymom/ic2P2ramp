@@ -5,7 +5,7 @@ import { backend } from '../../declarations/backend';
 import { PaymentProvider } from '../../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
 import { stringToUserType } from '../../model/utils';
-import { useUser } from '../../UserContext';
+import { useUser } from './UserContext';
 import { rampErrorToString } from '../../model/error';
 import { truncate } from '../../model/helper';
 

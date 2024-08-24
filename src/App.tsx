@@ -3,7 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
-import { useUser } from './UserContext';
+import { useUser } from './components/user/UserContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Menu from './components/Menu';
 import UserProfile from './components/user/UserProfile';
