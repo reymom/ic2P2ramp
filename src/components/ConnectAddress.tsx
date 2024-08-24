@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import { useUser } from '../UserContext';
-import { LoginAddress, RampError } from '../declarations/backend/backend.did';
+import { useUser } from './user/UserContext';
+import { LoginAddress } from '../declarations/backend/backend.did';
 import { useNavigate } from 'react-router-dom';
 import { AuthClient } from '@dfinity/auth-client';
 import { HttpAgent } from '@dfinity/agent';
@@ -62,14 +62,16 @@ const ConnectAddress: React.FC = () => {
         }
     }
 
-    const handleEmailLogin = async () => {
+    const handleEmailLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
         if (email && password) {
             setIsLoading(true);
 
             const loginAddress: LoginAddress = {
                 Email: { email }
             };
-            setLoginMethod(loginAddress);
+            setLoginMethod(loginAddress, password);
 
             try {
                 const result = await authenticateUser(loginAddress, password);
@@ -86,6 +88,7 @@ const ConnectAddress: React.FC = () => {
                     navigate("/login");
                 }
             } catch (error) {
+                console.log("error = ", error);
                 setMessage("Failed to login user");
             } finally {
                 setIsLoading(false);
@@ -177,23 +180,27 @@ const ConnectAddress: React.FC = () => {
             <hr className="border-t border-gray-300 w-full my-4" />
 
             <div className="my-4 flex flex-col space-y-2 w-full max-w-xs">
-                <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    className="px-4 py-2 border rounded w-full"
-                />
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="px-4 py-2 border rounded w-full"
-                />
-                <button onClick={handleEmailLogin} className="my-4 px-4 py-2 bg-amber-500 text-white rounded w-full">
-                    Log in with Email
-                </button>
+                <form onSubmit={handleEmailLogin}>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email"
+                        className="px-4 py-2 border rounded w-full"
+                        required
+                    />
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="px-4 py-2 border rounded w-full"
+                        required
+                    />
+                    <button type="submit" className="my-4 px-4 py-2 bg-amber-500 text-white rounded w-full">
+                        Log in with Email
+                    </button>
+                </form>
                 {isLoading ? (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
