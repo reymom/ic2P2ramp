@@ -4,19 +4,20 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
 
 import logo from '../assets/p2ploan.webp';
-import { useUser } from '../UserContext';
+import { useUser } from './user/UserContext';
 import { userTypeToString } from '../model/utils';
 import { truncate } from '../model/helper';
-import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { AuthClient } from '@dfinity/auth-client';
+import { icpHost, iiUrl } from '../model/icp';
+import { HttpAgent } from '@dfinity/agent';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
-    const { isConnected } = useAccount();
-    const { user, principal, icpBalance, logout } = useUser();
+    const { user, setPrincipal, setIcpAgent, icpBalance, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -103,6 +104,27 @@ const Menu: React.FC = () => {
             default:
                 return null;
         }
+    };
+
+    const handleInternetIdentityLogin = async () => {
+        const authClient = await AuthClient.create();
+        await authClient.login({
+            identityProvider: iiUrl,
+            onSuccess: async () => {
+                const identity = authClient.getIdentity();
+                const principal = identity.getPrincipal();
+                setPrincipal(principal);
+
+                const agent = new HttpAgent({ identity, host: icpHost });
+                if (process.env.FRONTEND_ENV === 'test') {
+                    agent.fetchRootKey();
+                }
+                setIcpAgent(agent);
+            },
+            onError: (error) => {
+                console.error("Internet Identity login failed:", error);
+            },
+        });
     };
 
     return (
@@ -206,28 +228,35 @@ const Menu: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {icpBalance && (
-                                        <div className="items-center text-center">
+                                    <div className="items-center text-center">
+                                        <hr className="border-t border-gray-300 w-full my-2" />
+                                        {icpBalance ? (
                                             <>
-                                                <hr className="border-t border-gray-300 w-full my-2" />
                                                 <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
                                                     {icpBalance} ICP
                                                 </div>
                                             </>
-                                        </div>
-                                    )}
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={handleInternetIdentityLogin}
+                                                    className="px-4 py-2 bg-blue-600 text-white text-center font-bold rounded-xl"
+                                                >
+                                                    Connect ICP
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
 
-                                    {isConnected && (
-                                        <>
-                                            <hr className="border-t border-gray-300 w-full my-2" />
+                                    <>
+                                        <hr className="border-t border-gray-300 w-full my-2" />
 
-                                            <div className="w-full flex justify-center">
-                                                <div className="inline-block">
-                                                    <ConnectButton chainStatus="icon" accountStatus="avatar" />
-                                                </div>
+                                        <div className="w-full flex justify-center">
+                                            <div className="inline-block">
+                                                <ConnectButton chainStatus="icon" accountStatus="avatar" />
                                             </div>
-                                        </>
-                                    )}
+                                        </div>
+                                    </>
 
                                 </div>
                                 <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100">
