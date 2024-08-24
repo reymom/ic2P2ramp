@@ -10,7 +10,7 @@ import {
 
 import './index.css';
 import App from './App';
-import { UserProvider } from './UserContext';
+import { UserProvider } from './components/user/UserContext';
 import { config } from './wagmi';
 
 
