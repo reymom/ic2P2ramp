@@ -1,9 +1,11 @@
 import { ethers } from 'ethers';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
-import { addresses, TokenOption } from '../constants/addresses';
+import { getVaultAddress } from '../constants/addresses';
 import { Order } from '../declarations/backend/backend.did';
+import { TokenOption } from '../constants/tokens';
 
 export const depositInVault = async (
+  chainId: number,
   selectedToken: TokenOption,
   cryptoAmount: bigint,
 ) => {
@@ -15,21 +17,38 @@ export const depositInVault = async (
   await provider.send('eth_requestAccounts', []);
   const signer = await provider.getSigner();
 
-  const tokenAddress = selectedToken?.address;
-  if (!tokenAddress) {
+  const vaultContract = new ethers.Contract(
+    getVaultAddress(chainId),
+    icP2PrampABI,
+    signer,
+  );
+
+  let transactionResponse;
+  if (selectedToken.isNative) {
+    const gasEstimate = await vaultContract.depositBaseCurrency.estimateGas({
+      value: cryptoAmount,
+    });
+
+    transactionResponse = await vaultContract.depositBaseCurrency({
+      value: cryptoAmount,
+      gasLimit: gasEstimate,
+    });
+  } else if (selectedToken.address !== '') {
+    const gasEstimate = await vaultContract.depositToken.estimateGas(
+      selectedToken.address,
+      cryptoAmount,
+    );
+
+    transactionResponse = await vaultContract.depositToken(
+      selectedToken.address,
+      cryptoAmount,
+      {
+        gasLimit: gasEstimate,
+      },
+    );
+  } else {
     throw new Error('No token selected');
   }
-
-  const vaultContract = new ethers.Contract(tokenAddress, icP2PrampABI, signer);
-
-  const gasEstimate = await vaultContract.depositBaseCurrency.estimateGas({
-    value: cryptoAmount,
-  });
-
-  const transactionResponse = await vaultContract.depositBaseCurrency({
-    value: cryptoAmount,
-    gasLimit: gasEstimate,
-  });
 
   const receipt = await transactionResponse.wait();
   if (receipt.status !== 1) {
@@ -39,34 +58,49 @@ export const depositInVault = async (
   return receipt;
 };
 
-export const withdrawFromVault = async (order: Order) => {
+export const withdrawFromVault = async (chainId: number, order: Order) => {
   if (!window.ethereum) {
     throw new Error('No crypto wallet found. Please install it.');
   }
+  if (!('EVM' in order.crypto.blockchain))
+    throw new Error('Order is not for EVM');
 
   const provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send('eth_requestAccounts', []);
   const signer = await provider.getSigner();
 
-  const tokenAddress =
-    order.crypto.token[0] ??
-    addresses[Number(order.crypto.blockchain)].native[1];
-
-  const vaultContract = new ethers.Contract(tokenAddress, icP2PrampABI, signer);
-
-  const gasEstimate = await vaultContract.uncommitDeposit.estimateGas(
-    order.offramper_address,
-    ethers.ZeroAddress,
-    order.crypto.amount,
+  const vaultContractAddress = getVaultAddress(chainId);
+  const vaultContract = new ethers.Contract(
+    vaultContractAddress,
+    icP2PrampABI,
+    signer,
   );
-  const transactionResponse = await vaultContract.uncommitDeposit(
-    order.offramper_address,
-    ethers.ZeroAddress,
-    order.crypto.amount,
-    {
-      gasLimit: gasEstimate,
-    },
-  );
+
+  const isNative =
+    order.crypto.token.length === 0 ||
+    order.crypto.token[0] === ethers.ZeroAddress;
+
+  let transactionResponse;
+  if (isNative) {
+    const gasEstimate = await vaultContract.withdrawBaseCurrency.estimateGas(
+      order.crypto.amount,
+    );
+    transactionResponse = await vaultContract.withdrawBaseCurrency(
+      order.crypto.amount,
+      { gasLimit: gasEstimate },
+    );
+  } else {
+    const tokenAddress = order.crypto.token[0];
+    const gasEstimate = await vaultContract.withdrawToken.estimateGas(
+      tokenAddress,
+      order.crypto.amount,
+    );
+    transactionResponse = await vaultContract.withdrawToken(
+      tokenAddress,
+      order.crypto.amount,
+      { gasLimit: gasEstimate },
+    );
+  }
 
   const receipt = await transactionResponse.wait();
   if (receipt.status !== 1) {
