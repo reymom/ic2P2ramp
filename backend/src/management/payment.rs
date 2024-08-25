@@ -21,10 +21,10 @@ pub async fn handle_evm_payment_completion(
     order_id: u64,
     chain_id: u64,
     gas: Option<u32>,
-) -> Result<()> {
+) -> Result<String> {
     let tx_hash = Ic2P2ramp::release_funds(order_id, chain_id, gas).await?;
     transaction::spawn_transaction_checker(
-        tx_hash,
+        tx_hash.clone(),
         chain_id,
         60,
         Duration::from_secs(4),
@@ -38,13 +38,13 @@ pub async fn handle_evm_payment_completion(
             }
         },
     );
-    Ok(())
+    Ok(tx_hash)
 }
 
 pub async fn handle_icp_payment_completion(
     order_id: u64,
     ledger_principal: &Principal,
-) -> Result<()> {
+) -> Result<String> {
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -60,7 +60,7 @@ pub async fn handle_icp_payment_completion(
         owner: onramper_principal,
         subaccount: None,
     };
-    ICPRamp::transfer(
+    let index = ICPRamp::transfer(
         *ledger_principal,
         to_account,
         amount - order.base.crypto.fee,
@@ -68,7 +68,9 @@ pub async fn handle_icp_payment_completion(
     )
     .await?;
 
-    super::order::set_order_completed(order_id)
+    super::order::set_order_completed(order_id)?;
+
+    Ok(index.to_string())
 }
 
 pub async fn get_revolut_consent(

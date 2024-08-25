@@ -73,7 +73,7 @@ impl Order {
         offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
         blockchain: Blockchain,
         token: Option<String>,
-        crypto_amount: u64,
+        crypto_amount: u128,
         offramper_address: TransactionAddress,
     ) -> Result<Self> {
         offramper_address.validate()?;

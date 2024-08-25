@@ -85,7 +85,7 @@ async fn transfer_value(
 #[ic_cdk::update]
 async fn test_deposit_funds(
     chain_id: u64,
-    amount: u64,
+    amount: u128,
     token_address: Option<String>,
     gas: Option<u32>,
 ) -> Result<String> {
@@ -209,7 +209,7 @@ fn create_order(
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
     token_address: Option<String>,
-    crypto_amount: u64,
+    crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
 ) -> Result<u64> {
@@ -388,7 +388,11 @@ async fn execute_revolut_payment(order_id: u64) -> Result<String> {
 // --------------------
 
 #[ic_cdk::update]
-async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u32>) -> Result<()> {
+async fn verify_transaction(
+    order_id: u64,
+    transaction_id: String,
+    gas: Option<u32>,
+) -> Result<String> {
     ic_cdk::println!(
         "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",
         order_id,
@@ -519,15 +523,18 @@ async fn verify_transaction(order_id: u64, transaction_id: String, gas: Option<u
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            payment_management::handle_evm_payment_completion(order_id, chain_id, gas).await?;
+            let tx_hash =
+                payment_management::handle_evm_payment_completion(order_id, chain_id, gas).await?;
+            return Ok(tx_hash);
         }
         Blockchain::ICP { ledger_principal } => {
-            payment_management::handle_icp_payment_completion(order_id, &ledger_principal).await?;
+            let index =
+                payment_management::handle_icp_payment_completion(order_id, &ledger_principal)
+                    .await?;
+            return Ok(index);
         }
         _ => todo!(),
     }
-
-    Ok(())
 }
 
 ic_cdk::export_candid!();

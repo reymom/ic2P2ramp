@@ -11,12 +11,12 @@ pub enum Blockchain {
 pub struct Crypto {
     pub blockchain: Blockchain,
     pub token: Option<String>, // For EVM tokens, this will be the contract address
-    pub amount: u64,
-    pub fee: u64,
+    pub amount: u128,
+    pub fee: u128,
 }
 
 impl Crypto {
-    pub fn new(blockchain: Blockchain, token: Option<String>, amount: u64, fee: u64) -> Self {
+    pub fn new(blockchain: Blockchain, token: Option<String>, amount: u128, fee: u128) -> Self {
         Self {
             blockchain,
             token,

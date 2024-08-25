@@ -63,7 +63,7 @@ impl Ic2P2ramp {
 
     pub async fn deposit_funds(
         chain_id: u64,
-        amount: u64,
+        amount: u128,
         token_address: Option<String>,
         gas: Option<u32>,
     ) -> Result<String> {
@@ -112,7 +112,7 @@ impl Ic2P2ramp {
         gas: U256,
         fee_estimates: FeeEstimates,
         chain_id: u64,
-        amount: u64,
+        amount: u128,
         token_address: String,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
@@ -151,7 +151,7 @@ impl Ic2P2ramp {
         gas: U256,
         fee_estimates: FeeEstimates,
         chain_id: u64,
-        amount: u64,
+        amount: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -183,7 +183,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         offramper_address: String,
         token_address: Option<String>,
-        amount: u64,
+        amount: u128,
         gas: Option<u32>,
     ) -> Result<String> {
         let gas = U256::from(gas.unwrap_or(21_000));
@@ -218,7 +218,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         offramper_address: String,
         token_address: String,
-        amount: u64,
+        amount: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -258,7 +258,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         offramper_address: String,
         token_address: Option<String>,
-        amount: u64,
+        amount: u128,
         gas: Option<u32>,
     ) -> Result<String> {
         let gas = U256::from(gas.unwrap_or(21_000));
@@ -293,7 +293,7 @@ impl Ic2P2ramp {
         chain_id: u64,
         offramper_address: String,
         token_address: String,
-        amount: u64,
+        amount: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -386,7 +386,7 @@ impl Ic2P2ramp {
         offramper_address: String,
         onramper_address: String,
         token_address: String,
-        amount: u64,
+        amount: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -428,7 +428,7 @@ impl Ic2P2ramp {
         gas: U256,
         fee_estimates: FeeEstimates,
         chain_id: u64,
-        amount: u64,
+        amount: u128,
         offramper_address: String,
         onramper_address: String,
         vault_manager_address: String,
