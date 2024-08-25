@@ -15,10 +15,10 @@ export const getEvmTokenOptions = (chainId: number): TokenOption[] => {
 
   return [
     {
-      name: mapping.native[0],
+      name: mapping.native,
       address: '',
       isNative: true,
-      rateSymbol: mapping.native[0],
+      rateSymbol: mapping.native,
     },
     {
       name: mapping.usdt[0],
