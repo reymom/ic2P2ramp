@@ -34,6 +34,22 @@ export const depositInVault = async (
       gasLimit: gasEstimate,
     });
   } else if (selectedToken.address !== '') {
+    // approve the vault contract to spend the tokens
+    const tokenContract = new ethers.Contract(
+      selectedToken.address,
+      [
+        'function approve(address spender, uint256 amount) external returns (bool)',
+      ],
+      signer,
+    );
+
+    const approveTx = await tokenContract.approve(
+      getVaultAddress(chainId),
+      cryptoAmount,
+    );
+    await approveTx.wait();
+
+    // make deposit
     const gasEstimate = await vaultContract.depositToken.estimateGas(
       selectedToken.address,
       cryptoAmount,
