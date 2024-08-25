@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
 
 import icpLogo from "../../assets/icp-logo.svg";
 import ethereumLogo from "../../assets/ethereum-logo.png";
@@ -15,7 +16,6 @@ import { withdrawFromVault } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
-import { useAccount } from 'wagmi';
 
 interface OrderProps {
     order: OrderState;
@@ -26,6 +26,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, PaymentProvider]>();
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [txHash, setTxHash] = useState<string>();
 
     const { chainId } = useAccount();
     const { user, userType, fetchIcpBalance } = useUser();
@@ -44,6 +45,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         : 'Locked' in order ? order.Locked.base.fiat_amount + order.Locked.base.offramper_fee
             : 'Completed' in order ? order.Completed.fiat_amount + order.Completed.offramper_fee
                 : null;
+
+    const explorerUrl = Object.values(NetworkIds).find(network => network.id === chainId)?.explorer;
 
     const handleProviderSelection = (selectedProviderType: PaymentProviderTypes) => {
         if (!user) return;
@@ -65,6 +68,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
+        setTxHash(undefined);
         setMessage(`Commiting to loan order ${orderId}...`);
 
         try {
@@ -87,27 +91,37 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
-                    const explorerUrl = Object.values(NetworkIds).find(network => network.id === orderBlockchain.EVM.chain_id)?.explorer;
-                    const txLink = `${explorerUrl}${result.Ok}`;
-                    setMessage(`EVM transaction sent. Wait for confirmation! tx = <a href="${txLink}" target="_blank">${truncate(result.Ok, 8, 8)}</a>`);
-                    setTimeout(() => {
-                        refetchOrders();
-                    }, 20000);
+                    setTxHash(result.Ok);
+                    const provider = new ethers.BrowserProvider(window.ethereum);
+                    provider.once(result.Ok, (transactionReceipt) => {
+                        if (transactionReceipt.status === 1) {
+                            setMessage("Order Locked!");
+                            setTxHash(undefined);
+                            setIsLoading(false);
+                            setTimeout(() => {
+                                refetchOrders();
+                            }, 4500);
+                        } else {
+                            setMessage("Transaction failed!");
+                            setTxHash(undefined);
+                        }
+                    });
                 } else {
-                    setMessage(`Order Locked!`)
+                    setMessage("Order Locked!");
+                    setIsLoading(false);
                     setTimeout(() => {
                         refetchOrders();
-                    }, 1000);
+                    }, 2500);
                 }
             } else {
                 const errorMessage = rampErrorToString(result.Err);
                 setMessage(errorMessage);
+                setIsLoading(false);
             }
         } catch (err) {
+            setIsLoading(false);
             console.error(err);
             setMessage(`Error commiting to order ${orderId}.`);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -116,6 +130,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         try {
             setIsLoading(true);
+            setTxHash(undefined);
             setMessage(`Removing order ${orderId}...`);
 
             switch (blockchainToBlockchainType(orderBlockchain)) {
@@ -163,6 +178,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
 
         setIsLoading(true);
+        setTxHash(undefined);
         setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
         try {
             // Send transaction ID to backend to verify payment
@@ -170,26 +186,39 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             if ('Ok' in response) {
                 setMessage(`Order Verified and Funds Transferred successfully!`);
                 if ('EVM' in orderBlockchain!) {
-                    setMessage("EVM transaction sent. Wait for confirmation!");
-                    setTimeout(() => {
-                        refetchOrders();
-                    }, 20000);
+                    setTxHash(response.Ok);
+
+                    const provider = new ethers.BrowserProvider(window.ethereum);
+                    provider.once(response.Ok, (transactionReceipt) => {
+                        if (transactionReceipt.status === 1) {
+                            setMessage("Order Completed!");
+                            setIsLoading(false);
+                            setTxHash(undefined);
+                            setTimeout(() => {
+                                refetchOrders();
+                            }, 4500);
+                        } else {
+                            setMessage("Transaction failed!");
+                            setTxHash(undefined);
+                        }
+                    });
                 } else {
-                    setMessage(`Order Locked!`)
+                    setMessage("Order Locked!");
+                    setIsLoading(false);
                     setTimeout(() => {
                         refetchOrders();
                         fetchIcpBalance();
-                    }, 1000);
+                    }, 2000);
                 }
             } else {
+                setIsLoading(false);
                 const errorMessage = rampErrorToString(response.Err);
                 setMessage(errorMessage);
             }
         } catch (err) {
+            setIsLoading(false);
             console.error(err);
             setMessage(`Error verifying payment for order ${orderId.toString()}.`);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -396,10 +425,16 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             {isLoading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
+                    <div className="text-sm font-medium text-gray-700">Processing transaction...
+                        {txHash && <a href={`${explorerUrl}${txHash}`} target="_blank">{truncate(txHash, 8, 8)}</a>}
+                    </div>
                 </div>
             ) : (
-                message && <div className="message-container" dangerouslySetInnerHTML={{ __html: message }}></div>
+                message && (
+                    <div className="mt-4 text-sm font-medium">
+                        <p className="text-gray-700 break-all">{message}</p>
+                    </div>
+                )
             )}
         </li>
     );

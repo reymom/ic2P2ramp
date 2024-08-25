@@ -46,7 +46,6 @@ const CreateOrder: React.FC = () => {
                 tokens = getIcpTokenOptions();
             }
 
-            console.log("[setTokenOptions] tokens = ", tokens);
             setTokenOptions(tokens);
         }
     }, [blockchainType, chainId]);
@@ -313,6 +312,12 @@ const CreateOrder: React.FC = () => {
 
                 {isValidAddressMessage()}
 
+                {chainId && selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
+                    <div className={`my-2 text-sm font-medium ${isValidChainId(chainId) ? 'text-green-600' : 'text-red-600'}`}>
+                        {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
+                    </div>
+                )}
+
                 <hr className="border-t border-gray-300 w-full my-4" />
 
                 <div className="my-4 mx-auto">
@@ -348,11 +353,6 @@ const CreateOrder: React.FC = () => {
 
                 <hr className="border-t border-gray-300 w-full my-4" />
 
-                {chainId && selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
-                    <div className={`mb-4 ${isValidChainId(chainId) ? 'text-green-500' : 'text-red-500'}`}>
-                        {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
-                    </div>
-                )}
                 <button
                     type="submit"
                     className={`px-4 py-2 rounded 
