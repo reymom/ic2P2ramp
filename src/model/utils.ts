@@ -63,10 +63,6 @@ export const stringToUserType = (userType: UserTypes): UserType => {
 // -------------
 // Order Filters
 // -------------
-export const filterToFilterType = (filter: OrderFilter): OrderFilterTypes => {
-  return candidToEnum(filter);
-};
-
 export const stringToOrderFilter = (
   key: OrderFilterTypes,
   value: any,
@@ -77,12 +73,6 @@ export const stringToOrderFilter = (
 // -------------------
 // Order State Filters
 // -------------------
-export const filterStateToFilterStateType = (
-  stateFilter: OrderStateFilter,
-): OrderStateFilterTypes => {
-  return candidToEnum(stateFilter);
-};
-
 export const stringToOrderStateFilter = (
   key: OrderStateFilterTypes,
 ): OrderStateFilter => {
