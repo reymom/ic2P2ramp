@@ -2,17 +2,17 @@
 
 DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
 
-# shellcheck source=../.env
+shellcheck source=../.env
 source "$DIR/../.env" || {
   echo "error while sourcing env file"
   exit
 }
 
-cargo build --release --target wasm32-unknown-unknown --package backend
+# cargo build --release --target wasm32-unknown-unknown --package backend
 
-candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+# candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
 
-dfx start --background --clean
+# dfx start --background --clean
 
 dfx identity use minter
 export MINTER_ACCOUNT_ID=$(dfx ledger account-id)
@@ -68,6 +68,8 @@ dfx deploy internet_identity
 
 dfx deps deploy xrc
 
+dfx deploy evm_rpc
+
 dfx generate backend
 
 dfx deploy backend --argument "(
@@ -76,7 +78,49 @@ dfx deploy backend --argument "(
       name = \"dfx_test_key\";
       curve = variant { secp256k1 };
     };
-    chains = vec {};
+    chains = vec {
+      record {
+        chain_id = 11155111 : nat64;
+        vault_manager_address = \"0x42ad57ab757ea55960f7d9805d82fa818683096b\";
+        services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+      };
+      record {
+        chain_id = 84532 : nat64;
+        vault_manager_address = \"0xfa29381958DD8a2dD86246FC0Ab2932972640580\";
+        services = variant {
+          Custom = record {
+            chainId = 84532 : nat64;
+            services = vec {
+              record { url = \"https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+            };
+          }
+        };
+      };
+      record {
+        chain_id = 11155420 : nat64;
+        vault_manager_address = \"0x9025e74D23384f664CfEB07F1d8ABd19570758B5\";
+        services = variant {
+          Custom = record {
+            chainId = 11155420 : nat64;
+            services = vec {
+              record { url = \"https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+            };
+          }
+        };
+      };
+      record {
+        chain_id = 2442 : nat64;
+        vault_manager_address = \"0x9025e74D23384f664CfEB07F1d8ABd19570758B5\";
+        services = variant {
+          Custom = record {
+            chainId = 2442 : nat64;
+            services = vec {
+              record { url = \"https://polygonzkevm-cardona.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+            };
+          }
+        };
+      };
+    };
     paypal = record {
       client_id = \"${PAYPAL_CLIENT_ID}\";
       client_secret = \"${PAYPAL_CLIENT_SECRET}\";
@@ -95,38 +139,38 @@ dfx deploy backend --argument "(
 
 dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
 
-export ACCOUNT_ID=$(dfx ledger account-id --of-principal zkp5d-qz6bw-3glxn-l2635-w5fyq-rxjb2-27zcp-deyty-ayjfn-kvbqh-5ae)
+# export ACCOUNT_ID=$(dfx ledger account-id --of-principal x43o3-z4337-mle53-vdvne-poc44-i7e66-rr34k-3sdep-uebye-i4r3t-7qe)
 
-export TO_PRINCIPAL=dtuky-kq5aj-vxqk7-m4kmi-kv4ld-zvsno-pdufp-5lwim-hnowi-amamz-iqe
-export TO_SUBACCOUNT="null"
-export AMOUNT="200_000_000"
-export FEE="10_000"
+# export TO_PRINCIPAL=7befc-xxqta-lqnm5-r6vfg-vfpss-mubwb-mosuw-wnhhj-qpfvf-67la2-hqe
+# export TO_SUBACCOUNT="null"
+# export AMOUNT="200_000_000"
+# export FEE="10_000"
 
-dfx canister call ryjl3-tyaaa-aaaaa-aaaba-cai icrc1_transfer \
-'(record {
-    to = record {                           
-        owner = principal "'$TO_PRINCIPAL'";
-        subaccount = '$TO_SUBACCOUNT';
-    };               
-    fee = opt '$FEE';
-    memo = null;
-    from_subaccount = null;
-    created_at_time = null;
-    amount = '$AMOUNT';
-})'
+# dfx canister call ryjl3-tyaaa-aaaaa-aaaba-cai icrc1_transfer \
+# '(record {
+#     to = record {
+#         owner = principal "'$TO_PRINCIPAL'";
+#         subaccount = '$TO_SUBACCOUNT';
+#     };
+#     fee = opt '$FEE';
+#     memo = null;
+#     from_subaccount = null;
+#     created_at_time = null;
+#     amount = '$AMOUNT';
+# })'
 
-export AMOUNT="100_000_000"
-export FEE="10"
+# export AMOUNT="100_000_000"
+# export FEE="10"
 
-dfx canister call mc6ru-gyaaa-aaaar-qaaaq-cai icrc1_transfer \
-'(record {
-    to = record {                           
-        owner = principal "'$TO_PRINCIPAL'";
-        subaccount = '$TO_SUBACCOUNT';
-    };               
-    fee = opt '$FEE';
-    memo = null;
-    from_subaccount = null;
-    created_at_time = null;
-    amount = '$AMOUNT';
-})'
+# dfx canister call mc6ru-gyaaa-aaaar-qaaaq-cai icrc1_transfer \
+# '(record {
+#     to = record {
+#         owner = principal "'$TO_PRINCIPAL'";
+#         subaccount = '$TO_SUBACCOUNT';
+#     };
+#     fee = opt '$FEE';
+#     memo = null;
+#     from_subaccount = null;
+#     created_at_time = null;
+#     amount = '$AMOUNT';
+# })'

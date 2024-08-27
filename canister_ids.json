@@ -1,8 +1,11 @@
 {
   "backend": {
-    "ic": "gtp43-xiaaa-aaaap-qhlvq-cai"
+    "ic": "a3hhm-taaaa-aaaap-qht2a-cai"
   },
   "frontend": {
     "ic": "gginw-waaaa-aaaap-qhlwa-cai"
+  },
+  "icrc1_ledger_canister": {
+    "ic": "ajbqv-7qaaa-aaaap-qhtza-cai"
   }
 }
