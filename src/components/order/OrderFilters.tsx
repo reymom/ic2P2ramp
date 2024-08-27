@@ -99,11 +99,11 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
     }
 
     return (
-        <div className="mb-4">
+        <div className="flex gap-4 items-center flex-grow">
             <select
                 value={filterType || 'all'}
                 onChange={handleFilterTypeChange}
-                className="block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
                 <option value='all'>All</option>
                 <option value='ByState:Created'>Created</option>
@@ -130,7 +130,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 <select
                     value={selectedAddress?.address || ''}
                     onChange={handleAddressChange}
-                    className="block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <option value=''>Select Address</option>
                     {user?.addresses.map((addr, index) => (
@@ -145,7 +145,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 <select
                     value={blockchainType || ""}
                     onChange={(e) => setBlockchainType(e.target.value !== "" ? e.target.value as BlockchainTypes : null)}
-                    className="block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="">Select Blockchain</option>
                     <option value="EVM">EVM</option>
@@ -158,9 +158,9 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 <select
                     value={(selectedBlockchain && 'EVM' in selectedBlockchain) ? Number(selectedBlockchain.EVM.chain_id) : ''}
                     onChange={handleChainIdChange}
-                    className="block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                    <option value="">Select Chain ID</option>
+                    <option value="">Select Chain</option>
                     {Object.keys(NetworkIds).map(networkId => {
                         const network = NetworkIds[networkId as keyof typeof NetworkIds];
                         return (
@@ -175,7 +175,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
                 <select
                     value={(selectedBlockchain && 'ICP' in selectedBlockchain) ? selectedBlockchain.ICP.ledger_principal.toString() : ''}
                     onChange={handleCanisterChange}
-                    className="block w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="">Select ICP Token</option>
                     {getIcpTokenOptions().map(token => (
