@@ -181,7 +181,6 @@ type Result_1 = variant { Ok : User; Err : RampError };
 type Result_2 = variant { Ok : nat64; Err : RampError };
 type Result_3 = variant { Ok : text; Err : RampError };
 type Result_4 = variant { Ok : nat; Err : RampError };
-type Result_5 = variant { Ok : OrderState; Err : RampError };
 type RevolutConfig = record {
   kid : text;
   tan : text;
@@ -229,8 +228,9 @@ service : (InitArg) -> {
   get_evm_address : () -> (text) query;
   get_exchange_rate : (text, text) -> (Result_3);
   get_icp_transaction_fee : (principal) -> (Result_4) query;
-  get_order : (nat64) -> (Result_5) query;
-  get_orders : (opt OrderFilter) -> (vec OrderState) query;
+  get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
+      vec OrderState,
+    ) query;
   get_rpc_providers : () -> (vec ProviderView) query;
   lock_order : (
       nat64,
@@ -248,6 +248,7 @@ service : (InitArg) -> {
   test_get_consent_url : () -> (Result_3);
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_3);
+  test_paypal : () -> (Result_3);
   transfer_value : (nat64, text, nat, opt int32) -> (Result_3);
   transform_remove_expires_in : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;

@@ -36,51 +36,77 @@ pub fn create_order(
     Ok(order.id)
 }
 
-pub fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
+pub fn get_orders(
+    filter: Option<OrderFilter>,
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Vec<OrderState> {
     match filter {
-        None => storage::ORDERS.with(|p| p.borrow().iter().map(|(_, v)| v.clone()).collect()),
-        Some(OrderFilter::ByOfframperId(offramper_id)) => {
-            storage::filter_orders(|order_state| match order_state {
+        None => storage::ORDERS.with(|p| {
+            let start_index = page.unwrap_or(1).saturating_sub(1) * page_size.unwrap_or(10);
+            let end_index = start_index + page_size.unwrap_or(10);
+
+            p.borrow()
+                .iter()
+                .skip(start_index as usize)
+                .take((end_index - start_index) as usize)
+                .map(|(_, v)| v.clone())
+                .collect()
+        }),
+        Some(OrderFilter::ByOfframperId(offramper_id)) => storage::filter_orders(
+            |order_state| match order_state {
                 OrderState::Created(order) => order.offramper_user_id == offramper_id,
                 OrderState::Locked(order) => order.base.offramper_user_id == offramper_id,
                 _ => false,
-            })
-        }
-        Some(OrderFilter::ByOnramperId(onramper_id)) => {
-            storage::filter_orders(|order_state| match order_state {
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::ByOnramperId(onramper_id)) => storage::filter_orders(
+            |order_state| match order_state {
                 OrderState::Locked(order) => order.onramper_user_id == onramper_id,
                 _ => false,
-            })
-        }
-        Some(OrderFilter::ByOfframperAddress(address)) => {
-            storage::filter_orders(|order_state| match order_state {
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::ByOfframperAddress(address)) => storage::filter_orders(
+            |order_state| match order_state {
                 OrderState::Created(order) => order.offramper_address == address,
                 OrderState::Locked(order) => order.base.offramper_address == address,
                 _ => false,
-            })
-        }
-        Some(OrderFilter::LockedByOnramper(address)) => {
-            storage::filter_orders(|order_state| match order_state {
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::LockedByOnramper(address)) => storage::filter_orders(
+            |order_state| match order_state {
                 OrderState::Locked(order) => order.onramper_address == address,
                 _ => false,
-            })
-        }
-        Some(OrderFilter::ByState(state)) => {
-            storage::filter_orders(|order_state| match (state.clone(), order_state) {
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::ByState(state)) => storage::filter_orders(
+            |order_state| match (state.clone(), order_state) {
                 (OrderStateFilter::Created, OrderState::Created(_))
                 | (OrderStateFilter::Locked, OrderState::Locked(_))
                 | (OrderStateFilter::Completed, OrderState::Completed(_))
                 | (OrderStateFilter::Cancelled, OrderState::Cancelled(_)) => true,
                 _ => false,
-            })
-        }
-        Some(OrderFilter::ByBlockchain(blockchain)) => {
-            storage::filter_orders(|order_state| match order_state {
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::ByBlockchain(blockchain)) => storage::filter_orders(
+            |order_state| match order_state {
                 OrderState::Created(order) => order.crypto.blockchain == blockchain,
                 OrderState::Locked(order) => order.base.crypto.blockchain == blockchain,
                 _ => false,
-            })
-        }
+            },
+            page,
+            page_size,
+        ),
     }
 }
 

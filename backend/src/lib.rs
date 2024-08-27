@@ -93,6 +93,11 @@ async fn test_deposit_funds(
 }
 
 #[ic_cdk::update]
+async fn test_paypal() -> Result<String> {
+    paypal::auth::get_paypal_access_token().await
+}
+
+#[ic_cdk::update]
 async fn test_get_consent_url() -> Result<String> {
     let consent_id = revolut::consent::create_account_access_consent(
         "1.00",
@@ -198,8 +203,12 @@ fn add_user_payment_provider(user_id: u64, payment_provider: PaymentProvider) ->
 // ------------------
 
 #[ic_cdk::query]
-fn get_orders(filter: Option<OrderFilter>) -> Vec<OrderState> {
-    order_management::get_orders(filter)
+fn get_orders(
+    filter: Option<OrderFilter>,
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Vec<OrderState> {
+    order_management::get_orders(filter, page, page_size)
 }
 
 #[ic_cdk::update]

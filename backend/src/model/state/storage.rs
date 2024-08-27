@@ -88,10 +88,13 @@ pub fn get_order(order_id: &u64) -> Result<OrderState> {
         .ok_or_else(|| RampError::OrderNotFound)
 }
 
-pub fn filter_orders<F>(filter: F) -> Vec<OrderState>
+pub fn filter_orders<F>(filter: F, page: Option<u32>, page_size: Option<u32>) -> Vec<OrderState>
 where
     F: Fn(&OrderState) -> bool,
 {
+    let start_index = page.unwrap_or(1).saturating_sub(1) * page_size.unwrap_or(10);
+    let end_index = start_index + page_size.unwrap_or(10);
+
     ORDERS.with_borrow(|orders| {
         orders
             .iter()
@@ -102,6 +105,8 @@ where
                     None
                 }
             })
+            .skip(start_index as usize)
+            .take((end_index - start_index) as usize)
             .collect()
     })
 }
