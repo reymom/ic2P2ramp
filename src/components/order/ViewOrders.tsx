@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons';
+
 
 import { backend } from '../../declarations/backend';
 import { OrderFilter, OrderState } from '../../declarations/backend/backend.did';
 import OrderFilters from './OrderFilters';
 import Order from './Order';
-import { filterStateToFilterStateType } from '../../model/utils';
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
-    const [orders, setOrders] = useState<OrderState[]>([]);
-    const [cachedAll, setCachedAll] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [orders, setOrders] = useState<OrderState[]>([]);
     const [filter, setFilter] = useState<OrderFilter | null>(initialFilter);
+    const [page, setPage] = useState(1);
+
+    const pageSize = 5;
 
     useEffect(() => {
-        fetchOrders(false);
-    }, [filter]);
+        fetchOrders();
+    }, [filter, page]);
 
     useEffect(() => {
         const clientId = process.env.FRONTEND_PAYPAL_CLIENT_ID;
@@ -37,17 +41,10 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
         }
     }, []);
 
-    const fetchOrders = async (refetch: Boolean) => {
-        if (!refetch && cachedAll) return;
+    const fetchOrders = async () => {
         try {
             setLoading(true);
-            let orders: OrderState[] = [];
-            if (!filter || !cachedAll) {
-                orders = await backend.get_orders([]);
-                setCachedAll(true);
-            } else if (filter) {
-                orders = await backend.get_orders([filter!]);
-            }
+            const orders = await backend.get_orders(filter ? [filter] : [], [page], [pageSize]);
             setOrders(orders);
         } catch (err) {
             console.error(err);
@@ -56,65 +53,69 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
         }
     };
 
-    const filteredOrders = orders.filter(order => {
-        if (filter === null) return true;
+    const handleNextPage = () => {
+        setPage((prevPage) => prevPage + 1);
+    };
 
-        if ("ByState" in filter) {
-            return (filterStateToFilterStateType(filter.ByState)) in order;
-        };
+    const handlePreviousPage = () => {
+        setPage((prevPage) => (prevPage > 1 ? prevPage - 1 : 1));
+    };
 
-        if ("ByOfframperAddress" in filter) {
-            const offramperAddress = "Created" in order ? order.Created.offramper_address :
-                "Locked" in order ? order.Locked.base.offramper_address : null;
-
-            return offramperAddress &&
-                (offramperAddress.address == filter.ByOfframperAddress.address)
-        };
-
-        if ("LockedByOnramper" in filter) {
-            return "Locked" in order &&
-                order.Locked.onramper_address.address === filter.LockedByOnramper.address
-        };
-
-        if ("ByBlockchain" in filter) {
-            const orderBlockchain = "Created" in order ? order.Created.crypto.blockchain :
-                "Locked" in order ? order.Locked.base.crypto.blockchain :
-                    "Completed" in order ? order.Completed.blockchain : null;
-
-            return orderBlockchain && (
-                ('EVM' in orderBlockchain && 'EVM' in filter.ByBlockchain &&
-                    orderBlockchain.EVM.chain_id === filter.ByBlockchain.EVM.chain_id
-                ) || ('ICP' in orderBlockchain && 'ICP' in filter.ByBlockchain &&
-                    orderBlockchain.ICP.ledger_principal.toString() === filter.ByBlockchain.ICP.ledger_principal.toString()
-                )
-            );
-        }
-
-        if ("ByOfframperId" in filter) {
-            return ("Created" in order && order.Created.offramper_user_id == filter.ByOfframperId) ||
-                ("Locked" in order && order.Locked.base.offramper_user_id == filter.ByOfframperId)
-        }
-
-        if ("ByOnramperId" in filter) {
-            return "Locked" in order && order.Locked.onramper_user_id == filter.ByOnramperId
-        }
-
-        return false;
-    });
+    const bottomPagination =
+        <div className="flex justify-between items-center my-4">
+            <button
+                onClick={handlePreviousPage}
+                disabled={page === 1}
+                className={`px-4 py-2 rounded-lg text-white ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+            >
+                <FontAwesomeIcon icon={faArrowLeft} />
+            </button>
+            <button
+                onClick={handleNextPage}
+                disabled={orders.length === 0}
+                className={`px-4 py-2 rounded-lg text-white ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+            >
+                <FontAwesomeIcon icon={faArrowRight} />
+            </button>
+        </div>
 
     return (
         <div className="container mx-auto p-4">
-            <h2 className="text-xl font-semibold mb-4">View Orders</h2>
-            <OrderFilters setFilter={setFilter} />
+            {/* <h2 className="text-xl font-semibold mb-4">View Orders</h2> */}
+            <div className="flex justify-between items-center mb-4">
+                <button
+                    onClick={handlePreviousPage}
+                    disabled={page === 1}
+                    className={`px-4 py-2 rounded-lg text-white ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                >
+                    <FontAwesomeIcon icon={faArrowLeft} />
+                </button>
+                <div className="flex flex-grow mx-2">
+                    <OrderFilters setFilter={setFilter} />
+                </div>
+                <button
+                    onClick={handleNextPage}
+                    disabled={orders.length === 0}
+                    className={`px-4 py-2 rounded-lg text-white ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                >
+                    <FontAwesomeIcon icon={faArrowRight} />
+                </button>
+            </div>
+
             {loading ? (
-                <div className="loader" />
+                <div className="mt-4 flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-700">Fetching orders...</div>
+                </div>
             ) : (
-                <ul className="space-y-4">
-                    {filteredOrders.map((order, index) => (
-                        <Order key={index} order={order} refetchOrders={() => fetchOrders(true)} />
+                <ul className="space-y-2">
+                    {orders.map((order, index) => (
+                        <Order key={index} order={order} refetchOrders={fetchOrders} />
                     ))}
                 </ul>
             )}
+
+            {orders.length > 0 ? bottomPagination : null}
         </div >
     );
 }
