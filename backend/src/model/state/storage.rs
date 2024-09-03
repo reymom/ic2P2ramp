@@ -74,6 +74,29 @@ pub fn find_user_by_login_address(login_address: &LoginAddress) -> Result<u64> {
     })
 }
 
+pub fn reset_password_user(login_address: &LoginAddress, password: String) -> Result<u64> {
+    USERS.with_borrow_mut(|users| {
+        let mut user_to_update = None;
+
+        for (_, user) in users.iter() {
+            if user.login == *login_address {
+                user_to_update = Some(User {
+                    hashed_password: Some(password.clone()),
+                    ..user
+                })
+            }
+        }
+
+        if let Some(user) = user_to_update {
+            let id = user.id;
+            users.insert(id, user);
+            return Ok(id);
+        } else {
+            return Err(RampError::UserNotFound);
+        }
+    })
+}
+
 // ------
 // ORDERS
 // ------

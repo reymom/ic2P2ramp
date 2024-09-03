@@ -51,6 +51,7 @@ pub struct InitArg {
     pub ecdsa_key_id: EcdsaKeyId,
     pub paypal: PaypalConfig,
     pub revolut: RevolutConfig,
+    pub proxy_url: String,
 }
 
 impl TryFrom<InitArg> for State {
@@ -62,6 +63,7 @@ impl TryFrom<InitArg> for State {
             ecdsa_key_id,
             paypal,
             revolut,
+            proxy_url,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -103,6 +105,7 @@ impl TryFrom<InitArg> for State {
                 kid: revolut.kid,
                 tan: revolut.tan,
             },
+            proxy_url,
             icp_fees: HashMap::new(),
         };
         Ok(state)

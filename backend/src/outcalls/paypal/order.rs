@@ -53,8 +53,7 @@ pub struct Payer {
 }
 
 pub async fn fetch_paypal_order(access_token: &str, order_id: &str) -> Result<PayPalOrderDetails> {
-    let api_url = read_state(|s| s.paypal.api_url.clone());
-    let url = format!("{}/v2/checkout/orders/{}", api_url, order_id);
+    let (api_url, proxy_url) = read_state(|s| (s.paypal.api_url.clone(), s.proxy_url.clone()));
 
     let request_headers = vec![
         HttpHeader {
@@ -65,10 +64,18 @@ pub async fn fetch_paypal_order(access_token: &str, order_id: &str) -> Result<Pa
             name: "Authorization".to_string(),
             value: format!("Bearer {}", access_token),
         },
+        HttpHeader {
+            name: "x-forwarded-host".to_string(),
+            value: api_url,
+        },
+        HttpHeader {
+            name: "idempotency-key".to_string(),
+            value: "order-key-0".to_string(),
+        },
     ];
 
     let request = CanisterHttpRequestArgument {
-        url,
+        url: format!("{}/v2/checkout/orders/{}", proxy_url, order_id),
         method: HttpMethod::GET,
         body: None,
         max_response_bytes: Some(5096), // content-length is 2630 bytes
