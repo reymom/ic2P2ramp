@@ -10,6 +10,12 @@ pub type Result<T> = std::result::Result<T, RampError>;
 
 #[derive(Error, Debug, CandidType)]
 pub enum RampError {
+    #[error("Only controller is allowed")]
+    OnlyController,
+
+    #[error("Only frontend is allowed")]
+    OnlyFrontend,
+
     #[error("Order Not Found")]
     OrderNotFound,
 

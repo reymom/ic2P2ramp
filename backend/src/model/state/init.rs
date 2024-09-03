@@ -107,6 +107,7 @@ impl TryFrom<InitArg> for State {
             },
             proxy_url,
             icp_fees: HashMap::new(),
+            frontend_canister: None,
         };
         Ok(state)
     }
