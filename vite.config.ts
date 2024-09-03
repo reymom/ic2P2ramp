@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
 import path from 'path';
+import { resolve } from 'path';
 
 dotenv.config();
 
@@ -33,6 +34,21 @@ export default defineConfig({
     environment('all', { prefix: 'CANISTER_' }),
     environment('all', { prefix: 'DFX_' }),
     environment('all', { prefix: 'FRONTEND_' }),
+    {
+      name: 'copy-assets',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: '.well-known/ic-domains',
+          source: 'app.ic2p2ramp.xyz',
+        });
+        this.emitFile({
+          type: 'asset',
+          fileName: '.ic-assets.json',
+          source: '[{"match": ".well-known", "ignore": false}]',
+        });
+      },
+    },
   ],
   test: {
     environment: 'jsdom',
