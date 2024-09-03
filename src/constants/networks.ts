@@ -1,5 +1,5 @@
 export const NetworkIds =
-  process.env.FRONTEND_ENV === 'production'
+  process.env.FRONTEND_EVM_ENV === 'production'
     ? {
         MAINNET: {
           id: 1,

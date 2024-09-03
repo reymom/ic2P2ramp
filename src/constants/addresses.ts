@@ -45,7 +45,7 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
 };
 
 export const addresses =
-  process.env.FRONTEND_ENV === 'production' ? prodAddresses : testAddresses;
+  process.env.FRONTEND_EVM_ENV === 'production' ? prodAddresses : testAddresses;
 
 export const getVaultAddress = (chainId: number): string => {
   return addresses[chainId].vault;
@@ -55,7 +55,7 @@ export const tokenCanisters = {
   ICP: 'ryjl3-tyaaa-aaaaa-aaaba-cai',
   OpenChat: '',
   ckBTC:
-    process.env.FRONTEND_ENV === 'production'
+    process.env.FRONTEND_ICP_ENV === 'production'
       ? 'mxzaz-hqaaa-aaaar-qaada-cai'
       : 'mc6ru-gyaaa-aaaar-qaaaq-cai',
 };
