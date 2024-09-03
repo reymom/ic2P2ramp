@@ -14,6 +14,12 @@ import { UserProvider } from './components/user/UserContext';
 import { config } from './wagmi';
 
 
+declare global {
+    interface Window {
+        Telegram?: any;
+    }
+}
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
