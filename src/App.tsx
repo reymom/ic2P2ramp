@@ -13,6 +13,9 @@ import CreateOrder from './components/order/CreateOrder';
 import ViewOrders from './components/order/ViewOrders';
 import { userTypeToString } from './model/utils';
 import { OrderFilter } from './declarations/backend/backend.did';
+import ConfirmEmail from './components/user/ConfirmEmail';
+import ResetPassword from './components/user/ResetPassword';
+import ForgotPassword from './components/user/ForgotPassword';
 
 function App() {
     const { user } = useUser();
@@ -22,6 +25,15 @@ function App() {
             getInitialOrderFilter();
         }
     }, [user]);
+
+    useEffect(() => {
+        if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+
+            tg.ready();
+            tg.expand();
+        }
+    }, []);
 
     const getInitialOrderFilter = (): OrderFilter | null => {
         if (!user) return { ByState: { Created: null } };
@@ -44,6 +56,9 @@ function App() {
                     <Routes>
                         <Route path="/" element={<ConnectAddress />} />
                         <Route path="/login" element={<RegisterUser />} />
+                        <Route path="/confirm-email" element={<ConfirmEmail />} />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
+                        <Route path="/reset-password" element={<ResetPassword />} />
                         <Route
                             path="/create"
                             element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}

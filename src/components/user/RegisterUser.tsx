@@ -8,6 +8,7 @@ import { stringToUserType } from '../../model/utils';
 import { useUser } from './UserContext';
 import { rampErrorToString } from '../../model/error';
 import { truncate } from '../../model/helper';
+import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '../../model/emailConfirmation';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -63,8 +64,6 @@ const RegisterUser: React.FC = () => {
     };
 
     const handleSubmit = async () => {
-        console.log("password = ", password);
-
         if (providers.length === 0) {
             setMessage('Please add at least one payment provider.');
             return;
@@ -75,9 +74,14 @@ const RegisterUser: React.FC = () => {
             return;
         }
 
+        if (Object.keys(loginMethod)[0] === 'Email') {
+            await handleEmailConfirmation();
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod, password ? [password] : []);
+            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod, []);
             if ('Ok' in result) {
                 console.log("register is Ok = ", result.Ok)
                 setGlobalUser(result.Ok);
@@ -91,6 +95,30 @@ const RegisterUser: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleEmailConfirmation = async () => {
+        if (!loginMethod || !password || !('Email' in loginMethod)) {
+            navigate("/")
+            return;
+        }
+
+        const confirmationToken = generateConfirmationToken();
+        storeTempUserData({
+            password,
+            providers,
+            userType,
+            loginMethod,
+            confirmationToken
+        });
+
+        try {
+            sendConfirmationEmail(loginMethod.Email.email, confirmationToken);
+        } catch (error) {
+            setMessage(`Failed to send confirmation email: ${error}`)
+            return;
+        }
+        navigate("/confirm-email");
     };
 
     return (
