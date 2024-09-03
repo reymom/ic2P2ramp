@@ -16,7 +16,6 @@ import { HttpAgent } from '@dfinity/agent';
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
     const [providerId, setProviderId] = useState('');
-    const [newAddress, setNewAddress] = useState('');
     const [selectedAddressType, setSelectedAddressType] = useState<'ICP' | 'EVM'>('EVM');
     const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>('UK.OBIE.SortCodeAccountNumber');
     const [revolutName, setRevolutName] = useState('');
@@ -26,7 +25,7 @@ const UserProfile: React.FC = () => {
 
     const { address, isConnected } = useAccount();
 
-    const { user, setUser, setIcpAgent, setPrincipal } = useUser();
+    const { user, principal, setUser, setIcpAgent, setPrincipal } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -47,11 +46,10 @@ const UserProfile: React.FC = () => {
             onSuccess: async () => {
                 const identity = authClient.getIdentity();
                 const principal = identity.getPrincipal();
-                setNewAddress(principal.toText());
                 setPrincipal(principal);
 
                 const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ENV === 'test') {
+                if (process.env.FRONTEND_ICP_ENV === 'test') {
                     agent.fetchRootKey();
                 }
                 setIcpAgent(agent);
@@ -207,18 +205,18 @@ const UserProfile: React.FC = () => {
 
                     )
                 ) : selectedAddressType === 'ICP' ? (
-                    newAddress ? (
+                    (principal !== null) ? (
                         <>
                             <input
                                 type="text"
-                                value={newAddress}
+                                value={principal.toString()}
                                 readOnly
                                 className="ml-2 px-3 py-2 border rounded w-full bg-gray-100"
                             />
                             <button
-                                disabled={!newAddress || isAddressInUserAddresses(newAddress)}
-                                onClick={() => handleAddAddress(newAddress)}
-                                className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!newAddress || isAddressInUserAddresses(newAddress) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                disabled={isAddressInUserAddresses(principal.toString()) || (isAddressInUserAddresses(principal.toString()))}
+                                onClick={() => handleAddAddress(principal.toString())}
+                                className={`ml-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg ${!principal || isAddressInUserAddresses(principal.toString()) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                 Add
                             </button>
                         </>

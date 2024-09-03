@@ -116,7 +116,7 @@ const Menu: React.FC = () => {
                 setPrincipal(principal);
 
                 const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ENV === 'test') {
+                if (process.env.FRONTEND_ICP_ENV === 'test') {
                     agent.fetchRootKey();
                 }
                 setIcpAgent(agent);
