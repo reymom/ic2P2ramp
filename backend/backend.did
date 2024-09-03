@@ -61,6 +61,7 @@ type HttpResponse = record {
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
   revolut : RevolutConfig;
+  proxy_url : text;
   chains : vec ChainConfig;
   paypal : PaypalConfig;
 };
@@ -250,9 +251,9 @@ service : (InitArg) -> {
   test_get_revolut_payment_token : (text) -> (Result_3);
   test_paypal : () -> (Result_3);
   transfer_value : (nat64, text, nat, opt int32) -> (Result_3);
-  transform_remove_expires_in : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
   unlock_order : (nat64, opt nat32) -> (Result_3);
+  update_password : (LoginAddress, opt text) -> (Result);
   verify_transaction : (nat64, text, opt nat32) -> (Result_3);
 }
