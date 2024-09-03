@@ -111,7 +111,7 @@ const ConnectAddress: React.FC = () => {
                 console.log("Principal connected = ", principal.toString());
 
                 const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ENV === 'test') {
+                if (process.env.FRONTEND_ICP_ENV === 'test') {
                     agent.fetchRootKey();
                 }
                 setIcpAgent(agent);
@@ -209,6 +209,11 @@ const ConnectAddress: React.FC = () => {
                 ) : (
                     message && <p className="my-2 text-sm font-medium text-red-500 break-all">{message}</p>
                 )}
+                <div className="mt-2 text-sm text-gray-600">
+                    <a href="#" onClick={() => navigate('/forgot-password')} className="underline">
+                        Forgot your password?
+                    </a>
+                </div>
             </div>
 
             <hr className="border-t border-gray-300 w-full my-4" />
