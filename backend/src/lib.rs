@@ -177,10 +177,16 @@ async fn register_user(
 
 #[ic_cdk::update]
 async fn authenticate_user(login_address: LoginAddress, password: Option<String>) -> Result<User> {
+    login_address.validate()?;
     let user_id = storage::find_user_by_login_address(&login_address)?;
     let user = storage::get_user(&user_id)?;
     user.verify_user_password(password)?;
     Ok(user)
+}
+
+#[ic_cdk::update]
+async fn update_password(login_address: LoginAddress, new_password: Option<String>) -> Result<()> {
+    user_management::reset_password_user(login_address, new_password).await
 }
 
 #[ic_cdk::update]

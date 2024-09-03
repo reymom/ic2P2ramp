@@ -42,6 +42,24 @@ pub async fn register_user(
     Ok(user)
 }
 
+pub async fn reset_password_user(
+    login_address: LoginAddress,
+    new_password: Option<String>,
+) -> Result<()> {
+    login_address.validate()?;
+    let hashed_password = if let LoginAddress::Email { .. } = login_address {
+        let password = new_password.ok_or(RampError::PasswordRequired)?;
+        random::hash_password(&password).await?
+    } else {
+        return Err(RampError::InvalidInput(
+            "Login Address must be of type Email".to_string(),
+        ));
+    };
+
+    storage::reset_password_user(&login_address, hashed_password)?;
+    Ok(())
+}
+
 pub fn add_transaction_address(user_id: u64, address: TransactionAddress) -> Result<()> {
     address.validate()?;
 

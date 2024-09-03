@@ -30,6 +30,7 @@ pub struct State {
     pub evm_address: Option<String>,
     pub paypal: PayPalState,
     pub revolut: RevolutState,
+    pub proxy_url: String,
     pub icp_fees: HashMap<Principal, NumTokens>,
 }
 
