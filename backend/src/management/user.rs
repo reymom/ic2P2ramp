@@ -83,6 +83,12 @@ pub fn add_payment_provider(user_id: u64, payment_provider: PaymentProvider) -> 
     Ok(())
 }
 
+pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> {
+    storage::mutate_user(user_id, |user| {
+        user.evm_auth_message = Some(auth_message.to_string());
+    })
+}
+
 pub fn can_commit_orders(user_id: &u64) -> Result<()> {
     let user = storage::get_user(user_id)?;
     user.is_banned()?;
