@@ -23,7 +23,7 @@ pub async fn fee_history(
     newest_block: BlockTag,
     reward_percentiles: Option<Vec<u8>>,
 ) -> FeeHistory {
-    let rpc_providers = types::get_rpc_providers(chain_id);
+    let rpc_providers = types::chains::get_rpc_providers(chain_id);
 
     let fee_history_args: FeeHistoryArgs = FeeHistoryArgs {
         blockCount: block_count,

@@ -2,25 +2,38 @@ use ethers_core::types::{Address, U256};
 
 use super::fees::{self, FeeEstimates};
 use super::signer::{self, SignRequest};
-use super::{helpers, transaction};
+use super::transaction;
 
+use crate::model::helpers;
+use crate::model::types::chains;
 use crate::{
     errors::{RampError, Result},
     state::storage,
-    types::{self, order::OrderState},
+    types::order::OrderState,
 };
 
 pub struct Ic2P2ramp;
 
 impl Ic2P2ramp {
+    const DEFAULT_GAS: u32 = 40_000;
+    // Gas margin of 30%
+    const GAS_MULTIPLIER_NUM: u32 = 13;
+    const GAS_MULTIPLIER_DEN: u32 = 10;
+
+    pub fn get_final_gas(estimated_gas: u32) -> u32 {
+        estimated_gas * Self::GAS_MULTIPLIER_NUM / Self::GAS_MULTIPLIER_DEN
+    }
+
     pub async fn commit_deposit(
         chain_id: u64,
         offramper_address: String,
         token_address: Option<String>,
         amount: u128,
-        gas: Option<u32>,
+        estimated_gas: Option<u32>,
     ) -> Result<String> {
-        let gas = U256::from(gas.unwrap_or(21_000));
+        let gas = U256::from(Ic2P2ramp::get_final_gas(
+            estimated_gas.unwrap_or(Self::DEFAULT_GAS),
+        ));
 
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         ic_cdk::println!(
@@ -30,7 +43,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
         let request = Self::sign_request_commit_deposit(
             gas,
@@ -93,9 +106,11 @@ impl Ic2P2ramp {
         offramper_address: String,
         token_address: Option<String>,
         amount: u128,
-        gas: Option<u32>,
+        estimated_gas: Option<u32>,
     ) -> Result<String> {
-        let gas = U256::from(gas.unwrap_or(21_000));
+        let gas = U256::from(Ic2P2ramp::get_final_gas(
+            estimated_gas.unwrap_or(Self::DEFAULT_GAS),
+        ));
 
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         ic_cdk::println!(
@@ -105,7 +120,7 @@ impl Ic2P2ramp {
             fee_estimates.max_priority_fee_per_gas
         );
 
-        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
         let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
         let request = Self::sign_request_uncommit_deposit(
             gas,
@@ -163,14 +178,20 @@ impl Ic2P2ramp {
         .await
     }
 
-    pub async fn release_funds(order_id: u64, chain_id: u64, gas: Option<u32>) -> Result<String> {
+    pub async fn release_funds(
+        order_id: u64,
+        chain_id: u64,
+        estimated_gas: Option<u32>,
+    ) -> Result<String> {
         let order_state = storage::get_order(&order_id)?;
         let order = match order_state {
             OrderState::Locked(locked_order) => locked_order,
             _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
         };
 
-        let gas = U256::from(gas.unwrap_or(21_000));
+        let gas = U256::from(Ic2P2ramp::get_final_gas(
+            estimated_gas.unwrap_or(Self::DEFAULT_GAS),
+        ));
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
         ic_cdk::println!(
             "[release_funds] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
@@ -178,14 +199,13 @@ impl Ic2P2ramp {
             fee_estimates.max_fee_per_gas,
             fee_estimates.max_priority_fee_per_gas
         );
-        let vault_manager_address = types::get_vault_manager_address(chain_id)?;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
+        // --
         // todo: substract admin_fee to fund the icp evm canister
+        // --
         let request: SignRequest;
         if let Some(token_address) = order.base.crypto.token {
-            if types::token_is_approved(chain_id, &token_address)? {
-                return Err(RampError::TokenAlreadyRegistered);
-            };
             request = Self::sign_request_release_token(
                 gas,
                 fee_estimates,
@@ -300,32 +320,85 @@ impl Ic2P2ramp {
         .await
     }
 
-    pub async fn transfer_eth(
+    pub async fn transfer(
         chain_id: u64,
-        to: String,
+        to: &str,
         value: u128,
-        gas: Option<i32>,
+        token_address: Option<String>,
+        estimated_gas: Option<u32>,
     ) -> Result<String> {
+        let gas = U256::from(Ic2P2ramp::get_final_gas(
+            estimated_gas.unwrap_or(Self::DEFAULT_GAS),
+        ));
+
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
-        let gas = U256::from(gas.unwrap_or(30_000));
 
-        let gas_cost = fee_estimates.max_fee_per_gas * gas;
-        if U256::from(value) <= gas_cost {
-            return Err(RampError::InsufficientFunds);
+        let request: SignRequest;
+        if let Some(token_address) = token_address {
+            request = Ic2P2ramp::sign_request_transfer_token(
+                chain_id,
+                gas,
+                fee_estimates,
+                to,
+                &token_address,
+                value,
+            )
+            .await?;
+        } else {
+            let gas_cost = fee_estimates.max_fee_per_gas * gas;
+            let transfer_value = U256::from(value) - gas_cost;
+
+            request = signer::create_sign_request(
+                transfer_value,
+                chain_id.into(),
+                Some(to.to_string()),
+                None,
+                gas,
+                None,
+                fee_estimates,
+            )
+            .await;
         }
-        let transfer_value = U256::from(value) - gas_cost;
-
-        let request = signer::create_sign_request(
-            transfer_value,
-            chain_id.into(),
-            Some(to),
-            None,
-            gas,
-            None,
-            fee_estimates,
-        )
-        .await;
 
         transaction::send_signed_transaction(request, chain_id).await
+    }
+
+    async fn sign_request_transfer_token(
+        chain_id: u64,
+        gas: U256,
+        fee_estimates: FeeEstimates,
+        to: &str,
+        token_address: &str,
+        value: u128,
+    ) -> Result<SignRequest> {
+        let abi = r#"
+            [
+                {
+                    "inputs": [
+                        {"internalType": "address", "name": "recipient", "type": "address"},
+                        {"internalType": "uint256", "name": "amount", "type": "uint256"}
+                    ],
+                    "name": "transfer",
+                    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        transaction::create_sign_request(
+            abi,
+            "transfer",
+            gas,
+            fee_estimates,
+            chain_id,
+            U256::from(0),
+            token_address.to_string(),
+            &[
+                ethers_core::abi::Token::Address(helpers::parse_address(to.to_string())?),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(value)),
+            ],
+        )
+        .await
     }
 }
