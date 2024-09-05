@@ -6,15 +6,15 @@ use crate::errors::{RampError, Result};
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
-enum AssetClass {
+pub enum AssetClass {
     Cryptocurrency,
     FiatCurrency,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
-struct Asset {
-    symbol: String,
-    class: AssetClass,
+pub struct Asset {
+    pub symbol: String,
+    pub class: AssetClass,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -70,16 +70,10 @@ enum GetExchangeRateResult {
     Err(ExchangeRateError),
 }
 
-pub async fn get_exchange_rate(fiat_symbol: &str, crypto_symbol: &str) -> Result<f64> {
+pub async fn get_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
     let request = GetExchangeRateRequest {
-        base_asset: Asset {
-            class: AssetClass::Cryptocurrency,
-            symbol: crypto_symbol.to_string(),
-        },
-        quote_asset: Asset {
-            class: AssetClass::FiatCurrency,
-            symbol: fiat_symbol.to_string(),
-        },
+        base_asset,
+        quote_asset,
         timestamp: None,
     };
 
