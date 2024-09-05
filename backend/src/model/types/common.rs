@@ -85,7 +85,7 @@ pub enum LoginAddress {
 impl LoginAddress {
     pub fn validate(&self) -> Result<()> {
         match self {
-            LoginAddress::Email { email, .. } => {
+            LoginAddress::Email { email } => {
                 if email.is_empty() {
                     return Err(RampError::InvalidInput("Email is empty".to_string()));
                 }
@@ -177,6 +177,12 @@ impl TransactionAddress {
 
         Ok(())
     }
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct AuthenticationData {
+    pub password: Option<String>,  // For Email
+    pub signature: Option<String>, // For EVM
 }
 
 #[cfg(test)]

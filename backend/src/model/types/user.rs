@@ -1,10 +1,14 @@
-use candid::{CandidType, Decode, Deserialize, Encode};
+use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
-use super::common::{LoginAddress, PaymentProvider, TransactionAddress};
+use super::{
+    common::{LoginAddress, PaymentProvider, TransactionAddress},
+    AuthenticationData,
+};
 use crate::{
     errors::{RampError, Result},
+    evm::signer,
     management::random,
     model::state,
 };
@@ -25,7 +29,8 @@ pub struct User {
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login: LoginAddress,
-    pub hashed_password: Option<String>,
+    pub hashed_password: Option<String>,   // for email login
+    pub evm_session_nonce: Option<String>, // for EVM login, unique per session
     pub addresses: HashSet<TransactionAddress>,
 }
 
@@ -51,6 +56,7 @@ impl User {
             score: 1,
             login: login_address,
             hashed_password,
+            evm_session_nonce: None,
             addresses,
         })
     }
@@ -69,24 +75,49 @@ impl User {
         }
     }
 
-    pub fn verify_user_password(&self, password: Option<String>) -> Result<()> {
-        if let LoginAddress::Email { .. } = &self.login {
-            let password = password.ok_or(RampError::PasswordRequired)?;
-            let hashed_password = self
-                .hashed_password
-                .clone()
-                .ok_or(RampError::InternalError("Password not in User".to_string()))?;
-            match random::verify_password(&password, &hashed_password) {
-                Ok(true) => {
-                    return Ok(());
-                }
-                Ok(false) => {
-                    return Err(RampError::InvalidPassword);
-                }
-                Err(e) => {
-                    return Err(e);
+    pub fn verify_user_auth(&self, auth_data: Option<AuthenticationData>) -> Result<()> {
+        match &self.login {
+            LoginAddress::Email { .. } => {
+                let password = auth_data
+                    .ok_or_else(|| RampError::PasswordRequired)?
+                    .password
+                    .ok_or(RampError::PasswordRequired)?;
+                let hashed_password = self
+                    .hashed_password
+                    .clone()
+                    .ok_or(RampError::InternalError("Password not in user".to_string()))?;
+                match random::verify_password(&password, &hashed_password) {
+                    Ok(true) => {
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        return Err(RampError::InvalidPassword);
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
             }
+            LoginAddress::EVM { address } => {
+                let signature = auth_data
+                    .clone()
+                    .ok_or_else(|| RampError::SignatureRequired)?
+                    .signature
+                    .ok_or(RampError::SignatureRequired)?;
+                let nonce = self.evm_session_nonce.as_ref().ok_or_else(|| {
+                    RampError::InternalError("evm session nonce not in user".to_string())
+                })?;
+
+                signer::verify_signature(&address, &nonce, &signature)?
+            }
+            LoginAddress::ICP { principal_id } => {
+                if ic_cdk::caller()
+                    != Principal::from_text(principal_id).map_err(|_| RampError::InvalidAddress)?
+                {
+                    return Err(RampError::Unauthorized);
+                }
+            }
+            _ => return Err(RampError::Unauthorized),
         }
 
         Ok(())

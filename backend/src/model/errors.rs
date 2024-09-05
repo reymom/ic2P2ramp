@@ -13,8 +13,20 @@ pub enum RampError {
     #[error("Only controller is allowed")]
     OnlyController,
 
-    #[error("Only frontend is allowed")]
-    OnlyFrontend,
+    #[error("Password is Invalid")]
+    InvalidPassword,
+
+    #[error("Password is Required")]
+    PasswordRequired,
+
+    #[error("User is not authorized")]
+    Unauthorized,
+
+    #[error("Signature is required")]
+    SignatureRequired,
+
+    #[error("Signature is not valid")]
+    InvalidSignature,
 
     #[error("Order Not Found")]
     OrderNotFound,
@@ -48,12 +60,6 @@ pub enum RampError {
 
     #[error("User score below zero")]
     UserBanned,
-
-    #[error("Password is Invalid")]
-    InvalidPassword,
-
-    #[error("Password is Required")]
-    PasswordRequired,
 
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
