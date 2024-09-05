@@ -5,7 +5,10 @@ use candid::Principal;
 use email_address::EmailAddress;
 use ethers_core::types::{Address, H160};
 
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    outcalls::xrc_rates::{self, Asset, AssetClass},
+};
 
 /// Introduces an asynchronous delay for the specified duration.
 ///
@@ -64,4 +67,24 @@ pub fn validate_email(address: &str) -> Result<()> {
 pub fn validate_solana_address(_solana_address: &str) -> Result<()> {
     // solana_sdk::pubkey::Pubkey::from_str(solana_address).map_err(|_| RampError::InvalidAddress)?;
     Ok(())
+}
+
+pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
+    let mut class = AssetClass::Cryptocurrency;
+    if token_symbol == "USD" {
+        class = AssetClass::FiatCurrency;
+    }
+    let base_asset = Asset {
+        class,
+        symbol: token_symbol.to_string(),
+    };
+    let quote_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: "ETH".to_string(),
+    };
+
+    match xrc_rates::get_exchange_rate(base_asset, quote_asset).await {
+        Ok(rate) => Ok(rate),
+        Err(err) => Err(err),
+    }
 }

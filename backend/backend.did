@@ -128,10 +128,10 @@ type ProviderView = record {
   providerId : nat64;
 };
 type RampError = variant {
-  TokenAlreadyRegistered;
   InvalidAddress;
   HttpRequestError : record { nat64; text };
   TransactionTimeout;
+  _TransactionFailed : text;
   UserNotOfframper;
   PaymentVerificationFailed;
   InvalidInput : text;
@@ -141,7 +141,7 @@ type RampError = variant {
   UserBanned;
   OrderTimerNotFound;
   ExchangeRateError : ExchangeRateError;
-  TransactionFailed : text;
+  UnsupportedBlockchain;
   ParseFloatError : text;
   MissingDebtorAccount;
   LedgerPrincipalNotSupported : text;
@@ -153,9 +153,11 @@ type RampError = variant {
   Pkcs8Error : text;
   PasswordRequired;
   ChainIdNotFound : nat64;
-  TokenUnregistered;
   ParseError : text;
   NonceTooLow;
+  OnlyFrontend;
+  OnlyController;
+  UnregisteredEvmToken;
   EmptyTransactionHash;
   InvalidOrderState : text;
   NonceTooHigh;
@@ -182,6 +184,7 @@ type Result_1 = variant { Ok : User; Err : RampError };
 type Result_2 = variant { Ok : nat64; Err : RampError };
 type Result_3 = variant { Ok : text; Err : RampError };
 type Result_4 = variant { Ok : nat; Err : RampError };
+type Result_5 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type RevolutConfig = record {
   kid : text;
   tan : text;
@@ -212,7 +215,6 @@ type UserType = variant { Offramper; Onramper };
 service : (InitArg) -> {
   add_user_payment_provider : (nat64, PaymentProvider) -> (Result);
   add_user_transaction_address : (nat64, TransactionAddress) -> (Result);
-  approve_token_allowance : (nat64, text, nat32) -> (Result);
   authenticate_user : (LoginAddress, opt text) -> (Result_1);
   cancel_order : (nat64) -> (Result);
   create_order : (
@@ -224,6 +226,8 @@ service : (InitArg) -> {
       nat,
       TransactionAddress,
       nat64,
+      opt nat32,
+      opt nat32,
     ) -> (Result_2);
   execute_revolut_payment : (nat64) -> (Result_3) query;
   get_evm_address : () -> (text) query;
@@ -240,20 +244,26 @@ service : (InitArg) -> {
       TransactionAddress,
       opt nat32,
     ) -> (Result_3);
+  register_evm_token : (nat64, text, text) -> (Result);
   register_icp_tokens : (vec text) -> (Result);
   register_user : (UserType, vec PaymentProvider, LoginAddress, opt text) -> (
       Result_1,
     );
   remove_user : (nat64) -> (Result_1);
-  test_deposit_funds : (nat64, nat, opt text, opt nat32) -> (Result_3);
+  set_frontend_canister : (principal) -> (Result);
   test_get_consent_url : () -> (Result_3);
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_3);
   test_paypal : () -> (Result_3);
-  transfer_value : (nat64, text, nat, opt int32) -> (Result_3);
+  transfer_canister_funds : (principal, principal, nat) -> (Result);
+  transfer_eth : (nat64, text, nat, opt nat32) -> (Result_3);
+  transfer_smart_contract_funds : (nat64, text, nat, opt text, opt nat32) -> (
+      Result_3,
+    );
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
   unlock_order : (nat64, opt nat32) -> (Result_3);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_transaction : (nat64, text, opt nat32) -> (Result_3);
+  view_canister_balances : () -> (Result_5) query;
 }

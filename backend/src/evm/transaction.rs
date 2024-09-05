@@ -14,8 +14,9 @@ use super::{
 
 use crate::{
     errors::{RampError, Result},
+    model::helpers,
     state::increment_nonce,
-    types::get_rpc_providers,
+    types::chains::get_rpc_providers,
 };
 
 #[derive(Debug)]
@@ -58,7 +59,6 @@ pub async fn create_sign_request(
 
 pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
     let tx = signer::sign_transaction(request).await;
-    ic_cdk::println!("Transaction sent: {:?}", tx);
 
     match send_raw_transaction(tx.clone(), chain_id).await {
         SendRawTransactionStatus::Ok(transaction_hash) => {
@@ -130,7 +130,7 @@ pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> Transac
     }
 }
 
-pub async fn wait_for_transaction_confirmation(
+pub async fn _wait_for_transaction_confirmation(
     tx_hash: String,
     chain_id: u64,
     max_attempts: u32,
@@ -142,7 +142,7 @@ pub async fn wait_for_transaction_confirmation(
                 return Ok(());
             }
             TransactionStatus::Failed(err) => {
-                return Err(RampError::TransactionFailed(err));
+                return Err(RampError::_TransactionFailed(err));
             }
             TransactionStatus::Pending => {
                 if attempt + 1 >= max_attempts {
@@ -154,7 +154,7 @@ pub async fn wait_for_transaction_confirmation(
                 );
             }
         }
-        super::helpers::delay(interval).await;
+        helpers::delay(interval).await;
     }
     Err(RampError::TransactionTimeout)
 }

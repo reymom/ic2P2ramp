@@ -6,10 +6,10 @@ use ic_cdk::api::management_canister::http_request::{
 };
 
 use crate::{
-    evm::helpers,
     management::order,
     model::{
         errors::{RampError, Result},
+        helpers,
         state::{read_state, storage},
         types::{order::OrderState, PaymentProvider},
     },
