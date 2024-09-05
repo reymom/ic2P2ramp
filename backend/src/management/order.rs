@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 
+use crate::evm::{fees, vault::Ic2P2ramp};
 use crate::management::user as user_management;
-use crate::model::types::TransactionAddress;
+use crate::model::helpers;
 use crate::types::{
+    calculate_fees, chains,
     order::{Order, OrderFilter, OrderState, OrderStateFilter},
-    Blockchain, PaymentProvider, PaymentProviderType,
+    Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 use crate::{
     errors::{RampError, Result},
     state, storage,
 };
 
-pub fn create_order(
+pub async fn create_order(
     offramper_user_id: u64,
     fiat_amount: u64,
     currency_symbol: String,
@@ -20,7 +22,53 @@ pub fn create_order(
     token: Option<String>,
     crypto_amount: u128,
     offramper_address: TransactionAddress,
+    estimated_gas_lock: Option<u32>,
+    estimated_gas_withdraw: Option<u32>,
 ) -> Result<u64> {
+    let (offramper_fee, crypto_fee) = match blockchain {
+        Blockchain::EVM { chain_id } => {
+            let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
+                RampError::InvalidInput(
+                    "Gas estimation for locking is required for EVM".to_string(),
+                )
+            })?;
+            let estimated_gas_withdraw = estimated_gas_withdraw.ok_or_else(|| {
+                RampError::InvalidInput(
+                    "Gas estimation for withdrawing is required for EVM".to_string(),
+                )
+            })?;
+
+            let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
+                + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
+            let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+
+            let mut blockchain_fees =
+                total_gas_estimation as u128 * fee_estimates.max_fee_per_gas.as_u128();
+
+            if let Some(token_address) = token.clone() {
+                let xrc_symbol = chains::get_evm_token_symbol(chain_id, &token_address)?;
+                let rate = helpers::get_eth_token_rate(xrc_symbol).await?;
+
+                blockchain_fees = (blockchain_fees as f64 * rate) as u128
+            }
+            calculate_fees(fiat_amount, crypto_amount, blockchain_fees)
+        }
+        Blockchain::ICP { ledger_principal } => {
+            let icp_fee: u128 = state::get_fee(&ledger_principal)?
+                .0
+                .try_into()
+                .map_err(|e| {
+                    RampError::InternalError(format!(
+                        "icp fee cannot be converted to u128: {:?}",
+                        e
+                    ))
+                })?;
+
+            calculate_fees(fiat_amount, crypto_amount, icp_fee * 2)
+        }
+        _ => return Err(RampError::UnsupportedBlockchain),
+    };
+
     let order = Order::new(
         offramper_user_id,
         fiat_amount,
@@ -30,6 +78,8 @@ pub fn create_order(
         token,
         crypto_amount,
         offramper_address,
+        offramper_fee,
+        crypto_fee,
     )?;
 
     storage::insert_order(&order);
