@@ -7,16 +7,17 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
+use model::types::chains;
+use outcalls::xrc_rates::{Asset, AssetClass};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use evm::{helpers, providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
+use evm::{providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
 use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, user as user_management,
 };
 use model::errors::{self, RampError, Result};
-use model::guards;
 use model::state::{
     self, initialize_state, mutate_state, read_state, storage, upgrade, InitArg, State,
 };
@@ -26,6 +27,7 @@ use model::types::{
     user::{User, UserType},
     Blockchain, LoginAddress, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
+use model::{guards, helpers};
 use outcalls::{
     paypal,
     revolut::{self, token},
@@ -68,15 +70,15 @@ fn get_evm_address() -> String {
 }
 
 #[ic_cdk::update]
-async fn transfer_value(
+async fn transfer_eth(
     chain_id: u64,
     to: String,
     amount: u128,
-    gas: Option<i32>,
+    estimated_gas: Option<u32>,
 ) -> Result<String> {
     guards::only_controller()?;
     helpers::validate_evm_address(&to)?;
-    Ic2P2ramp::transfer_eth(chain_id, to, amount, gas).await
+    Ic2P2ramp::transfer(chain_id, &to, amount, None, estimated_gas).await
 }
 
 // -----
@@ -132,6 +134,18 @@ async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
     ICPRamp::set_icp_fees(icp_canisters).await
 }
 
+#[ic_cdk::update]
+async fn register_evm_token(
+    chain_id: u64,
+    token_address: String,
+    rate_symbol: String,
+) -> Result<()> {
+    guards::only_controller()?;
+    helpers::validate_evm_address(&token_address)?;
+    chains::approve_evm_token(chain_id, &token_address, &rate_symbol);
+    Ok(())
+}
+
 #[ic_cdk::query]
 fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
     state::get_fee(&ledger_principal)
@@ -142,13 +156,69 @@ async fn get_rpc_providers() -> Vec<ProviderView> {
     providers::get_providers().await
 }
 
+#[ic_cdk::query]
+async fn view_canister_balances() -> Result<HashMap<String, f64>> {
+    ICPRamp::get_canister_balances().await
+}
+
+#[ic_cdk::update]
+async fn transfer_canister_funds(
+    ledger_canister: Principal,
+    to_principal: Principal,
+    amount: u128,
+) -> Result<()> {
+    guards::only_controller()?;
+
+    let fee = state::get_fee(&ledger_canister)?;
+    let to_account = Account {
+        owner: to_principal,
+        subaccount: None,
+    };
+
+    ICPRamp::transfer(
+        ledger_canister,
+        to_account,
+        NumTokens::from(amount) - fee.clone(),
+        Some(fee),
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+async fn transfer_evm_funds(
+    chain_id: u64,
+    to: String,
+    amount: u128,
+    token: Option<String>,
+    estimated_gas: Option<u32>,
+) -> Result<String> {
+    guards::only_controller()?;
+    helpers::validate_evm_address(&to)?;
+
+    if let Some(token) = token.clone() {
+        chains::evm_token_is_approved(chain_id, &token)?;
+    }
+    Ic2P2ramp::transfer(chain_id, &to, amount, token, estimated_gas).await
+}
+
 // ---------
 // XRC Rate
 // ---------
 
 #[ic_cdk::update]
 async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<String> {
-    match xrc_rates::get_exchange_rate(&fiat_symbol, &crypto_symbol).await {
+    let base_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: crypto_symbol.to_string(),
+    };
+    let quote_asset = Asset {
+        class: AssetClass::FiatCurrency,
+        symbol: fiat_symbol.to_string(),
+    };
+
+    match xrc_rates::get_exchange_rate(base_asset, quote_asset).await {
         Ok(rate) => Ok(rate.to_string()),
         Err(err) => Err(err),
     }
@@ -217,7 +287,7 @@ fn get_orders(
 }
 
 #[ic_cdk::update]
-fn create_order(
+async fn create_order(
     fiat_amount: u64,
     fiat_symbol: String,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
@@ -226,6 +296,8 @@ fn create_order(
     crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
+    estimated_gas_lock: Option<u32>,
+    estimated_gas_withdraw: Option<u32>,
 ) -> Result<u64> {
     guards::only_frontend()?;
     let user = storage::get_user(&offramper_user_id)?;
@@ -239,9 +311,14 @@ fn create_order(
     }
 
     match blockchain {
-        Blockchain::EVM { chain_id } => state::is_chain_supported(chain_id)?,
-        Blockchain::ICP { ledger_principal } => state::is_token_supported(&ledger_principal)?,
-        _ => (),
+        Blockchain::EVM { chain_id } => {
+            chains::chain_is_supported(chain_id)?;
+            if let Some(token) = token_address.clone() {
+                chains::evm_token_is_approved(chain_id, &token)?;
+            };
+        }
+        Blockchain::ICP { ledger_principal } => state::is_icp_token_supported(&ledger_principal)?,
+        _ => return Err(RampError::UnsupportedBlockchain),
     }
 
     order_management::create_order(
@@ -253,7 +330,10 @@ fn create_order(
         token_address,
         crypto_amount,
         offramper_address,
+        estimated_gas_lock,
+        estimated_gas_withdraw,
     )
+    .await
 }
 
 #[ic_cdk::update]
@@ -262,7 +342,7 @@ async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    gas: Option<u32>,
+    estimated_gas: Option<u32>,
 ) -> Result<String> {
     guards::only_frontend()?;
     user_management::can_commit_orders(&onramper_user_id)?;
@@ -287,7 +367,7 @@ async fn lock_order(
                 order.offramper_address.address,
                 order.crypto.token,
                 order.crypto.amount,
-                gas,
+                estimated_gas,
             )
             .await?;
             transaction::spawn_transaction_checker(
@@ -319,12 +399,12 @@ async fn lock_order(
             )?;
             Ok(format!("order {:?} is locked!", order_id))
         }
-        _ => ic_cdk::trap("blockchain orders are still not implemented"),
+        _ => return Err(RampError::UnsupportedBlockchain),
     }
 }
 
 #[ic_cdk::update]
-async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
+async fn unlock_order(order_id: u64, estimated_gas: Option<u32>) -> Result<String> {
     guards::only_frontend()?;
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
@@ -339,7 +419,7 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
                 order.base.offramper_address.address,
                 order.base.crypto.token,
                 order.base.crypto.amount,
-                gas,
+                estimated_gas,
             )
             .await?;
             transaction::spawn_transaction_checker(
@@ -353,7 +433,7 @@ async fn unlock_order(order_id: u64, gas: Option<u32>) -> Result<String> {
             );
             Ok(tx_hash)
         }
-        _ => todo!(),
+        _ => return Err(RampError::UnsupportedBlockchain),
     }
 }
 
@@ -410,7 +490,7 @@ async fn execute_revolut_payment(order_id: u64) -> Result<String> {
 async fn verify_transaction(
     order_id: u64,
     transaction_id: String,
-    gas: Option<u32>,
+    estimated_gas: Option<u32>,
 ) -> Result<String> {
     guards::only_frontend()?;
 
@@ -544,8 +624,12 @@ async fn verify_transaction(
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            let tx_hash =
-                payment_management::handle_evm_payment_completion(order_id, chain_id, gas).await?;
+            let tx_hash = payment_management::handle_evm_payment_completion(
+                order_id,
+                chain_id,
+                estimated_gas,
+            )
+            .await?;
             return Ok(tx_hash);
         }
         Blockchain::ICP { ledger_principal } => {
@@ -554,7 +638,7 @@ async fn verify_transaction(
                     .await?;
             return Ok(index);
         }
-        _ => todo!(),
+        _ => return Err(RampError::UnsupportedBlockchain),
     }
 }
 
