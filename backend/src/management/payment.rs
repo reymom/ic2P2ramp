@@ -63,7 +63,7 @@ pub async fn handle_icp_payment_completion(
     let index = ICPRamp::transfer(
         *ledger_principal,
         to_account,
-        amount - order.base.crypto.fee - fee.clone(),
+        amount - order.base.crypto.fee,
         Some(fee),
     )
     .await?;

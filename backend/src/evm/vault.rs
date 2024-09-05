@@ -201,14 +201,8 @@ impl Ic2P2ramp {
         );
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
-        // substract gas cost estimation
-        let gas_fees = gas.as_u128() * fee_estimates.max_fee_per_gas.as_u128();
-
         let request: SignRequest;
         if let Some(token_address) = order.base.crypto.token {
-            let xrc_symbol = chains::get_evm_token_symbol(chain_id, &token_address)?;
-            let rate = helpers::get_eth_token_rate(xrc_symbol).await?;
-
             request = Self::sign_request_release_token(
                 gas,
                 fee_estimates,
@@ -216,7 +210,7 @@ impl Ic2P2ramp {
                 order.base.offramper_address.address,
                 order.onramper_address.address,
                 token_address,
-                order.base.crypto.amount - order.base.crypto.fee - (gas_fees as f64 * rate) as u128,
+                order.base.crypto.amount - order.base.crypto.fee,
                 vault_manager_address,
             )
             .await?;
@@ -225,7 +219,7 @@ impl Ic2P2ramp {
                 gas,
                 fee_estimates,
                 chain_id,
-                order.base.crypto.amount - order.base.crypto.fee - gas_fees,
+                order.base.crypto.amount - order.base.crypto.fee,
                 order.base.offramper_address.address,
                 order.onramper_address.address,
                 vault_manager_address,
