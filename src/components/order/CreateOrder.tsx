@@ -13,7 +13,7 @@ import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
-import { depositInVault } from '../../model/evm';
+import { depositInVault, estimateOrderLockGas, estimateOrderReleaseGas } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
 
 const CreateOrder: React.FC = () => {
@@ -156,18 +156,30 @@ const CreateOrder: React.FC = () => {
             }
 
             let cryptoAmountUnits: bigint;
+            let gasEstimateLock: [number] | [] = [];
+            let gasEstimateRelease: [number] | [] = [];
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
                 cryptoAmountUnits = ethers.parseEther(cryptoAmount.toString());
                 try {
                     const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
                     console.log('Transaction receipt: ', receipt);
+
+                    const gasForLocking = await estimateOrderLockGas(chainId, selectedToken, cryptoAmountUnits);
+                    if (gasForLocking === BigInt(0)) throw new Error("could not estimate gas");
+                    gasEstimateLock = [Number(gasForLocking)];
+
+                    const gasForReleasing = await estimateOrderReleaseGas(chainId, selectedToken, cryptoAmountUnits);
+                    if (gasForReleasing === BigInt(0)) throw new Error("could not estimate gas");
+                    gasEstimateRelease = [Number(gasForReleasing)];
+
                     setMessage('Transaction successful!');
                 } catch (e: any) {
                     setMessage(`Transaction failed: ${e.message || e}`);
                     return;
                 }
             } else if (blockchain === 'ICP') {
+                // at some point get decimals dynamically
                 cryptoAmountUnits = BigInt(cryptoAmount * 100_000_000);
                 try {
                     const ledgerCanister = Principal.fromText(selectedToken.address);
@@ -195,6 +207,8 @@ const CreateOrder: React.FC = () => {
                 cryptoAmountUnits,
                 selectedAddress,
                 user.id,
+                gasEstimateLock,
+                gasEstimateRelease,
             );
 
             if ('Ok' in result) {

@@ -125,3 +125,82 @@ export const withdrawFromVault = async (chainId: number, order: Order) => {
 
   return receipt;
 };
+
+export const estimateOrderLockGas = async (
+  chainId: number,
+  selectedToken: TokenOption,
+  cryptoAmount: bigint,
+): Promise<bigint> => {
+  if (!window.ethereum) {
+    throw new Error('No crypto wallet found. Please install it.');
+  }
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send('eth_requestAccounts', []);
+  const signer = await provider.getSigner();
+
+  const vaultContract = new ethers.Contract(
+    getVaultAddress(chainId),
+    icP2PrampABI,
+    signer,
+  );
+
+  let gasEstimateLock: bigint;
+  if (selectedToken.isNative) {
+    gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
+      signer.getAddress(),
+      ethers.ZeroAddress,
+      cryptoAmount,
+    );
+  } else if (selectedToken.address !== '') {
+    gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
+      signer.getAddress(),
+      selectedToken.address,
+      cryptoAmount,
+    );
+  } else {
+    throw new Error('Invalid token selection.');
+  }
+
+  return gasEstimateLock;
+};
+
+export const estimateOrderReleaseGas = async (
+  chainId: number,
+  selectedToken: TokenOption,
+  cryptoAmount: bigint,
+): Promise<bigint> => {
+  if (!window.ethereum) {
+    throw new Error('No crypto wallet found. Please install it.');
+  }
+
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send('eth_requestAccounts', []);
+  const signer = await provider.getSigner();
+
+  const vaultContract = new ethers.Contract(
+    getVaultAddress(chainId),
+    icP2PrampABI,
+    signer,
+  );
+
+  let gasEstimateRelease: bigint;
+  if (selectedToken.isNative) {
+    gasEstimateRelease = await vaultContract.releaseBaseCurrency.estimateGas(
+      signer.getAddress(),
+      signer.getAddress(),
+      cryptoAmount,
+    );
+  } else if (selectedToken.address !== '') {
+    gasEstimateRelease = await vaultContract.releaseFunds.estimateGas(
+      signer.getAddress(),
+      signer.getAddress(),
+      selectedToken.address,
+      cryptoAmount,
+    );
+  } else {
+    throw new Error('Invalid token selection.');
+  }
+
+  return gasEstimateRelease;
+};

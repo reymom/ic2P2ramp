@@ -8,11 +8,11 @@ import ethereumLogo from "../../assets/ethereum-logo.png";
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { NetworkIds } from '../../constants/networks';
-import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/tokens';
+import { getEvmTokenOptions, getIcpTokenOptions, TokenOption } from '../../constants/tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
-import { withdrawFromVault } from '../../model/evm';
+import { estimateOrderLockGas, withdrawFromVault } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
@@ -71,9 +71,22 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setTxHash(undefined);
         setMessage(`Commiting to loan order ${orderId}...`);
 
+        let gasEstimation: [] | [number] = [];
+        const hasToken = order.Created.crypto.token.length > 0;
+        const tokenOption: TokenOption = {
+            name: "",
+            address: hasToken ? order.Created.crypto.token[0]! : "",
+            isNative: hasToken ? true : false,
+            rateSymbol: "",
+        }
         try {
             const orderAddress = user.addresses.find(address => {
                 if ('EVM' in orderBlockchain && 'EVM' in address.address_type) {
+                    gasEstimation = [Number(estimateOrderLockGas(
+                        Number(orderBlockchain.EVM.chain_id),
+                        tokenOption,
+                        order.Created.crypto.amount - order.Created.crypto.fee
+                    ))]
                     return true;
                 }
                 if ('ICP' in orderBlockchain && 'ICP' in address.address_type) {
@@ -87,7 +100,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             if (!orderAddress) throw new Error("No address matches for user");
 
-            const result = await backend.lock_order(orderId, user.id, provider, orderAddress, [100000]);
+            const result = await backend.lock_order(orderId, user.id, provider, orderAddress, gasEstimation);
 
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
@@ -173,16 +186,34 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const handlePayPalSuccess = async (transactionId: string) => {
-        if (!('Locked' in order) || !orderId) return;
+        if (!('Locked' in order) || !orderId || !orderBlockchain) return;
 
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
 
         setIsLoading(true);
         setTxHash(undefined);
         setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
+
+        // estimate withdraw gas
+        let gasEstimation: [] | [number] = [];
+        const hasToken = order.Locked.base.crypto.token.length > 0;
+        const tokenOption: TokenOption = {
+            name: "",
+            address: hasToken ? order.Locked.base.crypto.token[0]! : "",
+            isNative: hasToken ? true : false,
+            rateSymbol: "",
+        }
+        if ('EVM' in orderBlockchain) {
+            gasEstimation = [Number(estimateOrderLockGas(
+                Number(orderBlockchain.EVM.chain_id),
+                tokenOption,
+                order.Locked.base.crypto.amount - order.Locked.base.crypto.fee
+            ))]
+        }
+
         try {
             // Send transaction ID to backend to verify payment
-            const response = await backend.verify_transaction(orderId, transactionId, [100000]);
+            const response = await backend.verify_transaction(orderId, transactionId, gasEstimation);
             if ('Ok' in response) {
                 setMessage(`Order Verified and Funds Transferred successfully!`);
                 if ('EVM' in orderBlockchain!) {
@@ -273,9 +304,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         switch (blockchainToBlockchainType(crypto.blockchain)) {
             case 'EVM':
-                return ethers.formatEther(crypto.amount);
+                return ethers.formatEther(crypto.amount - crypto.fee);
             case 'ICP':
-                return (Number(crypto.amount) / 100_000_000).toFixed(3);
+                return (Number(crypto.amount - crypto.fee) / 100_000_000).toFixed(3);
             case 'Solana':
                 return "Solana not implemented"
         }
