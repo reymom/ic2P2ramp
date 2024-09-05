@@ -1,4 +1,5 @@
 use ethers_core::abi::ethereum_types::{Address, U256, U64};
+use ethers_core::k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey};
 use ethers_core::types::transaction::eip1559::Eip1559TransactionRequest;
 use ethers_core::types::{Bytes, Signature};
 use ethers_core::utils::keccak256;
@@ -9,6 +10,7 @@ use ic_cdk::api::management_canister::ecdsa::{
 use std::str::FromStr;
 
 use super::fees::FeeEstimates;
+use crate::model::errors::{RampError, Result};
 use crate::state::read_state;
 
 pub struct SignRequest {
@@ -115,10 +117,8 @@ pub async fn sign_transaction(req: SignRequest) -> String {
 }
 
 fn y_parity(prehash: &[u8], sig: &[u8], pubkey: &[u8]) -> u64 {
-    use ethers_core::k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
-
     let orig_key = VerifyingKey::from_sec1_bytes(pubkey).expect("failed to parse the pubkey");
-    let signature = Signature::try_from(sig).unwrap();
+    let signature = K256Signature::try_from(sig).unwrap();
     for parity in [0u8, 1] {
         let recid = RecoveryId::try_from(parity).unwrap();
         let recovered_key = VerifyingKey::recover_from_prehash(prehash, &signature, recid)
@@ -134,26 +134,6 @@ fn y_parity(prehash: &[u8], sig: &[u8], pubkey: &[u8]) -> u64 {
         hex::encode(pubkey)
     )
 }
-
-// pub async fn estimate_gas(tx: String, chain_id: u64) -> () {
-//     let rpc_providers = read_state(|s| {
-//         s.rpc_services
-//             .get(&chain_id)
-//             .cloned()
-//             .ok_or("Unsupported chain ID")
-//     })
-//     .unwrap();
-//     let cycles = 10_000_000_000;
-
-//     let arg: Option<RpcConfig> = None;
-//     let res = ic_cdk::api::call::call_with_payment128(
-//         CANISTER_ID,
-//         "eth_estimateGas",
-//         (rpc_providers, arg, tx),
-//         cycles,
-//     )
-//     .await;
-// }
 
 pub async fn get_public_key() -> Vec<u8> {
     let key_id = read_state(|s| s.ecdsa_key_id.clone());
@@ -182,4 +162,17 @@ pub fn pubkey_bytes_to_address(pubkey_bytes: &[u8]) -> String {
     let hash = keccak256(&point_bytes[1..]);
 
     ethers_core::utils::to_checksum(&Address::from_slice(&hash[12..32]), None)
+}
+
+pub fn verify_signature(evm_address: &str, message: &str, signature: &str) -> Result<()> {
+    let recovered_address = Signature::from_str(signature)
+        .map_err(|_| RampError::InvalidSignature)?
+        .recover(message)
+        .map_err(|_| RampError::InvalidSignature)?;
+
+    if recovered_address == Address::from_str(evm_address).map_err(|_| RampError::InvalidAddress)? {
+        Ok(())
+    } else {
+        Err(RampError::InvalidSignature)
+    }
 }

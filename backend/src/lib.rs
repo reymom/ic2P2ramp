@@ -7,7 +7,6 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
-use model::types::chains;
 use outcalls::xrc_rates::{Asset, AssetClass};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -15,17 +14,18 @@ use std::time::Duration;
 use evm::{providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
 use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
-    order as order_management, payment as payment_management, user as user_management,
+    order as order_management, payment as payment_management, random, user as user_management,
 };
 use model::errors::{self, RampError, Result};
 use model::state::{
     self, initialize_state, mutate_state, read_state, storage, upgrade, InitArg, State,
 };
 use model::types::{
-    self,
+    self, chains,
     order::{OrderFilter, OrderState},
     user::{User, UserType},
-    Blockchain, LoginAddress, PaymentProvider, PaymentProviderType, TransactionAddress,
+    AuthenticationData, Blockchain, LoginAddress, PaymentProvider, PaymentProviderType,
+    TransactionAddress,
 };
 use model::{guards, helpers};
 use outcalls::{
@@ -235,24 +235,48 @@ async fn register_user(
     login_address: LoginAddress,
     password: Option<String>,
 ) -> Result<User> {
-    guards::only_frontend()?;
     user_management::register_user(user_type, payment_providers, login_address, password).await
 }
 
 #[ic_cdk::update]
-async fn authenticate_user(login_address: LoginAddress, password: Option<String>) -> Result<User> {
-    guards::only_frontend()?;
+async fn authenticate_user(
+    login_address: LoginAddress,
+    auth_data: Option<AuthenticationData>,
+) -> Result<User> {
     login_address.validate()?;
     let user_id = storage::find_user_by_login_address(&login_address)?;
     let user = storage::get_user(&user_id)?;
-    user.verify_user_password(password)?;
+    user.verify_user_auth(auth_data)?;
     Ok(user)
 }
 
 #[ic_cdk::update]
 async fn update_password(login_address: LoginAddress, new_password: Option<String>) -> Result<()> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     user_management::reset_password_user(login_address, new_password).await
+}
+
+#[ic_cdk::update]
+async fn generate_evm_session_nonce(login_address: LoginAddress) -> Result<String> {
+    login_address.validate()?;
+    let address = if let LoginAddress::EVM { address } = login_address.clone() {
+        Ok(address)
+    } else {
+        Err(RampError::InvalidInput(
+            "Login address is not of type EVM".to_string(),
+        ))
+    }?;
+
+    let user_id = storage::find_user_by_login_address(&login_address)?;
+    let auth_message = format!(
+        "Please sign this message to authenticate: {}\nNonce: {}",
+        address,
+        random::generate_token().await?
+    );
+
+    user_management::update_user_auth_message(user_id, &auth_message)?;
+
+    Ok(msg_nonce)
 }
 
 #[ic_cdk::update]
@@ -263,13 +287,13 @@ fn remove_user(user_id: u64) -> Result<User> {
 
 #[ic_cdk::update]
 fn add_user_transaction_address(user_id: u64, address: TransactionAddress) -> Result<()> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     user_management::add_transaction_address(user_id, address)
 }
 
 #[ic_cdk::update]
 fn add_user_payment_provider(user_id: u64, payment_provider: PaymentProvider) -> Result<()> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     user_management::add_payment_provider(user_id, payment_provider)
 }
 
@@ -299,7 +323,7 @@ async fn create_order(
     estimated_gas_lock: Option<u32>,
     estimated_gas_withdraw: Option<u32>,
 ) -> Result<u64> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     let user = storage::get_user(&offramper_user_id)?;
     user.is_banned()?;
     user.is_offramper()?;
@@ -344,7 +368,7 @@ async fn lock_order(
     onramper_address: TransactionAddress,
     estimated_gas: Option<u32>,
 ) -> Result<String> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     user_management::can_commit_orders(&onramper_user_id)?;
 
     let order_state = storage::get_order(&order_id)?;
@@ -405,7 +429,7 @@ async fn lock_order(
 
 #[ic_cdk::update]
 async fn unlock_order(order_id: u64, estimated_gas: Option<u32>) -> Result<String> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -439,7 +463,7 @@ async fn unlock_order(order_id: u64, estimated_gas: Option<u32>) -> Result<Strin
 
 #[ic_cdk::update]
 async fn cancel_order(order_id: u64) -> Result<()> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(order) => order,
@@ -492,7 +516,7 @@ async fn verify_transaction(
     transaction_id: String,
     estimated_gas: Option<u32>,
 ) -> Result<String> {
-    guards::only_frontend()?;
+    // guards::only_frontend()?;
 
     ic_cdk::println!(
         "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",

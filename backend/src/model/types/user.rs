@@ -29,8 +29,8 @@ pub struct User {
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login: LoginAddress,
-    pub hashed_password: Option<String>,   // for email login
-    pub evm_session_nonce: Option<String>, // for EVM login, unique per session
+    pub hashed_password: Option<String>,  // for email login
+    pub evm_auth_message: Option<String>, // for EVM login, unique per session
     pub addresses: HashSet<TransactionAddress>,
 }
 
@@ -56,7 +56,7 @@ impl User {
             score: 1,
             login: login_address,
             hashed_password,
-            evm_session_nonce: None,
+            evm_auth_message: None,
             addresses,
         })
     }
@@ -104,11 +104,11 @@ impl User {
                     .ok_or_else(|| RampError::SignatureRequired)?
                     .signature
                     .ok_or(RampError::SignatureRequired)?;
-                let nonce = self.evm_session_nonce.as_ref().ok_or_else(|| {
-                    RampError::InternalError("evm session nonce not in user".to_string())
+                let message = self.evm_auth_message.as_ref().ok_or_else(|| {
+                    RampError::InternalError("evm auth message not in user".to_string())
                 })?;
 
-                signer::verify_signature(&address, &nonce, &signature)?
+                signer::verify_signature(&address, &message, &signature)?
             }
             LoginAddress::ICP { principal_id } => {
                 if ic_cdk::caller()
