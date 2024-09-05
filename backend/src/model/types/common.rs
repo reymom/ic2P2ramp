@@ -1,10 +1,8 @@
 use candid::{CandidType, Deserialize};
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{
-    errors::{RampError, Result},
-    evm::helpers,
-};
+use crate::errors::{RampError, Result};
+use crate::helpers;
 
 #[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PaymentProviderType {
@@ -64,12 +62,12 @@ pub fn contains_provider_type(
     providers.get(&provider.provider_type()).is_some()
 }
 
-pub fn calculate_fees(fiat_amount: u64, crypto_amount: u128) -> (u64, u128) {
-    // Static strategy: 2% fee for the offramper, 0.5% for the admin
+pub fn calculate_fees(fiat_amount: u64, crypto_amount: u128, blockchain_fees: u128) -> (u64, u128) {
+    // Static strategy: 2% fee for the offramper, 0.1% for the admin
     let offramper_fee = fiat_amount / 50; // 2%
-    let crypto_fee = crypto_amount / 200; // 0.5%
+    let admin_fee = crypto_amount / 1000; // 0.1%
 
-    (offramper_fee, crypto_fee)
+    (offramper_fee, blockchain_fees + admin_fee)
 }
 
 // ---------

@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     blockchain::{Blockchain, Crypto},
-    common::{calculate_fees, AddressType, PaymentProvider, PaymentProviderType},
+    common::{AddressType, PaymentProvider, PaymentProviderType},
     TransactionAddress,
 };
 
@@ -75,10 +75,11 @@ impl Order {
         token: Option<String>,
         crypto_amount: u128,
         offramper_address: TransactionAddress,
+        offramper_fee: u64,
+        crypto_fee: u128,
     ) -> Result<Self> {
         offramper_address.validate()?;
 
-        // Check if the address type matches the blockchain type
         match (blockchain.clone(), &offramper_address.address_type) {
             (Blockchain::EVM { .. }, AddressType::EVM)
             | (Blockchain::ICP { .. }, AddressType::ICP)
@@ -91,8 +92,6 @@ impl Order {
         }
 
         let order_id = state::generate_order_id();
-        let (offramper_fee, crypto_fee) = calculate_fees(fiat_amount, crypto_amount);
-
         let order = Order {
             id: order_id.clone(),
             offramper_user_id,

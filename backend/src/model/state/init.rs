@@ -6,7 +6,7 @@ use std::{fmt, str::FromStr};
 
 use super::state::{InvalidStateError, State};
 use crate::evm::rpc::RpcServices;
-use crate::model::types::{paypal::PayPalState, revolut::RevolutState, ChainState};
+use crate::model::types::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct ChainConfig {

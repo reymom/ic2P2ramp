@@ -73,14 +73,11 @@ pub enum RampError {
     #[error("Vault manager address not found for chain ID: {0}")]
     VaultManagerAddressNotFound(u64),
 
-    #[error("Token already registered")]
-    TokenAlreadyRegistered,
-
     #[error("Token is unregistered")]
-    TokenUnregistered,
+    UnregisteredEvmToken,
 
     #[error("Transaction failed: {0}")]
-    TransactionFailed(String),
+    _TransactionFailed(String),
 
     #[error("Transaction timeout")]
     TransactionTimeout,
@@ -132,6 +129,9 @@ pub enum RampError {
 
     #[error("Ledger principal {0} not supported")]
     LedgerPrincipalNotSupported(String),
+
+    #[error("Blockchain is not supported")]
+    UnsupportedBlockchain,
 }
 
 impl From<ParseFloatError> for RampError {

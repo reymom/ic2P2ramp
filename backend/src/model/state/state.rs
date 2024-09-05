@@ -10,7 +10,7 @@ use crate::{
     management,
 };
 
-use crate::types::{paypal::PayPalState, revolut::RevolutState, ChainState};
+use crate::types::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();
@@ -123,7 +123,7 @@ pub fn set_frontend_canister(canister: &Principal) -> Result<()> {
     }))
 }
 
-pub fn is_token_supported(ledger_principal: &Principal) -> Result<()> {
+pub fn is_icp_token_supported(ledger_principal: &Principal) -> Result<()> {
     read_state(|state| {
         if state.icp_fees.contains_key(ledger_principal) {
             Ok(())
@@ -131,16 +131,6 @@ pub fn is_token_supported(ledger_principal: &Principal) -> Result<()> {
             Err(RampError::LedgerPrincipalNotSupported(
                 ledger_principal.to_string(),
             ))
-        }
-    })
-}
-
-pub fn is_chain_supported(chain_id: u64) -> Result<()> {
-    read_state(|state| {
-        if state.chains.contains_key(&chain_id) {
-            Ok(())
-        } else {
-            Err(RampError::ChainIdNotFound(chain_id))
         }
     })
 }
