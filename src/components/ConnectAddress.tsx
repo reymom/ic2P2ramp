@@ -2,19 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useUser } from './user/UserContext';
-import { LoginAddress } from '../declarations/backend/backend.did';
+import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
 import { useNavigate } from 'react-router-dom';
 import { AuthClient } from '@dfinity/auth-client';
 import { HttpAgent } from '@dfinity/agent';
 import { icpHost, iiUrl } from '../model/icp';
+import { validatePassword } from '../model/helper';
+import { ethers } from 'ethers';
+import { backend } from '../declarations/backend';
+import { rampErrorToString } from '../model/error';
 
 const ConnectAddress: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [message, setMessage] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [loadingEmail, setLoadingEmail] = useState(false);
     const [loadingEvm, setLoadingEvm] = useState(false);
     const [loadingIcp, setLoadingIcp] = useState(false);
+    const [emailMessage, setEmailMessage] = useState('');
+    const [evmMessage, setEvmMessage] = useState('');
 
     const { isConnected, address } = useAccount();
     const { userType, setLoginMethod, setIcpAgent, authenticateUser, setUser, setPrincipal } = useUser();
@@ -29,52 +34,76 @@ const ConnectAddress: React.FC = () => {
     }, [userType]);
 
     const handleEvmLogin = async () => {
-        if (address) {
-            setLoadingEvm(true);
+        if (!window.ethereum) throw new Error('No crypto wallet found.');
+        if (!address) {
+            setEvmMessage("Undefined evm address. Please connect your wallet.");
+            return;
+        }
 
-            const loginAddress: LoginAddress = {
-                EVM: { address }
-            };
-            setLoginMethod(loginAddress)
+        const loginAddress: LoginAddress = { EVM: { address } };
+        setLoginMethod(loginAddress)
 
-            try {
-                const result = await authenticateUser(loginAddress);
-                if ('Ok' in result) {
-                    setUser(result.Ok);
+        setLoadingEvm(true);
+        try {
+            const result = await backend.generate_evm_session_nonce({ EVM: { address } });
+            if ('Ok' in result) { // user exists, we need to verify the signature
+                console.log("result.Ok = ", result.Ok);
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await provider.getSigner();
+                const signature = await signer.signMessage(result.Ok);
 
-                    if ('Offramper' in result.Ok.user_type) {
-                        navigate("/create");
+                const recoveredAddress = ethers.verifyMessage(result.Ok, signature);
+
+
+                console.log('Expected address:', address);
+                console.log('Recovered address:', recoveredAddress);
+
+                try {
+                    const result = await authenticateUser(loginAddress, { signature: [signature], password: [] });
+                    if ('Ok' in result) {
+                        setUser(result.Ok);
+                        navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
                     } else {
-                        navigate("/view");
+                        setEvmMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`)
                     }
-                } else {
-                    navigate("/login");
+                } catch (error) {
+                    setEvmMessage(`Failed to authenticate user: ${error}`);
                 }
-            } catch (error) {
-                setMessage("Failed to search user");
-            } finally {
-                setLoadingEvm(false);
+            } else if ("UserNotFound" in result.Err) {
+                navigate("/register");
+            } else {
+                setEvmMessage(`Internal error when generating evm session nonce: ${rampErrorToString(result.Err)}`)
             }
-
-            navigate("/login");
-        } else {
-            console.error("EVM Address is undefined")
+        } catch (error) {
+            setEvmMessage(`Failed to generate evm nonce: {error}`);
+            setLoginMethod(null);
+        } finally {
+            setLoadingEvm(false);
         }
     }
 
     const handleEmailLogin = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            setEmailMessage(passwordError);
+            return;
+        }
         if (email && password) {
-            setIsLoading(true);
+            setLoadingEmail(true);
 
             const loginAddress: LoginAddress = {
                 Email: { email }
             };
             setLoginMethod(loginAddress, password);
 
+            const authData: AuthenticationData = {
+                signature: [],
+                password: [password]
+            }
             try {
-                const result = await authenticateUser(loginAddress, password);
+                const result = await authenticateUser(loginAddress, authData);
                 if ('Ok' in result) {
                     setUser(result.Ok)
                     if ('Offramper' in result.Ok.user_type) {
@@ -83,15 +112,15 @@ const ConnectAddress: React.FC = () => {
                         navigate("/view");
                     }
                 } else if ('Err' in result && 'InvalidPassword' in result.Err) {
-                    setMessage('Invalid password');
+                    setEmailMessage('Invalid password');
                 } else {
-                    navigate("/login");
+                    navigate("/register");
                 }
             } catch (error) {
                 console.log("error = ", error);
-                setMessage("Failed to login user");
+                setEmailMessage("Failed to login user");
             } finally {
-                setIsLoading(false);
+                setLoadingEmail(false);
             }
         } else {
             console.error("Email and Password are required");
@@ -131,10 +160,11 @@ const ConnectAddress: React.FC = () => {
                             navigate("/view");
                         }
                     } else {
-                        navigate("/login");
+                        navigate("/register");
                     }
                 } catch (error) {
-                    setMessage("Failed to login user");
+                    console.error("error authenticating user identity")
+                    throw error;
                 } finally {
                     setLoadingIcp(false);
                 }
@@ -169,11 +199,13 @@ const ConnectAddress: React.FC = () => {
                         Login with Ethereum
                     </button>
                 )}
-                {loadingEvm && (
+                {loadingEvm ? (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
                         <div className="text-sm font-medium text-gray-700">Checking user address...</div>
                     </div>
+                ) : (
+                    evmMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{evmMessage}</p>
                 )}
             </div>
 
@@ -201,13 +233,13 @@ const ConnectAddress: React.FC = () => {
                         Log in with Email
                     </button>
                 </form>
-                {isLoading ? (
+                {loadingEmail ? (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
                         <div className="text-sm font-medium text-gray-700">Checking email...</div>
                     </div>
                 ) : (
-                    message && <p className="my-2 text-sm font-medium text-red-500 break-all">{message}</p>
+                    emailMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{emailMessage}</p>
                 )}
                 <div className="mt-2 text-sm text-gray-600">
                     <a href="#" onClick={() => navigate('/forgot-password')} className="underline">

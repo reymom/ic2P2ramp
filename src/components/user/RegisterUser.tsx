@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { backend } from '../../declarations/backend';
-import { PaymentProvider } from '../../declarations/backend/backend.did';
+import { AuthenticationData, PaymentProvider } from '../../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
 import { stringToUserType } from '../../model/utils';
 import { useUser } from './UserContext';
 import { rampErrorToString } from '../../model/error';
 import { truncate } from '../../model/helper';
 import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '../../model/emailConfirmation';
+import { ethers } from 'ethers';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -20,7 +21,7 @@ const RegisterUser: React.FC = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { setUser: setGlobalUser, user, loginMethod, password } = useUser();
+    const { authenticateUser, setUser: setGlobalUser, user, loginMethod, password } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -74,7 +75,7 @@ const RegisterUser: React.FC = () => {
             return;
         }
 
-        if (Object.keys(loginMethod)[0] === 'Email') {
+        if ('Email' in loginMethod) {
             await handleEmailConfirmation();
             return;
         }
@@ -82,13 +83,20 @@ const RegisterUser: React.FC = () => {
         setIsLoading(true);
         try {
             const result = await backend.register_user(stringToUserType(userType), providers, loginMethod, []);
+            if ('Err' in result) {
+                setGlobalUser(null);
+                setMessage(`Error registering user: ${rampErrorToString(result.Err)}`)
+            }
             if ('Ok' in result) {
                 console.log("register is Ok = ", result.Ok)
-                setGlobalUser(result.Ok);
-                navigate(userType === "Onramper" ? "/view" : "/create");
-            } else {
-                setGlobalUser(null);
-                setMessage(rampErrorToString(result.Err));
+
+                if ('EVM' in loginMethod) {
+                    await handleEvmSignature();
+                } else {
+                    setGlobalUser(result.Ok);
+                    navigate(userType === "Onramper" ? "/view" : "/create");
+                }
+
             }
         } catch (error) {
             setMessage(`Failed to register user: ${error}`);
@@ -96,6 +104,31 @@ const RegisterUser: React.FC = () => {
             setIsLoading(false);
         }
     };
+
+    const handleEvmSignature = async () => {
+        try {
+            const result = await backend.generate_evm_session_nonce(loginMethod!);
+
+            if ('Err' in result) setMessage(`Failed to generate evm nonce ${rampErrorToString(result.Err)}`);
+            if ('Ok' in result) {
+                const provider = new ethers.BrowserProvider(window.ethereum);
+                const signer = await provider.getSigner();
+                const signature = await signer.signMessage(result.Ok);
+                try {
+                    const result = await authenticateUser(loginMethod, { signature: [signature], password: [] });
+                    if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
+                    if ('Ok' in result) {
+                        setGlobalUser(result.Ok);
+                        navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
+                    }
+                } catch (error) {
+                    setMessage(`Failed to authenticate user: ${error}`);
+                }
+            }
+        } catch (error) {
+            setMessage(`Failed to generate evm nonce: ${error}`);
+        }
+    }
 
     const handleEmailConfirmation = async () => {
         if (!loginMethod || !password || !('Email' in loginMethod)) {
