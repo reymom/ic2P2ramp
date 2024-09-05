@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { LoginAddress, Result_1, User } from '../../declarations/backend/backend.did';
+import { AuthenticationData, LoginAddress, Result_1, User } from '../../declarations/backend/backend.did';
 import { backend } from '../../declarations/backend';
 import { UserTypes } from '../../model/types';
 import { userTypeToString } from '../../model/utils';
@@ -22,7 +22,7 @@ interface UserContextProps {
     setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
     setIcpAgent: (agent: HttpAgent | null) => void;
     setPrincipal: (principal: Principal | null) => void;
-    authenticateUser: (login: LoginAddress | null, pwd?: string) => Promise<Result_1>;
+    authenticateUser: (login: LoginAddress | null, authData?: AuthenticationData) => Promise<Result_1>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -48,11 +48,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         fetchIcpBalance();
     }, [principal, icpAgent]);
 
-    const authenticateUser = async (login: LoginAddress | null, pwd?: string): Promise<Result_1> => {
+    const authenticateUser = async (login: LoginAddress | null, authData?: AuthenticationData): Promise<Result_1> => {
         if (!login) throw new Error("Login method is not defined");
-        if ('Email' in login && !pwd) throw new Error("Password is required");
+        if ('Email' in login && (!authData || !authData.password)) throw new Error("Password is required");
         try {
-            return await backend.authenticate_user(login, pwd ? [pwd] : []);
+            return await backend.authenticate_user(login, authData ? [authData] : []);
         } catch (error) {
             console.error('Failed to fetch user: ', error);
             throw error;

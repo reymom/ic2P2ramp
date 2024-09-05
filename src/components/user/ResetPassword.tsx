@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clearTempResetPasswordData, getTempResetPasswordData } from '../../model/emailConfirmation';
 import { backend } from '../../declarations/backend';
 import { rampErrorToString } from '../../model/error';
+import { validatePassword } from '../../model/helper';
 
 const ResetPassword: React.FC = () => {
     const [password, setPassword] = useState('');
@@ -40,6 +41,12 @@ const ResetPassword: React.FC = () => {
             return;
         }
 
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            setMessage(passwordError);
+            return;
+        }
+
         if (password !== confirmPassword) {
             setMessage('Passwords do not match.');
             return;
@@ -51,7 +58,7 @@ const ResetPassword: React.FC = () => {
             if ('Ok' in response) {
                 setMessage('Password has been reset successfully.');
                 clearTempResetPasswordData();
-                navigate("/login");
+                navigate("/register");
             } else {
                 setMessage(`Failed to reset password: ${rampErrorToString(response.Err)}`);
             }

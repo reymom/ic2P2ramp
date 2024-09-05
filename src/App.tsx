@@ -55,7 +55,7 @@ function App() {
                 <div className="bg-white p-8 space-x-2 space-y-2 rounded shadow-md text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3">
                     <Routes>
                         <Route path="/" element={<ConnectAddress />} />
-                        <Route path="/login" element={<RegisterUser />} />
+                        <Route path="/register" element={<RegisterUser />} />
                         <Route path="/confirm-email" element={<ConfirmEmail />} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
                         <Route path="/reset-password" element={<ResetPassword />} />

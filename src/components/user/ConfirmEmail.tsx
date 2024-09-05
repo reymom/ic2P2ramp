@@ -81,7 +81,7 @@ const ConfirmEmail: React.FC = () => {
             ) : (
                 <form onSubmit={handleSubmit} className="mt-4">
                     <label htmlFor="token" className="block text-sm font-medium text-gray-700">
-                        Enter Confirmation Token
+                        Enter Confirmation Token received in your email
                     </label>
                     <input
                         id="token"
