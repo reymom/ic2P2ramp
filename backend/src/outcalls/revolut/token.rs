@@ -68,6 +68,7 @@ pub async fn get_revolut_access_token(consent_id: String) -> Result<String> {
 
 pub async fn wait_for_revolut_access_token(
     order_id: u64,
+    session_token: &str,
     max_attempts: u32,
     interval_seconds: u64,
 ) -> Result<String> {
@@ -76,6 +77,10 @@ pub async fn wait_for_revolut_access_token(
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
+
+    let user = storage::get_user(&order.onramper_user_id)?;
+    user.validate_session(&session_token)?;
+
     let (
         consent_id,
         amount,
@@ -131,7 +136,14 @@ pub async fn wait_for_revolut_access_token(
 
                 // Automatically verify the transaction after setting the payment ID
                 ic_cdk::println!("[wait_for_access_token] Verifying transaction...");
-                match crate::verify_transaction(order_id, payment_id.clone(), None).await {
+                match crate::verify_transaction(
+                    order_id,
+                    session_token.to_string(),
+                    payment_id.clone(),
+                    None,
+                )
+                .await
+                {
                     Ok(_) => ic_cdk::println!(
                         "[wait_for_access_token] Transaction verified successfully."
                     ),

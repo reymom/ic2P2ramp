@@ -4,6 +4,7 @@ mod common;
 pub mod order;
 pub mod paypal;
 pub mod revolut;
+pub mod session;
 pub mod user;
 
 pub use blockchain::Blockchain;

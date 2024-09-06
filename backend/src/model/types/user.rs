@@ -4,6 +4,7 @@ use std::{borrow::Cow, collections::HashSet};
 
 use super::{
     common::{LoginAddress, PaymentProvider, TransactionAddress},
+    session::Session,
     AuthenticationData,
 };
 use crate::{
@@ -26,12 +27,13 @@ pub struct User {
     pub id: u64,
     pub user_type: UserType,
     pub payment_providers: HashSet<PaymentProvider>,
+    pub addresses: HashSet<TransactionAddress>,
     pub fiat_amount: u64, // received for offramper or payed by onramper
     pub score: i32,
     pub login: LoginAddress,
     pub hashed_password: Option<String>,  // for email login
     pub evm_auth_message: Option<String>, // for EVM login, unique per session
-    pub addresses: HashSet<TransactionAddress>,
+    pub session: Option<Session>,
 }
 
 impl User {
@@ -58,6 +60,7 @@ impl User {
             hashed_password,
             evm_auth_message: None,
             addresses,
+            session: None,
         })
     }
 
@@ -111,16 +114,28 @@ impl User {
                 signer::verify_signature(&address, &message, &signature)?
             }
             LoginAddress::ICP { principal_id } => {
+                ic_cdk::println!(
+                    "[verify_user_auth] caller = {:?}",
+                    ic_cdk::caller().to_string()
+                );
+                ic_cdk::println!("[verify_user_auth] principal_id = {:?}", principal_id);
                 if ic_cdk::caller()
                     != Principal::from_text(principal_id).map_err(|_| RampError::InvalidAddress)?
                 {
-                    return Err(RampError::Unauthorized);
+                    return Err(RampError::UnauthorizedPrincipal);
                 }
             }
-            _ => return Err(RampError::Unauthorized),
+            _ => return Err(RampError::UnauthorizedPrincipal),
         }
 
         Ok(())
+    }
+
+    pub fn validate_session(&self, token: &str) -> Result<()> {
+        self.session
+            .as_ref()
+            .ok_or_else(|| RampError::SessionNotFound)?
+            .validate(token)
     }
 
     pub fn update_fiat_amount(&mut self, amount: u64) {

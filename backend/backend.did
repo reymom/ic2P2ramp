@@ -144,6 +144,7 @@ type RampError = variant {
   ExchangeRateError : ExchangeRateError;
   SignatureRequired;
   UnsupportedBlockchain;
+  SessionNotFound;
   ParseFloatError : text;
   MissingDebtorAccount;
   LedgerPrincipalNotSupported : text;
@@ -156,9 +157,10 @@ type RampError = variant {
   Pkcs8Error : text;
   PasswordRequired;
   ChainIdNotFound : nat64;
-  Unauthorized;
+  TokenExpired;
   ParseError : text;
   NonceTooLow;
+  TokenInvalid;
   OnlyController;
   UnregisteredEvmToken;
   EmptyTransactionHash;
@@ -170,6 +172,7 @@ type RampError = variant {
   Utf8Error;
   VaultManagerAddressNotFound : nat64;
   UserNotFound;
+  UnauthorizedPrincipal;
   InvalidPassword;
   InsufficientFunds;
 };
@@ -202,6 +205,7 @@ type RpcServices = variant {
   Custom : record { chainId : nat64; services : vec RpcApi };
   EthMainnet : opt vec EthMainnetService;
 };
+type Session = record { token : text; expires_at : nat64 };
 type TransactionAddress = record { address_type : AddressType; address : text };
 type TransformArgs = record { context : blob; response : HttpResponse };
 type User = record {
@@ -211,17 +215,19 @@ type User = record {
   fiat_amount : nat64;
   score : int32;
   login : LoginAddress;
-  evm_session_nonce : opt text;
+  evm_auth_message : opt text;
   addresses : vec TransactionAddress;
+  session : opt Session;
   hashed_password : opt text;
 };
 type UserType = variant { Offramper; Onramper };
 service : (InitArg) -> {
-  add_user_payment_provider : (nat64, PaymentProvider) -> (Result);
-  add_user_transaction_address : (nat64, TransactionAddress) -> (Result);
+  add_user_payment_provider : (nat64, text, PaymentProvider) -> (Result);
+  add_user_transaction_address : (nat64, text, TransactionAddress) -> (Result);
   authenticate_user : (LoginAddress, opt AuthenticationData) -> (Result_1);
-  cancel_order : (nat64) -> (Result);
+  cancel_order : (nat64, text) -> (Result);
   create_order : (
+      text,
       nat64,
       text,
       vec record { PaymentProviderType; PaymentProvider },
@@ -233,8 +239,8 @@ service : (InitArg) -> {
       opt nat32,
       opt nat32,
     ) -> (Result_2);
-  execute_revolut_payment : (nat64) -> (Result_3) query;
-  generate_evm_session_nonce : (LoginAddress) -> (Result_3);
+  execute_revolut_payment : (nat64, text) -> (Result_3) query;
+  generate_evm_auth_message : (LoginAddress) -> (Result_3);
   get_evm_address : () -> (text) query;
   get_exchange_rate : (text, text) -> (Result_3);
   get_icp_transaction_fee : (principal) -> (Result_4) query;
@@ -242,8 +248,10 @@ service : (InitArg) -> {
       vec OrderState,
     ) query;
   get_rpc_providers : () -> (vec ProviderView) query;
+  get_user : (nat64) -> (Result_1) query;
   lock_order : (
       nat64,
+      text,
       nat64,
       PaymentProvider,
       TransactionAddress,
@@ -265,8 +273,8 @@ service : (InitArg) -> {
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat32) -> (Result_3);
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
-  unlock_order : (nat64, opt nat32) -> (Result_3);
+  unlock_order : (nat64, text, opt nat32) -> (Result_3);
   update_password : (LoginAddress, opt text) -> (Result);
-  verify_transaction : (nat64, text, opt nat32) -> (Result_3);
+  verify_transaction : (nat64, text, text, opt nat32) -> (Result_3);
   view_canister_balances : () -> (Result_5) query;
 }

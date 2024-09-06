@@ -190,8 +190,8 @@ pub fn lock_order(
 pub fn unlock_order(order_id: u64) -> Result<()> {
     storage::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            let score = user_management::decrease_user_score(order.onramper_user_id)?;
-            ic_cdk::println!("[unlock_order] user score decreased = {:?}", score);
+            user_management::decrease_user_score(order.onramper_user_id)?;
+            ic_cdk::println!("[unlock_order] user score decreased");
             *order_state = OrderState::Created(order.base.clone());
             Ok(())
         }

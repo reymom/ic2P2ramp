@@ -20,13 +20,22 @@ pub enum RampError {
     PasswordRequired,
 
     #[error("User is not authorized")]
-    Unauthorized,
+    UnauthorizedPrincipal,
 
     #[error("Signature is required")]
     SignatureRequired,
 
     #[error("Signature is not valid")]
     InvalidSignature,
+
+    #[error("Token is Invalid")]
+    TokenInvalid,
+
+    #[error("Token is Expired")]
+    TokenExpired,
+
+    #[error("Session not Found")]
+    SessionNotFound,
 
     #[error("Order Not Found")]
     OrderNotFound,

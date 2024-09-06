@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use super::random;
 use crate::{
     errors::{RampError, Result},
+    model::types::session::Session,
     state::storage,
     types::{
         user::{User, UserType},
@@ -18,11 +19,19 @@ pub async fn register_user(
 ) -> Result<User> {
     login_address.validate()?;
 
-    let hashed_password = if let LoginAddress::Email { .. } = login_address {
-        let password = password.ok_or(RampError::PasswordRequired)?;
-        Some(random::hash_password(&password).await?)
-    } else {
-        None
+    let hashed_password: Result<Option<String>> = match login_address.clone() {
+        LoginAddress::Email { .. } => {
+            let password = password.ok_or(RampError::PasswordRequired)?;
+            Ok(Some(random::hash_password(&password).await?))
+        }
+        LoginAddress::ICP { principal_id } => {
+            ic_cdk::println!("[register] caller = {:?}", ic_cdk::caller().to_string());
+            if ic_cdk::caller().to_string() != principal_id {
+                return Err(RampError::UnauthorizedPrincipal);
+            }
+            Ok(None)
+        }
+        _ => Ok(None),
     };
 
     if payment_providers.is_empty() {
@@ -35,7 +44,7 @@ pub async fn register_user(
         .into_iter()
         .try_for_each(|p| p.validate())?;
 
-    let mut user = User::new(user_type, login_address, hashed_password)?;
+    let mut user = User::new(user_type, login_address, hashed_password?)?;
     user.payment_providers = payment_providers;
 
     storage::insert_user(&user);
@@ -60,10 +69,16 @@ pub async fn reset_password_user(
     Ok(())
 }
 
-pub fn add_transaction_address(user_id: u64, address: TransactionAddress) -> Result<()> {
+pub fn add_transaction_address(
+    user_id: u64,
+    token: &str,
+    address: TransactionAddress,
+) -> Result<()> {
     address.validate()?;
 
     storage::mutate_user(user_id, |user| {
+        user.validate_session(&token)?;
+
         if let Some(existing_address) = user.addresses.take(&address) {
             ic_cdk::println!("updating address {:?} to {:?}", existing_address, address)
         }
@@ -73,14 +88,19 @@ pub fn add_transaction_address(user_id: u64, address: TransactionAddress) -> Res
     })?
 }
 
-pub fn add_payment_provider(user_id: u64, payment_provider: PaymentProvider) -> Result<()> {
+pub fn add_payment_provider(
+    user_id: u64,
+    token: &str,
+    payment_provider: PaymentProvider,
+) -> Result<()> {
     payment_provider.validate()?;
 
     storage::mutate_user(user_id, |user| {
-        user.payment_providers.insert(payment_provider);
-    })?;
+        user.validate_session(&token)?;
 
-    Ok(())
+        user.payment_providers.insert(payment_provider);
+        Ok(())
+    })?
 }
 
 pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> {
@@ -89,11 +109,11 @@ pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> 
     })
 }
 
-pub fn can_commit_orders(user_id: &u64) -> Result<()> {
-    let user = storage::get_user(user_id)?;
-    user.is_banned()?;
-    user.validate_onramper()?;
-    Ok(())
+pub fn set_session(user_id: u64, session: &Session) -> Result<User> {
+    storage::mutate_user(user_id, |user| {
+        user.session = Some(session.clone());
+        Ok(user.to_owned())
+    })?
 }
 
 pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
