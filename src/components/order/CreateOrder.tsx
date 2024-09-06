@@ -31,7 +31,7 @@ const CreateOrder: React.FC = () => {
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { chain, chainId, address } = useAccount();
-    const { user, icpAgent, principal, fetchIcpBalance } = useUser();
+    const { user, sessionToken, icpAgent, principal, fetchIcpBalance } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -134,6 +134,7 @@ const CreateOrder: React.FC = () => {
             setMessage('User Not Found');
             return;
         }
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
 
         if (!chainId) throw new Error('Chain id is not available')
         if (!selectedBlockchain) throw new Error('No blockchain selected');
@@ -199,6 +200,7 @@ const CreateOrder: React.FC = () => {
             }
 
             const result = await backend.create_order(
+                sessionToken,
                 BigInt(Math.ceil(fiatAmount! * 100)),
                 currency,
                 providerTuples,

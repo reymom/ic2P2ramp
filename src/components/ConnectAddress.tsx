@@ -1,16 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
-import { useUser } from './user/UserContext';
-import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
 import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { AuthClient } from '@dfinity/auth-client';
 import { HttpAgent } from '@dfinity/agent';
+import { useAccount } from 'wagmi';
+
+import { backend, createActor } from '../declarations/backend';
+import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
+import { useUser } from './user/UserContext';
 import { icpHost, iiUrl } from '../model/icp';
 import { validatePassword } from '../model/helper';
-import { ethers } from 'ethers';
-import { backend } from '../declarations/backend';
 import { rampErrorToString } from '../model/error';
+
+// Icons
+import icpLogo from "../assets/icp-logo.svg";
+import ethereumLogo from "../assets/ethereum-logo.png";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEnvelope, faKey } from '@fortawesome/free-solid-svg-icons';
 
 const ConnectAddress: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -22,7 +29,15 @@ const ConnectAddress: React.FC = () => {
     const [evmMessage, setEvmMessage] = useState('');
 
     const { isConnected, address } = useAccount();
-    const { userType, setLoginMethod, setIcpAgent, authenticateUser, setUser, setPrincipal } = useUser();
+    const {
+        userType,
+        setLoginMethod,
+        setIcpAgent,
+        authenticateUser,
+        setUser,
+        setPrincipal,
+        setBackendActor
+    } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -45,19 +60,11 @@ const ConnectAddress: React.FC = () => {
 
         setLoadingEvm(true);
         try {
-            const result = await backend.generate_evm_session_nonce({ EVM: { address } });
+            const result = await backend.generate_evm_auth_message({ EVM: { address } });
             if ('Ok' in result) { // user exists, we need to verify the signature
-                console.log("result.Ok = ", result.Ok);
                 const provider = new ethers.BrowserProvider(window.ethereum);
                 const signer = await provider.getSigner();
                 const signature = await signer.signMessage(result.Ok);
-
-                const recoveredAddress = ethers.verifyMessage(result.Ok, signature);
-
-
-                console.log('Expected address:', address);
-                console.log('Recovered address:', recoveredAddress);
-
                 try {
                     const result = await authenticateUser(loginAddress, { signature: [signature], password: [] });
                     if ('Ok' in result) {
@@ -145,13 +152,20 @@ const ConnectAddress: React.FC = () => {
                 }
                 setIcpAgent(agent);
 
+                if (!process.env.CANISTER_ID_BACKEND) throw new Error("canister id not in env file");
+                const backendActor = createActor(process.env.CANISTER_ID_BACKEND, {
+                    agent,
+                });
+                setBackendActor(backendActor);
+
                 const loginAddress: LoginAddress = {
                     ICP: { principal_id: principal.toText() }
                 };
                 setLoginMethod(loginAddress);
 
                 try {
-                    const result = await authenticateUser(loginAddress);
+                    const result = await authenticateUser(loginAddress, undefined);
+                    console.log("result = ", result);
                     if ('Ok' in result) {
                         setUser(result.Ok)
                         if ('Offramper' in result.Ok.user_type) {
@@ -163,7 +177,7 @@ const ConnectAddress: React.FC = () => {
                         navigate("/register");
                     }
                 } catch (error) {
-                    console.error("error authenticating user identity")
+                    console.error(`error authenticating user identity: ${error}`)
                     throw error;
                 } finally {
                     setLoadingIcp(false);
@@ -176,83 +190,97 @@ const ConnectAddress: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col items-center justify-center text-center h-full rounded">
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto space-y-6">
+            <div className="text-center mb-6">
+                <h2 className="text-white text-2xl font-semibold">Sign in to icRamp</h2>
+            </div>
 
-            <div className="my-4">
-                <button onClick={handleInternetIdentityLogin} className="px-2 py-2 bg-green-500 text-white rounded-xl">
-                    Log in with Internet Identity
-                </button>
+            <div className="space-y-4">
+                <div
+                    className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md hover:bg-gray-500 cursor-pointer"
+                    onClick={handleInternetIdentityLogin}
+                >
+                    <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
+                    <span className="text-white text-lg">Sign in with Internet Identity</span>
+                </div>
                 {loadingIcp && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-700">Checking icp principal...</div>
+                        <div className="text-sm font-medium text-gray-400">Checking ICP principal...</div>
                     </div>
                 )}
-            </div>
 
-            <hr className="border-t border-gray-300 w-full my-4" />
-
-            <div className="my-4">
-                {!isConnected && <ConnectButton label={"Connect Wallet"} />}
-                {isConnected && (
-                    <button onClick={handleEvmLogin} className="px-4 py-2 bg-blue-500 text-white rounded">
-                        Login with Ethereum
-                    </button>
-                )}
-                {loadingEvm ? (
+                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md hover:bg-gray-500 cursor-pointer">
+                    <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
+                    {!isConnected && (
+                        <div className="w-full text-left">
+                            <ConnectButton.Custom>
+                                {({ openConnectModal }) => (
+                                    <button
+                                        className="text-white w-full text-lg text-left"
+                                        onClick={openConnectModal}
+                                    >
+                                        Connect your wallet
+                                    </button>
+                                )}
+                            </ConnectButton.Custom>
+                        </div>
+                    )}
+                    {isConnected && (
+                        <button onClick={handleEvmLogin} className="text-white text-lg w-full text-left">Register with Ethereum.</button>
+                    )}
+                </div>
+                {loadingEvm && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-700">Checking user address...</div>
+                        <div className="text-sm font-medium text-gray-400">Checking user address...</div>
                     </div>
-                ) : (
-                    evmMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{evmMessage}</p>
                 )}
+                {evmMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{evmMessage}</p>}
             </div>
 
-            <hr className="border-t border-gray-300 w-full my-4" />
+            <hr className="border-t border-gray-500 w-full my-4" />
 
-            <div className="my-4 flex flex-col space-y-2 w-full max-w-xs">
-                <form onSubmit={handleEmailLogin}>
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
+                    <FontAwesomeIcon icon={faEnvelope} className="text-white h-5 w-5" />
                     <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="Enter your email"
-                        className="px-4 py-2 border rounded w-full"
+                        className="px-3 py-1.5 bg-transparent text-white border-none outline-none w-full"
                         required
                     />
+                </div>
+                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
+                    <FontAwesomeIcon icon={faKey} className="text-white h-5 w-5" />
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter your password"
-                        className="px-4 py-2 border rounded w-full"
+                        className="px-3 py-1.5 bg-transparent text-white border-none outline-none w-full"
                         required
                     />
-                    <button type="submit" className="my-4 px-4 py-2 bg-amber-500 text-white rounded w-full">
-                        Log in with Email
-                    </button>
-                </form>
-                {loadingEmail ? (
-                    <div className="my-2 flex justify-center items-center space-x-2">
-                        <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-700">Checking email...</div>
-                    </div>
-                ) : (
-                    emailMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{emailMessage}</p>
-                )}
-                <div className="mt-2 text-sm text-gray-600">
-                    <a href="#" onClick={() => navigate('/forgot-password')} className="underline">
+                </div>
+                <button type="submit" className="w-full bg-amber-500 text-white py-2 rounded-md hover:bg-amber-400">
+                    Log in with Email
+                </button>
+                <div className="text-center">
+                    <a href="#" onClick={() => navigate('/forgot-password')} className="text-sm text-gray-400 hover:underline">
                         Forgot your password?
                     </a>
                 </div>
-            </div>
+            </form>
 
-            <hr className="border-t border-gray-300 w-full my-4" />
-
-            <button onClick={() => navigate('/view')} className="my-4 px-4 py-2 bg-gray-400 text-white rounded">
-                Enter as Guest
-            </button>
+            {loadingEmail && (
+                <div className="my-2 flex justify-center items-center space-x-2">
+                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-400">Checking email...</div>
+                </div>
+            )}
+            {emailMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{emailMessage}</p>}
         </div>
     );
 };

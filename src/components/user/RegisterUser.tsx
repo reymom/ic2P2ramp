@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { backend } from '../../declarations/backend';
-import { AuthenticationData, PaymentProvider } from '../../declarations/backend/backend.did';
+import { PaymentProvider } from '../../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
 import { stringToUserType } from '../../model/utils';
 import { useUser } from './UserContext';
@@ -21,7 +21,7 @@ const RegisterUser: React.FC = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { authenticateUser, setUser: setGlobalUser, user, loginMethod, password } = useUser();
+    const { authenticateUser, setUser: setGlobalUser, user, loginMethod, password, backendActor } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -82,18 +82,25 @@ const RegisterUser: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const result = await backend.register_user(stringToUserType(userType), providers, loginMethod, []);
+            let result = await backendActor.register_user(stringToUserType(userType), providers, loginMethod, []);
             if ('Err' in result) {
                 setGlobalUser(null);
                 setMessage(`Error registering user: ${rampErrorToString(result.Err)}`)
             }
             if ('Ok' in result) {
-                console.log("register is Ok = ", result.Ok)
-
                 if ('EVM' in loginMethod) {
                     await handleEvmSignature();
                 } else {
-                    setGlobalUser(result.Ok);
+                    try {
+                        const result = await authenticateUser(loginMethod, { signature: [], password: [] });
+                        if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
+                        if ('Ok' in result) {
+                            setGlobalUser(result.Ok);
+                            navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
+                        }
+                    } catch (error) {
+                        setMessage(`Failed to authenticate user: ${error}`);
+                    }
                     navigate(userType === "Onramper" ? "/view" : "/create");
                 }
 
@@ -107,7 +114,7 @@ const RegisterUser: React.FC = () => {
 
     const handleEvmSignature = async () => {
         try {
-            const result = await backend.generate_evm_session_nonce(loginMethod!);
+            const result = await backend.generate_evm_auth_message(loginMethod!);
 
             if ('Err' in result) setMessage(`Failed to generate evm nonce ${rampErrorToString(result.Err)}`);
             if ('Ok' in result) {

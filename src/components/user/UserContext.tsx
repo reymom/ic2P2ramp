@@ -1,28 +1,36 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { AuthenticationData, LoginAddress, Result_1, User } from '../../declarations/backend/backend.did';
 import { backend } from '../../declarations/backend';
+import { _SERVICE } from '../../declarations/backend/backend.did';
 import { UserTypes } from '../../model/types';
 import { userTypeToString } from '../../model/utils';
-import { HttpAgent } from '@dfinity/agent';
+import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { tokenCanisters } from '../../constants/addresses';
 import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
+import { saveSessionToken, getSessionToken, clearSessionToken } from '../../model/session';
 
 interface UserContextProps {
     user: User | null;
     userType: UserTypes;
     loginMethod: LoginAddress | null;
+    sessionToken: string | null;
     password: string | null;
     logout: () => void;
     icpAgent: HttpAgent | null;
+    backendActor: ActorSubclass<_SERVICE>,
     principal: Principal | null;
     icpBalance: string | null;
     fetchIcpBalance: () => void;
     setUser: (user: User | null) => void;
     setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
     setIcpAgent: (agent: HttpAgent | null) => void;
+    setBackendActor: (actor: ActorSubclass<_SERVICE>) => void;
     setPrincipal: (principal: Principal | null) => void;
-    authenticateUser: (login: LoginAddress | null, authData?: AuthenticationData) => Promise<Result_1>;
+    authenticateUser: (
+        login: LoginAddress | null,
+        authData?: AuthenticationData,
+    ) => Promise<Result_1>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -31,8 +39,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [userType, setUserType] = useState<UserTypes>("Visitor");
     const [loginMethod, setLoginMethod] = useState<LoginAddress | null>(null);
+    const [sessionToken, setSessionToken] = useState<string | null>(getSessionToken());
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
+    const [backendActor, setBackendActor] = useState<ActorSubclass<_SERVICE>>(backend);
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [icpBalance, setIcpBalance] = useState<string | null>(null);
 
@@ -51,8 +61,23 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const authenticateUser = async (login: LoginAddress | null, authData?: AuthenticationData): Promise<Result_1> => {
         if (!login) throw new Error("Login method is not defined");
         if ('Email' in login && (!authData || !authData.password)) throw new Error("Password is required");
+        if ('EVM' in login && (!authData || !authData.signature)) throw new Error("EVM Signature is required");
+
         try {
-            return await backend.authenticate_user(login, authData ? [authData] : []);
+            let result = await backendActor.authenticate_user(login, authData ? [authData] : []);
+
+            if ('Ok' in result) {
+                setUser(result.Ok);
+                // Save session token in context and localStorage
+                const session = result.Ok.session.length > 0 ? result.Ok.session[0] : null;
+                if (session) {
+                    setSessionToken(session.token);
+                    saveSessionToken(session.token);
+                } else {
+                    throw new Error("Session Token is not properly set in the backend");
+                }
+            }
+            return result;
         } catch (error) {
             console.error('Failed to fetch user: ', error);
             throw error;
@@ -62,6 +87,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         setUser(null);
         setLoginMethod(null);
+        setSessionToken(null);
+        clearSessionToken();
         setIcpAgent(null);
         setPrincipal(null);
         setUserType("Visitor");
@@ -95,9 +122,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             user,
             userType,
             loginMethod,
+            sessionToken,
             password,
             logout,
             icpAgent,
+            backendActor,
             principal,
             icpBalance,
             fetchIcpBalance,
@@ -107,6 +136,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 setPassword(pwd || null);
             },
             setIcpAgent,
+            setBackendActor,
             setPrincipal,
             authenticateUser
         }}>

@@ -29,7 +29,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [txHash, setTxHash] = useState<string>();
 
     const { chainId } = useAccount();
-    const { user, userType, fetchIcpBalance } = useUser();
+    const { user, userType, sessionToken, fetchIcpBalance } = useUser();
 
     const orderId = 'Created' in order ? order.Created.id
         : 'Locked' in order ? order.Locked.base.id
@@ -65,6 +65,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const commitToOrder = async (provider: PaymentProvider) => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
+
         if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
@@ -100,7 +102,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             if (!orderAddress) throw new Error("No address matches for user");
 
-            const result = await backend.lock_order(orderId, user.id, provider, orderAddress, gasEstimation);
+            const result = await backend.lock_order(orderId, sessionToken, user.id, provider, orderAddress, gasEstimation);
 
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
@@ -139,6 +141,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const removeOrder = async () => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
         if (!('Created' in order) || !orderBlockchain || !orderId) return;
 
         try {
@@ -168,7 +171,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     throw new Error('Blockchain not defined')
             }
 
-            const result = await backend.cancel_order(orderId);
+            const result = await backend.cancel_order(orderId, sessionToken);
             if ('Ok' in result) {
                 setMessage("Order Cancelled");
                 refetchOrders();
@@ -186,6 +189,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const handlePayPalSuccess = async (transactionId: string) => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
         if (!('Locked' in order) || !orderId || !orderBlockchain) return;
 
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
@@ -213,7 +217,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         try {
             // Send transaction ID to backend to verify payment
-            const response = await backend.verify_transaction(orderId, transactionId, gasEstimation);
+            const response = await backend.verify_transaction(orderId, sessionToken, transactionId, gasEstimation);
             if ('Ok' in response) {
                 setMessage(`Order Verified and Funds Transferred successfully!`);
                 if ('EVM' in orderBlockchain!) {
@@ -254,12 +258,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const handleRevolutRedirect = async () => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
         if (!('Locked' in order) || !orderId) return;
 
         const consentUrl = order.Locked.consent_url?.[0];
         if (consentUrl) {
             console.log('Listening for Revolut transaction confirmation...');
-            backend.execute_revolut_payment(orderId)
+            backend.execute_revolut_payment(orderId, sessionToken)
                 .catch(err => console.error("Failed to execute revolut payment: ", err));
             window.location.href = consentUrl;
         } else {

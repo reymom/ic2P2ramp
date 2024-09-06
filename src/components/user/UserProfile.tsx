@@ -25,7 +25,7 @@ const UserProfile: React.FC = () => {
 
     const { address, isConnected } = useAccount();
 
-    const { user, principal, setUser, setIcpAgent, setPrincipal } = useUser();
+    const { user, sessionToken, principal, setUser, setIcpAgent, setPrincipal } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -61,6 +61,8 @@ const UserProfile: React.FC = () => {
     };
 
     const handleAddProvider = async () => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
+
         if (!providerType) return;
         setLoadingAddProvider(true);
 
@@ -80,7 +82,7 @@ const UserProfile: React.FC = () => {
         }
 
         try {
-            const result = await backend.add_user_payment_provider(user.id, newProvider);
+            const result = await backend.add_user_payment_provider(user.id, sessionToken, newProvider);
             if ('Ok' in result) {
                 const updatedProviders = [...user.payment_providers, newProvider]
                 setUser({ ...user, payment_providers: updatedProviders });
@@ -95,6 +97,8 @@ const UserProfile: React.FC = () => {
     };
 
     const handleAddAddress = async (addressToAdd: string) => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session")
+
         if (!selectedAddressType) return;
         setLoadingAddAddress(true);
 
@@ -104,7 +108,7 @@ const UserProfile: React.FC = () => {
         } as TransactionAddress;
 
         try {
-            const result = await backend.add_user_transaction_address(user.id, addingAddress);
+            const result = await backend.add_user_transaction_address(user.id, sessionToken, addingAddress);
             if ('Ok' in result) {
                 const updatedAddresses = [...user.addresses, addingAddress];
                 setUser({ ...user, addresses: updatedAddresses });
