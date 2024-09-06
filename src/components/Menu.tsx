@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
 
-import logo from '../assets/p2ploan.webp';
+import logo from '../assets/icR-logo.png';
+
 import { useUser } from './user/UserContext';
 import { userTypeToString } from '../model/utils';
 import { truncate } from '../model/helper';
@@ -141,7 +142,7 @@ const Menu: React.FC = () => {
                             <div className="p-4 flex items-center justify-between">
                                 <div>
                                     <Link to="/" className="flex items-center" onClick={closeMenu}>
-                                        <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
+                                        <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
                                     </Link>
                                 </div>
                                 <button onClick={toggleMenu} className="p-2">
@@ -165,9 +166,16 @@ const Menu: React.FC = () => {
 
             {!isMobile &&
                 <div className="flex justify-between w-full">
-                    <Link to="/" className="flex items-center w-72">
-                        <img src={logo} className="rounded-full h-12 w-12 mr-2" alt="ic2P2ramp logo" />
-                        <h1 className="text-xl font-bold">ic2P2ramp</h1>
+                    <Link to="/" className="flex items-center w-72 text-center align-middle">
+                        <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
+                        <h1 className="text-4xl font-serif text-white tracking-widest -mt-2" style={{
+                            color: '#ffffff',
+                            WebkitTextStroke: '2px #280d57',
+                            WebkitTextFillColor: '#ffffff',
+                            letterSpacing: '0.1em',
+                        }}>
+                            icRamp
+                        </h1>
                     </Link>
                     <div className="flex-grow flex justify-center">
                         <div className="flex items-center space-x-4">
