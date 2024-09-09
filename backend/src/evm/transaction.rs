@@ -7,7 +7,7 @@ use super::{
     rpc::{
         GetTransactionReceiptResult, MultiGetTransactionReceiptResult,
         MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
-        SendRawTransactionStatus, EVM_RPC,
+        SendRawTransactionStatus, TransactionReceipt, EVM_RPC,
     },
     signer::{self, SignRequest},
 };
@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Debug)]
 pub enum TransactionStatus {
-    Confirmed,
+    Confirmed(TransactionReceipt),
     Failed(String),
     Pending,
 }
@@ -112,7 +112,7 @@ pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> Transac
             Some(receipt),
         )),)) => {
             if receipt.status == 1_u32 {
-                TransactionStatus::Confirmed
+                TransactionStatus::Confirmed(receipt)
             } else {
                 TransactionStatus::Failed(format!("Transaction failed: {:?}", receipt))
             }
@@ -138,7 +138,7 @@ pub async fn _wait_for_transaction_confirmation(
 ) -> Result<()> {
     for attempt in 0..max_attempts {
         match check_transaction_status(tx_hash.clone(), chain_id).await {
-            TransactionStatus::Confirmed => {
+            TransactionStatus::Confirmed(_) => {
                 return Ok(());
             }
             TransactionStatus::Failed(err) => {
@@ -166,7 +166,7 @@ pub fn spawn_transaction_checker<F>(
     interval: Duration,
     on_success: F,
 ) where
-    F: Fn() + 'static,
+    F: Fn(TransactionReceipt) + 'static,
 {
     fn schedule_check<F>(
         tx_hash: String,
@@ -176,15 +176,15 @@ pub fn spawn_transaction_checker<F>(
         interval: Duration,
         on_success: F,
     ) where
-        F: Fn() + 'static,
+        F: Fn(TransactionReceipt) + 'static,
     {
         ic_cdk_timers::set_timer(interval, move || {
             ic_cdk::println!("[schedule_check] spawning...");
             ic_cdk::spawn(async move {
                 match check_transaction_status(tx_hash.clone(), chain_id).await {
-                    TransactionStatus::Confirmed => {
+                    TransactionStatus::Confirmed(receipt) => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Confirmed");
-                        on_success();
+                        on_success(receipt);
                     }
                     TransactionStatus::Pending if attempts < max_attempts => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Pending...");

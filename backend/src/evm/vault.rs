@@ -4,23 +4,21 @@ use super::fees::{self, FeeEstimates};
 use super::signer::{self, SignRequest};
 use super::transaction;
 
-use crate::model::helpers;
-use crate::model::types::chains;
-use crate::{
-    errors::{RampError, Result},
-    state::storage,
-    types::order::OrderState,
+use crate::errors::Result;
+use crate::model::{
+    helpers,
+    types::{chains, order::LockedOrder},
 };
 
 pub struct Ic2P2ramp;
 
 impl Ic2P2ramp {
-    const DEFAULT_GAS: u32 = 40_000;
-    // Gas margin of 30%
-    const GAS_MULTIPLIER_NUM: u32 = 13;
-    const GAS_MULTIPLIER_DEN: u32 = 10;
+    const DEFAULT_GAS: u64 = 100_000;
+    // Gas margin of 20%
+    const GAS_MULTIPLIER_NUM: u64 = 12;
+    const GAS_MULTIPLIER_DEN: u64 = 10;
 
-    pub fn get_final_gas(estimated_gas: u32) -> u32 {
+    pub fn get_final_gas(estimated_gas: u64) -> u64 {
         estimated_gas * Self::GAS_MULTIPLIER_NUM / Self::GAS_MULTIPLIER_DEN
     }
 
@@ -29,7 +27,7 @@ impl Ic2P2ramp {
         offramper_address: String,
         token_address: Option<String>,
         amount: u128,
-        estimated_gas: Option<u32>,
+        estimated_gas: Option<u64>,
     ) -> Result<String> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
@@ -106,7 +104,7 @@ impl Ic2P2ramp {
         offramper_address: String,
         token_address: Option<String>,
         amount: u128,
-        estimated_gas: Option<u32>,
+        estimated_gas: Option<u64>,
     ) -> Result<String> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
@@ -179,16 +177,10 @@ impl Ic2P2ramp {
     }
 
     pub async fn release_funds(
-        order_id: u64,
+        order: LockedOrder,
         chain_id: u64,
-        estimated_gas: Option<u32>,
+        estimated_gas: Option<u64>,
     ) -> Result<String> {
-        let order_state = storage::get_order(&order_id)?;
-        let order = match order_state {
-            OrderState::Locked(locked_order) => locked_order,
-            _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-        };
-
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
@@ -322,7 +314,7 @@ impl Ic2P2ramp {
         to: &str,
         value: u128,
         token_address: Option<String>,
-        estimated_gas: Option<u32>,
+        estimated_gas: Option<u64>,
     ) -> Result<String> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),

@@ -9,7 +9,7 @@ use super::rpc::{
 
 use crate::types;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FeeEstimates {
     pub max_fee_per_gas: U256,
     pub max_priority_fee_per_gas: U256,
