@@ -17,11 +17,12 @@ import { rampErrorToString } from '../model/error';
 import icpLogo from "../assets/icp-logo.svg";
 import ethereumLogo from "../assets/ethereum-logo.png";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEnvelope, faKey } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
 const ConnectAddress: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [loadingEmail, setLoadingEmail] = useState(false);
     const [loadingEvm, setLoadingEvm] = useState(false);
     const [loadingIcp, setLoadingIcp] = useState(false);
@@ -206,7 +207,7 @@ const ConnectAddress: React.FC = () => {
                 {loadingIcp && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-400">Checking ICP principal...</div>
+                        <div className="text-sm font-medium text-gray-300">Checking ICP principal...</div>
                     </div>
                 )}
 
@@ -227,13 +228,13 @@ const ConnectAddress: React.FC = () => {
                         </div>
                     )}
                     {isConnected && (
-                        <button onClick={handleEvmLogin} className="text-white text-lg w-full text-left">Register with Ethereum.</button>
+                        <button onClick={handleEvmLogin} className="text-white text-lg w-full text-left">Login with Ethereum</button>
                     )}
                 </div>
                 {loadingEvm && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-400">Checking user address...</div>
+                        <div className="text-sm font-medium text-gray-300">Checking address...</div>
                     </div>
                 )}
                 {evmMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{evmMessage}</p>}
@@ -249,25 +250,32 @@ const ConnectAddress: React.FC = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="Enter your email"
-                        className="px-3 py-1.5 bg-transparent text-white border-none outline-none w-full"
+                        className="px-3 py-1 bg-transparent text-white border-none outline-none w-full"
                         required
                     />
                 </div>
                 <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
                     <FontAwesomeIcon icon={faKey} className="text-white h-5 w-5" />
                     <input
-                        type="password"
+                        type={isPasswordVisible ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter your password"
-                        className="px-3 py-1.5 bg-transparent text-white border-none outline-none w-full"
+                        className="px-3 py-1 bg-transparent text-white border-none outline-none w-full"
                         required
                     />
+                    <button
+                        type="button"
+                        className="px-2 py-1"
+                        onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                    >
+                        <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300 h-5 w-5" />
+                    </button>
                 </div>
-                <button type="submit" className="w-full bg-amber-500 text-white py-2 rounded-md hover:bg-amber-400">
+                <button type="submit" className="w-full bg-amber-800 text-white py-3 rounded-md hover:bg-amber-700">
                     Log in with Email
                 </button>
-                <div className="text-center">
+                <div className="text-center -mt-1">
                     <a href="#" onClick={() => navigate('/forgot-password')} className="text-sm text-gray-400 hover:underline">
                         Forgot your password?
                     </a>
@@ -277,7 +285,7 @@ const ConnectAddress: React.FC = () => {
             {loadingEmail && (
                 <div className="my-2 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-400">Checking email...</div>
+                    <div className="text-sm font-medium text-gray-300">Checking email...</div>
                 </div>
             )}
             {emailMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{emailMessage}</p>}

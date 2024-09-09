@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { clearTempResetPasswordData, getTempResetPasswordData } from '../../model/emailConfirmation';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
+
 import { backend } from '../../declarations/backend';
 import { rampErrorToString } from '../../model/error';
 import { validatePassword } from '../../model/helper';
+import { clearTempResetPasswordData, getTempResetPasswordData } from '../../model/emailConfirmation';
 
 const ResetPassword: React.FC = () => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
     const [message, setMessage] = useState<string>();
     const [isLoading, setIsLoading] = useState(false);
 
@@ -70,36 +75,56 @@ const ResetPassword: React.FC = () => {
     };
 
     return (
-        <div className="max-w-md mx-auto rounded-xl">
-            <h2 className="text-lg font-bold mb-4">Reset Password</h2>
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto text-white">
+            <div className="text-center mb-8">
+                <h2 className="text-2xl font-semibold">Reset Password</h2>
+            </div>
             <form onSubmit={handleResetPassword} className="flex flex-col space-y-4">
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter new password"
-                    className="px-4 py-2 border rounded w-full"
-                    required
-                />
-                <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="px-4 py-2 border rounded w-full"
-                    required
-                />
-                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded w-full" disabled={isLoading}>
+                <div className="relative">
+                    <input
+                        type={isPasswordVisible ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter new password"
+                        className="px-4 py-2 bg-gray-600 border rounded w-full"
+                        required
+                    />
+                    <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 px-3 py-2"
+                        onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                    >
+                        <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300" />
+                    </button>
+                </div>
+                <div className="relative">
+                    <input
+                        type={isConfirmPasswordVisible ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                        className="px-4 py-2 bg-gray-600 border rounded w-full"
+                        required
+                    />
+                    <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 px-3 py-2"
+                        onClick={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                    >
+                        <FontAwesomeIcon icon={isConfirmPasswordVisible ? faEyeSlash : faEye} className="text-gray-300" />
+                    </button>
+                </div>
+                <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded w-full" disabled={isLoading}>
                     {isLoading ? 'Resetting...' : 'Reset Password'}
                 </button>
             </form>
             {isLoading && (
                 <div className="flex justify-center items-center space-x-2 mt-4">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Loading...</div>
+                    <div className="text-sm font-medium text-gray-300">Loading...</div>
                 </div>
             )}
-            {message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>}
+            {message && <p className="mt-4 text-sm font-medium text-red-600 break-all">{message}</p>}
         </div>
     );
 };
