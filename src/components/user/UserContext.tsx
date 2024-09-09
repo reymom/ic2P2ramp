@@ -8,7 +8,7 @@ import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { tokenCanisters } from '../../constants/addresses';
 import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
-import { saveSessionToken, getSessionToken, clearSessionToken } from '../../model/session';
+import { saveUserSession, getUserSession, clearUserSession } from '../../model/session';
 
 interface UserContextProps {
     user: User | null;
@@ -36,10 +36,12 @@ interface UserContextProps {
 const UserContext = createContext<UserContextProps | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [userType, setUserType] = useState<UserTypes>("Visitor");
+    const userSession = getUserSession();
+
+    const [user, setUser] = useState<User | null>(userSession ? userSession.user : null);
+    const [userType, setUserType] = useState<UserTypes>(userSession ? userTypeToString(userSession.user.user_type) : "Visitor");
     const [loginMethod, setLoginMethod] = useState<LoginAddress | null>(null);
-    const [sessionToken, setSessionToken] = useState<string | null>(getSessionToken());
+    const [sessionToken, setSessionToken] = useState<string | null>(userSession ? userSession.sessionToken : null);
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [backendActor, setBackendActor] = useState<ActorSubclass<_SERVICE>>(backend);
@@ -72,7 +74,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 const session = result.Ok.session.length > 0 ? result.Ok.session[0] : null;
                 if (session) {
                     setSessionToken(session.token);
-                    saveSessionToken(session.token);
+                    saveUserSession({ user: result.Ok, sessionToken: session.token });
                 } else {
                     throw new Error("Session Token is not properly set in the backend");
                 }
@@ -88,7 +90,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setLoginMethod(null);
         setSessionToken(null);
-        clearSessionToken();
+        clearUserSession();
         setIcpAgent(null);
         setPrincipal(null);
         setUserType("Visitor");
