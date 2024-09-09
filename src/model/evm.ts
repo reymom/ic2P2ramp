@@ -126,6 +126,7 @@ export const withdrawFromVault = async (chainId: number, order: Order) => {
   return receipt;
 };
 
+// this cannot work here because it is onlyIcpEvmCanister
 export const estimateOrderLockGas = async (
   chainId: number,
   selectedToken: TokenOption,
@@ -148,13 +149,13 @@ export const estimateOrderLockGas = async (
   let gasEstimateLock: bigint;
   if (selectedToken.isNative) {
     gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
-      signer.getAddress(),
+      await signer.getAddress(),
       ethers.ZeroAddress,
       cryptoAmount,
     );
   } else if (selectedToken.address !== '') {
     gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
-      signer.getAddress(),
+      await signer.getAddress(),
       selectedToken.address,
       cryptoAmount,
     );
@@ -165,6 +166,7 @@ export const estimateOrderLockGas = async (
   return gasEstimateLock;
 };
 
+//this cannot work here because it is onlyIcpEvmCanister
 export const estimateOrderReleaseGas = async (
   chainId: number,
   selectedToken: TokenOption,
@@ -187,14 +189,14 @@ export const estimateOrderReleaseGas = async (
   let gasEstimateRelease: bigint;
   if (selectedToken.isNative) {
     gasEstimateRelease = await vaultContract.releaseBaseCurrency.estimateGas(
-      signer.getAddress(),
-      signer.getAddress(),
+      await signer.getAddress(),
+      await signer.getAddress(),
       cryptoAmount,
     );
   } else if (selectedToken.address !== '') {
     gasEstimateRelease = await vaultContract.releaseFunds.estimateGas(
-      signer.getAddress(),
-      signer.getAddress(),
+      await signer.getAddress(),
+      await signer.getAddress(),
       selectedToken.address,
       cryptoAmount,
     );
