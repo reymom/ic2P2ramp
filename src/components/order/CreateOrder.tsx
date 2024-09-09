@@ -6,7 +6,7 @@ import { Principal } from '@dfinity/principal';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
-import { TokenOption, getIcpTokenOptions, getEvmTokenOptions } from '../../constants/tokens';
+import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, commitEvmGas, releaseEvmGas } from '../../constants/tokens';
 import { tokenCanisters } from '../../constants/addresses';
 import { NetworkIds } from '../../constants/networks';
 import { useUser } from '../user/UserContext';
@@ -51,6 +51,7 @@ const CreateOrder: React.FC = () => {
     }, [blockchainType, chainId]);
 
     const handleBlockchainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedToken(null);
         const value = e.target.value;
         setBlockchainType(value as BlockchainTypes);
         if (value === "EVM") {
@@ -166,13 +167,13 @@ const CreateOrder: React.FC = () => {
                     const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
                     console.log('Transaction receipt: ', receipt);
 
-                    const gasForLocking = await estimateOrderLockGas(chainId, selectedToken, cryptoAmountUnits);
-                    if (gasForLocking === BigInt(0)) throw new Error("could not estimate gas");
-                    gasEstimateLock = [Number(gasForLocking)];
+                    // const gasForLocking = await estimateOrderLockGas(chainId, selectedToken, cryptoAmountUnits);
+                    // if (gasForLocking === BigInt(0)) throw new Error("could not estimate gas");
+                    gasEstimateLock = [commitEvmGas];
 
-                    const gasForReleasing = await estimateOrderReleaseGas(chainId, selectedToken, cryptoAmountUnits);
-                    if (gasForReleasing === BigInt(0)) throw new Error("could not estimate gas");
-                    gasEstimateRelease = [Number(gasForReleasing)];
+                    // const gasForReleasing = await estimateOrderReleaseGas(chainId, selectedToken, cryptoAmountUnits);
+                    // if (gasForReleasing === BigInt(0)) throw new Error("could not estimate gas");
+                    gasEstimateRelease = [releaseEvmGas];
 
                     setMessage('Transaction successful!');
                 } catch (e: any) {
@@ -265,38 +266,40 @@ const CreateOrder: React.FC = () => {
         && selectedProviders.length > 0 && selectedToken !== null;
 
     return (
-        <>
-            <h2 className="text-lg font-bold mb-4 text-center">Create Offramping Order</h2>
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg">
+            <div className="text-center mb-8">
+                <h2 className="text-white text-2xl font-semibold">Create Offramping Order</h2>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex justify-between items-center mb-4">
-                    <label className="block text-gray-700 w-24">Fiat:</label>
+                    <label className="block text-white w-24">Fiat:</label>
                     <div className="flex-grow flex items-center">
                         <input
                             type="number"
                             value={fiatAmount?.toFixed(2)}
-                            className="py-2 px-3 w-36 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="py-2 px-3 w-36 border bg-gray-600 border-gray-500 rounded-l-lg text-white"
                             required
                             disabled
                         />
-                        <span className="py-2 px-3 bg-gray-100 border border-gray-300 rounded-r-lg">$</span>
+                        <span className="py-2 px-3 bg-gray-600 border border-gray-500 rounded-r-lg text-white">$</span>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-gray-700 w-24">Crypto:</label>
+                    <label className="text-white w-24">Crypto:</label>
                     <input
                         type="number"
                         value={cryptoAmount}
                         onChange={(e) => setCryptoAmount(Number(e.target.value))}
-                        className="flex-grow py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                         required
                     />
                 </div>
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-gray-700 w-24">Blockchain:</label>
+                    <label className="text-white w-24">Blockchain:</label>
                     <select
                         value={blockchainType}
                         onChange={handleBlockchainChange}
-                        className="flex-grow py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                         required
                     >
                         <option selected>Select Blockchain</option>
@@ -306,11 +309,11 @@ const CreateOrder: React.FC = () => {
                     </select>
                 </div>
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-gray-700 w-24">Token:</label>
+                    <label className="text-white w-24">Token:</label>
                     <select
                         value={selectedToken?.address || undefined}
                         onChange={handleTokenChange}
-                        className="flex-grow py-2 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                         required
                     >
                         <option value="">Select a token</option>
@@ -322,7 +325,7 @@ const CreateOrder: React.FC = () => {
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-700">Fetching Rates...</div>
+                        <div className="text-sm font-medium text-white">Fetching Rates...</div>
                     </div>
                 )}
 
@@ -334,10 +337,10 @@ const CreateOrder: React.FC = () => {
                     </div>
                 )}
 
-                <hr className="border-t border-gray-300 w-full my-4" />
+                <hr className="border-t border-gray-500 w-full my-4" />
 
                 <div className="my-4 mx-auto">
-                    <label className="block text-gray-700 mb-2">Payment Providers:</label>
+                    <label className="block text-white mb-2">Payment Providers:</label>
                     {user?.payment_providers.map((provider, index) => {
                         return (
                             <div key={index} className="block mb-2">
@@ -348,17 +351,17 @@ const CreateOrder: React.FC = () => {
                                     checked={selectedProviders!.includes(provider)}
                                     onChange={() => handleProviderSelection(provider)}
                                 />
-                                <label htmlFor={`provider-${index}`} className="text-gray-700">
+                                <label htmlFor={`provider-${index}`} className="text-white">
                                     {'PayPal' in provider &&
                                         <>
-                                            <span className='font-semibold'>Paypal: </span>
-                                            {provider.PayPal.id}
+                                            <span className='font-semibold'>Paypal</span>
+                                            <div>{provider.PayPal.id}</div>
                                         </>
                                     }
                                     {'Revolut' in provider &&
                                         <>
-                                            <span className='font-semibold'>Revolut: </span>
-                                            {provider.Revolut.id} (Scheme): ${provider.Revolut.scheme}`;
+                                            <span className='font-semibold'>Revolut</span>
+                                            <div>{provider.Revolut.id} (Scheme): ${provider.Revolut.scheme}</div>
                                         </>
                                     }
                                 </label>
@@ -367,12 +370,11 @@ const CreateOrder: React.FC = () => {
                     })}
                 </div>
 
-                <hr className="border-t border-gray-300 w-full my-4" />
+                <hr className="border-t border-gray-500 w-full my-4" />
 
                 <button
                     type="submit"
-                    className={`px-4 py-2 rounded 
-                        ${validInputs ? 'bg-blue-500 text-white' : 'bg-gray-500 text-white cursor-not-allowed'}`}
+                    className={`px-4 py-2 rounded-md ${validInputs ? 'bg-green-800 text-white hover:bg-green-700 focus:outline-none' : 'bg-gray-500 text-white cursor-not-allowed'}`}
                     disabled={!validInputs}
                 >
                     Create Order
@@ -382,12 +384,12 @@ const CreateOrder: React.FC = () => {
             {isLoading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
+                    <div className="text-sm font-medium text-gray-300">Processing...</div>
                 </div>
             ) : (
-                message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>
+                message && <p className="mt-4 text-sm font-medium text-red-600 break-all">{message}</p>
             )}
-        </>
+        </div>
     );
 }
 

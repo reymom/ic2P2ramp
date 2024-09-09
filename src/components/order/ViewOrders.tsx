@@ -80,13 +80,13 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
         </div>
 
     return (
-        <div className="container mx-auto p-4">
+        <div className="container mx-auto p-4 bg-gray-700 border rounded-md text-white">
             {/* <h2 className="text-xl font-semibold mb-4">View Orders</h2> */}
             <div className="flex justify-between items-center mb-4">
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}
-                    className={`px-4 py-2 rounded-lg text-white ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-4 py-2 rounded-lg ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
                 >
                     <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
@@ -96,7 +96,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handleNextPage}
                     disabled={orders.length === 0}
-                    className={`px-4 py-2 rounded-lg text-white ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-4 py-2 rounded-lg ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
                 >
                     <FontAwesomeIcon icon={faArrowRight} />
                 </button>
@@ -105,7 +105,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             {loading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Fetching orders...</div>
+                    <div className="text-sm font-medium text-gray-300">Fetching orders...</div>
                 </div>
             ) : (
                 <ul className="space-y-2">
@@ -115,7 +115,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 </ul>
             )}
 
-            {orders.length > 0 ? bottomPagination : null}
+            {orders.length > 3 ? bottomPagination : null}
         </div >
     );
 }

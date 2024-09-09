@@ -8,11 +8,11 @@ import ethereumLogo from "../../assets/ethereum-logo.png";
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { NetworkIds } from '../../constants/networks';
-import { getEvmTokenOptions, getIcpTokenOptions, TokenOption } from '../../constants/tokens';
+import { commitEvmGas, getEvmTokenOptions, getIcpTokenOptions, releaseEvmGas, TokenOption } from '../../constants/tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
-import { estimateOrderLockGas, withdrawFromVault } from '../../model/evm';
+import { estimateOrderLockGas, estimateOrderReleaseGas, withdrawFromVault } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
@@ -84,11 +84,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         try {
             const orderAddress = user.addresses.find(address => {
                 if ('EVM' in orderBlockchain && 'EVM' in address.address_type) {
-                    gasEstimation = [Number(estimateOrderLockGas(
-                        Number(orderBlockchain.EVM.chain_id),
-                        tokenOption,
-                        order.Created.crypto.amount - order.Created.crypto.fee
-                    ))]
+                    // gasEstimation = [Number(estimateOrderLockGas(
+                    //     Number(orderBlockchain.EVM.chain_id),
+                    //     tokenOption,
+                    //     order.Created.crypto.amount - order.Created.crypto.fee
+                    // ))]
+                    gasEstimation = [commitEvmGas];
                     return true;
                 }
                 if ('ICP' in orderBlockchain && 'ICP' in address.address_type) {
@@ -208,11 +209,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             rateSymbol: "",
         }
         if ('EVM' in orderBlockchain) {
-            gasEstimation = [Number(estimateOrderLockGas(
-                Number(orderBlockchain.EVM.chain_id),
-                tokenOption,
-                order.Locked.base.crypto.amount - order.Locked.base.crypto.fee
-            ))]
+            // gasEstimation = [Number(estimateOrderReleaseGas(
+            //     Number(orderBlockchain.EVM.chain_id),
+            //     tokenOption,
+            //     order.Locked.base.crypto.amount - order.Locked.base.crypto.fee
+            // ))]
+            gasEstimation = [releaseEvmGas];
         }
 
         try {
@@ -309,21 +311,38 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         switch (blockchainToBlockchainType(crypto.blockchain)) {
             case 'EVM':
-                return ethers.formatEther(crypto.amount - crypto.fee);
+                const fullAmountEVM = ethers.formatEther(crypto.amount - crypto.fee);
+                const shortAmountEVM = parseFloat(fullAmountEVM).toPrecision(3);
+                return { fullAmount: fullAmountEVM, shortAmount: shortAmountEVM };
             case 'ICP':
-                return (Number(crypto.amount - crypto.fee) / 100_000_000).toFixed(3);
+                const fullAmountICP = (Number(crypto.amount - crypto.fee) / 100_000_000).toString();
+                const shortAmountICP = parseFloat(fullAmountICP).toPrecision(3);
+                return { fullAmount: fullAmountICP, shortAmount: shortAmountICP };
             case 'Solana':
-                return "Solana not implemented"
+                return { fullAmount: "Solana not implemented", shortAmount: "Solana not implemented" };
         }
     }
 
     let blockchainLogo = !orderBlockchain ? null :
         'EVM' in orderBlockchain ? ethereumLogo : 'ICP' in orderBlockchain ? icpLogo : null;
-    let backgroundColor = 'Created' in order ? "bg-gray-100" : 'Locked' in order ? "bg-gray-300"
-        : 'Completed' in order ? "bg-green-100" : 'Cancelled' in order ? "bg-red-100" : "bg-white";
+    let backgroundColor =
+        'Created' in order ? "bg-blue-900 bg-opacity-30"
+            : 'Locked' in order ? "bg-yellow-800 bg-opacity-30"
+                : 'Completed' in order ? "bg-green-800 bg-opacity-30"
+                    : 'Cancelled' in order ? "bg-red-800 bg-opacity-30"
+                        : "bg-gray-800 bg-opacity-20";
+
+    let borderColor =
+        'Created' in order ? "border-blue-600"
+            : 'Locked' in order ? "border-yellow-600"
+                : 'Completed' in order ? "border-green-600"
+                    : 'Cancelled' in order ? "border-red-600"
+                        : "border-gray-600";
+
+    let textColor = 'Created' in order || 'Locked' in order ? "text-white" : "text-gray-300";
 
     return (
-        <li className={`p-4 border rounded-xl shadow-md ${backgroundColor} relative`}>
+        <li className={`px-12 py-8 border rounded-xl shadow-md ${backgroundColor} ${borderColor} ${textColor} relative`}>
             {blockchainLogo && (
                 <img
                     src={blockchainLogo}
@@ -332,83 +351,124 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 />
             )}
             {'Created' in order && (
-                <div className="flex flex-col space-y-2">
-                    <div><strong>Fiat Amount:</strong> {formatFiatAmount()} $</div>
-                    <div>
-                        <strong>Crypto Amount:</strong> {formatCryptoAmount()} {getTokenSymbol()}
-                    </div>
-                    <div><strong>Providers:</strong>
-                        {order.Created.offramper_providers.map((provider, index) => {
-                            let providerType = paymentProviderTypeToString(provider[0])
+                <div className="flex flex-col">
+                    <div className="space-y-3">
+                        {/* Fiat and Crypto Amount */}
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Price:</span>
+                            <span className="font-medium">{formatFiatAmount()} $</span>
+                        </div>
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Amount:</span>
+                            <span className="font-medium" title={formatCryptoAmount()?.fullAmount}>
+                                {formatCryptoAmount()?.shortAmount} {getTokenSymbol()}
+                            </span>
+                        </div>
 
-                            if (userType === 'Onramper') {
-                                return (
-                                    <div key={index}>
-                                        <input
-                                            type="checkbox"
-                                            id={`provider-${index}`}
-                                            onChange={() => handleProviderSelection(providerType)}
-                                            checked={committedProvider && paymentProviderTypeToString(committedProvider[0]) === providerType}
-                                        />
-                                        <label htmlFor={providerType} className="ml-2">{providerType}</label>
-                                    </div>
-                                )
-                            } else {
-                                return (
-                                    <div>{providerType}</div>
-                                )
-                            };
-                        })}
+                        {/* Offramper Address */}
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Address:</span>
+                            <span className="font-medium">{truncate(order.Created.offramper_address.address, 6, 6)}</span>
+                        </div>
+
+                        {'EVM' in order.Created.crypto.blockchain && (
+                            <div className="text-lg flex justify-between">
+                                <span className="opacity-80">Network:</span>
+                                <span className="font-medium">{getNetworkName()}</span>
+                            </div>
+                        )}
                     </div>
-                    <div><strong>Offramper Address:</strong> {truncate(order.Created.offramper_address.address, 6, 6)}</div>
-                    {'EVM' in order.Created.crypto.blockchain && (
-                        <div><strong>Network:</strong> {getNetworkName()}</div>
-                    )}
+
+                    <hr className="border-t border-gray-500 w-full my-3" />
+
+                    {/* Providers */}
+                    <div className="text-lg">
+                        <span className="opacity-90">Payment Methods:</span>
+                        <div className="font-medium">
+                            {order.Created.offramper_providers.map((provider, index) => {
+                                let providerType = paymentProviderTypeToString(provider[0]);
+
+                                if (userType === 'Onramper') {
+                                    return (
+                                        <div key={index} className="my-2">
+                                            <input
+                                                type="checkbox"
+                                                id={`provider-${index}`}
+                                                onChange={() => handleProviderSelection(providerType)}
+                                                checked={committedProvider && paymentProviderTypeToString(committedProvider[0]) === providerType}
+                                                className="form-checkbox h-5 w-5 text-center"
+                                            />
+                                            <label htmlFor={`provider-${index}`} className="ml-3 text-lg">{providerType}</label>
+                                        </div>
+                                    );
+                                } else {
+                                    return (
+                                        <div key={index} className="text-lg my-2">{providerType}</div>
+                                    );
+                                }
+                            })}
+                        </div>
+                    </div>
+
+                    <hr className="border-t border-gray-500 w-full my-3" />
+
+                    {/* Commit Button for Onramper */}
                     {user && userType === 'Onramper' && (() => {
                         const disabled = !committedProvider ||
                             !user.addresses.some(addr =>
                                 Object.keys(addr.address_type)[0] === Object.keys(order.Created.offramper_address.address_type)[0]
-                            )
+                            );
                         return (
-                            <div>
-                                <button
-                                    onClick={() => commitToOrder(committedProvider![1])}
-                                    className={`mt-2 px-4 py-2 rounded text-white ${disabled ?
-                                        'bg-gray-400 cursor-not-allowed' : 'bg-green-500'}`}
-                                    disabled={disabled}
-                                >
-                                    Commit
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => commitToOrder(committedProvider![1])}
+                                className={`mt-3 px-4 py-2 rounded w-full font-medium ${disabled ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                                disabled={disabled}
+                            >
+                                Lock Order (1h to pay)
+                            </button>
                         );
                     })()}
+
+                    {/* Remove Button for Offramper */}
                     {user && userType === 'Offramper' && order.Created.offramper_user_id === user.id && (
-                        <div>
-                            <button
-                                onClick={removeOrder}
-                                className="mt-2 px-4 py-2 bg-red-500 text-white rounded"
-                            >
-                                Remove
-                            </button>
-                        </div>
+                        <button
+                            onClick={removeOrder}
+                            className="mt-3 px-4 py-2 bg-red-600 rounded w-full font-medium hover:bg-red-700"
+                        >
+                            Remove
+                        </button>
                     )}
                 </div>
             )}
             {'Locked' in order && (
-                <div className="flex flex-col space-y-2">
-                    <div><strong>Fiat Amount:</strong> {formatFiatAmount()} $</div>
-                    <div>
-                        <strong>Crypto Amount:</strong> {formatCryptoAmount()} {getTokenSymbol()}
-                    </div>
-                    <div><strong>Provider:</strong> {paymentProviderTypeToString(providerToProviderType(order.Locked.onramper_provider))}</div>
-                    <div><strong>Offramper Address:</strong> {truncate(order.Locked.base.offramper_address.address, 6, 6)}
-                        {'ICP' in order.Locked.base.crypto.blockchain && (
-                            <span>({Object.keys(order.Locked.base.offramper_address.address_type)[0]})</span>
+                <div className="flex flex-col">
+                    <div className="space-y-3">
+                        {/* Fiat and Crypto Amount */}
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Price:</span>
+                            <span className="font-medium">{formatFiatAmount()} $</span>
+                        </div>
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Amount:</span>
+                            <span className="font-medium" title={formatCryptoAmount()?.fullAmount}>
+                                {formatCryptoAmount()?.shortAmount} {getTokenSymbol()}
+                            </span>
+                        </div>
+
+                        {/* Offramper Address */}
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-90">Address:</span>
+                            <span className="font-medium">{truncate(order.Locked.base.offramper_address.address, 6, 6)}</span>
+                        </div>
+
+                        {'EVM' in order.Locked.base.crypto.blockchain && (
+                            <div className="text-lg flex justify-between">
+                                <span className="opacity-80">Network:</span>
+                                <span className="font-medium">{getNetworkName()}</span>
+                            </div>
                         )}
                     </div>
-                    {'EVM' in order.Locked.base.crypto.blockchain && (
-                        <div><strong>Network:</strong> {getNetworkName()}</div>
-                    )}
+
                     {user && userType === 'Onramper' && order.Locked.onramper_user_id === user.id && (
                         <div>
                             {order.Locked.onramper_provider.hasOwnProperty('PayPal') ? (
@@ -430,7 +490,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             ) : order.Locked.onramper_provider.hasOwnProperty('Revolut') ? (
                                 <div>
                                     <button
-                                        className="px-4 py-2 bg-blue-500 text-white rounded"
+                                        className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
                                         onClick={handleRevolutRedirect}
                                     >
                                         Confirm Revolut Consent
@@ -443,17 +503,29 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 </div>
             )}
             {'Completed' in order && (
-                <div className="flex flex-col space-y-2">
-                    <div><strong>Fiat Amount:</strong> {formatFiatAmount()} $</div>
-                    <div><strong>Onramper:</strong> {truncate(order.Completed.onramper.address, 6, 6)}</div>
-                    <div><strong>Offramper:</strong> {truncate(order.Completed.offramper.address, 6, 6)}</div>
+                <div className="flex flex-col space-y-3">
+                    <div className="text-lg flex justify-between">
+                        <span className="opacity-90">Fiat Amount:</span>
+                        <span className="font-medium">{formatFiatAmount()} $</span>
+                    </div>
+                    <div className="text-lg flex justify-between">
+                        <span className="opacity-90">Onramper:</span>
+                        <span className="font-medium">{truncate(order.Completed.onramper.address, 6, 6)}</span>
+                    </div>
+                    <div>
+                        <span className="opacity-90">Offramper:</span>
+                        <span className="font-medium">{truncate(order.Completed.offramper.address, 6, 6)}</span>
+                    </div>
                     {'EVM' in order.Completed.blockchain && (
-                        <div><strong>Network:</strong> {getNetworkName()}</div>
+                        <div className="text-lg flex justify-between">
+                            <span className="opacity-80">Network:</span>
+                            <span className="font-medium">{getNetworkName()}</span>
+                        </div>
                     )}
                 </div>
             )}
             {'Cancelled' in order && (
-                <div className="flex flex-col space-y-2">
+                <div className="flex flex-col space-y-3">
                     <div><strong>Order ID:</strong> {order.Cancelled.toString()}</div>
                     <div><strong>Status:</strong> Cancelled</div>
                 </div>
@@ -461,14 +533,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             {isLoading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Processing transaction...
+                    <div className="text-sm font-medium text-gray-300">Processing transaction...
                         {txHash && <a href={`${explorerUrl}${txHash}`} target="_blank">{truncate(txHash, 8, 8)}</a>}
                     </div>
                 </div>
             ) : (
                 message && (
                     <div className="mt-4 text-sm font-medium">
-                        <p className="text-gray-700 break-all">{message}</p>
+                        <p className="text-red-600 break-all">{message}</p>
                     </div>
                 )
             )}

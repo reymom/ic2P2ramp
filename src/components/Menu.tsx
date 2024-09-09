@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
 
+import icpLogo from "../assets/icp-logo.svg";
+import ethereumLogo from "../assets/ethereum-logo.png";
 import logo from '../assets/icR-logo.png';
 
 import { useUser } from './user/UserContext';
@@ -12,12 +14,14 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { AuthClient } from '@dfinity/auth-client';
 import { icpHost, iiUrl } from '../model/icp';
 import { HttpAgent } from '@dfinity/agent';
+import { useAccount } from 'wagmi';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
+    const { isConnected } = useAccount();
     const { user, setPrincipal, setIcpAgent, icpBalance, logout } = useUser();
     const navigate = useNavigate();
 
@@ -75,7 +79,7 @@ const Menu: React.FC = () => {
                 <>
                     <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
                         <FontAwesomeIcon icon={faFileAlt} />
-                        <span>View Orders</span>
+                        <span>Orders</span>
                     </Link>
                 </>
             );
@@ -86,7 +90,7 @@ const Menu: React.FC = () => {
                 return (
                     <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
                         <FontAwesomeIcon icon={faFileAlt} />
-                        <span>View Orders</span>
+                        <span>Orders</span>
                     </Link>
                 );
             case "Offramper":
@@ -188,15 +192,18 @@ const Menu: React.FC = () => {
             <div className="w-72 flex justify-end items-center relative">
                 {!user ? (
                     <div className="relative">
-                        <button onClick={() => navigate('/')} className="bg-blue-500 flex items-center p-2 text-white rounded-full">
-                            <FontAwesomeIcon icon={faRightToBracket} size="2x" className="text-gray-800 mr-2" />
+                        <button
+                            onClick={() => navigate('/')}
+                            className="flex items-center justify-center bg-indigo-800 hover:bg-indigo-700 text-lg font-bold text-white px-3 py-2 rounded-lg transition-all"
+                        >
+                            <FontAwesomeIcon icon={faRightToBracket} size="lg" className="mr-2" />
                             <span>Login</span>
                         </button>
                     </div>
                 ) : (
                     <div className="relative" ref={profileDropdownRef}>
-                        <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 bg-gray-600 text-white rounded-full">
-                            <FontAwesomeIcon icon={faUserCircle} size="2x" className="text-white" />
+                        <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 border border-gray-400 rounded-lg transition-all">
+                            <FontAwesomeIcon icon={faUserCircle} size="2x" className="text-violet-800" />
                             <svg className={`w-4 h-4 ml-1 transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
@@ -239,31 +246,48 @@ const Menu: React.FC = () => {
                                     <div className="items-center text-center">
                                         <hr className="border-t border-gray-300 w-full my-2" />
                                         {icpBalance ? (
-                                            <>
-                                                <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
-                                                    {icpBalance} ICP
-                                                </div>
-                                            </>
+                                            <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
+                                                {icpBalance} ICP
+                                            </div>
                                         ) : (
-                                            <>
-                                                <button
-                                                    onClick={handleInternetIdentityLogin}
-                                                    className="px-4 py-2 bg-blue-600 text-white text-center font-bold rounded-xl"
-                                                >
-                                                    Connect ICP
-                                                </button>
-                                            </>
+                                            <div
+                                                className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-700 cursor-pointer"
+                                                onClick={handleInternetIdentityLogin}
+                                            >
+                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
+                                                <span className="text-white text-lg">Connect ICP</span>
+                                            </div>
                                         )}
                                     </div>
 
                                     <>
                                         <hr className="border-t border-gray-300 w-full my-2" />
 
-                                        <div className="w-full flex justify-center">
-                                            <div className="inline-block">
-                                                <ConnectButton chainStatus="icon" accountStatus="avatar" />
+                                        {!isConnected ? (
+                                            <div className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-700 cursor-pointer">
+                                                <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
+                                                <div className="w-full text-left">
+                                                    <ConnectButton.Custom>
+                                                        {({ openConnectModal }) => (
+                                                            <button
+                                                                className="text-white w-full text-lg text-left"
+                                                                onClick={openConnectModal}
+                                                            >
+                                                                Connect wallet
+                                                            </button>
+                                                        )}
+                                                    </ConnectButton.Custom>
+                                                </div>
                                             </div>
-                                        </div>
+
+                                        ) : (
+
+                                            <div className="w-full flex justify-center">
+                                                <div className="inline-block">
+                                                    <ConnectButton chainStatus="icon" accountStatus="avatar" />
+                                                </div>
+                                            </div>
+                                        )}
                                     </>
 
                                 </div>
