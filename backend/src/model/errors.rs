@@ -115,6 +115,9 @@ pub enum RampError {
     #[error("Insufficient funds")]
     InsufficientFunds,
 
+    #[error("Fees exceed the funds amount")]
+    FundsBelowFees,
+
     #[error("Failed to parse response: {0}")]
     ParseError(String),
 

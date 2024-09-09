@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
+use num_traits::cast::ToPrimitive;
 
 use crate::{
     evm::{transaction, vault::Ic2P2ramp},
@@ -10,6 +11,8 @@ use crate::{
         errors::{RampError, Result},
         state::{self, storage},
         types::{
+            chains,
+            gas::MethodGasUsage,
             order::{Order, OrderState},
             PaymentProvider, PaymentProviderType,
         },
@@ -20,15 +23,46 @@ use crate::{
 pub async fn handle_evm_payment_completion(
     order_id: u64,
     chain_id: u64,
-    gas: Option<u32>,
+    gas: Option<u64>,
 ) -> Result<String> {
-    let tx_hash = Ic2P2ramp::release_funds(order_id, chain_id, gas).await?;
+    let order_state = storage::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+    let mut action_type = MethodGasUsage::ReleaseNative;
+    if let Some(_) = order.base.crypto.token {
+        action_type = MethodGasUsage::ReleaseToken
+    };
+    let tx_hash = Ic2P2ramp::release_funds(order, chain_id, gas).await?;
+
     transaction::spawn_transaction_checker(
         tx_hash.clone(),
         chain_id,
         60,
         Duration::from_secs(4),
-        move || {
+        move |receipt| {
+            let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
+            let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
+            let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
+
+            ic_cdk::println!(
+                "[verify_transaction] Gas Used: {}, Gas Price: {}, Block Number: {}",
+                gas_used,
+                gas_price,
+                block_number
+            );
+
+            if !(gas_used == 0 || gas_price == 0) {
+                let _ = chains::register_gas_usage(
+                    chain_id,
+                    gas_used,
+                    gas_price,
+                    block_number,
+                    &action_type,
+                );
+            }
+
             // Update order state to completed
             match super::order::set_order_completed(order_id) {
                 Ok(_) => {

@@ -22,8 +22,8 @@ pub async fn create_order(
     token: Option<String>,
     crypto_amount: u128,
     offramper_address: TransactionAddress,
-    estimated_gas_lock: Option<u32>,
-    estimated_gas_withdraw: Option<u32>,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
     let (offramper_fee, crypto_fee) = match blockchain {
         Blockchain::EVM { chain_id } => {
@@ -42,14 +42,20 @@ pub async fn create_order(
                 + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
             let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
 
+            ic_cdk::println!("[create_order] fee_estimates = {:?}", fee_estimates);
             let mut blockchain_fees =
                 total_gas_estimation as u128 * fee_estimates.max_fee_per_gas.as_u128();
-
+            ic_cdk::println!("[create_order] blockchain_fees = {:?}", blockchain_fees);
             if let Some(token_address) = token.clone() {
                 let xrc_symbol = chains::get_evm_token_symbol(chain_id, &token_address)?;
                 let rate = helpers::get_eth_token_rate(xrc_symbol).await?;
+                ic_cdk::println!("[create_order] token rate = {:?}", rate);
 
-                blockchain_fees = (blockchain_fees as f64 * rate) as u128
+                blockchain_fees = (blockchain_fees as f64 * rate) as u128;
+                ic_cdk::println!(
+                    "[create_order] blockchain_fees after = {:?}",
+                    blockchain_fees
+                );
             }
             calculate_fees(fiat_amount, crypto_amount, blockchain_fees)
         }
@@ -68,6 +74,10 @@ pub async fn create_order(
         }
         _ => return Err(RampError::UnsupportedBlockchain),
     };
+
+    if crypto_fee >= crypto_amount {
+        return Err(RampError::FundsBelowFees);
+    }
 
     let order = Order::new(
         offramper_user_id,
