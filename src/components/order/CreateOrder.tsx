@@ -6,14 +6,14 @@ import { Principal } from '@dfinity/principal';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
-import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, commitEvmGas, releaseEvmGas } from '../../constants/tokens';
+import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, defaultCommitEvmGas, defaultReleaseEvmGas } from '../../constants/tokens';
 import { tokenCanisters } from '../../constants/addresses';
 import { NetworkIds } from '../../constants/networks';
 import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
-import { depositInVault, estimateOrderLockGas, estimateOrderReleaseGas } from '../../model/evm';
+import { depositInVault, estimateGasAndGasPrice } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
 
 const CreateOrder: React.FC = () => {
@@ -158,8 +158,8 @@ const CreateOrder: React.FC = () => {
             }
 
             let cryptoAmountUnits: bigint;
-            let gasEstimateLock: [number] | [] = [];
-            let gasEstimateRelease: [number] | [] = [];
+            let gasEstimateLock: [bigint] | [] = [];
+            let gasEstimateRelease: [bigint] | [] = [];
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
                 cryptoAmountUnits = ethers.parseEther(cryptoAmount.toString());
@@ -167,13 +167,17 @@ const CreateOrder: React.FC = () => {
                     const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
                     console.log('Transaction receipt: ', receipt);
 
-                    // const gasForLocking = await estimateOrderLockGas(chainId, selectedToken, cryptoAmountUnits);
-                    // if (gasForLocking === BigInt(0)) throw new Error("could not estimate gas");
-                    gasEstimateLock = [commitEvmGas];
+                    const gasForCommit = await estimateGasAndGasPrice(chainId, { Commit: null }, defaultCommitEvmGas);
+                    console.log("[createOrder] gasCommitEstimate = ", gasForCommit);
+                    gasEstimateLock = [gasForCommit[0]];
 
-                    // const gasForReleasing = await estimateOrderReleaseGas(chainId, selectedToken, cryptoAmountUnits);
-                    // if (gasForReleasing === BigInt(0)) throw new Error("could not estimate gas");
-                    gasEstimateRelease = [releaseEvmGas];
+                    const gasForRelease = await estimateGasAndGasPrice(
+                        chainId,
+                        selectedToken.isNative ? { ReleaseNative: null } : { ReleaseToken: null },
+                        defaultReleaseEvmGas
+                    );
+                    console.log("[createOrder] gasReleaseEstimate = ", gasForRelease);
+                    gasEstimateRelease = [gasForRelease[0]];
 
                     setMessage('Transaction successful!');
                 } catch (e: any) {
@@ -181,7 +185,7 @@ const CreateOrder: React.FC = () => {
                     return;
                 }
             } else if (blockchain === 'ICP') {
-                // at some point get decimals dynamically
+                // todo: get decimals dynamically
                 cryptoAmountUnits = BigInt(cryptoAmount * 100_000_000);
                 try {
                     const ledgerCanister = Principal.fromText(selectedToken.address);

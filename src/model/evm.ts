@@ -1,8 +1,9 @@
 import { ethers } from 'ethers';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import { getVaultAddress } from '../constants/addresses';
-import { Order } from '../declarations/backend/backend.did';
+import { MethodGasUsage, Order } from '../declarations/backend/backend.did';
 import { TokenOption } from '../constants/tokens';
+import { backend } from '../declarations/backend';
 
 export const depositInVault = async (
   chainId: number,
@@ -126,83 +127,23 @@ export const withdrawFromVault = async (chainId: number, order: Order) => {
   return receipt;
 };
 
-// this cannot work here because it is onlyIcpEvmCanister
-export const estimateOrderLockGas = async (
+export const estimateGasAndGasPrice = async (
   chainId: number,
-  selectedToken: TokenOption,
-  cryptoAmount: bigint,
-): Promise<bigint> => {
-  if (!window.ethereum) {
-    throw new Error('No crypto wallet found. Please install it.');
-  }
-
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  const signer = await provider.getSigner();
-
-  const vaultContract = new ethers.Contract(
-    getVaultAddress(chainId),
-    icP2PrampABI,
-    signer,
+  method: MethodGasUsage,
+  defaultGas: bigint,
+): Promise<[bigint, bigint]> => {
+  const response = await backend.get_average_gas_prices(
+    BigInt(chainId),
+    BigInt(0),
+    BigInt(100),
+    method,
   );
 
-  let gasEstimateLock: bigint;
-  if (selectedToken.isNative) {
-    gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
-      await signer.getAddress(),
-      ethers.ZeroAddress,
-      cryptoAmount,
-    );
-  } else if (selectedToken.address !== '') {
-    gasEstimateLock = await vaultContract.commitDeposit.estimateGas(
-      await signer.getAddress(),
-      selectedToken.address,
-      cryptoAmount,
-    );
-  } else {
-    throw new Error('Invalid token selection.');
+  if ('Ok' in response && response.Ok.length > 0) {
+    return response.Ok[0]!;
+  } else if ('Err' in response) {
+    console.error('[estimateGasAndGasPrice] error = ', response.Err);
   }
 
-  return gasEstimateLock;
-};
-
-//this cannot work here because it is onlyIcpEvmCanister
-export const estimateOrderReleaseGas = async (
-  chainId: number,
-  selectedToken: TokenOption,
-  cryptoAmount: bigint,
-): Promise<bigint> => {
-  if (!window.ethereum) {
-    throw new Error('No crypto wallet found. Please install it.');
-  }
-
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  const signer = await provider.getSigner();
-
-  const vaultContract = new ethers.Contract(
-    getVaultAddress(chainId),
-    icP2PrampABI,
-    signer,
-  );
-
-  let gasEstimateRelease: bigint;
-  if (selectedToken.isNative) {
-    gasEstimateRelease = await vaultContract.releaseBaseCurrency.estimateGas(
-      await signer.getAddress(),
-      await signer.getAddress(),
-      cryptoAmount,
-    );
-  } else if (selectedToken.address !== '') {
-    gasEstimateRelease = await vaultContract.releaseFunds.estimateGas(
-      await signer.getAddress(),
-      await signer.getAddress(),
-      selectedToken.address,
-      cryptoAmount,
-    );
-  } else {
-    throw new Error('Invalid token selection.');
-  }
-
-  return gasEstimateRelease;
+  return [defaultGas, BigInt(0)];
 };

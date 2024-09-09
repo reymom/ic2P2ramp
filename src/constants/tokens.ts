@@ -1,7 +1,7 @@
 import { addresses, tokenCanisters } from './addresses';
 
-export const commitEvmGas = 70000;
-export const releaseEvmGas = 90000;
+export const defaultCommitEvmGas = BigInt(80000);
+export const defaultReleaseEvmGas = BigInt(90000);
 
 export interface TokenOption {
   name: string;

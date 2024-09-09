@@ -8,11 +8,11 @@ import ethereumLogo from "../../assets/ethereum-logo.png";
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { NetworkIds } from '../../constants/networks';
-import { commitEvmGas, getEvmTokenOptions, getIcpTokenOptions, releaseEvmGas, TokenOption } from '../../constants/tokens';
+import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas } from '../../constants/tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
-import { estimateOrderLockGas, estimateOrderReleaseGas, withdrawFromVault } from '../../model/evm';
+import { estimateGasAndGasPrice, withdrawFromVault } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
@@ -73,23 +73,17 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setTxHash(undefined);
         setMessage(`Commiting to loan order ${orderId}...`);
 
-        let gasEstimation: [] | [number] = [];
-        const hasToken = order.Created.crypto.token.length > 0;
-        const tokenOption: TokenOption = {
-            name: "",
-            address: hasToken ? order.Created.crypto.token[0]! : "",
-            isNative: hasToken ? true : false,
-            rateSymbol: "",
-        }
+        let gasEstimation: [] | [bigint] = [];
         try {
-            const orderAddress = user.addresses.find(address => {
+            const orderAddress = user.addresses.find(async address => {
                 if ('EVM' in orderBlockchain && 'EVM' in address.address_type) {
-                    // gasEstimation = [Number(estimateOrderLockGas(
-                    //     Number(orderBlockchain.EVM.chain_id),
-                    //     tokenOption,
-                    //     order.Created.crypto.amount - order.Created.crypto.fee
-                    // ))]
-                    gasEstimation = [commitEvmGas];
+                    const gasForCommit = await estimateGasAndGasPrice(
+                        Number(orderBlockchain.EVM.chain_id),
+                        { Commit: null },
+                        defaultCommitEvmGas
+                    );
+                    console.log("[commitToOrder] gasCommitEstimate = ", gasForCommit);
+                    gasEstimation = [gasForCommit[0]];
                     return true;
                 }
                 if ('ICP' in orderBlockchain && 'ICP' in address.address_type) {
@@ -199,22 +193,17 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setTxHash(undefined);
         setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
 
-        // estimate withdraw gas
-        let gasEstimation: [] | [number] = [];
+        // estimate release gas
+        let gasEstimation: [] | [bigint] = [];
         const hasToken = order.Locked.base.crypto.token.length > 0;
-        const tokenOption: TokenOption = {
-            name: "",
-            address: hasToken ? order.Locked.base.crypto.token[0]! : "",
-            isNative: hasToken ? true : false,
-            rateSymbol: "",
-        }
         if ('EVM' in orderBlockchain) {
-            // gasEstimation = [Number(estimateOrderReleaseGas(
-            //     Number(orderBlockchain.EVM.chain_id),
-            //     tokenOption,
-            //     order.Locked.base.crypto.amount - order.Locked.base.crypto.fee
-            // ))]
-            gasEstimation = [releaseEvmGas];
+            const gasForRelease = await estimateGasAndGasPrice(
+                Number(orderBlockchain.EVM.chain_id),
+                hasToken ? { ReleaseToken: null } : { ReleaseNative: null },
+                defaultReleaseEvmGas
+            );
+            console.log("[handlePayPalSuccess] gasReleaseEstimate = ", gasForRelease);
+            gasEstimation = [gasForRelease[0]];
         }
 
         try {
