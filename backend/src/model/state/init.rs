@@ -6,6 +6,7 @@ use std::{fmt, str::FromStr};
 
 use super::state::{InvalidStateError, State};
 use crate::evm::rpc::RpcServices;
+use crate::model::types::gas::ChainGasTracking;
 use crate::model::types::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
@@ -79,6 +80,7 @@ impl TryFrom<InitArg> for State {
                     rpc_services: config.services,
                     nonce: U256::zero(),
                     approved_tokens: HashMap::new(),
+                    gas_tracking: ChainGasTracking::default(),
                 },
             );
         }
@@ -107,7 +109,6 @@ impl TryFrom<InitArg> for State {
             },
             proxy_url,
             icp_fees: HashMap::new(),
-            frontend_canister: None,
         };
         Ok(state)
     }

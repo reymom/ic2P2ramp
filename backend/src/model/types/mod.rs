@@ -1,6 +1,7 @@
 mod blockchain;
 pub mod chains;
 mod common;
+pub mod gas;
 pub mod order;
 pub mod paypal;
 pub mod revolut;

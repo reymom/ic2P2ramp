@@ -32,7 +32,6 @@ pub struct State {
     pub revolut: RevolutState,
     pub proxy_url: String,
     pub icp_fees: HashMap<Principal, NumTokens>,
-    pub frontend_canister: Option<Principal>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -115,12 +114,6 @@ pub fn get_fee(ledger_principal: &Principal) -> Result<NumTokens> {
             .cloned()
             .ok_or_else(|| RampError::LedgerPrincipalNotSupported(ledger_principal.to_string()))
     })
-}
-
-pub fn set_frontend_canister(canister: &Principal) -> Result<()> {
-    Ok(mutate_state(|state| {
-        state.frontend_canister = Some(*canister);
-    }))
 }
 
 pub fn is_icp_token_supported(ledger_principal: &Principal) -> Result<()> {
