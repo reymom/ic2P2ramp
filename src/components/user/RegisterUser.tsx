@@ -162,23 +162,29 @@ const RegisterUser: React.FC = () => {
     };
 
     return (
-        <div className="max-w-md mx-auto rounded-xl">
-            <h2 className="text-lg font-bold mb-4">Register</h2>
-            <div className="flex items-center mb-6">
-                <label className="block text-gray-400 w-32">User Type:</label>
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg space-y-4">
+            <div className="text-center mb-8">
+                <h2 className="text-white text-2xl font-semibold">Register</h2>
+            </div>
+
+            {/* User Type Selection */}
+            <div className="flex items-center">
+                <label className="block text-white w-32">User Type:</label>
                 <select
                     value={userType}
                     onChange={(e) => setUserType(e.target.value as 'Offramper' | 'Onramper')}
-                    className="flex-grow px-3 py-2 border rounded"
+                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                 >
                     <option value="Offramper">Offramper</option>
                     <option value="Onramper">Onramper</option>
                 </select>
             </div>
+
+            {/* Login Address Display */}
             {loginMethod && (
-                <div className="flex items-center mb-4">
-                    <label className="block text-gray-700 w-32">Login Address:</label>
-                    <span className="flex-grow px-3 py-2 border rounded bg-gray-100 truncate text-left">
+                <div className="flex items-center">
+                    <label className="block text-white w-32">Address:</label>
+                    <span className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 rounded-md truncate text-left text-white">
                         {(() => {
                             if ('EVM' in loginMethod) {
                                 return truncate(loginMethod.EVM.address, 12, 10);
@@ -195,38 +201,38 @@ const RegisterUser: React.FC = () => {
                 </div>
             )}
 
-            <hr className="border-t border-gray-300 w-full my-4" />
+            <hr className="border-t border-gray-500 w-full" />
 
             <div className="flex items-center">
-                <label className="block text-gray-700 w-32">Provider:</label>
+                <label className="block text-white w-32">Provider:</label>
                 <select
                     value={providerType}
                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
-                    className="flex-grow px-3 py-2 border rounded"
+                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                 >
                     {providerTypes.map(type => (
                         <option value={type}>{type}</option>
                     ))}
                 </select>
             </div>
-            <div className="flex items-center mt-1">
-                <label className="block text-gray-700 w-32">Provider ID:</label>
+            <div className="flex items-center">
+                <label className="block text-white w-32">ID:</label>
                 <input
                     type="text"
                     value={providerId}
                     onChange={(e) => setProviderId(e.target.value)}
-                    className="flex-grow px-3 py-2 border rounded"
+                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                 />
             </div>
 
             {providerType === 'Revolut' && (
                 <>
-                    <div className="flex items-center mt-1">
-                        <label className="block text-gray-700 w-32">Scheme:</label>
+                    <div className="flex items-center">
+                        <label className="block text-white w-32">Scheme:</label>
                         <select
                             value={revolutScheme}
                             onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
-                            className="flex-grow px-3 py-2 border rounded"
+                            className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                         >
                             <option value="" selected>Select Scheme</option>
                             {revolutSchemes.map(type => (
@@ -235,67 +241,76 @@ const RegisterUser: React.FC = () => {
                         </select>
                     </div>
                     {userType === 'Offramper' && (
-                        <div className="flex items-center mt-1">
-                            <label className="block text-gray-700 w-32 mt-1">Name:</label>
+                        <div className="flex items-center">
+                            <label className="block text-white w-32">Name:</label>
                             <input
                                 type="text"
                                 value={revolutName}
                                 onChange={(e) => setRevolutName(e.target.value)}
-                                className="flex-grow px-3 py-2 border rounded"
+                                className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
                             />
                         </div>
                     )}
                 </>
             )}
-            <button onClick={handleAddProvider} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded w-full">
+            <button
+                onClick={handleAddProvider}
+                className="w-full px-4 py-2 bg-indigo-700 text-white font-semibold rounded-md hover:bg-indigo-600 focus:outline-none focus:ring focus:ring-indigo-500"
+            >
                 Add Provider
             </button>
-            <div className="mt-4">
-                <ul className="list-disc list-inside bg-gray-100 p-2 rounded">
-                    {providers.map((provider, index) => {
-                        if ('PayPal' in provider) {
-                            return (
-                                <li key={index} className="py-1">
-                                    PayPal: {provider.PayPal.id}
-                                </li>
-                            );
-                        } else if ('Revolut' in provider) {
-                            return (
-                                <li key={index} className="py-1">
-                                    Revolut: {provider.Revolut.id}
-                                    <div>Scheme: {provider.Revolut.scheme}</div>
-                                    {provider.Revolut.name && provider.Revolut.name.length > 0 && (
-                                        <div>Name: {provider.Revolut.name[0]}</div>
-                                    )}
-                                </li>
-                            );
-                        } else {
-                            return null;
-                        }
-                    })}
-                </ul>
-            </div>
 
-            <hr className="border-t border-gray-300 w-full my-4" />
+            {providers.length > 0 && (
+                <div className="mt-4">
+                    <ul className="list-none bg-gray-600 p-4 rounded-md text-white">
+                        {providers.map((provider, index) => {
+                            if ('PayPal' in provider) {
+                                return (
+                                    <li key={index} className="py-1">
+                                        <span className="text-gray-300">(PayPal)</span>
+                                        <div>{provider.PayPal.id}</div>
+                                    </li>
+                                );
+                            } else if ('Revolut' in provider) {
+                                return (
+                                    <li key={index} className="py-1">
+                                        <span className="text-gray-300">(Revolut)</span>
+                                        <div>{provider.Revolut.id}</div>
+                                        <div>Scheme: {provider.Revolut.scheme}</div>
+                                        {provider.Revolut.name && provider.Revolut.name.length > 0 && (
+                                            <div>Name: {provider.Revolut.name[0]}</div>
+                                        )}
+                                    </li>
+                                );
+                            } else {
+                                return null;
+                            }
+                        })}
+                    </ul>
+                </div>
+            )}
+
+            <hr className="border-t border-gray-500 my-6" />
 
             <div className="flex justify-between">
                 <button
                     onClick={() => navigate("/view")}
-                    className="px-4 py-2 bg-gray-400 text-white rounded"
+                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-400 focus:outline-none focus:ring focus:ring-gray-300"
                 >
                     Skip
                 </button>
-                <button onClick={handleSubmit} className="px-4 py-2 bg-green-500 text-white rounded">
+                <button onClick={handleSubmit} className="px-4 py-2 bg-green-800 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring focus:ring-green-600">
                     Register
                 </button>
             </div>
+
             {isLoading ? (
-                <div className="mt-4 flex justify-center items-center space-x-2">
+                <div className="mt-6 flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Processing transaction...</div>
+                    <div className="text-sm font-medium text-gray-300">Processing...</div>
                 </div>
             ) : (
-                message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>
+                message && <p className="mt-4 text-sm font-medium text-red-600 break-all">{message}</p>
             )}
         </div>
     );

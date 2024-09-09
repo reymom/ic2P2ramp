@@ -69,18 +69,20 @@ const ConfirmEmail: React.FC = () => {
     };
 
     return (
-        <div className="max-w-md mx-auto rounded-xl">
-            <h2 className="text-lg font-bold mb-4">Email Confirmation</h2>
+        <div className="max-w-md mx-auto rounded-xl p-8 text-white bg-gray-700">
+            <div className="text-center mb-8">
+                <h2 className="text-2xl font-semibold mb-4">Email Confirmation</h2>
+            </div>
             {isLoading ? (
                 <div className="flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Confirming your email...</div>
+                    <div className="text-sm font-medium text-gray-300">Confirming your email...</div>
                 </div>
             ) : message ? (
-                <p className="mt-4 text-sm font-medium text-red-400-700 break-all">{message}</p>
+                <p className="mt-4 text-sm font-medium text-red-500 break-all">{message}</p>
             ) : (
                 <form onSubmit={handleSubmit} className="mt-4">
-                    <label htmlFor="token" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="token" className="block text-sm font-medium text-gray-200">
                         Enter Confirmation Token received in your email
                     </label>
                     <input
@@ -89,12 +91,12 @@ const ConfirmEmail: React.FC = () => {
                         value={manualToken}
                         onChange={(e) => setManualToken(e.target.value)}
                         placeholder="Enter token"
-                        className="mt-2 p-2 border rounded w-full"
+                        className="mt-2 p-2 border rounded bg-gray-600 w-full"
                         required
                     />
                     <button
                         type="submit"
-                        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded w-full"
+                        className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded w-full"
                     >
                         Confirm Email
                     </button>

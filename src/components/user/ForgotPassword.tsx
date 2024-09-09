@@ -48,28 +48,30 @@ const ForgotPassword: React.FC = () => {
     };
 
     return (
-        <div className="max-w-md mx-auto rounded-xl">
-            <h2 className="text-lg font-bold mb-4">Forgot Password</h2>
+        <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto space-y-4 text-white">
+            <div className="text-center mb-8">
+                <h2 className="text-2xl font-semibold">Forgot Password</h2>
+            </div>
             <form onSubmit={handleForgotPassword} className="flex flex-col space-y-4">
                 <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="px-4 py-2 border rounded w-full"
+                    className="px-4 py-2 bg-gray-600 border rounded w-full"
                     required
                 />
-                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded w-full" disabled={isLoading}>
+                <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded w-full" disabled={isLoading}>
                     {isLoading ? 'Sending...' : 'Send Password Reset Link'}
                 </button>
             </form>
             {isLoading && (
-                <div className="flex justify-center items-center space-x-2 mt-4">
+                <div className="flex justify-center items-center space-x-2">
                     <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-700">Loading...</div>
+                    <div className="text-sm font-medium text-gray-300">Loading...</div>
                 </div>
             )}
-            {message && <p className="mt-4 text-sm font-medium text-gray-700 break-all">{message}</p>}
+            {message && <p className="text-sm font-medium text-gray-300 break-all">{message}</p>}
         </div>
     );
 };
