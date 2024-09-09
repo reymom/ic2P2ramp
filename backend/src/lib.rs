@@ -7,12 +7,17 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
-use model::types::session::Session;
+use num_traits::cast::ToPrimitive;
 use outcalls::xrc_rates::{Asset, AssetClass};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use evm::{providers, rpc::ProviderView, transaction, vault::Ic2P2ramp};
+use evm::{
+    providers,
+    rpc::{ProviderView, TransactionReceipt},
+    transaction,
+    vault::Ic2P2ramp,
+};
 use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
@@ -23,7 +28,9 @@ use model::state::{
 };
 use model::types::{
     self, chains,
+    gas::MethodGasUsage,
     order::{OrderFilter, OrderState},
+    session::Session,
     user::{User, UserType},
     AuthenticationData, Blockchain, LoginAddress, PaymentProvider, PaymentProviderType,
     TransactionAddress,
@@ -75,7 +82,7 @@ async fn transfer_eth(
     chain_id: u64,
     to: String,
     amount: u128,
-    estimated_gas: Option<u32>,
+    estimated_gas: Option<u64>,
 ) -> Result<String> {
     guards::only_controller()?;
     helpers::validate_evm_address(&to)?;
@@ -122,12 +129,6 @@ async fn test_get_revolut_payment_details(payment_id: String) -> Result<()> {
 // ----------
 // Management
 // ----------
-
-#[ic_cdk::update]
-fn set_frontend_canister(principal: Principal) -> Result<()> {
-    guards::only_controller()?;
-    state::set_frontend_canister(&principal)
-}
 
 #[ic_cdk::update]
 async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
@@ -193,7 +194,7 @@ async fn transfer_evm_funds(
     to: String,
     amount: u128,
     token: Option<String>,
-    estimated_gas: Option<u32>,
+    estimated_gas: Option<u64>,
 ) -> Result<String> {
     guards::only_controller()?;
     helpers::validate_evm_address(&to)?;
@@ -318,6 +319,16 @@ fn add_user_payment_provider(
 // ------------------
 
 #[ic_cdk::query]
+fn get_average_gas_prices(
+    chain_id: u64,
+    to_block: u128,
+    max_blocks_in_past: u64,
+    method: MethodGasUsage,
+) -> Result<Option<(u128, u128)>> {
+    chains::get_average_gas(chain_id, to_block, max_blocks_in_past, &method) // <gas, gas_price>
+}
+
+#[ic_cdk::query]
 fn get_orders(
     filter: Option<OrderFilter>,
     page: Option<u32>,
@@ -337,8 +348,8 @@ async fn create_order(
     crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
-    estimated_gas_lock: Option<u32>,
-    estimated_gas_withdraw: Option<u32>,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
     let user = storage::get_user(&offramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -384,7 +395,7 @@ async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    estimated_gas: Option<u32>,
+    estimated_gas: Option<u64>,
 ) -> Result<String> {
     let user = storage::get_user(&onramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -419,7 +430,28 @@ async fn lock_order(
                 chain_id,
                 60,
                 Duration::from_secs(4),
-                move || {
+                move |receipt: TransactionReceipt| {
+                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
+                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
+                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
+
+                    ic_cdk::println!(
+                        "[lock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
+                        gas_used,
+                        gas_price,
+                        block_number
+                    );
+
+                    if !(gas_used == 0 || gas_price == 0) {
+                        let _ = chains::register_gas_usage(
+                            chain_id,
+                            gas_used,
+                            gas_price,
+                            block_number,
+                            &MethodGasUsage::Commit,
+                        );
+                    }
+
                     let _ = order_management::lock_order(
                         order_id,
                         onramper_user_id,
@@ -451,7 +483,7 @@ async fn lock_order(
 async fn unlock_order(
     order_id: u64,
     session_token: String,
-    estimated_gas: Option<u32>,
+    estimated_gas: Option<u64>,
 ) -> Result<String> {
     let order_state = storage::get_order(&order_id)?;
     let order = match order_state {
@@ -478,7 +510,18 @@ async fn unlock_order(
                 chain_id,
                 60,
                 Duration::from_secs(4),
-                move || {
+                move |receipt| {
+                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
+                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
+                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
+
+                    ic_cdk::println!(
+                        "[unlock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
+                        gas_used,
+                        gas_price,
+                        block_number
+                    );
+
                     let _ = order_management::unlock_order(order_id);
                 },
             );
@@ -545,7 +588,7 @@ async fn verify_transaction(
     order_id: u64,
     session_token: String,
     transaction_id: String,
-    estimated_gas: Option<u32>,
+    estimated_gas: Option<u64>,
 ) -> Result<String> {
     ic_cdk::println!(
         "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",
