@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider } from '../../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
 import { stringToUserType } from '../../model/utils';
-import { useUser } from './UserContext';
 import { rampErrorToString } from '../../model/error';
 import { truncate } from '../../model/helper';
 import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '../../model/emailConfirmation';
-import { ethers } from 'ethers';
+import { useUser } from './UserContext';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -94,10 +94,7 @@ const RegisterUser: React.FC = () => {
                     try {
                         const result = await authenticateUser(loginMethod, { signature: [], password: [] });
                         if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
-                        if ('Ok' in result) {
-                            setGlobalUser(result.Ok);
-                            navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
-                        }
+                        if ('Ok' in result) navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
                     } catch (error) {
                         setMessage(`Failed to authenticate user: ${error}`);
                     }
@@ -116,7 +113,10 @@ const RegisterUser: React.FC = () => {
         try {
             const result = await backend.generate_evm_auth_message(loginMethod!);
 
-            if ('Err' in result) setMessage(`Failed to generate evm nonce ${rampErrorToString(result.Err)}`);
+            if ('Err' in result) {
+                setGlobalUser(null);
+                setMessage(`Failed to generate evm nonce ${rampErrorToString(result.Err)}`);
+            }
             if ('Ok' in result) {
                 const provider = new ethers.BrowserProvider(window.ethereum);
                 const signer = await provider.getSigner();
@@ -124,10 +124,7 @@ const RegisterUser: React.FC = () => {
                 try {
                     const result = await authenticateUser(loginMethod, { signature: [signature], password: [] });
                     if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
-                    if ('Ok' in result) {
-                        setGlobalUser(result.Ok);
-                        navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
-                    }
+                    if ('Ok' in result) navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
                 } catch (error) {
                     setMessage(`Failed to authenticate user: ${error}`);
                 }
@@ -255,7 +252,7 @@ const RegisterUser: React.FC = () => {
             )}
             <button
                 onClick={handleAddProvider}
-                className="w-full px-4 py-2 bg-indigo-700 text-white font-semibold rounded-md hover:bg-indigo-600 focus:outline-none focus:ring focus:ring-indigo-500"
+                className="w-full px-4 py-2 bg-indigo-700 text-white font-semibold rounded-md hover:bg-indigo-800 focus:outline-none focus:ring focus:ring-indigo-500"
             >
                 Add Provider
             </button>
@@ -295,11 +292,11 @@ const RegisterUser: React.FC = () => {
             <div className="flex justify-between">
                 <button
                     onClick={() => navigate("/view")}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-400 focus:outline-none focus:ring focus:ring-gray-300"
+                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring focus:ring-gray-300"
                 >
                     Skip
                 </button>
-                <button onClick={handleSubmit} className="px-4 py-2 bg-green-800 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring focus:ring-green-600">
+                <button onClick={handleSubmit} className="px-4 py-2 bg-green-800 text-white rounded-md hover:bg-green-900 focus:outline-none focus:ring focus:ring-green-600">
                     Register
                 </button>
             </div>

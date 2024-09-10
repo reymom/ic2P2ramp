@@ -1,14 +1,15 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { AuthenticationData, LoginAddress, Result_1, User } from '../../declarations/backend/backend.did';
-import { backend } from '../../declarations/backend';
-import { _SERVICE } from '../../declarations/backend/backend.did';
-import { UserTypes } from '../../model/types';
-import { userTypeToString } from '../../model/utils';
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
-import { tokenCanisters } from '../../constants/addresses';
 import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
-import { saveUserSession, getUserSession, clearUserSession } from '../../model/session';
+import { Principal } from '@dfinity/principal';
+
+import { backend } from '../../declarations/backend';
+import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
+import { tokenCanisters } from '../../constants/addresses';
+import { UserTypes } from '../../model/types';
+import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType } from '../../model/session';
+import { AuthClient } from '@dfinity/auth-client';
+import { icpHost, iiUrl } from '../../model/icp';
 
 interface UserContextProps {
     user: User | null;
@@ -16,7 +17,7 @@ interface UserContextProps {
     loginMethod: LoginAddress | null;
     sessionToken: string | null;
     password: string | null;
-    logout: () => void;
+    logout: () => Promise<void>;
     icpAgent: HttpAgent | null;
     backendActor: ActorSubclass<_SERVICE>,
     principal: Principal | null;
@@ -24,9 +25,8 @@ interface UserContextProps {
     fetchIcpBalance: () => void;
     setUser: (user: User | null) => void;
     setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
-    setIcpAgent: (agent: HttpAgent | null) => void;
     setBackendActor: (actor: ActorSubclass<_SERVICE>) => void;
-    setPrincipal: (principal: Principal | null) => void;
+    loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
     authenticateUser: (
         login: LoginAddress | null,
         authData?: AuthenticationData,
@@ -38,27 +38,72 @@ const UserContext = createContext<UserContextProps | undefined>(undefined);
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const userSession = getUserSession();
 
-    const [user, setUser] = useState<User | null>(userSession ? userSession.user : null);
-    const [userType, setUserType] = useState<UserTypes>(userSession ? userTypeToString(userSession.user.user_type) : "Visitor");
+    const [user, setUser] = useState<User | null>(userSession);
     const [loginMethod, setLoginMethod] = useState<LoginAddress | null>(null);
-    const [sessionToken, setSessionToken] = useState<string | null>(userSession ? userSession.sessionToken : null);
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [backendActor, setBackendActor] = useState<ActorSubclass<_SERVICE>>(backend);
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [icpBalance, setIcpBalance] = useState<string | null>(null);
 
+    const sessionToken = getSessionToken(user);
+    const userType = getUserType(user);
+
     useEffect(() => {
-        if (!user) {
-            setUserType("Visitor")
-            return;
+        if (!user || (user && isSessionExpired(user))) {
+            logout();
         }
-        setUserType(userTypeToString(user!.user_type));
     }, [user]);
 
     useEffect(() => {
         fetchIcpBalance();
     }, [principal, icpAgent]);
+
+    const checkInternetIdentity = async () => {
+        const authClient = await AuthClient.create();
+        if (await authClient.isAuthenticated()) {
+            const identity = authClient.getIdentity();
+            const principal = identity.getPrincipal();
+            setPrincipal(principal);
+            console.log("ICP Principal = ", principal);
+
+            const agent = new HttpAgent({ identity, host: icpHost });
+            if (process.env.FRONTEND_ICP_ENV === 'test') {
+                agent.fetchRootKey();
+            }
+            setIcpAgent(agent);
+        }
+    };
+
+    useEffect(() => {
+        checkInternetIdentity();
+    }, []);
+
+    const loginInternetIdentity = async (): Promise<[Principal, HttpAgent]> => {
+        const authClient = await AuthClient.create();
+        return new Promise((resolve, reject) => {
+            authClient.login({
+                identityProvider: iiUrl,
+                onSuccess: async () => {
+                    const identity = authClient.getIdentity();
+                    const principal = identity.getPrincipal();
+                    setPrincipal(principal);
+                    console.log("ICP Principal = ", principal);
+
+                    const agent = new HttpAgent({ identity, host: icpHost });
+                    if (process.env.FRONTEND_ICP_ENV === 'test') {
+                        agent.fetchRootKey();
+                    }
+                    setIcpAgent(agent);
+                    resolve([principal, agent]);
+                },
+                onError: (error) => {
+                    console.error("Internet Identity login failed:", error);
+                    reject(error);
+                },
+            });
+        });
+    }
 
     const authenticateUser = async (login: LoginAddress | null, authData?: AuthenticationData): Promise<Result_1> => {
         if (!login) throw new Error("Login method is not defined");
@@ -70,11 +115,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
             if ('Ok' in result) {
                 setUser(result.Ok);
-                // Save session token in context and localStorage
                 const session = result.Ok.session.length > 0 ? result.Ok.session[0] : null;
                 if (session) {
-                    setSessionToken(session.token);
-                    saveUserSession({ user: result.Ok, sessionToken: session.token });
+                    saveUserSession(result.Ok);
                 } else {
                     throw new Error("Session Token is not properly set in the backend");
                 }
@@ -86,14 +129,23 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
-    const logout = () => {
-        setUser(null);
-        setLoginMethod(null);
-        setSessionToken(null);
-        clearUserSession();
-        setIcpAgent(null);
-        setPrincipal(null);
-        setUserType("Visitor");
+    const logout = async (): Promise<void> => {
+        try {
+            const authClient = await AuthClient.create();
+            if (authClient && await authClient.isAuthenticated()) {
+                await authClient.logout({
+                    returnTo: process.env.FRONTEND_BASE_URL || window.location.origin,
+                });
+            }
+        } catch (error) {
+            console.error("Error logging out from Internet Identity:", error);
+        } finally {
+            setUser(null);
+            setLoginMethod(null);
+            clearUserSession();
+            setIcpAgent(null);
+            setPrincipal(null);
+        }
     };
 
     const fetchIcpBalance = async () => {
@@ -137,9 +189,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 setLoginMethod(login);
                 setPassword(pwd || null);
             },
-            setIcpAgent,
             setBackendActor,
-            setPrincipal,
+            loginInternetIdentity,
             authenticateUser
         }}>
             {children}

@@ -2,14 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { AuthClient } from '@dfinity/auth-client';
-import { HttpAgent } from '@dfinity/agent';
 import { useAccount } from 'wagmi';
 
 import { backend, createActor } from '../declarations/backend';
 import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
 import { useUser } from './user/UserContext';
-import { icpHost, iiUrl } from '../model/icp';
 import { validatePassword } from '../model/helper';
 import { rampErrorToString } from '../model/error';
 
@@ -33,11 +30,10 @@ const ConnectAddress: React.FC = () => {
     const {
         userType,
         setLoginMethod,
-        setIcpAgent,
-        authenticateUser,
         setUser,
-        setPrincipal,
-        setBackendActor
+        setBackendActor,
+        loginInternetIdentity,
+        authenticateUser
     } = useUser();
     const navigate = useNavigate();
 
@@ -83,7 +79,7 @@ const ConnectAddress: React.FC = () => {
                 setEvmMessage(`Internal error when generating evm session nonce: ${rampErrorToString(result.Err)}`)
             }
         } catch (error) {
-            setEvmMessage(`Failed to generate evm nonce: {error}`);
+            setEvmMessage(`Failed to generate evm nonce: ${error}`);
             setLoginMethod(null);
         } finally {
             setLoadingEvm(false);
@@ -136,58 +132,40 @@ const ConnectAddress: React.FC = () => {
     };
 
     const handleInternetIdentityLogin = async () => {
-        const authClient = await AuthClient.create();
-        await authClient.login({
-            identityProvider: iiUrl,
-            onSuccess: async () => {
-                setLoadingIcp(true);
+        try {
+            setLoadingIcp(true);
+            const [principal, agent] = await loginInternetIdentity();
 
-                const identity = authClient.getIdentity();
-                const principal = identity.getPrincipal();
-                setPrincipal(principal);
-                console.log("Principal connected = ", principal.toString());
+            if (!principal) throw new Error("Principal not set after II login");
+            if (!agent) throw new Error("ICP Agent not set after II login");
+            if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
 
-                const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ICP_ENV === 'test') {
-                    agent.fetchRootKey();
+            const backendActor = createActor(process.env.CANISTER_ID_BACKEND, { agent });
+            setBackendActor(backendActor);
+
+            const loginAddress: LoginAddress = {
+                ICP: { principal_id: principal.toText() }
+            };
+            setLoginMethod(loginAddress);
+
+            const result = await authenticateUser(loginAddress, undefined);
+            console.log("[authenticateUser] result = ", result);
+
+            if ('Ok' in result) {
+                setUser(result.Ok);
+                if ('Offramper' in result.Ok.user_type) {
+                    navigate("/create");
+                } else {
+                    navigate("/view");
                 }
-                setIcpAgent(agent);
-
-                if (!process.env.CANISTER_ID_BACKEND) throw new Error("canister id not in env file");
-                const backendActor = createActor(process.env.CANISTER_ID_BACKEND, {
-                    agent,
-                });
-                setBackendActor(backendActor);
-
-                const loginAddress: LoginAddress = {
-                    ICP: { principal_id: principal.toText() }
-                };
-                setLoginMethod(loginAddress);
-
-                try {
-                    const result = await authenticateUser(loginAddress, undefined);
-                    console.log("result = ", result);
-                    if ('Ok' in result) {
-                        setUser(result.Ok)
-                        if ('Offramper' in result.Ok.user_type) {
-                            navigate("/create");
-                        } else {
-                            navigate("/view");
-                        }
-                    } else {
-                        navigate("/register");
-                    }
-                } catch (error) {
-                    console.error(`error authenticating user identity: ${error}`)
-                    throw error;
-                } finally {
-                    setLoadingIcp(false);
-                }
-            },
-            onError: (error) => {
-                console.error("Internet Identity login failed:", error);
-            },
-        });
+            } else {
+                navigate("/register");
+            }
+        } catch (error) {
+            console.error(`Error authenticating user identity: ${error}`);
+        } finally {
+            setLoadingIcp(false);
+        }
     };
 
     return (
@@ -272,7 +250,7 @@ const ConnectAddress: React.FC = () => {
                         <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300 h-5 w-5" />
                     </button>
                 </div>
-                <button type="submit" className="w-full bg-amber-800 text-white py-3 rounded-md hover:bg-amber-700">
+                <button type="submit" className="w-full bg-amber-800 text-white py-3 rounded-md hover:bg-amber-900">
                     Log in with Email
                 </button>
                 <div className="text-center -mt-1">

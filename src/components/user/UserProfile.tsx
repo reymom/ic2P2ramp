@@ -16,6 +16,7 @@ import { useUser } from './UserContext';
 
 import icpLogo from "../../assets/icp-logo.svg";
 import ethereumLogo from "../../assets/ethereum-logo.png";
+import { isSessionExpired, saveUserSession } from '../../model/session';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -29,18 +30,24 @@ const UserProfile: React.FC = () => {
     const [loadingAddProvider, setLoadingAddProvider] = useState(false);
 
     const { address, isConnected } = useAccount();
-    const { user, sessionToken, principal, setUser, setIcpAgent, setPrincipal } = useUser();
+    const { user, sessionToken, principal, setUser, loginInternetIdentity, logout } = useUser();
     const navigate = useNavigate();
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!user) {
-            navigate('/');
-        }
+        if (!user) navigate('/');
     }, [user, navigate]);
 
+    if (!user) {
+        navigate('/');
+        return null
+    }
 
-    if (!user) return null;
+    if (isSessionExpired(user)) {
+        logout();
+        navigate("/");
+        return;
+    }
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -61,28 +68,11 @@ const UserProfile: React.FC = () => {
     };
 
     const handleInternetIdentityLogin = async () => {
-        const authClient = await AuthClient.create();
-        await authClient.login({
-            identityProvider: iiUrl,
-            onSuccess: async () => {
-                const identity = authClient.getIdentity();
-                const principal = identity.getPrincipal();
-                setPrincipal(principal);
-
-                const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ICP_ENV === 'test') {
-                    agent.fetchRootKey();
-                }
-                setIcpAgent(agent);
-            },
-            onError: (error) => {
-                console.error("Internet Identity login failed:", error);
-            },
-        });
+        await loginInternetIdentity();
     };
 
     const handleAddProvider = async () => {
-        if (!sessionToken) throw new Error("Please authenticate to get a token session")
+        if (!sessionToken) throw new Error("Please authenticate to get a token session");
 
         if (!providerType) return;
         setLoadingAddProvider(true);
@@ -105,8 +95,11 @@ const UserProfile: React.FC = () => {
         try {
             const result = await backend.add_user_payment_provider(user.id, sessionToken, newProvider);
             if ('Ok' in result) {
-                const updatedProviders = [...user.payment_providers, newProvider]
-                setUser({ ...user, payment_providers: updatedProviders });
+                const updatedProviders = [...user.payment_providers, newProvider];
+                const updatedUser = { ...user, payment_providers: updatedProviders };
+
+                setUser(updatedUser);
+                saveUserSession(updatedUser);
             } else {
                 setMessage(rampErrorToString(result.Err));
             }
@@ -132,7 +125,10 @@ const UserProfile: React.FC = () => {
             const result = await backend.add_user_transaction_address(user.id, sessionToken, addingAddress);
             if ('Ok' in result) {
                 const updatedAddresses = [...user.addresses, addingAddress];
-                setUser({ ...user, addresses: updatedAddresses });
+                const updatedUser = { ...user, addresses: updatedAddresses };
+
+                setUser(updatedUser);
+                saveUserSession(updatedUser);
             } else {
                 setMessage(`Failed to update address: ${rampErrorToString(result.Err)}`)
             }
@@ -222,19 +218,13 @@ const UserProfile: React.FC = () => {
                         <div className="absolute bg-gray-600 rounded-md mt-2 w-full shadow-lg z-10">
                             <div
                                 className="flex items-center px-3 py-2 hover:bg-gray-500 cursor-pointer"
-                                onClick={() => {
-                                    setSelectedAddressType('EVM');
-                                    setAddressDropdownOpen(false);
-                                }}
+                                onClick={() => handleAddressSelectOption('EVM')}
                             >
                                 <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6" />
                             </div>
                             <div
                                 className="flex items-center px-3 py-2 hover:bg-gray-500 cursor-pointer"
-                                onClick={() => {
-                                    setSelectedAddressType('ICP');
-                                    setAddressDropdownOpen(false);
-                                }}
+                                onClick={() => handleAddressSelectOption('ICP')}
                             >
                                 <img src={icpLogo} alt="ICP Logo" className="h-6 w-6" />
                             </div>
@@ -255,7 +245,7 @@ const UserProfile: React.FC = () => {
                                 onClick={() => handleAddAddress(address!)}
                                 className={
                                     `ml-2 px-4 py-2 text-white font-semibold rounded-md w-1/4
-                                    ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-600'}`
+                                    ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`
                                 }>
                                 Add
                             </button>
@@ -265,7 +255,7 @@ const UserProfile: React.FC = () => {
                             <ConnectButton.Custom>
                                 {({ openConnectModal }) => (
                                     <button
-                                        className="text-white w-full text-lg bg-amber-800 hover:bg-amber-700 cursor-pointer px-3 py-2 rounded-md"
+                                        className="text-white w-full text-lg bg-amber-800 hover:bg-amber-900 cursor-pointer px-3 py-2 rounded-md"
                                         onClick={openConnectModal}
                                     >
                                         Connect wallet
@@ -282,12 +272,12 @@ const UserProfile: React.FC = () => {
                                 type="text"
                                 value={principal.toString()}
                                 readOnly
-                                className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
+                                className="px-3 py-2 border text-white border-gray-500 w-full rounded-md bg-gray-600"
                             />
                             <button
                                 disabled={isAddressInUserAddresses(principal.toString()) || (isAddressInUserAddresses(principal.toString()))}
                                 onClick={() => handleAddAddress(principal.toString())}
-                                className={`ml-2 px-4 py-2 text-white w-1/4 font-semibold rounded-md ${!principal || isAddressInUserAddresses(principal.toString()) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-600'}`}>
+                                className={`ml-2 px-4 py-2 text-white w-1/4 font-semibold rounded-md ${!principal || isAddressInUserAddresses(principal.toString()) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`}>
                                 Add
                             </button>
                         </div>
@@ -388,7 +378,7 @@ const UserProfile: React.FC = () => {
                     </>
                 )}
 
-                <button onClick={handleAddProvider} className="px-4 py-2 bg-indigo-700 text-white font-medium rounded-md hover:bg-indigo-600">
+                <button onClick={handleAddProvider} className="px-4 py-2 bg-indigo-700 text-white font-medium rounded-md hover:bg-indigo-800">
                     Add
                 </button>
             </div>
