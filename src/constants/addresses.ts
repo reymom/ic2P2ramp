@@ -26,7 +26,7 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
   // OP Sepolia
   11155420: {
     vault: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
-    native: 'OP',
+    native: 'ETH',
     usdt: ['USDT', ''],
   },
 };

@@ -49,7 +49,7 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-100">
             <Menu />
             <div className="flex-grow flex justify-center items-center py-8">
                 <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3">
