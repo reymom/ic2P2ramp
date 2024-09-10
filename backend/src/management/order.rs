@@ -40,9 +40,14 @@ pub async fn create_order(
 
             let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
                 + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
-            let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+            ic_cdk::println!(
+                "[create_order] total_gas_estimation = {:?}",
+                total_gas_estimation
+            );
 
+            let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
             ic_cdk::println!("[create_order] fee_estimates = {:?}", fee_estimates);
+
             let mut blockchain_fees =
                 total_gas_estimation as u128 * fee_estimates.max_fee_per_gas.as_u128();
             ic_cdk::println!("[create_order] blockchain_fees = {:?}", blockchain_fees);

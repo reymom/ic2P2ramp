@@ -70,17 +70,18 @@ pub fn validate_solana_address(_solana_address: &str) -> Result<()> {
 }
 
 pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
+    let base_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: "ETH".to_string(),
+    };
+
     let mut class = AssetClass::Cryptocurrency;
     if token_symbol == "USD" {
         class = AssetClass::FiatCurrency;
     }
-    let base_asset = Asset {
+    let quote_asset = Asset {
         class,
         symbol: token_symbol.to_string(),
-    };
-    let quote_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: "ETH".to_string(),
     };
 
     match xrc_rates::get_exchange_rate(base_asset, quote_asset).await {
