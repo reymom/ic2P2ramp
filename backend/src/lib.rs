@@ -582,7 +582,6 @@ async fn execute_revolut_payment(order_id: u64, session_token: String) -> Result
 // --------------------
 // Payment Verification
 // --------------------
-
 #[ic_cdk::update]
 async fn verify_transaction(
     order_id: u64,
