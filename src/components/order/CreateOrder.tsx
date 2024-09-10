@@ -15,6 +15,7 @@ import { blockchainToBlockchainType, providerToProviderType } from '../../model/
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
 import { depositInVault, estimateGasAndGasPrice } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
+import { isSessionExpired } from '../../model/session';
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
@@ -31,8 +32,23 @@ const CreateOrder: React.FC = () => {
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { chain, chainId, address } = useAccount();
-    const { user, sessionToken, icpAgent, principal, fetchIcpBalance } = useUser();
+    const { user, sessionToken, icpAgent, principal, fetchIcpBalance, logout } = useUser();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!user) navigate('/');
+    }, [user, navigate]);
+
+    if (!user) {
+        navigate('/');
+        return;
+    }
+
+    if (isSessionExpired(user)) {
+        logout();
+        navigate("/");
+        return;
+    }
 
     useEffect(() => {
         if (blockchainType) {
@@ -144,7 +160,6 @@ const CreateOrder: React.FC = () => {
         try {
             setIsLoading(true);
             setMessage('Creating offramping order...');
-
 
             const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
                 const providerType: PaymentProviderType = providerToProviderType(provider);
@@ -378,7 +393,7 @@ const CreateOrder: React.FC = () => {
 
                 <button
                     type="submit"
-                    className={`px-4 py-2 rounded-md ${validInputs ? 'bg-green-800 text-white hover:bg-green-700 focus:outline-none' : 'bg-gray-500 text-white cursor-not-allowed'}`}
+                    className={`px-4 py-2 rounded-md ${validInputs ? 'bg-green-800 text-white hover:bg-green-900 focus:outline-none' : 'bg-gray-500 text-white cursor-not-allowed'}`}
                     disabled={!validInputs}
                 >
                     Create Order

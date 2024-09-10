@@ -66,14 +66,14 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             <button
                 onClick={handlePreviousPage}
                 disabled={page === 1}
-                className={`px-4 py-2 rounded-lg text-white ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                className={`px-4 py-2 rounded-lg text-white ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
                 <FontAwesomeIcon icon={faArrowLeft} />
             </button>
             <button
                 onClick={handleNextPage}
                 disabled={orders.length === 0}
-                className={`px-4 py-2 rounded-lg text-white ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                className={`px-4 py-2 rounded-lg text-white ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
                 <FontAwesomeIcon icon={faArrowRight} />
             </button>
@@ -86,7 +86,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}
-                    className={`px-4 py-2 rounded-lg ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-4 py-2 rounded-lg ${page === 1 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                 >
                     <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
@@ -96,7 +96,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handleNextPage}
                     disabled={orders.length === 0}
-                    className={`px-4 py-2 rounded-lg ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}
+                    className={`px-4 py-2 rounded-lg ${orders.length < pageSize ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                 >
                     <FontAwesomeIcon icon={faArrowRight} />
                 </button>

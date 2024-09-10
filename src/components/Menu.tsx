@@ -22,7 +22,7 @@ const Menu: React.FC = () => {
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
     const { isConnected } = useAccount();
-    const { user, setPrincipal, setIcpAgent, icpBalance, logout } = useUser();
+    const { user, icpBalance, loginInternetIdentity, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -112,24 +112,7 @@ const Menu: React.FC = () => {
     };
 
     const handleInternetIdentityLogin = async () => {
-        const authClient = await AuthClient.create();
-        await authClient.login({
-            identityProvider: iiUrl,
-            onSuccess: async () => {
-                const identity = authClient.getIdentity();
-                const principal = identity.getPrincipal();
-                setPrincipal(principal);
-
-                const agent = new HttpAgent({ identity, host: icpHost });
-                if (process.env.FRONTEND_ICP_ENV === 'test') {
-                    agent.fetchRootKey();
-                }
-                setIcpAgent(agent);
-            },
-            onError: (error) => {
-                console.error("Internet Identity login failed:", error);
-            },
-        });
+        await loginInternetIdentity();
     };
 
     return (
@@ -194,7 +177,7 @@ const Menu: React.FC = () => {
                     <div className="relative">
                         <button
                             onClick={() => navigate('/')}
-                            className="flex items-center justify-center bg-indigo-800 hover:bg-indigo-700 text-lg font-bold text-white px-3 py-2 rounded-lg transition-all"
+                            className="flex items-center justify-center bg-indigo-800 hover:bg-indigo-900 text-lg font-bold text-white px-3 py-2 rounded-lg transition-all"
                         >
                             <FontAwesomeIcon icon={faRightToBracket} size="lg" className="mr-2" />
                             <span>Login</span>
@@ -251,7 +234,7 @@ const Menu: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div
-                                                className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-700 cursor-pointer"
+                                                className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer"
                                                 onClick={handleInternetIdentityLogin}
                                             >
                                                 <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
@@ -264,7 +247,7 @@ const Menu: React.FC = () => {
                                         <hr className="border-t border-gray-300 w-full my-2" />
 
                                         {!isConnected ? (
-                                            <div className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-700 cursor-pointer">
+                                            <div className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer">
                                                 <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
                                                 <div className="w-full text-left">
                                                     <ConnectButton.Custom>

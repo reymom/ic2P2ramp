@@ -114,7 +114,7 @@ const ResetPassword: React.FC = () => {
                         <FontAwesomeIcon icon={isConfirmPasswordVisible ? faEyeSlash : faEye} className="text-gray-300" />
                     </button>
                 </div>
-                <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded w-full" disabled={isLoading}>
+                <button type="submit" className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 rounded w-full" disabled={isLoading}>
                     {isLoading ? 'Resetting...' : 'Reset Password'}
                 </button>
             </form>

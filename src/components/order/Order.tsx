@@ -410,7 +410,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         return (
                             <button
                                 onClick={() => commitToOrder(committedProvider![1])}
-                                className={`mt-3 px-4 py-2 rounded w-full font-medium ${disabled ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                                className={`mt-3 px-4 py-2 rounded w-full font-medium ${disabled ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-700 hover:bg-green-800'}`}
                                 disabled={disabled}
                             >
                                 Lock Order (1h to pay)
@@ -422,7 +422,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     {user && userType === 'Offramper' && order.Created.offramper_user_id === user.id && (
                         <button
                             onClick={removeOrder}
-                            className="mt-3 px-4 py-2 bg-red-600 rounded w-full font-medium hover:bg-red-700"
+                            className="mt-3 px-4 py-2 bg-red-700 rounded w-full font-medium hover:bg-red-800"
                         >
                             Remove
                         </button>
