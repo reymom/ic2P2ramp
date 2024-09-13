@@ -8,7 +8,7 @@ use crate::{
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Session {
     pub token: String,
-    pub expires_at: u64,
+    pub expires_at: u64, // nanoseconds
 }
 
 impl Session {

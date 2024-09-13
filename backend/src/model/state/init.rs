@@ -5,9 +5,13 @@ use std::collections::HashMap;
 use std::{fmt, str::FromStr};
 
 use super::state::{InvalidStateError, State};
-use crate::evm::rpc::RpcServices;
-use crate::model::types::gas::ChainGasTracking;
-use crate::model::types::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
+use crate::{
+    evm::rpc::RpcServices,
+    model::types::{
+        evm::{chains::ChainState, gas::ChainGasTracking},
+        payment::{paypal::PayPalState, revolut::RevolutState},
+    },
+};
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct ChainConfig {

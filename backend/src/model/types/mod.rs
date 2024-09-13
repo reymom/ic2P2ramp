@@ -1,10 +1,8 @@
 mod blockchain;
-pub mod chains;
 mod common;
-pub mod gas;
+pub mod evm;
 pub mod order;
-pub mod paypal;
-pub mod revolut;
+pub mod payment;
 pub mod session;
 pub mod user;
 

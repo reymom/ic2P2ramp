@@ -5,12 +5,14 @@ use ic_cdk_timers::{clear_timer, set_timer, TimerId};
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
+use crate::types::{
+    evm::chains::ChainState,
+    payment::{paypal::PayPalState, revolut::RevolutState},
+};
 use crate::{
     errors::{RampError, Result},
     management,
 };
-
-use crate::types::{chains::ChainState, paypal::PayPalState, revolut::RevolutState};
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();

@@ -142,6 +142,9 @@ pub enum RampError {
     #[error("Rsa Error: {0}")]
     RsaError(String),
 
+    #[error("Rpc Error: {0}")]
+    RpcError(String),
+
     #[error("IC Rejection Code: {0:?}, Error: {1}")]
     ICRejectionError(RejectionCode, String),
 
