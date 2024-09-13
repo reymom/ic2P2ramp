@@ -4,10 +4,13 @@ use serde_bytes::ByteBuf;
 use std::ops::Add;
 
 use super::rpc::{
-    BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, MultiFeeHistoryResult, EVM_RPC,
+    Block, BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, GetBlockByNumberResult,
+    MultiFeeHistoryResult, MultiGetBlockByNumberResult, EVM_RPC,
 };
-
-use crate::types;
+use crate::{
+    model::errors::{RampError, Result},
+    types::evm::chains,
+};
 
 #[derive(Clone, Debug)]
 pub struct FeeEstimates {
@@ -23,7 +26,7 @@ pub async fn fee_history(
     newest_block: BlockTag,
     reward_percentiles: Option<Vec<u8>>,
 ) -> FeeHistory {
-    let rpc_providers = types::chains::get_rpc_providers(chain_id);
+    let rpc_providers = chains::get_rpc_providers(chain_id);
 
     let fee_history_args: FeeHistoryArgs = FeeHistoryArgs {
         blockCount: block_count,
@@ -111,4 +114,25 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> FeeEstimates {
 pub fn nat_to_u256(n: &Nat) -> U256 {
     let be_bytes = n.0.to_bytes_be();
     U256::from_big_endian(&be_bytes)
+}
+
+pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<Block> {
+    let rpc_providers = chains::get_rpc_providers(chain_id);
+
+    let cycles = 10_000_000_000;
+    match EVM_RPC
+        .eth_get_block_by_number(rpc_providers, None, block_tag, cycles)
+        .await
+    {
+        Ok((res,)) => match res {
+            MultiGetBlockByNumberResult::Consistent(block_result) => match block_result {
+                GetBlockByNumberResult::Ok(block) => Ok(block),
+                GetBlockByNumberResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
+            },
+            MultiGetBlockByNumberResult::Inconsistent(_) => {
+                ic_cdk::trap("Block Result is inconsistent");
+            }
+        },
+        Err((code, message)) => Err(RampError::ICRejectionError(code, message)),
+    }
 }
