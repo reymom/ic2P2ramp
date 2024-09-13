@@ -8,7 +8,7 @@ import ethereumLogo from "../../assets/ethereum-logo.png";
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { NetworkIds } from '../../constants/networks';
-import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas } from '../../constants/tokens';
+import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas, TokenOption } from '../../constants/tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
@@ -46,7 +46,28 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             : 'Completed' in order ? order.Completed.fiat_amount + order.Completed.offramper_fee
                 : null;
 
-    const explorerUrl = Object.values(NetworkIds).find(network => network.id === chainId)?.explorer;
+    const getToken = (): TokenOption | undefined => {
+        const crypto = 'Created' in order ? order.Created.crypto
+            : 'Locked' in order ? order.Locked.base.crypto
+                : null
+        if (!crypto) return undefined;
+
+        const tokens = 'EVM' in crypto.blockchain ? getEvmTokenOptions(Number(crypto.blockchain.EVM.chain_id))
+            : 'ICP' in crypto.blockchain ? getIcpTokenOptions() : null;
+        if (!tokens) return undefined;
+
+        const tokenAddress = 'EVM' in crypto.blockchain ? crypto.token?.[0] ?? '' :
+            'ICP' in crypto.blockchain ? crypto.blockchain.ICP.ledger_principal.toString() : '';
+
+        return tokens.find(token => {
+            return token.address === tokenAddress;
+        })
+    }
+
+    const token = getToken();
+
+    const orderCreatedChainId = 'Created' in order && 'EVM' in order.Created.crypto.blockchain ? order.Created.crypto.blockchain.EVM.chain_id : undefined;
+    const explorerUrl = Object.values(NetworkIds).find(network => network.id === orderCreatedChainId)?.explorer;
 
     const handleProviderSelection = (selectedProviderType: PaymentProviderTypes) => {
         if (!user) return;
@@ -80,7 +101,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     const gasForCommit = await estimateGasAndGasPrice(
                         Number(orderBlockchain.EVM.chain_id),
                         { Commit: null },
-                        defaultCommitEvmGas
+                        defaultCommitEvmGas,
                     );
                     console.log("[commitToOrder] gasCommitEstimate = ", gasForCommit);
                     gasEstimation = [gasForCommit[0]];
@@ -270,23 +291,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     }
 
     const getTokenSymbol = (): string => {
-        const crypto = 'Created' in order ? order.Created.crypto
-            : 'Locked' in order ? order.Locked.base.crypto
-                : null
-        if (!crypto) return "";
-
-        const tokens = 'EVM' in crypto.blockchain ? getEvmTokenOptions(Number(crypto.blockchain.EVM.chain_id))
-            : 'ICP' in crypto.blockchain ? getIcpTokenOptions() : null;
-        if (!tokens) return "";
-
-        const tokenAddress = 'EVM' in crypto.blockchain ? crypto.token?.[0] ?? '' :
-            'ICP' in crypto.blockchain ? crypto.blockchain.ICP.ledger_principal.toString() : '';
-
-        const token = tokens.find(token => {
-            return token.address === tokenAddress;
-        });
         return token ? token.rateSymbol : "Unknown";
     };
+
+    const getTokenDecimals = (): number => {
+        if (!token) throw new Error("Token not found");
+        return token.decimals
+    }
 
     const formatFiatAmount = () => {
         return (Number(orderFiatAmount) / 100).toFixed(2);
@@ -301,10 +312,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         switch (blockchainToBlockchainType(crypto.blockchain)) {
             case 'EVM':
                 const fullAmountEVM = ethers.formatEther(crypto.amount - crypto.fee);
+                ethers.formatUnits(
+                    crypto.amount.toString(),
+                    getTokenDecimals()
+                );
                 const shortAmountEVM = parseFloat(fullAmountEVM).toPrecision(3);
                 return { fullAmount: fullAmountEVM, shortAmount: shortAmountEVM };
             case 'ICP':
-                const fullAmountICP = (Number(crypto.amount - crypto.fee) / 100_000_000).toString();
+                const fullAmountICP = (Number(crypto.amount - crypto.fee) / getTokenDecimals()).toString();
                 const shortAmountICP = parseFloat(fullAmountICP).toPrecision(3);
                 return { fullAmount: fullAmountICP, shortAmount: shortAmountICP };
             case 'Solana':
