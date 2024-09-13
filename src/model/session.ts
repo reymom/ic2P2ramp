@@ -16,7 +16,7 @@ export const isSessionExpired = (user: User): boolean => {
   if (!user.session || user.session.length === 0) return true;
 
   const session = user.session[0];
-  const currentTime = BigInt(Date.now());
+  const currentTime = BigInt(Date.now() * 1_000_000);
   return session.expires_at <= currentTime;
 };
 
