@@ -7,7 +7,7 @@ use super::transaction;
 use crate::errors::Result;
 use crate::model::{
     helpers,
-    types::{chains, order::LockedOrder},
+    types::{evm::chains, order::LockedOrder},
 };
 
 pub struct Ic2P2ramp;
@@ -203,6 +203,7 @@ impl Ic2P2ramp {
                 order.onramper_address.address,
                 token_address,
                 order.base.crypto.amount - order.base.crypto.fee,
+                order.base.crypto.fee,
                 vault_manager_address,
             )
             .await?;
@@ -212,6 +213,7 @@ impl Ic2P2ramp {
                 fee_estimates,
                 chain_id,
                 order.base.crypto.amount - order.base.crypto.fee,
+                order.base.crypto.fee,
                 order.base.offramper_address.address,
                 order.onramper_address.address,
                 vault_manager_address,
@@ -230,6 +232,7 @@ impl Ic2P2ramp {
         onramper_address: String,
         token_address: String,
         amount: u128,
+        fee: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -239,7 +242,8 @@ impl Ic2P2ramp {
                         {"internalType": "address", "name": "_offramper", "type": "address"},
                         {"internalType": "address", "name": "_onramper", "type": "address"},
                         {"internalType": "address", "name": "_token", "type": "address"},
-                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+                        {"internalType": "uint256", "name": "_fee", "type": "uint256"}
                     ],
                     "name": "releaseFunds",
                     "outputs": [],
@@ -262,6 +266,7 @@ impl Ic2P2ramp {
                 ethers_core::abi::Token::Address(helpers::parse_address(onramper_address)?),
                 ethers_core::abi::Token::Address(helpers::parse_address(token_address)?),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fee)),
             ],
         )
         .await
@@ -272,6 +277,7 @@ impl Ic2P2ramp {
         fee_estimates: FeeEstimates,
         chain_id: u64,
         amount: u128,
+        fee: u128,
         offramper_address: String,
         onramper_address: String,
         vault_manager_address: String,
@@ -282,7 +288,8 @@ impl Ic2P2ramp {
                     "inputs": [
                         {"internalType": "address", "name": "_offramper", "type": "address"},
                         {"internalType": "address", "name": "_onramper", "type": "address"},
-                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+                        {"internalType": "uint256", "name": "_fee", "type": "uint256"}
                     ],
                     "name": "releaseBaseCurrency",
                     "outputs": [],
@@ -304,9 +311,86 @@ impl Ic2P2ramp {
                 ethers_core::abi::Token::Address(helpers::parse_address(offramper_address)?),
                 ethers_core::abi::Token::Address(helpers::parse_address(onramper_address)?),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fee)),
             ],
         )
         .await
+    }
+
+    pub async fn withdraw_token(
+        chain_id: u64,
+        token_address: String,
+        amount: u128,
+    ) -> Result<String> {
+        let abi = r#"
+            [
+                {
+                    "inputs": [
+                        {"internalType": "address", "name": "_token", "type": "address"},
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                    ],
+                    "name": "withdrawToken",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+
+        let request = transaction::create_sign_request(
+            abi,
+            "withdrawToken",
+            U256::from(Ic2P2ramp::DEFAULT_GAS),
+            fee_estimates,
+            chain_id,
+            U256::from(0),
+            vault_manager_address,
+            &[
+                ethers_core::abi::Token::Address(helpers::parse_address(token_address)?),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+            ],
+        )
+        .await?;
+
+        transaction::send_signed_transaction(request, chain_id).await
+    }
+
+    pub async fn withdraw_base_currency(chain_id: u64, amount: u128) -> Result<String> {
+        let abi = r#"
+            [
+                {
+                    "inputs": [
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                    ],
+                    "name": "withdrawBaseCurrency",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                }
+            ]
+        "#;
+
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+
+        let request = transaction::create_sign_request(
+            abi,
+            "withdrawBaseCurrency",
+            U256::from(Ic2P2ramp::DEFAULT_GAS),
+            fee_estimates,
+            chain_id,
+            U256::from(0),
+            vault_manager_address,
+            &[ethers_core::abi::Token::Uint(
+                ethers_core::types::U256::from(amount),
+            )],
+        )
+        .await?;
+
+        transaction::send_signed_transaction(request, chain_id).await
     }
 
     pub async fn transfer(

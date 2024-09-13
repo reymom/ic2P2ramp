@@ -16,7 +16,7 @@ use crate::{
     errors::{RampError, Result},
     model::helpers,
     state::increment_nonce,
-    types::chains::get_rpc_providers,
+    types::evm::chains::get_rpc_providers,
 };
 
 #[derive(Debug)]

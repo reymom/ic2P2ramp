@@ -395,6 +395,21 @@ impl Service {
         )
         .await
     }
+    pub async fn eth_get_block_by_number(
+        &self,
+        arg0: RpcServices,
+        arg1: Option<RpcConfig>,
+        arg2: BlockTag,
+        cycles: u128,
+    ) -> Result<(MultiGetBlockByNumberResult,)> {
+        ic_cdk::api::call::call_with_payment128(
+            self.0,
+            "eth_getBlockByNumber",
+            (arg0, arg1, arg2),
+            cycles,
+        )
+        .await
+    }
     pub async fn eth_get_transaction_receipt(
         &self,
         arg0: RpcServices,
@@ -424,9 +439,6 @@ impl Service {
             cycles,
         )
         .await
-    }
-    pub async fn get_providers(&self) -> Result<(Vec<ProviderView>,)> {
-        ic_cdk::call(self.0, "getProviders", ()).await
     }
 }
 
