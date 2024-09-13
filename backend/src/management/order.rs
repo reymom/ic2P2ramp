@@ -4,7 +4,8 @@ use crate::evm::{fees, vault::Ic2P2ramp};
 use crate::management::user as user_management;
 use crate::model::helpers;
 use crate::types::{
-    calculate_fees, chains,
+    calculate_fees,
+    evm::token,
     order::{Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
@@ -12,6 +13,51 @@ use crate::{
     errors::{RampError, Result},
     state, storage,
 };
+
+pub async fn calculate_order_evm_fees(
+    chain_id: u64,
+    fiat_amount: u64,
+    crypto_amount: u128,
+    token: Option<String>,
+    estimated_gas_lock: u64,
+    estimated_gas_withdraw: u64,
+) -> Result<(u64, u128)> {
+    let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
+        + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
+    ic_cdk::println!(
+        "[calculate_order_evm_fees] total_gas_estimation = {:?}",
+        total_gas_estimation
+    );
+
+    let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+    ic_cdk::println!(
+        "[calculate_order_evm_fees] fee_estimates = {:?}",
+        fee_estimates
+    );
+
+    let mut blockchain_fees =
+        total_gas_estimation as u128 * fee_estimates.max_fee_per_gas.as_u128();
+    ic_cdk::println!(
+        "[calculate_order_evm_fees] blockchain_fees = {:?}",
+        blockchain_fees
+    );
+
+    if let Some(token_address) = token {
+        let token = token::get_evm_token(chain_id, &token_address)?;
+        let rate = helpers::get_eth_token_rate(token.rate_symbol).await?;
+        ic_cdk::println!("[calculate_order_evm_fees] token rate = {:?}", rate);
+        // token::add_token_rate(token_address, rate);
+
+        let scale_factor = 10u128.pow(18 - token.decimals as u32);
+        blockchain_fees = ((blockchain_fees as f64 * rate) / scale_factor as f64) as u128;
+        ic_cdk::println!(
+            "[calculate_order_evm_fees] blockchain_fees after = {:?}",
+            blockchain_fees
+        );
+    }
+
+    Ok(calculate_fees(fiat_amount, crypto_amount, blockchain_fees))
+}
 
 pub async fn create_order(
     offramper_user_id: u64,
@@ -38,31 +84,15 @@ pub async fn create_order(
                 )
             })?;
 
-            let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
-                + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
-            ic_cdk::println!(
-                "[create_order] total_gas_estimation = {:?}",
-                total_gas_estimation
-            );
-
-            let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
-            ic_cdk::println!("[create_order] fee_estimates = {:?}", fee_estimates);
-
-            let mut blockchain_fees =
-                total_gas_estimation as u128 * fee_estimates.max_fee_per_gas.as_u128();
-            ic_cdk::println!("[create_order] blockchain_fees = {:?}", blockchain_fees);
-            if let Some(token_address) = token.clone() {
-                let xrc_symbol = chains::get_evm_token_symbol(chain_id, &token_address)?;
-                let rate = helpers::get_eth_token_rate(xrc_symbol).await?;
-                ic_cdk::println!("[create_order] token rate = {:?}", rate);
-
-                blockchain_fees = (blockchain_fees as f64 * rate) as u128;
-                ic_cdk::println!(
-                    "[create_order] blockchain_fees after = {:?}",
-                    blockchain_fees
-                );
-            }
-            calculate_fees(fiat_amount, crypto_amount, blockchain_fees)
+            calculate_order_evm_fees(
+                chain_id,
+                fiat_amount,
+                crypto_amount,
+                token.clone(),
+                estimated_gas_lock,
+                estimated_gas_withdraw,
+            )
+            .await?
         }
         Blockchain::ICP { ledger_principal } => {
             let icp_fee: u128 = state::get_fee(&ledger_principal)?
