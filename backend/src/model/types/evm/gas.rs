@@ -1,5 +1,10 @@
 use candid::{CandidType, Deserialize};
 
+use crate::model::{
+    errors::{RampError, Result},
+    state::{mutate_state, read_state},
+};
+
 #[derive(Deserialize, CandidType, Debug)]
 pub enum MethodGasUsage {
     Commit,
@@ -65,4 +70,51 @@ impl GasUsage {
 
         Some((total_gas / length, total_gas_price / length))
     }
+}
+
+pub fn register_gas_usage(
+    chain_id: u64,
+    gas: u128,
+    gas_price: u128,
+    block_number: u128,
+    action_type: &MethodGasUsage,
+) -> Result<()> {
+    mutate_state(|state| {
+        let chain_state = state
+            .chains
+            .get_mut(&chain_id)
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+
+        let gas_tracking = match action_type {
+            MethodGasUsage::Commit => &mut chain_state.gas_tracking.commit_gas,
+            MethodGasUsage::ReleaseToken => &mut chain_state.gas_tracking.release_token_gas,
+            MethodGasUsage::ReleaseNative => &mut chain_state.gas_tracking.release_native_gas,
+        };
+
+        gas_tracking.record_gas_usage(gas, gas_price, block_number);
+
+        Ok(())
+    })
+}
+
+pub fn get_average_gas(
+    chain_id: u64,
+    current_block: u128,
+    max_blocks_in_past: u64,
+    action_type: &MethodGasUsage,
+) -> Result<Option<(u128, u128)>> {
+    read_state(|state| {
+        let chain_state = state
+            .chains
+            .get(&chain_id)
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+
+        let gas_tracking = match action_type {
+            MethodGasUsage::Commit => &chain_state.gas_tracking.commit_gas,
+            MethodGasUsage::ReleaseToken => &chain_state.gas_tracking.release_token_gas,
+            MethodGasUsage::ReleaseNative => &chain_state.gas_tracking.release_native_gas,
+        };
+
+        Ok(gas_tracking.average_gas(current_block, max_blocks_in_past))
+    })
 }
