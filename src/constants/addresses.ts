@@ -1,46 +1,82 @@
+export interface TokenMapping {
+  name: string;
+  address: string;
+  decimals: number;
+}
+
 interface AddressMapping {
   vault: string;
-  native: string;
-  usdt: [string, string];
+  native: TokenMapping;
+  usdt: TokenMapping;
+  usdc: TokenMapping;
+}
+
+if (
+  !process.env.CONTRACT_SEPOLIA ||
+  !process.env.CONTRACT_BASE_SEPOLIA ||
+  !process.env.CONTRACT_OP_SEPOLIA ||
+  !process.env.CONTRACT_MANTLE_SEPOLIA
+) {
+  console.error('Contract addresses not defined');
 }
 
 const testAddresses: { [chainId: number]: AddressMapping } = {
   // Sepolia
   11155111: {
-    vault: '0x42ad57ab757ea55960f7d9805d82fa818683096b',
-    native: 'ETH',
-    usdt: ['USDT', '0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF'],
+    vault: process.env.CONTRACT_SEPOLIA ? process.env.CONTRACT_SEPOLIA : '',
+    native: { name: 'ETH', address: 'native', decimals: 18 },
+    usdt: {
+      name: 'USDT',
+      address: '0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF',
+      decimals: 18,
+    },
+    usdc: { name: 'USDC', address: '', decimals: 6 },
   },
   // Base Sepolia
   84532: {
-    vault: '0xfa29381958DD8a2dD86246FC0Ab2932972640580',
-    native: 'ETH',
-    usdt: ['USDT', '0x67d2d3a45457b69259FB1F8d8178bAE4F6B11b4d'],
-  },
-  // Polyzon zkEVM Cardona
-  2442: {
-    vault: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
-    native: 'MATIC',
-    usdt: ['USDT', ''],
+    vault: process.env.CONTRACT_BASE_SEPOLIA
+      ? process.env.CONTRACT_BASE_SEPOLIA
+      : '',
+    native: { name: 'ETH', address: 'native', decimals: 18 },
+    usdt: { name: 'USDT', address: '', decimals: 18 },
+    usdc: {
+      name: 'USDC',
+      address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      decimals: 6,
+    },
   },
   // OP Sepolia
   11155420: {
-    vault: '0x9025e74D23384f664CfEB07F1d8ABd19570758B5',
-    native: 'ETH',
-    usdt: ['USDT', ''],
+    vault: process.env.CONTRACT_OP_SEPOLIA
+      ? process.env.CONTRACT_OP_SEPOLIA
+      : '',
+    native: { name: 'ETH', address: 'native', decimals: 18 },
+    usdt: { name: 'USDT', address: '', decimals: 6 },
+    usdc: { name: 'USDC', address: '', decimals: 6 },
+  },
+  // Mantle Sepolia
+  5003: {
+    vault: process.env.CONTRACT_MANTLE_SEPOLIA
+      ? process.env.CONTRACT_MANTLE_SEPOLIA
+      : '',
+    native: { name: 'MNT', address: 'native', decimals: 18 },
+    usdt: { name: 'USDT', address: '', decimals: 6 },
+    usdc: { name: 'USDC', address: '', decimals: 6 },
   },
 };
 
 const prodAddresses: { [chainId: number]: AddressMapping } = {
   1: {
     vault: '0x...',
-    native: 'ETH',
-    usdt: ['USDT', '0x...'],
+    native: { name: 'ETH', address: 'native', decimals: 18 },
+    usdt: { name: 'USDT', address: '', decimals: 6 },
+    usdc: { name: 'USDC', address: '', decimals: 6 },
   },
   137: {
     vault: '0x...',
-    native: 'MATIC',
-    usdt: ['USDT', '0x...'],
+    native: { name: 'MATIC', address: 'native', decimals: 18 },
+    usdt: { name: 'USDT', address: '', decimals: 6 },
+    usdc: { name: 'USDC', address: '', decimals: 6 },
   },
 };
 

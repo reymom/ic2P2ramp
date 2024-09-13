@@ -36,11 +36,11 @@ export const NetworkIds =
         OP_SEPOLIA: {
           id: 11155420,
           name: 'Optimism Sepolia',
-          explorer: 'https://optimism.etherscan.io/tx/',
+          explorer: 'https://sepolia-optimism.etherscan.io/tx/',
         },
-        POLYGON_ZKEVM_TESTNET: {
-          id: 2442,
-          name: 'Polygon zkEVM Testnet',
-          explorer: 'https://explorer.public.zkevm-test.net/tx/',
+        MANTLE_SEPOLIA: {
+          id: 5003,
+          name: 'Mantle Sepolia',
+          explorer: 'https://explorer.sepolia.mantle.xyz/tx/',
         },
       };
