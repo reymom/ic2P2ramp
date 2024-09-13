@@ -2,13 +2,13 @@ import { createContext, useState, useContext, ReactNode, useEffect } from 'react
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
 import { Principal } from '@dfinity/principal';
+import { AuthClient } from '@dfinity/auth-client';
 
 import { backend } from '../../declarations/backend';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
 import { tokenCanisters } from '../../constants/addresses';
 import { UserTypes } from '../../model/types';
 import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType } from '../../model/session';
-import { AuthClient } from '@dfinity/auth-client';
 import { icpHost, iiUrl } from '../../model/icp';
 
 interface UserContextProps {
