@@ -8,13 +8,12 @@ use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 use num_traits::cast::ToPrimitive;
-use outcalls::xrc_rates::{Asset, AssetClass};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use evm::{
-    providers,
-    rpc::{ProviderView, TransactionReceipt},
+    fees,
+    rpc::{Block, BlockTag, TransactionReceipt},
     transaction,
     vault::Ic2P2ramp,
 };
@@ -26,9 +25,13 @@ use model::errors::{self, RampError, Result};
 use model::state::{
     self, initialize_state, mutate_state, read_state, storage, upgrade, InitArg, State,
 };
+use model::types::evm::{
+    chains,
+    gas::{self, MethodGasUsage},
+    token::{self, Token, TokenManager},
+};
 use model::types::{
-    self, chains,
-    gas::MethodGasUsage,
+    self,
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
@@ -38,8 +41,8 @@ use model::types::{
 use model::{guards, helpers};
 use outcalls::{
     paypal,
-    revolut::{self, token},
-    xrc_rates,
+    revolut::{self, token as revolut_token},
+    xrc_rates::{self, Asset, AssetClass},
 };
 
 fn setup_timers() {
@@ -126,6 +129,11 @@ async fn test_get_revolut_payment_details(payment_id: String) -> Result<()> {
     Ok(())
 }
 
+#[ic_cdk::update]
+async fn test_get_latest_block(chain_id: u64) -> Result<Block> {
+    fees::eth_get_latest_block(chain_id, evm::rpc::BlockTag::Latest).await
+}
+
 // ----------
 // Management
 // ----------
@@ -136,26 +144,46 @@ async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
     ICPRamp::set_icp_fees(icp_canisters).await
 }
 
+#[ic_cdk::query]
+async fn get_evm_tokens(chain_id: u64) -> Result<Vec<Token>> {
+    read_state(|state| {
+        let chain_state = state
+            .chains
+            .get(&chain_id)
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+
+        Ok(chain_state
+            .approved_tokens
+            .values()
+            .cloned()
+            .collect::<Vec<Token>>())
+    })
+}
+
 #[ic_cdk::update]
-async fn register_evm_token(
+async fn register_evm_tokens(
     chain_id: u64,
-    token_address: String,
-    rate_symbol: String,
+    tokens: Vec<(String, u8, String, Option<String>)>,
 ) -> Result<()> {
     guards::only_controller()?;
-    helpers::validate_evm_address(&token_address)?;
-    chains::approve_evm_token(chain_id, &token_address, &rate_symbol);
+
+    let mut new_tokens = TokenManager::new();
+    for (token_address, decimals, rate_symbol, desc) in tokens {
+        helpers::validate_evm_address(&token_address)?;
+
+        let mut new_token = Token::new(token_address.clone(), decimals, &rate_symbol);
+        new_token.set_description(desc);
+
+        new_tokens.add_token(token_address, new_token)
+    }
+
+    token::approve_evm_tokens(chain_id, new_tokens.tokens);
     Ok(())
 }
 
 #[ic_cdk::query]
 fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
     state::get_fee(&ledger_principal)
-}
-
-#[ic_cdk::query]
-async fn get_rpc_providers() -> Vec<ProviderView> {
-    providers::get_providers().await
 }
 
 #[ic_cdk::query]
@@ -200,9 +228,21 @@ async fn transfer_evm_funds(
     helpers::validate_evm_address(&to)?;
 
     if let Some(token) = token.clone() {
-        chains::evm_token_is_approved(chain_id, &token)?;
+        token::evm_token_is_approved(chain_id, &token)?;
     }
     Ic2P2ramp::transfer(chain_id, &to, amount, token, estimated_gas).await
+}
+
+#[ic_cdk::update]
+async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -> Result<String> {
+    if let Some(token_address) = token {
+        token::evm_token_is_approved(chain_id, &token_address)?;
+        let withdraw_tx = Ic2P2ramp::withdraw_token(chain_id, token_address, amount).await?;
+        Ok(withdraw_tx)
+    } else {
+        let withdraw_tx = Ic2P2ramp::withdraw_base_currency(chain_id, amount).await?;
+        Ok(withdraw_tx)
+    }
 }
 
 // ---------
@@ -318,14 +358,36 @@ fn add_user_payment_provider(
 // ICP Offramp Orders
 // ------------------
 
-#[ic_cdk::query]
-fn get_average_gas_prices(
+// <gas, gas_price>
+#[ic_cdk::update]
+async fn get_average_gas_prices(
     chain_id: u64,
-    to_block: u128,
     max_blocks_in_past: u64,
     method: MethodGasUsage,
 ) -> Result<Option<(u128, u128)>> {
-    chains::get_average_gas(chain_id, to_block, max_blocks_in_past, &method) // <gas, gas_price>
+    let block = fees::eth_get_latest_block(chain_id, BlockTag::Latest).await?;
+    gas::get_average_gas(chain_id, block.number, max_blocks_in_past, &method)
+}
+
+// <(offramper_fee, crypto_fee)>
+#[ic_cdk::update]
+async fn calculate_order_evm_fees(
+    chain_id: u64,
+    fiat_amount: u64,
+    crypto_amount: u128,
+    token: Option<String>,
+    estimated_gas_lock: u64,
+    estimated_gas_withdraw: u64,
+) -> Result<(u64, u128)> {
+    order_management::calculate_order_evm_fees(
+        chain_id,
+        fiat_amount,
+        crypto_amount,
+        token.clone(),
+        estimated_gas_lock,
+        estimated_gas_withdraw,
+    )
+    .await
 }
 
 #[ic_cdk::query]
@@ -366,7 +428,7 @@ async fn create_order(
         Blockchain::EVM { chain_id } => {
             chains::chain_is_supported(chain_id)?;
             if let Some(token) = token_address.clone() {
-                chains::evm_token_is_approved(chain_id, &token)?;
+                token::evm_token_is_approved(chain_id, &token)?;
             };
         }
         Blockchain::ICP { ledger_principal } => state::is_icp_token_supported(&ledger_principal)?,
@@ -443,7 +505,7 @@ async fn lock_order(
                     );
 
                     if !(gas_used == 0 || gas_price == 0) {
-                        let _ = chains::register_gas_usage(
+                        let _ = gas::register_gas_usage(
                             chain_id,
                             gas_used,
                             gas_price,
@@ -576,7 +638,7 @@ async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
 // ---------------
 #[ic_cdk::query]
 async fn execute_revolut_payment(order_id: u64, session_token: String) -> Result<String> {
-    token::wait_for_revolut_access_token(order_id, &session_token, 10, 3).await
+    revolut_token::wait_for_revolut_access_token(order_id, &session_token, 10, 3).await
 }
 
 // --------------------
