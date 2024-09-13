@@ -13,7 +13,7 @@ import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
-import { depositInVault, estimateGasAndGasPrice } from '../../model/evm';
+import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
 
@@ -152,6 +152,10 @@ const CreateOrder: React.FC = () => {
             return;
         }
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
+        if (isSessionExpired(user)) {
+            setMessage('Token Is Expired');
+            return;
+        }
 
         if (!chainId) throw new Error('Chain id is not available')
         if (!selectedBlockchain) throw new Error('No blockchain selected');
@@ -177,22 +181,49 @@ const CreateOrder: React.FC = () => {
             let gasEstimateRelease: [bigint] | [] = [];
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
-                cryptoAmountUnits = ethers.parseEther(cryptoAmount.toString());
-                try {
-                    const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
-                    console.log('Transaction receipt: ', receipt);
+                cryptoAmountUnits = selectedToken.isNative ? ethers.parseEther(cryptoAmount.toString())
+                    : ethers.parseUnits(
+                        cryptoAmount.toString(),
+                        selectedToken.decimals
+                    );
 
-                    const gasForCommit = await estimateGasAndGasPrice(chainId, { Commit: null }, defaultCommitEvmGas);
+                try {
+                    const gasForCommit = await estimateGasAndGasPrice(
+                        chainId,
+                        { Commit: null },
+                        defaultCommitEvmGas,
+                    );
                     console.log("[createOrder] gasCommitEstimate = ", gasForCommit);
                     gasEstimateLock = [gasForCommit[0]];
 
                     const gasForRelease = await estimateGasAndGasPrice(
                         chainId,
                         selectedToken.isNative ? { ReleaseNative: null } : { ReleaseToken: null },
-                        defaultReleaseEvmGas
+                        defaultReleaseEvmGas,
                     );
                     console.log("[createOrder] gasReleaseEstimate = ", gasForRelease);
                     gasEstimateRelease = [gasForRelease[0]];
+
+                    const [offramperFee, cryptoFee] = await estimateOrderFees(
+                        BigInt(chainId),
+                        BigInt(Math.ceil(fiatAmount! * 100)),
+                        cryptoAmountUnits,
+                        selectedToken.isNative ? [] : [selectedToken.address],
+                        gasForCommit[0],
+                        gasForRelease[0],
+                    );
+                    console.log(
+                        `[estimateOrderFees] Offramper fee = ${offramperFee}, Crypto fee = ${cryptoFee}`,
+                    );
+
+                    if (cryptoFee >= cryptoAmountUnits) {
+                        console.error('[validateOrderFees] Total fees exceed crypto amount');
+                        setMessage("Fees for commit and release will probably exceed the crypto amount!");
+                        return;
+                    }
+
+                    const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
+                    console.log('Transaction receipt: ', receipt);
 
                     setMessage('Transaction successful!');
                 } catch (e: any) {
@@ -200,8 +231,9 @@ const CreateOrder: React.FC = () => {
                     return;
                 }
             } else if (blockchain === 'ICP') {
-                // todo: get decimals dynamically
-                cryptoAmountUnits = BigInt(cryptoAmount * 100_000_000);
+                const decimalMultiplier = selectedToken.decimals;
+                console.log("ICP token decimal multiplier (should be 8)= ", decimalMultiplier);
+                cryptoAmountUnits = BigInt(cryptoAmount * 10 ** decimalMultiplier);
                 try {
                     const ledgerCanister = Principal.fromText(selectedToken.address);
                     const fees = await fetchIcpTransactionFee(ledgerCanister);

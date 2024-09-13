@@ -131,11 +131,15 @@ export const estimateGasAndGasPrice = async (
   chainId: number,
   method: MethodGasUsage,
   defaultGas: bigint,
+  days: number = 7,
 ): Promise<[bigint, bigint]> => {
+  const blockTimeInSeconds = 12; // Approximate block time
+  const blocksPerDay = (24 * 60 * 60) / blockTimeInSeconds;
+  const maxBlocksInPast = BigInt(Math.ceil(blocksPerDay * days));
+
   const response = await backend.get_average_gas_prices(
     BigInt(chainId),
-    BigInt(0),
-    BigInt(100),
+    maxBlocksInPast,
     method,
   );
 
@@ -146,4 +150,34 @@ export const estimateGasAndGasPrice = async (
   }
 
   return [defaultGas, BigInt(0)];
+};
+
+export const estimateOrderFees = async (
+  chainId: bigint,
+  fiatAmount: bigint,
+  cryptoAmount: bigint,
+  token: [] | [string],
+  gasForCommit: bigint,
+  gasForRelease: bigint,
+): Promise<[bigint, bigint]> => {
+  try {
+    const estimateOrderFees = await backend.calculate_order_evm_fees(
+      chainId,
+      fiatAmount,
+      cryptoAmount,
+      token,
+      gasForCommit,
+      gasForRelease,
+    );
+
+    if ('Ok' in estimateOrderFees) {
+      return estimateOrderFees.Ok;
+    } else {
+      console.error('[estimateOrderFees] Failed to calculate fees');
+      throw new Error('Failed to calculate order fees');
+    }
+  } catch (error) {
+    console.error('[estimateOrderFees] Error:', error);
+    throw error;
+  }
 };
