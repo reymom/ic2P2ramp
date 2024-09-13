@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
+
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
-
 import icpLogo from "../assets/icp-logo.svg";
 import ethereumLogo from "../assets/ethereum-logo.png";
 import logo from '../assets/icR-logo.png';
@@ -10,16 +12,12 @@ import logo from '../assets/icR-logo.png';
 import { useUser } from './user/UserContext';
 import { userTypeToString } from '../model/utils';
 import { truncate } from '../model/helper';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { AuthClient } from '@dfinity/auth-client';
-import { icpHost, iiUrl } from '../model/icp';
-import { HttpAgent } from '@dfinity/agent';
-import { useAccount } from 'wagmi';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
     const { isConnected } = useAccount();
     const { user, icpBalance, loginInternetIdentity, logout } = useUser();
@@ -27,7 +25,6 @@ const Menu: React.FC = () => {
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
-
 
     useEffect(() => {
         const handleResize = () => {
@@ -74,40 +71,29 @@ const Menu: React.FC = () => {
     };
 
     const renderLinks = () => {
-        if (!user) {
-            return (
-                <>
-                    <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
-                        <FontAwesomeIcon icon={faFileAlt} />
-                        <span>Orders</span>
-                    </Link>
-                </>
-            );
-        }
+        const viewLink =
+            <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
+                <FontAwesomeIcon icon={faFileAlt} className="text-teal-900 w-6" />
+                <span>Orders</span>
+            </Link>
 
+        if (!user) return viewLink;
         switch (userTypeToString(user.user_type)) {
-            case "Onramper":
-                return (
-                    <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
-                        <FontAwesomeIcon icon={faFileAlt} />
-                        <span>Orders</span>
-                    </Link>
-                );
+            case "Onramper": return viewLink;
             case "Offramper":
                 return (
                     <>
-                        <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
-                            <FontAwesomeIcon icon={faFileAlt} />
+                        <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
+                            <FontAwesomeIcon icon={faFileAlt} className="text-yellow-900 w-6" />
                             <span>My Orders</span>
                         </Link>
-                        <Link to="/create" onClick={closeMenu} className="flex items-center space-x-2 py-2 px-4 lg:inline-block lg:py-0">
-                            <FontAwesomeIcon icon={faPlusCircle} />
+                        <Link to="/create" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
+                            <FontAwesomeIcon icon={faPlusCircle} className="text-blue-900 w-6" />
                             <span>Create Order</span>
                         </Link>
                     </>
                 );
-            default:
-                return null;
+            default: return null;
         }
     };
 
@@ -115,28 +101,59 @@ const Menu: React.FC = () => {
         await loginInternetIdentity();
     };
 
+    useEffect(() => {
+        if (user && user.session && user.session.length > 0 && user.session[0]) {
+            const sessionExpiry = user.session[0].expires_at;
+            const calculateTimeLeft = () => {
+                const currentTime = BigInt(Date.now() * 1_000_000);
+                const timeLeftNano = sessionExpiry - currentTime;
+                const timeLeftSeconds = Number(timeLeftNano) / 1_000_000_000;
+
+                setTimeLeft(timeLeftSeconds > 0 ? timeLeftSeconds : null);
+            };
+
+            calculateTimeLeft();
+
+            const timer = setInterval(calculateTimeLeft, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [user]);
+
+    const formatTimeLeft = (seconds: number) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
+
     return (
-        <nav className="p-6 flex justify-between items-center rounded-lg" style={{ backgroundColor: 'transparent' }}>
+        <nav className="p-6 flex justify-between items-center rounded-lg bg-transparent">
             {isMobile &&
                 <>
                     <div className="flex items-center justify-between w-full">
-                        <button onClick={toggleMenu} className="p-4">
+                        <button onClick={toggleMenu} className="p-4 text-gray-700">
                             <FontAwesomeIcon icon={faBars} size="2x" />
                         </button>
                     </div>
-                    <div className={`fixed inset-0 bg-gray-800 bg-opacity-75 z-50 lg:hidden ${isMenuOpen ? 'block' : 'hidden'}`}>
-                        <div className="absolute top-0 left-0 w-64 bg-white h-full shadow-md" ref={menuRef}>
+                    <div className={`fixed inset-0 bg-gray-900 bg-opacity-75 z-50 lg:hidden ${isMenuOpen ? 'block' : 'hidden'}`}>
+                        <div className="absolute top-0 left-0 w-64 bg-gray-200 h-full shadow-md" ref={menuRef}>
                             <div className="p-4 flex items-center justify-between">
                                 <div>
                                     <Link to="/" className="flex items-center" onClick={closeMenu}>
                                         <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
+                                        <h1 className="text-2xl text-sky-700 tracking-wider -mt-2" style={{
+                                            WebkitTextStroke: '1px #280d57',
+                                            WebkitTextFillColor: '#280d57',
+                                            letterSpacing: '0.08em',
+                                        }}>
+                                            icRamp
+                                        </h1>
                                     </Link>
                                 </div>
-                                <button onClick={toggleMenu} className="p-2">
-                                    <FontAwesomeIcon icon={faTimes} size="lg" className="text-gray-600" />
+                                <button onClick={toggleMenu} className="p-2 text-gray-600">
+                                    <FontAwesomeIcon icon={faTimes} size="lg" />
                                 </button>
                             </div>
-                            <div className="p-4 flex-grow">
+                            <div className="p-4 space-y-4">
                                 {renderLinks()}
                             </div>
                             {icpBalance && (
@@ -155,17 +172,17 @@ const Menu: React.FC = () => {
                 <div className="flex justify-between w-full">
                     <Link to="/" className="flex items-center w-72 text-center align-middle">
                         <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
-                        <h1 className="text-4xl font-serif text-white tracking-widest -mt-2" style={{
-                            color: '#ffffff',
-                            WebkitTextStroke: '2px #280d57',
-                            WebkitTextFillColor: '#ffffff',
-                            letterSpacing: '0.1em',
+                        <h1 className="text-4xl text-sky-700 tracking-wider -mt-2" style={{
+                            // color: '#ffffff',
+                            WebkitTextStroke: '1px #280d57',
+                            WebkitTextFillColor: '#280d57',
+                            letterSpacing: '0.08em',
                         }}>
                             icRamp
                         </h1>
                     </Link>
-                    <div className="flex-grow flex justify-center">
-                        <div className="flex items-center space-x-4">
+                    <div className="flex-grow flex justify-center text-gray-800">
+                        <div className="flex items-center space-x-6">
                             {renderLinks()}
                         </div>
                     </div>
@@ -192,25 +209,25 @@ const Menu: React.FC = () => {
                             </svg>
                         </button>
                         {isProfileDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-64 bg-white shadow-lg rounded-lg z-10">
+                            <div className="absolute right-0 mt-2 w-72 bg-white shadow-lg rounded-lg z-10">
                                 <div className="p-4 text-gray-700 border-b border-gray-200">
 
                                     <div className="flex items-center text-center">
                                         <span className="flex-grow text-sm font-semibold text-blue-600 truncate">
                                             {(() => {
                                                 if ('EVM' in user.login) {
-                                                    return truncate(user.login.EVM.address, 10, 10);
+                                                    return truncate(user.login.EVM.address, 12, 12);
                                                 } else if ('ICP' in user.login) {
-                                                    return truncate(user.login.ICP.principal_id, 10, 10);
+                                                    return truncate(user.login.ICP.principal_id, 12, 12);
                                                 } else if ('Solana' in user.login) {
-                                                    return truncate(user.login.Solana.address, 10, 10);
+                                                    return truncate(user.login.Solana.address, 12, 12);
                                                 } else if ('Email' in user.login) {
-                                                    return truncate(user.login.Email.email, 10, 10);
+                                                    return truncate(user.login.Email.email, 12, 12);
                                                 }
                                                 return '';
                                             })()}
                                         </span>
-                                        <span className="ml-2 text-gray-500">
+                                        {/* <span className="ml-2 text-gray-500">
                                             {(() => {
                                                 if ('EVM' in user.login) {
                                                     return 'EVM';
@@ -223,57 +240,53 @@ const Menu: React.FC = () => {
                                                 }
                                                 return '';
                                             })()}
-                                        </span>
+                                        </span> */}
                                     </div>
 
                                     <div className="items-center text-center">
                                         <hr className="border-t border-gray-300 w-full my-2" />
                                         {icpBalance ? (
-                                            <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
-                                                {icpBalance} ICP
+                                            <div className="relative flex justify-center items-center border border-gray-300 rounded-md px-3 py-2 text-green-800 text-center font-medium">
+                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
+                                                <span className="text-lg">{icpBalance} ICP</span>
                                             </div>
                                         ) : (
                                             <div
-                                                className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer"
+                                                className="relative flex justify-center items-center px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer"
                                                 onClick={handleInternetIdentityLogin}
                                             >
-                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
+                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
                                                 <span className="text-white text-lg">Connect ICP</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    <>
-                                        <hr className="border-t border-gray-300 w-full my-2" />
-
-                                        {!isConnected ? (
-                                            <div className="flex items-center space-x-3 px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer">
-                                                <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
-                                                <div className="w-full text-left">
-                                                    <ConnectButton.Custom>
-                                                        {({ openConnectModal }) => (
-                                                            <button
-                                                                className="text-white w-full text-lg text-left"
-                                                                onClick={openConnectModal}
-                                                            >
-                                                                Connect wallet
-                                                            </button>
-                                                        )}
-                                                    </ConnectButton.Custom>
-                                                </div>
+                                    <hr className="border-t border-gray-300 w-full my-2" />
+                                    {!isConnected ? (
+                                        <div className="relative flex justify-center items-center px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer">
+                                            <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 absolute left-3" />
+                                            <div className="w-full text-left">
+                                                <ConnectButton.Custom>
+                                                    {({ openConnectModal }) => (
+                                                        <button
+                                                            className="text-white w-full text-lg"
+                                                            onClick={openConnectModal}
+                                                        >
+                                                            Connect wallet
+                                                        </button>
+                                                    )}
+                                                </ConnectButton.Custom>
                                             </div>
-
-                                        ) : (
-
-                                            <div className="w-full flex justify-center">
-                                                <div className="inline-block">
-                                                    <ConnectButton chainStatus="icon" accountStatus="avatar" />
-                                                </div>
+                                        </div>
+                                    ) : (
+                                        <div className="w-full flex justify-center">
+                                            <div className="inline-block">
+                                                <ConnectButton chainStatus="icon" accountStatus="avatar" />
                                             </div>
-                                        )}
-                                    </>
-
+                                        </div>
+                                    )}
                                 </div>
+
                                 <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100">
                                     <FontAwesomeIcon icon={faUserCircle} size="lg" className='mr-2' />
                                     <span>Profile</span>
@@ -281,6 +294,9 @@ const Menu: React.FC = () => {
                                 <button onClick={logout} className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100">
                                     <FontAwesomeIcon icon={faSignOutAlt} size="lg" className='mr-2' />
                                     <span>Logout</span>
+                                    {timeLeft !== null && (
+                                        <span className="ml-auto text-sm text-gray-500">({formatTimeLeft(timeLeft)})</span>
+                                    )}
                                 </button>
                             </div>
                         )}
