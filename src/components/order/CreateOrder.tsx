@@ -17,6 +17,8 @@ import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../..
 import { BlockchainTypes } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
 
+const RATE_CACHE_EXPIRY_MS = 5 * 60 * 1000;
+
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
     const [currency, setCurrency] = useState<string>("USD");
@@ -32,7 +34,7 @@ const CreateOrder: React.FC = () => {
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { chain, chainId, address } = useAccount();
-    const { user, sessionToken, icpAgent, principal, fetchIcpBalance, logout } = useUser();
+    const { user, sessionToken, icpAgent, principal, fetchIcpBalance, refetchUser, logout } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -67,6 +69,8 @@ const CreateOrder: React.FC = () => {
     }, [blockchainType, chainId]);
 
     const handleBlockchainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        if (loadingRate) return;
+
         setSelectedToken(null);
         const value = e.target.value;
         setBlockchainType(value as BlockchainTypes);
@@ -83,6 +87,8 @@ const CreateOrder: React.FC = () => {
     };
 
     const handleTokenChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        if (loadingRate) return;
+
         const selected = tokenOptions.find(token => token.address === e.target.value);
         setSelectedToken(selected || null);
 
@@ -93,6 +99,22 @@ const CreateOrder: React.FC = () => {
 
     const getExchangeRateFromXRC = async (token: string) => {
         if (token === "") return;
+
+        const isEth = token === "ETH";
+        const cacheKey = isEth ? `${token}_global_exchange_rate` : `${token}_${chainId}_exchange_rate`;
+        const cachedRate = localStorage.getItem(cacheKey);
+        if (cachedRate) {
+            const { rate, timestamp } = JSON.parse(cachedRate);
+            const currentTime = Date.now();
+
+            // If cache is still valid, use the cached rate
+            if (currentTime - timestamp < RATE_CACHE_EXPIRY_MS) {
+                console.log("[exchangeRate] Using cached rate");
+                setExchangeRate(rate);
+                return;
+            }
+        }
+
         setLoadingRate(true);
         try {
             const result = await backend.get_exchange_rate(currency, token);
@@ -100,6 +122,12 @@ const CreateOrder: React.FC = () => {
             if ('Ok' in result) {
                 const rate = parseFloat(result.Ok);
                 setExchangeRate(rate);
+
+                // Cache the new rate with timestamp
+                localStorage.setItem(
+                    cacheKey,
+                    JSON.stringify({ rate, timestamp: Date.now() })
+                );
             } else {
                 const errorMessage = rampErrorToString(result.Err);
                 console.error(errorMessage);
@@ -265,6 +293,7 @@ const CreateOrder: React.FC = () => {
 
             if ('Ok' in result) {
                 setMessage(`Order with ID=${result.Ok} created!`);
+                refetchUser();
                 navigate("/view");
             } else {
                 const errorMessage = rampErrorToString(result.Err);
@@ -348,8 +377,9 @@ const CreateOrder: React.FC = () => {
                     <select
                         value={blockchainType}
                         onChange={handleBlockchainChange}
-                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                        className={`flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white ${loadingRate ? 'cursor-not-allowed' : ''}`}
                         required
+                        disabled={loadingRate}
                     >
                         <option selected>Select Blockchain</option>
                         {user?.addresses.some(addr => 'EVM' in addr.address_type) && <option value="EVM">EVM</option>}
@@ -362,8 +392,9 @@ const CreateOrder: React.FC = () => {
                     <select
                         value={selectedToken?.address || undefined}
                         onChange={handleTokenChange}
-                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                        className={`flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white ${loadingRate ? 'cursor-not-allowed' : ''}`}
                         required
+                        disabled={loadingRate}
                     >
                         <option value="">Select a token</option>
                         {tokenOptions.map((token) => (
