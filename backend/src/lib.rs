@@ -409,8 +409,14 @@ fn get_orders(
 }
 
 #[ic_cdk::query]
-fn get_transaction_log(order_id: u64) -> Option<EvmTransactionLog> {
-    logs::get_transaction_log(order_id)
+fn get_transaction_log(
+    order_id: u64,
+    user_id: u64,
+    session_token: String,
+) -> Result<Option<EvmTransactionLog>> {
+    let user = storage::get_user(&user_id)?;
+    user.validate_session(&session_token)?;
+    Ok(logs::get_transaction_log(order_id))
 }
 
 #[ic_cdk::update]
@@ -594,9 +600,6 @@ async fn unlock_order(
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
-    if order.payment_done {
-        return Err(RampError::PaymentDone);
-    }
 
     let user = storage::get_user(&order.onramper_user_id)?;
     user.validate_session(&session_token)?;

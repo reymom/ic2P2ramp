@@ -241,6 +241,9 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
+    if order.payment_done {
+        return Err(RampError::PaymentDone);
+    }
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {

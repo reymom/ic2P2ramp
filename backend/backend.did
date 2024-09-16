@@ -57,6 +57,11 @@ type EthMainnetService = variant {
   Ankr;
 };
 type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type EvmTransactionLog = record {
+  status : TransactionStatus;
+  action : TransactionAction;
+  order_id : nat64;
+};
 type ExchangeRateError = variant {
   AnonymousPrincipalNotAllowed;
   CryptoQuoteAssetNotFound;
@@ -99,6 +104,17 @@ type LockedOrder = record {
   payment_id : opt text;
   onramper_provider : PaymentProvider;
   consent_url : opt text;
+};
+type LogEntry = record {
+  transactionHash : opt text;
+  blockNumber : opt nat;
+  data : text;
+  blockHash : opt text;
+  transactionIndex : opt nat;
+  topics : vec text;
+  address : text;
+  logIndex : opt nat;
+  removed : bool;
 };
 type LoginAddress = variant {
   EVM : record { address : text };
@@ -173,6 +189,7 @@ type RampError = variant {
   Pkcs8Error : text;
   PasswordRequired;
   ChainIdNotFound : nat64;
+  PaymentDone;
   TokenExpired;
   ParseError : text;
   NonceTooLow;
@@ -204,14 +221,15 @@ type RejectionCode = variant {
 };
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : User; Err : RampError };
+type Result_10 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : record { nat64; nat }; Err : RampError };
 type Result_3 = variant { Ok : nat64; Err : RampError };
 type Result_4 = variant { Ok : text; Err : RampError };
 type Result_5 = variant { Ok : opt record { nat; nat }; Err : RampError };
 type Result_6 = variant { Ok : vec Token; Err : RampError };
 type Result_7 = variant { Ok : nat; Err : RampError };
-type Result_8 = variant { Ok : Block; Err : RampError };
-type Result_9 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_8 = variant { Ok : opt EvmTransactionLog; Err : RampError };
+type Result_9 = variant { Ok : Block; Err : RampError };
 type RevolutConfig = record {
   kid : text;
   tan : text;
@@ -234,7 +252,28 @@ type Token = record {
   address : text;
   rate_symbol : text;
 };
+type TransactionAction = variant { Release; Uncommit; Cancel; Commit };
 type TransactionAddress = record { address_type : AddressType; address : text };
+type TransactionReceipt = record {
+  to : text;
+  status : nat;
+  transactionHash : text;
+  blockNumber : nat;
+  from : text;
+  logs : vec LogEntry;
+  blockHash : text;
+  "type" : text;
+  transactionIndex : nat;
+  effectiveGasPrice : nat;
+  logsBloom : text;
+  contractAddress : opt text;
+  gasUsed : nat;
+};
+type TransactionStatus = variant {
+  Failed : text;
+  Confirmed : TransactionReceipt;
+  Pending;
+};
 type TransformArgs = record { context : blob; response : HttpResponse };
 type User = record {
   id : nat64;
@@ -280,6 +319,7 @@ service : (InitArg) -> {
   get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
       vec OrderState,
     ) query;
+  get_transaction_log : (nat64, nat64, text) -> (Result_8) query;
   get_user : (nat64) -> (Result_1) query;
   lock_order : (
       nat64,
@@ -289,6 +329,7 @@ service : (InitArg) -> {
       TransactionAddress,
       opt nat64,
     ) -> (Result_4);
+  refetch_user : (nat64, text) -> (Result_1) query;
   register_evm_tokens : (nat64, vec record { text; nat8; text; opt text }) -> (
       Result,
     );
@@ -298,7 +339,7 @@ service : (InitArg) -> {
     );
   remove_user : (nat64) -> (Result_1);
   test_get_consent_url : () -> (Result_4);
-  test_get_latest_block : (nat64) -> (Result_8);
+  test_get_latest_block : (nat64) -> (Result_9);
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_4);
   test_paypal : () -> (Result_4);
@@ -310,6 +351,6 @@ service : (InitArg) -> {
   unlock_order : (nat64, text, opt nat64) -> (Result_4);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_transaction : (nat64, text, text, opt nat64) -> (Result_4);
-  view_canister_balances : () -> (Result_9) query;
+  view_canister_balances : () -> (Result_10) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result_4);
 }
