@@ -7,6 +7,8 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
+use model::state::heap::logs;
+use model::types::evm::logs::{EvmTransactionLog, TransactionAction};
 use num_traits::cast::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -325,6 +327,13 @@ async fn generate_evm_auth_message(login_address: LoginAddress) -> Result<String
 }
 
 #[ic_cdk::query]
+fn refetch_user(user_id: u64, token: String) -> Result<User> {
+    let user = storage::get_user(&user_id)?;
+    user.validate_session(&token)?;
+    Ok(user)
+}
+
+#[ic_cdk::query]
 fn get_user(user_id: u64) -> Result<User> {
     guards::only_controller()?;
     storage::get_user(&user_id)
@@ -397,6 +406,11 @@ fn get_orders(
     page_size: Option<u32>,
 ) -> Vec<OrderState> {
     order_management::get_orders(filter, page, page_size)
+}
+
+#[ic_cdk::query]
+fn get_transaction_log(order_id: u64) -> Option<EvmTransactionLog> {
+    logs::get_transaction_log(order_id)
 }
 
 #[ic_cdk::update]
@@ -492,36 +506,63 @@ async fn lock_order(
                 chain_id,
                 60,
                 Duration::from_secs(4),
+                order_id,
+                TransactionAction::Commit,
                 move |receipt: TransactionReceipt| {
                     let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
                     let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
                     let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
 
-                    ic_cdk::println!(
-                        "[lock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                        gas_used,
-                        gas_price,
-                        block_number
-                    );
-
                     if !(gas_used == 0 || gas_price == 0) {
-                        let _ = gas::register_gas_usage(
+                        match gas::register_gas_usage(
                             chain_id,
                             gas_used,
                             gas_price,
                             block_number,
                             &MethodGasUsage::Commit,
+                        ) {
+                            Ok(()) => ic_cdk::println!(
+                                "[lock_order].[register_gas_usage] Gas Used: {}, Gas Price: {}, Block Number: {}",
+                                gas_used,
+                                gas_price,
+                                block_number
+                            ),
+                            Err(err) => ic_cdk::println!("[lock_order].[register_gas_usage] error: {:?}", err),
+                        }
+                    } else {
+                        ic_cdk::println!(
+                            "[lock_order] Gas Used: {}, Gas Price: {}",
+                            gas_used,
+                            gas_price
                         );
                     }
 
-                    let _ = order_management::lock_order(
-                        order_id,
-                        onramper_user_id,
-                        onramper_provider.clone(),
-                        onramper_address.clone(),
-                        revolut_consent_id.clone(),
-                        consent_url.clone(),
-                    );
+                    let onramper_provider = onramper_provider.clone();
+                    let onramper_address = onramper_address.clone();
+                    let revolut_consent_id = revolut_consent_id.clone();
+                    let consent_url = consent_url.clone();
+
+                    ic_cdk::spawn(async move {
+                        match order_management::lock_order(
+                            order_id,
+                            onramper_user_id,
+                            onramper_provider,
+                            onramper_address,
+                            revolut_consent_id,
+                            consent_url,
+                        )
+                        .await
+                        {
+                            Ok(()) => ic_cdk::println!("order {:?} is locked!", order_id),
+                            Err(err) => {
+                                ic_cdk::println!(
+                                    "order {:?} failed to be locked: {:?}",
+                                    order_id,
+                                    err
+                                )
+                            }
+                        };
+                    });
                 },
             );
             Ok(tx_hash)
@@ -534,7 +575,8 @@ async fn lock_order(
                 onramper_address.clone(),
                 revolut_consent_id.clone(),
                 consent_url.clone(),
-            )?;
+            )
+            .await?;
             Ok(format!("order {:?} is locked!", order_id))
         }
         _ => return Err(RampError::UnsupportedBlockchain),
@@ -552,45 +594,15 @@ async fn unlock_order(
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
+    if order.payment_done {
+        return Err(RampError::PaymentDone);
+    }
 
     let user = storage::get_user(&order.onramper_user_id)?;
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
 
-    match order.base.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
-            let tx_hash = Ic2P2ramp::uncommit_deposit(
-                chain_id,
-                order.base.offramper_address.address,
-                order.base.crypto.token,
-                order.base.crypto.amount,
-                estimated_gas,
-            )
-            .await?;
-            transaction::spawn_transaction_checker(
-                tx_hash.clone(),
-                chain_id,
-                60,
-                Duration::from_secs(4),
-                move |receipt| {
-                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
-                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
-                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
-
-                    ic_cdk::println!(
-                        "[unlock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                        gas_used,
-                        gas_price,
-                        block_number
-                    );
-
-                    let _ = order_management::unlock_order(order_id);
-                },
-            );
-            Ok(tx_hash)
-        }
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }
+    order_management::unlock_order(order_id, estimated_gas).await
 }
 
 #[ic_cdk::update]
