@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use candid::CandidType;
 use ethers_core::types::U256;
 
 use super::{
@@ -14,12 +15,12 @@ use super::{
 
 use crate::{
     errors::{RampError, Result},
-    model::helpers,
+    model::{helpers, state::heap::logs, types::evm::logs::TransactionAction},
     state::increment_nonce,
     types::evm::chains::get_rpc_providers,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, CandidType)]
 pub enum TransactionStatus {
     Confirmed(TransactionReceipt),
     Failed(String),
@@ -164,6 +165,8 @@ pub fn spawn_transaction_checker<F>(
     chain_id: u64,
     max_attempts: u32,
     interval: Duration,
+    order_id: u64,
+    action: TransactionAction,
     on_success: F,
 ) where
     F: Fn(TransactionReceipt) + 'static,
@@ -174,6 +177,7 @@ pub fn spawn_transaction_checker<F>(
         attempts: u32,
         max_attempts: u32,
         interval: Duration,
+        order_id: u64,
         on_success: F,
     ) where
         F: Fn(TransactionReceipt) + 'static,
@@ -184,31 +188,48 @@ pub fn spawn_transaction_checker<F>(
                 match check_transaction_status(tx_hash.clone(), chain_id).await {
                     TransactionStatus::Confirmed(receipt) => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Confirmed");
+                        logs::update_transaction_log(
+                            order_id,
+                            TransactionStatus::Confirmed(receipt.clone()),
+                        );
                         on_success(receipt);
                     }
                     TransactionStatus::Pending if attempts < max_attempts => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Pending...");
+                        logs::update_transaction_log(order_id, TransactionStatus::Pending);
                         schedule_check(
                             tx_hash.clone(),
                             chain_id,
                             attempts + 1,
                             max_attempts,
                             interval,
+                            order_id,
                             on_success,
                         );
                     }
                     TransactionStatus::Failed(err) => {
                         ic_cdk::println!("[schedule_check] Transaction failed: {:?}", err);
+                        logs::update_transaction_log(order_id, TransactionStatus::Failed(err));
                     }
                     _ => {
                         ic_cdk::println!(
                             "[schedule_check] Transaction status check exceeded maximum attempts"
                         );
+                        logs::remove_transaction_log(order_id);
                     }
                 }
             });
         });
     }
 
-    schedule_check(tx_hash, chain_id, 0, max_attempts, interval, on_success);
+    logs::add_transaction_log(order_id, action);
+    schedule_check(
+        tx_hash,
+        chain_id,
+        0,
+        max_attempts,
+        interval,
+        order_id,
+        on_success,
+    );
 }

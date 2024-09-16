@@ -1,0 +1,67 @@
+use std::time::Duration;
+
+use ic_cdk_timers::{clear_timer, set_timer};
+
+use crate::{
+    evm::transaction::TransactionStatus,
+    model::types::evm::logs::{EvmTransactionLog, TransactionAction},
+};
+
+use super::{EVM_TRANSACTION_LOGS, TRANSACTION_LOG_TIMERS};
+
+pub fn add_transaction_log(order_id: u64, action: TransactionAction) {
+    EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {
+        logs.insert(
+            order_id,
+            EvmTransactionLog {
+                order_id,
+                action,
+                status: TransactionStatus::Pending,
+            },
+        );
+    });
+}
+
+pub fn update_transaction_log(order_id: u64, status: TransactionStatus) {
+    EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {
+        if let Some(log) = logs.get_mut(&order_id) {
+            log.status = status.clone();
+        }
+    });
+
+    if matches!(
+        status,
+        TransactionStatus::Confirmed(_) | TransactionStatus::Failed(_)
+    ) {
+        set_transaction_removal_timer(order_id);
+    }
+}
+
+pub fn remove_transaction_log(order_id: u64) {
+    EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {
+        logs.remove(&order_id);
+    });
+}
+
+pub fn get_transaction_log(order_id: u64) -> Option<EvmTransactionLog> {
+    EVM_TRANSACTION_LOGS.with_borrow(|logs| logs.get(&order_id).cloned())
+}
+
+pub fn set_transaction_removal_timer(order_id: u64) {
+    let timer_id = set_timer(Duration::from_secs(300), move || {
+        remove_transaction_log(order_id);
+        clear_transaction_timer(order_id);
+    });
+
+    TRANSACTION_LOG_TIMERS.with_borrow_mut(|timers| {
+        timers.insert(order_id, timer_id);
+    });
+}
+
+pub fn clear_transaction_timer(order_id: u64) {
+    TRANSACTION_LOG_TIMERS.with_borrow_mut(|timers| {
+        if let Some(timer_id) = timers.remove(&order_id) {
+            clear_timer(timer_id);
+        }
+    });
+}

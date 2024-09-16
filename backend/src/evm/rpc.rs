@@ -223,7 +223,7 @@ pub struct GetLogsArgs {
     pub topics: Option<Vec<Vec<String>>>,
 }
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct LogEntry {
     pub transactionHash: Option<String>,
     pub blockNumber: Option<candid::Nat>,
@@ -266,7 +266,7 @@ pub enum MultiGetTransactionCountResult {
     Inconsistent(Vec<(RpcService, GetTransactionCountResult)>),
 }
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct TransactionReceipt {
     pub to: String,
     pub status: candid::Nat,
