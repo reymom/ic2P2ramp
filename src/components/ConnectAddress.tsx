@@ -66,7 +66,6 @@ const ConnectAddress: React.FC = () => {
                 try {
                     const result = await authenticateUser(loginAddress, { signature: [signature], password: [] });
                     if ('Ok' in result) {
-                        setUser(result.Ok);
                         navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
                     } else {
                         setEvmMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`)
@@ -147,10 +146,7 @@ const ConnectAddress: React.FC = () => {
             setLoginMethod(loginAddress);
 
             const result = await authenticateUser(loginAddress, undefined, backendActor);
-            console.log("[authenticateUser] result = ", result);
-
             if ('Ok' in result) {
-                setUser(result.Ok);
                 if ('Offramper' in result.Ok.user_type) {
                     navigate("/create");
                 } else {

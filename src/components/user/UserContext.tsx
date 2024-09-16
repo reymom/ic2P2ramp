@@ -38,6 +38,7 @@ const UserContext = createContext<UserContextProps | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(getUserSession());
+    const [sessionToken, setSessionToken] = useState<string | null>(getSessionToken(user));
     const [loginMethod, setLoginMethod] = useState<LoginAddress | null>(null);
     const [password, setPassword] = useState<string | null>(null);
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
@@ -45,12 +46,22 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [icpBalance, setIcpBalance] = useState<string | null>(null);
 
-    const sessionToken = getSessionToken(user);
     const userType = getUserType(user);
+
+    // I want to refetch if user is loaded from localStorage
+    const [hasRefetched, setHasRefetched] = useState(false);
+    useEffect(() => {
+        if (!hasRefetched) {
+            refetchUser();
+            setHasRefetched(true);
+        }
+    }, [sessionToken, hasRefetched]);
 
     useEffect(() => {
         if (!user || (user && isSessionExpired(user))) {
             logout();
+        } else {
+            setSessionToken(getSessionToken(user));
         }
     }, [user]);
 
@@ -143,6 +154,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             const result = await tmpActor.authenticate_user(login, authData ? [authData] : []);
 
             if ('Ok' in result) {
+                setHasRefetched(true);
                 setUser(result.Ok);
                 const session = result.Ok.session.length > 0 ? result.Ok.session[0] : null;
                 if (session) {
