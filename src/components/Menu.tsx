@@ -5,13 +5,14 @@ import { useAccount } from 'wagmi';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
-import icpLogo from "../assets/icp-logo.svg";
-import ethereumLogo from "../assets/ethereum-logo.png";
+import icpLogo from "../assets/blockchains/icp-logo.svg";
+import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
 import logo from '../assets/icR-logo.png';
 
 import { useUser } from './user/UserContext';
 import { userTypeToString } from '../model/utils';
-import { truncate } from '../model/helper';
+import { truncate, formatTimeLeft } from '../model/helper';
+import { sessionMarginMilisec } from '../model/session';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -105,7 +106,7 @@ const Menu: React.FC = () => {
         if (user && user.session && user.session.length > 0 && user.session[0]) {
             const sessionExpiry = user.session[0].expires_at;
             const calculateTimeLeft = () => {
-                const currentTime = BigInt(Date.now() * 1_000_000);
+                const currentTime = BigInt((Date.now() + sessionMarginMilisec) * 1_000_000);
                 const timeLeftNano = sessionExpiry - currentTime;
                 const timeLeftSeconds = Number(timeLeftNano) / 1_000_000_000;
 
@@ -118,12 +119,6 @@ const Menu: React.FC = () => {
             return () => clearInterval(timer);
         }
     }, [user]);
-
-    const formatTimeLeft = (seconds: number) => {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
 
     return (
         <nav className="p-6 flex justify-between items-center rounded-lg bg-transparent">
@@ -227,20 +222,6 @@ const Menu: React.FC = () => {
                                                 return '';
                                             })()}
                                         </span>
-                                        {/* <span className="ml-2 text-gray-500">
-                                            {(() => {
-                                                if ('EVM' in user.login) {
-                                                    return 'EVM';
-                                                } else if ('ICP' in user.login) {
-                                                    return 'ICP';
-                                                } else if ('Solana' in user.login) {
-                                                    return 'Solana';
-                                                } else if ('Email' in user.login) {
-                                                    return 'Email';
-                                                }
-                                                return '';
-                                            })()}
-                                        </span> */}
                                     </div>
 
                                     <div className="items-center text-center">
