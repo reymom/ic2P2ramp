@@ -4,10 +4,11 @@ use std::time::Duration;
 
 use crate::evm::{fees, transaction, vault::Ic2P2ramp};
 use crate::management::user as user_management;
+use crate::model::types::order::LockedOrder;
 use crate::types::{
     calculate_fees,
     evm::{logs::TransactionAction, token},
-    get_fee,
+    get_icp_fee,
     order::{Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
@@ -97,7 +98,7 @@ pub async fn create_order(
             .await?
         }
         Blockchain::ICP { ledger_principal } => {
-            let icp_fee: u128 = get_fee(&ledger_principal)?.0.try_into().map_err(|e| {
+            let icp_fee: u128 = get_icp_fee(&ledger_principal)?.0.try_into().map_err(|e| {
                 RampError::InternalError(format!("icp fee cannot be converted to u128: {:?}", e))
             })?;
 
@@ -277,6 +278,12 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
                             order.base.id,
                             e
                         );
+                        if let Err(e) = set_order_uncommited(order_id) {
+                            ic_cdk::println!(
+                                "[unlock_order].[set_order_uncommited] failed: {:?}",
+                                e
+                            )
+                        }
                     };
                 },
             );
@@ -342,4 +349,40 @@ pub fn set_order_completed(order_id: u64) -> Result<()> {
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
     })?
+}
+
+pub fn set_order_uncommited(order_id: u64) -> Result<()> {
+    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            order.uncommit();
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
+}
+
+pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<LockedOrder> {
+    let order_state = memory::stable::orders::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+    if order.payment_done {
+        return Err(RampError::PaymentDone);
+    };
+    if order.uncommited {
+        return Err(RampError::OrderUncommitted);
+    }
+    order
+        .base
+        .offramper_providers
+        .get(&order.onramper_provider.provider_type())
+        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type()))?;
+
+    let user = memory::stable::users::get_user(&order.onramper_user_id)?;
+    user.validate_session(session_token)?;
+    user.is_banned()?;
+    user.validate_onramper()?;
+
+    Ok(order)
 }
