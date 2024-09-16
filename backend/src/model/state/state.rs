@@ -7,12 +7,15 @@ use std::{cell::RefCell, collections::HashMap, time::Duration};
 
 use crate::types::{
     evm::chains::ChainState,
+    evm::logs::EvmTransactionLog,
     payment::{paypal::PayPalState, revolut::RevolutState},
 };
 use crate::{
     errors::{RampError, Result},
     management,
 };
+
+const LOCK_DURATION_TIME_SECONDS: u64 = 120; // 1 hour
 
 thread_local! {
     static STATE: RefCell<Option<State>> = RefCell::default();
@@ -22,6 +25,8 @@ thread_local! {
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
 
     static LOCKED_ORDER_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::default();
+
+    static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
 }
 
 #[derive(Clone, Debug)]
@@ -83,11 +88,11 @@ pub fn generate_user_id() -> u64 {
     })
 }
 
-pub fn set_order_timer(order_id: u64) {
-    let duration = 3600; // 1 hour
+pub async fn set_order_timer(order_id: u64) {
+    let duration = LOCK_DURATION_TIME_SECONDS;
     let timer_id = set_timer(Duration::from_secs(duration), move || {
         ic_cdk::spawn(async move {
-            if let Err(e) = management::order::unlock_order(order_id) {
+            if let Err(e) = management::order::unlock_order(order_id, None).await {
                 ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
             }
         });

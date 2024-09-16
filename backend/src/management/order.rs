@@ -1,8 +1,10 @@
+use num_traits::ToPrimitive;
 use std::collections::HashMap;
+use std::time::Duration;
 
-use crate::evm::{fees, vault::Ic2P2ramp};
+use crate::evm::{fees, transaction, vault::Ic2P2ramp};
 use crate::management::user as user_management;
-use crate::model::helpers;
+use crate::model::types::evm::logs::TransactionAction;
 use crate::types::{
     calculate_fees,
     evm::token,
@@ -11,6 +13,7 @@ use crate::types::{
 };
 use crate::{
     errors::{RampError, Result},
+    model::helpers,
     state, storage,
 };
 
@@ -205,7 +208,7 @@ pub fn get_orders(
     }
 }
 
-pub fn lock_order(
+pub async fn lock_order(
     order_id: u64,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
@@ -227,23 +230,72 @@ pub fn lock_order(
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     })??;
 
-    state::set_order_timer(order_id);
+    state::set_order_timer(order_id).await;
 
     Ok(())
 }
 
-pub fn unlock_order(order_id: u64) -> Result<()> {
-    storage::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Locked(order) => {
-            user_management::decrease_user_score(order.onramper_user_id)?;
-            ic_cdk::println!("[unlock_order] user score decreased");
-            *order_state = OrderState::Created(order.base.clone());
-            Ok(())
-        }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-    })??;
+pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<String> {
+    let order_state = storage::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
 
-    state::clear_order_timer(order_id)
+    match order.base.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            // Uncommit the deposit in the EVM vault
+            let tx_hash = Ic2P2ramp::uncommit_deposit(
+                chain_id,
+                order.base.offramper_address.address,
+                order.base.crypto.token,
+                order.base.crypto.amount,
+                estimated_gas,
+            )
+            .await?;
+
+            // Check the transaction receipt
+            transaction::spawn_transaction_checker(
+                tx_hash.clone(),
+                chain_id,
+                60,
+                Duration::from_secs(4),
+                order_id,
+                TransactionAction::Uncommit,
+                move |receipt| {
+                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
+                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
+                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
+
+                    ic_cdk::println!(
+                        "[internal_unlock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
+                        gas_used,
+                        gas_price,
+                        block_number
+                    );
+
+                    // Unlock the order in the backend once the transaction succeeds
+                    if let Err(e) = storage::unlock_order(order.base.id) {
+                        ic_cdk::println!(
+                            "[unlock_order] failed to unlock order #{:?}, error: {:?}",
+                            order.base.id,
+                            e
+                        );
+                    };
+                },
+            );
+
+            Ok(tx_hash)
+        }
+        Blockchain::ICP { ledger_principal } => {
+            storage::unlock_order(order.base.id)?;
+            Ok(format!(
+                "Unlocked ICP order for ledger: {:?}",
+                ledger_principal
+            ))
+        }
+        _ => return Err(RampError::UnsupportedBlockchain),
+    }
 }
 
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {

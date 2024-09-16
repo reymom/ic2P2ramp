@@ -9,6 +9,8 @@ use crate::types::{
     user::User,
 };
 
+use super::state;
+
 pub type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 thread_local! {
@@ -147,4 +149,23 @@ where
             Err(RampError::OrderNotFound)
         }
     })
+}
+
+pub fn unlock_order(order_id: u64) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            mutate_user(order.onramper_user_id, |user| {
+                user.decrease_score();
+            })?;
+            ic_cdk::println!(
+                "[unlock_order] score decreased for user #{:?}",
+                order.onramper_user_id
+            );
+            *order_state = OrderState::Created(order.base.clone());
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })??;
+
+    state::clear_order_timer(order_id)
 }

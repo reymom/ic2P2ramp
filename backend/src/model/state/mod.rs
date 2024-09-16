@@ -1,4 +1,6 @@
+pub mod heap;
 mod init;
+pub mod stable;
 mod state;
 pub mod storage;
 pub mod upgrade;

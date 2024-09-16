@@ -40,7 +40,7 @@ impl SerializableState {
                     let remaining_duration = unlock_timestamp - ic_cdk::api::time();
                     let timer_id = set_timer(Duration::from_secs(remaining_duration), move || {
                         ic_cdk::spawn(async move {
-                            if let Err(e) = management::order::unlock_order(order_id) {
+                            if let Err(e) = management::order::unlock_order(order_id, None).await {
                                 ic_cdk::println!(
                                     "Failed to auto-unlock order {}: {:?}",
                                     order_id,
@@ -53,7 +53,7 @@ impl SerializableState {
                 } else {
                     // If the timer has already expired, unlock the order immediately
                     ic_cdk::spawn(async move {
-                        if let Err(e) = management::order::unlock_order(order_id) {
+                        if let Err(e) = management::order::unlock_order(order_id, None).await {
                             ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
                         }
                     });
