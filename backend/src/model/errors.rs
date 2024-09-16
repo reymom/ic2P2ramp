@@ -46,6 +46,9 @@ pub enum RampError {
     #[error("Invalid Order State: {0}")]
     InvalidOrderState(String),
 
+    #[error("Order is Uncommitted in the EVM vault")]
+    OrderUncommitted,
+
     #[error("Payment is already done")]
     PaymentDone,
 

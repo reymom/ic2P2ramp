@@ -33,7 +33,7 @@ use model::types::evm::{
     token::{self, Token, TokenManager},
 };
 use model::types::{
-    self, get_fee, is_icp_token_supported,
+    self, get_icp_fee, is_icp_token_supported,
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
@@ -185,7 +185,7 @@ async fn register_evm_tokens(
 
 #[ic_cdk::query]
 fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
-    get_fee(&ledger_principal)
+    get_icp_fee(&ledger_principal)
 }
 
 #[ic_cdk::query]
@@ -201,7 +201,7 @@ async fn transfer_canister_funds(
 ) -> Result<()> {
     guards::only_controller()?;
 
-    let fee = get_fee(&ledger_canister)?;
+    let fee = get_icp_fee(&ledger_canister)?;
     let to_account = Account {
         owner: to_principal,
         subaccount: None,
@@ -609,6 +609,27 @@ async fn unlock_order(
 }
 
 #[ic_cdk::update]
+async fn manual_unlock_order(order_id: u64) -> Result<()> {
+    guards::only_controller()?;
+
+    let order_state = stable::orders::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+
+    if order.uncommited {
+        stable::orders::unlock_order(order_id)?;
+        ic_cdk::println!("Manually unlocked order #{}", order_id);
+        Ok(())
+    } else {
+        return Err(RampError::InternalError(
+            "order is not uncommited".to_string(),
+        ));
+    }
+}
+
+#[ic_cdk::update]
 async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
     let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
@@ -626,7 +647,7 @@ async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
                 Principal::from_text(&order.offramper_address.address).unwrap();
 
             let amount = NumTokens::from(order.crypto.amount);
-            let fee = get_fee(ledger_principal)?;
+            let fee = get_icp_fee(ledger_principal)?;
 
             let to_account = Account {
                 owner: offramper_principal,
@@ -659,6 +680,12 @@ async fn execute_revolut_payment(order_id: u64, session_token: String) -> Result
 // --------------------
 // Payment Verification
 // --------------------
+#[ic_cdk::query]
+fn verify_order_is_payable(order_id: u64, session_token: String) -> Result<()> {
+    let _ = order_management::verify_order_is_payable(order_id, &session_token)?;
+    Ok(())
+}
+
 #[ic_cdk::update]
 async fn verify_transaction(
     order_id: u64,
@@ -672,69 +699,16 @@ async fn verify_transaction(
         transaction_id
     );
 
-    let order_state = stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
-    order
-        .base
-        .offramper_providers
-        .get(&order.onramper_provider.provider_type())
-        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type()))?;
-    let user = stable::users::get_user(&order.onramper_user_id)?;
-    user.validate_session(&session_token)?;
+    let order = order_management::verify_order_is_payable(order_id, &session_token)?;
 
     match &order.clone().onramper_provider {
         PaymentProvider::PayPal { id: onramper_id } => {
-            let access_token = paypal::auth::get_paypal_access_token().await?;
-            ic_cdk::println!("[verify_transaction] Obtained PayPal access token");
-            let capture_details =
-                paypal::order::fetch_paypal_order(&access_token, &transaction_id).await?;
+            ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
 
-            // Verify the captured payment details (amounts are in cents)
-            let total_expected_amount =
-                (order.base.fiat_amount + order.base.offramper_fee) as f64 / 100.0;
-
-            let received_amount: f64 = capture_details
-                .purchase_units
-                .iter()
-                .flat_map(|unit| &unit.payments.captures)
-                .map(|capture| capture.amount.value.parse::<f64>().unwrap())
-                .sum();
-
-            let amount_matches = (received_amount - total_expected_amount).abs() < f64::EPSILON;
-            let currency_matches = capture_details.purchase_units[0].amount.currency_code
-                == order.base.currency_symbol;
-
-            let offramper_provider = order
-                .base
-                .offramper_providers
-                .iter()
-                .find(|(provider_type, _)| *provider_type == &PaymentProviderType::PayPal)
-                .ok_or(RampError::InvalidOfframperProvider)?;
-
-            let PaymentProvider::PayPal { id: offramper_id } = offramper_provider.1 else {
-                return Err(RampError::InvalidOfframperProvider);
-            };
-
-            let offramper_matches =
-                capture_details.purchase_units[0].payee.email_address == *offramper_id;
-            let onramper_matches = capture_details.payer.email_address == *onramper_id;
-
-            if capture_details.status == "COMPLETED"
-                && amount_matches
-                && currency_matches
-                && offramper_matches
-                && onramper_matches
-            {
-                ic_cdk::println!("[verify_transaction] verified is true!!");
-                order_management::set_payment_id(order_id, transaction_id)?;
-                order_management::mark_order_as_paid(order.base.id)?;
-            } else {
-                return Err(RampError::PaymentVerificationFailed);
-            }
+            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order.base)
+                .await?
         }
+
         PaymentProvider::Revolut {
             scheme: onramper_scheme,
             id: onramper_id,
@@ -742,57 +716,13 @@ async fn verify_transaction(
         } => {
             ic_cdk::println!("[verify_transaction] Handling Revolut payment verification");
 
-            let payment_details =
-                revolut::transaction::fetch_revolut_payment_details(&transaction_id).await?;
-
-            // Verify the captured payment details (amounts are in cents)
-            let total_expected_amount =
-                (order.base.fiat_amount + order.base.offramper_fee) as f64 / 100.0;
-            let amount_matches = payment_details.data.initiation.instructed_amount.amount
-                == total_expected_amount.to_string();
-            let currency_matches = payment_details.data.initiation.instructed_amount.currency
-                == order.base.currency_symbol;
-
-            let onramper_account = match payment_details.data.initiation.debtor_account {
-                Some(details) => details,
-                None => return Err(RampError::MissingDebtorAccount),
-            };
-            let debtor_matches = onramper_account.scheme_name == *onramper_scheme
-                && onramper_account.identification == *onramper_id;
-
-            let offramper_account = payment_details.data.initiation.creditor_account;
-
-            let offramper_provider = order
-                .base
-                .offramper_providers
-                .iter()
-                .find(|(provider_type, _)| *provider_type == &PaymentProviderType::Revolut)
-                .ok_or(RampError::InvalidOfframperProvider)?;
-
-            let PaymentProvider::Revolut {
-                scheme: offramper_scheme,
-                id: offramper_id,
-                name: offramper_name,
-            } = offramper_provider.1
-            else {
-                return Err(RampError::InvalidOfframperProvider);
-            };
-
-            let creditor_matches = offramper_account.scheme_name == *offramper_scheme
-                && offramper_account.identification == *offramper_id
-                && offramper_account.name == *offramper_name;
-
-            if payment_details.data.status == "AcceptedSettlementCompleted"
-                && amount_matches
-                && currency_matches
-                && debtor_matches
-                && creditor_matches
-            {
-                ic_cdk::println!("[verify_transaction] verified is true!!");
-                order_management::mark_order_as_paid(order.base.id)?;
-            } else {
-                return Err(RampError::PaymentVerificationFailed);
-            }
+            payment_management::verify_revolut_payment(
+                onramper_id,
+                &transaction_id,
+                onramper_scheme,
+                &order.base,
+            )
+            .await?
         }
     }
 

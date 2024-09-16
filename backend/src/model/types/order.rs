@@ -141,6 +141,7 @@ impl Order {
             payment_done: false,
             payment_id: None,
             locked_at: time(),
+            uncommited: false,
         })
     }
 }
@@ -155,12 +156,17 @@ pub struct LockedOrder {
     pub consent_url: Option<String>,
     pub payment_done: bool,
     pub payment_id: Option<String>,
+    pub uncommited: bool,
     pub locked_at: u64,
 }
 
 impl LockedOrder {
     pub fn complete(self) -> CompletedOrder {
         self.into()
+    }
+
+    pub fn uncommit(&mut self) {
+        self.uncommited = true;
     }
 }
 

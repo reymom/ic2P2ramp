@@ -32,7 +32,7 @@ impl Crypto {
     }
 }
 
-pub fn get_fee(ledger_principal: &Principal) -> Result<NumTokens> {
+pub fn get_icp_fee(ledger_principal: &Principal) -> Result<NumTokens> {
     read_state(|state| {
         state
             .icp_fees
