@@ -11,8 +11,8 @@ import { validatePassword } from '../model/helper';
 import { rampErrorToString } from '../model/error';
 
 // Icons
-import icpLogo from "../assets/icp-logo.svg";
-import ethereumLogo from "../assets/ethereum-logo.png";
+import icpLogo from "../assets/blockchains/icp-logo.svg";
+import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
@@ -25,13 +25,13 @@ const ConnectAddress: React.FC = () => {
     const [loadingIcp, setLoadingIcp] = useState(false);
     const [emailMessage, setEmailMessage] = useState('');
     const [evmMessage, setEvmMessage] = useState('');
+    const [iIMessage, setIIMessage] = useState('');
 
     const { isConnected, address } = useAccount();
     const {
         userType,
         setLoginMethod,
         setUser,
-        setBackendActor,
         loginInternetIdentity,
         authenticateUser
     } = useUser();
@@ -47,6 +47,7 @@ const ConnectAddress: React.FC = () => {
 
     const handleEvmLogin = async () => {
         if (!window.ethereum) throw new Error('No crypto wallet found.');
+
         if (!address) {
             setEvmMessage("Undefined evm address. Please connect your wallet.");
             return;
@@ -132,23 +133,20 @@ const ConnectAddress: React.FC = () => {
     };
 
     const handleInternetIdentityLogin = async () => {
+        if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
         try {
             setLoadingIcp(true);
             const [principal, agent] = await loginInternetIdentity();
-
             if (!principal) throw new Error("Principal not set after II login");
             if (!agent) throw new Error("ICP Agent not set after II login");
-            if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
-
             const backendActor = createActor(process.env.CANISTER_ID_BACKEND, { agent });
-            setBackendActor(backendActor);
 
             const loginAddress: LoginAddress = {
                 ICP: { principal_id: principal.toText() }
             };
             setLoginMethod(loginAddress);
 
-            const result = await authenticateUser(loginAddress, undefined);
+            const result = await authenticateUser(loginAddress, undefined, backendActor);
             console.log("[authenticateUser] result = ", result);
 
             if ('Ok' in result) {
@@ -158,6 +156,8 @@ const ConnectAddress: React.FC = () => {
                 } else {
                     navigate("/view");
                 }
+            } else if ('UnauthorizedPrincipal' in result.Err) {
+                setIIMessage('Could not authorize agent.')
             } else {
                 navigate("/register");
             }
@@ -188,6 +188,7 @@ const ConnectAddress: React.FC = () => {
                         <div className="text-sm font-medium text-gray-300">Checking ICP principal...</div>
                     </div>
                 )}
+                {iIMessage && <p className="my-2 text-sm font-medium text-red-500 break-all">{iIMessage}</p>}
 
                 <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md hover:bg-gray-500 cursor-pointer">
                     <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
@@ -232,7 +233,7 @@ const ConnectAddress: React.FC = () => {
                         required
                     />
                 </div>
-                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
+                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md text-xl">
                     <FontAwesomeIcon icon={faKey} className="text-white h-5 w-5" />
                     <input
                         type={isPasswordVisible ? 'text' : 'password'}
@@ -249,6 +250,19 @@ const ConnectAddress: React.FC = () => {
                     >
                         <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300 h-5 w-5" />
                     </button>
+                    <style>
+                        {`
+                            input:-webkit-autofill {
+                                background-color: #4b5563 !important; /* bg-gray-600 */
+                                -webkit-text-fill-color: white !important;
+                                transition: background-color 5000s ease-in-out 0s;
+                            }
+                            input:-webkit-autofill:focus {
+                                background-color: #4b5563 !important;
+                                -webkit-text-fill-color: white !important;
+                            }
+                        `}
+                    </style>
                 </div>
                 <button type="submit" className="w-full bg-amber-800 text-white py-3 rounded-md hover:bg-amber-900">
                     Log in with Email
