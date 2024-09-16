@@ -7,14 +7,17 @@ use num_traits::cast::ToPrimitive;
 use crate::{
     evm::{transaction, vault::Ic2P2ramp},
     icp::vault::Ic2P2ramp as ICPRamp,
-    model::types::{
-        evm::gas::{self, MethodGasUsage},
-        order::{Order, OrderState},
-        PaymentProvider, PaymentProviderType,
-    },
     model::{
         errors::{RampError, Result},
         state::{self, storage},
+        types::{
+            evm::{
+                gas::{self, MethodGasUsage},
+                logs::TransactionAction,
+            },
+            order::{Order, OrderState},
+            PaymentProvider, PaymentProviderType,
+        },
     },
     outcalls::revolut,
 };
@@ -40,6 +43,8 @@ pub async fn handle_evm_payment_completion(
         chain_id,
         60,
         Duration::from_secs(4),
+        order_id,
+        TransactionAction::Release,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);

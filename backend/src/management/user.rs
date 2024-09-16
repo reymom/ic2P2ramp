@@ -126,9 +126,3 @@ pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
 pub fn update_offramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
     storage::mutate_user(user_id, |user| user.update_fiat_amount(fiat_amount))
 }
-
-pub fn decrease_user_score(user_id: u64) -> Result<()> {
-    storage::mutate_user(user_id, |user| {
-        user.decrease_score();
-    })
-}
