@@ -112,8 +112,49 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         }
     };
 
+    const pollTransactionLog = async (orderId: bigint, chainId: bigint) => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session");
+
+        try {
+            const pollLog = async () => {
+                const logResult = await backend.get_transaction_log(orderId, chainId, sessionToken);
+                if ('Ok' in logResult && logResult.Ok.length > 0 && logResult.Ok[0]) {
+                    const transactionLog = logResult.Ok[0];
+                    if ('Confirmed' in transactionLog.status) {
+                        const receipt = transactionLog.status.Confirmed;
+                        const successMessage = 'Commit' in transactionLog.action ?
+                            `Locked Order #${orderId}, refetching data...` : 'Release' in transactionLog.action ?
+                                `Verified Order #${orderId}, funds are released. Refetching data...` : 'Cancel' in transactionLog.action ?
+                                    `Cancelled Order #${orderId}, refetching data...` : "Transaction is successful!"
+                        setMessage(successMessage);
+                        setTxHash(receipt.transactionHash);
+                        setTimeout(() => {
+                            setIsLoading(false);
+                            refetchOrders();
+                            refetchUser();
+                        }, 3500);
+                        return;
+                    } else if ('Failed' in transactionLog.status) {
+                        setMessage(`Transaction failed: ${transactionLog.status.Failed}`);
+                        setIsLoading(false);
+                        setTxHash(undefined);
+                        return;
+                    }
+                }
+                // If still pending, poll again after a short delay
+                setTimeout(pollLog, 4000);
+            };
+            // Start polling for transaction status
+            pollLog();
+        } catch (error) {
+            console.error("Error polling transaction logs: ", error);
+            setMessage("Failed to retrieve transaction status");
+            setIsLoading(false);
+        }
+    };
+
     const commitToOrder = async (provider: PaymentProvider) => {
-        if (!sessionToken) throw new Error("Please authenticate to get a token session")
+        if (!sessionToken) throw new Error("Please authenticate to get a token session");
         if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
@@ -133,7 +174,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         const onramperAddress = user.addresses.find(addr => Object.keys(orderBlockchain)[0] in addr.address_type);
         if (!onramperAddress) throw new Error("No address matches for user");
-        console.log("onramperAddress = ", onramperAddress);
 
         try {
             const result = await backend.lock_order(orderId, sessionToken, user.id, provider, onramperAddress, gasEstimation);
@@ -141,43 +181,23 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 if ('EVM' in orderBlockchain) {
                     setTxHash(result.Ok);
 
-                    const provider = new ethers.BrowserProvider(window.ethereum);
-                    provider.once(result.Ok, (transactionReceipt) => {
-                        console.log("provider.once transactionReceipt = ", transactionReceipt)
-                        if (transactionReceipt.status === 1) {
-                            setMessage("Order Locked!");
-                            setTxHash(undefined);
-                            setTimeout(() => {
-                                refetchOrders();
-                                refetchUser();
-                            }, 4500);
-                        } else {
-                            const errorMessage = "Transaction failed!";
-                            setMessage(errorMessage);
-                            setTxHash(undefined);
-                        }
-                        setIsLoading(false);
-                    });
+                    pollTransactionLog(orderId, orderBlockchain.EVM.chain_id);
                 } else {
-                    setMessage("Order Locked!");
-                    setLoadingMessage(defaultLoadingMessage);
+                    setLoadingMessage(`Locked Order #${orderId}, refetching data...`);
                     setTimeout(() => {
+                        setIsLoading(false);
                         refetchOrders();
                         refetchUser();
                     }, 2500);
-                    setIsLoading(false);
                 }
             } else {
-                const errorMessage = rampErrorToString(result.Err);
-                setMessage(errorMessage);
+                setMessage(rampErrorToString(result.Err));
                 setIsLoading(false);
             }
         } catch (err) {
             setMessage(`Error commiting to order ${orderId}: ${err}`);
             setIsLoading(false);
             console.error(err);
-        } finally {
-            console.log("finally");
         }
     };
 
@@ -260,29 +280,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 if ('EVM' in orderBlockchain!) {
                     setTxHash(response.Ok);
 
-                    const provider = new ethers.BrowserProvider(window.ethereum);
-                    provider.once(response.Ok, (transactionReceipt) => {
-                        console.log("[paypal] transactionReceipt = ", transactionReceipt)
-                        if (transactionReceipt.status === 1) {
-                            setMessage("Order Completed!");
-                            setIsLoading(false);
-                            setTxHash(undefined);
-                            setTimeout(() => {
-                                refetchOrders();
-                                refetchUser();
-                            }, 4500);
-                        } else {
-                            setMessage("Transaction failed!");
-                            setTxHash(undefined);
-                        }
-                    });
+                    pollTransactionLog(orderId, orderBlockchain.EVM.chain_id);
                 } else {
-                    setMessage("Order Locked!");
-                    setIsLoading(false);
+                    setMessage(`Verified Order #${orderId}, funds are released.Refetching data...`);
                     setTimeout(() => {
+                        setIsLoading(false);
                         refetchOrders();
                         refetchUser();
-                    }, 2000);
+                    }, 2500);
                 }
             } else {
                 setIsLoading(false);
@@ -293,8 +298,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             setIsLoading(false);
             setMessage(`Error verifying payment for order ${orderId.toString()}.`);
             console.error(err);
-        } finally {
-            console.log("finally")
         }
     };
 
@@ -660,9 +663,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             )}
             {isLoading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
-                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-300">{loadingMessage}&nbsp;
-                        {txHash && <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank">{truncate(txHash, 8, 8)}</a>}
+                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
+                    <div className="text-sm font-medium text-gray-300 flex items-center">
+                        {loadingMessage}&nbsp;
+                        {txHash &&
+                            <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-blue-400 hover:underline">
+                                {truncate(txHash, 8, 8)}
+                            </a>
+                        }
                     </div>
                 </div>
             ) : (
