@@ -11,7 +11,7 @@ use crate::{
     errors::{RampError, Result},
     evm::signer,
     management::random,
-    model::state,
+    model::memory,
 };
 
 const MAX_USER_SIZE: u32 = 1000;
@@ -51,7 +51,7 @@ impl User {
         };
 
         Ok(Self {
-            id: state::generate_user_id(),
+            id: memory::heap::generate_user_id(),
             user_type,
             payment_providers: HashSet::new(),
             fiat_amount: 0,

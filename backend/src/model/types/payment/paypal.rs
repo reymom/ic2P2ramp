@@ -1,4 +1,4 @@
-use crate::state::{mutate_state, read_state};
+use crate::model::memory::heap::{mutate_state, read_state};
 
 #[derive(Clone, Debug)]
 pub struct PayPalState {

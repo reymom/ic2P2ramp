@@ -7,7 +7,7 @@ use crate::{
     model::types::evm::logs::{EvmTransactionLog, TransactionAction},
 };
 
-use super::{EVM_TRANSACTION_LOGS, TRANSACTION_LOG_TIMERS};
+use super::heap::{EVM_TRANSACTION_LOGS, TRANSACTION_LOG_TIMERS};
 
 pub fn add_transaction_log(order_id: u64, action: TransactionAction) {
     EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {

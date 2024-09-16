@@ -5,7 +5,7 @@ use std::{borrow::Cow, collections::HashMap, fmt};
 
 use crate::{
     errors::{RampError, Result},
-    state,
+    model::memory,
 };
 
 use super::{
@@ -91,7 +91,7 @@ impl Order {
             }
         }
 
-        let order_id = state::generate_order_id();
+        let order_id = memory::heap::generate_order_id();
         let order = Order {
             id: order_id.clone(),
             offramper_user_id,

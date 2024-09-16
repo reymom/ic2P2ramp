@@ -5,7 +5,7 @@ use ethers_core::types::U256;
 use crate::{
     errors::{RampError, Result},
     evm::rpc::RpcServices,
-    state::read_state,
+    model::memory::heap::{mutate_state, read_state},
 };
 
 use super::{gas::ChainGasTracking, token::Token};
@@ -17,6 +17,14 @@ pub struct ChainState {
     pub nonce: U256,
     pub approved_tokens: HashMap<String, Token>,
     pub gas_tracking: ChainGasTracking,
+}
+
+pub fn increment_nonce(chain_id: u64) {
+    mutate_state(|state| {
+        if let Some(chain_state) = state.chains.get_mut(&chain_id) {
+            chain_state.nonce += U256::from(1);
+        }
+    });
 }
 
 pub fn get_rpc_providers(chain_id: u64) -> RpcServices {

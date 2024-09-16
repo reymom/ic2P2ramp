@@ -15,9 +15,11 @@ use super::{
 
 use crate::{
     errors::{RampError, Result},
-    model::{helpers, state::heap::logs, types::evm::logs::TransactionAction},
-    state::increment_nonce,
-    types::evm::chains::get_rpc_providers,
+    model::{helpers, memory::heap::logs},
+    types::evm::{
+        chains::{get_rpc_providers, increment_nonce},
+        logs::TransactionAction,
+    },
 };
 
 #[derive(Debug, Clone, CandidType)]

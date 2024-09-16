@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::model::errors::{RampError, Result};
-use crate::model::state::{mutate_state, read_state};
+use crate::model::memory::heap::{mutate_state, read_state};
 use candid::{Nat, Principal};
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::{BlockIndex, NumTokens, TransferArg, TransferError};

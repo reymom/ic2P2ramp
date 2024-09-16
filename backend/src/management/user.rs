@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use super::random;
 use crate::{
     errors::{RampError, Result},
+    model::memory::stable::users,
     model::types::session::Session,
-    state::storage,
     types::{
         user::{User, UserType},
         LoginAddress, PaymentProvider, TransactionAddress,
@@ -47,7 +47,7 @@ pub async fn register_user(
     let mut user = User::new(user_type, login_address, hashed_password?)?;
     user.payment_providers = payment_providers;
 
-    storage::insert_user(&user);
+    users::insert_user(&user);
     Ok(user)
 }
 
@@ -65,7 +65,7 @@ pub async fn reset_password_user(
         ));
     };
 
-    storage::reset_password_user(&login_address, hashed_password)?;
+    users::reset_password_user(&login_address, hashed_password)?;
     Ok(())
 }
 
@@ -76,7 +76,7 @@ pub fn add_transaction_address(
 ) -> Result<()> {
     address.validate()?;
 
-    storage::mutate_user(user_id, |user| {
+    users::mutate_user(user_id, |user| {
         user.validate_session(&token)?;
 
         if let Some(existing_address) = user.addresses.take(&address) {
@@ -95,7 +95,7 @@ pub fn add_payment_provider(
 ) -> Result<()> {
     payment_provider.validate()?;
 
-    storage::mutate_user(user_id, |user| {
+    users::mutate_user(user_id, |user| {
         user.validate_session(&token)?;
 
         user.payment_providers.insert(payment_provider);
@@ -104,25 +104,25 @@ pub fn add_payment_provider(
 }
 
 pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> {
-    storage::mutate_user(user_id, |user| {
+    users::mutate_user(user_id, |user| {
         user.evm_auth_message = Some(auth_message.to_string());
     })
 }
 
 pub fn set_session(user_id: u64, session: &Session) -> Result<User> {
-    storage::mutate_user(user_id, |user| {
+    users::mutate_user(user_id, |user| {
         user.session = Some(session.clone());
         Ok(user.to_owned())
     })?
 }
 
 pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
-    storage::mutate_user(user_id, |user| {
+    users::mutate_user(user_id, |user| {
         user.update_fiat_amount(fiat_amount);
         user.increase_score();
     })
 }
 
 pub fn update_offramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
-    storage::mutate_user(user_id, |user| user.update_fiat_amount(fiat_amount))
+    users::mutate_user(user_id, |user| user.update_fiat_amount(fiat_amount))
 }

@@ -4,7 +4,7 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{errors::RampError, model::state::read_state, Result};
+use crate::{errors::RampError, model::memory::heap::read_state, Result};
 
 use super::jws;
 

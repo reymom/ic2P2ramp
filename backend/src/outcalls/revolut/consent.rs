@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::{RampError, Result},
-    state::read_state,
+    model::memory::heap::read_state,
 };
 
 use ic_cdk::api::management_canister::http_request::{

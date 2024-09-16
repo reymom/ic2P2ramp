@@ -8,7 +8,7 @@ use ic_cdk::api::time;
 
 use crate::{
     errors::{RampError, Result},
-    state::read_state,
+    model::memory::heap::read_state,
     types::payment::paypal,
 };
 

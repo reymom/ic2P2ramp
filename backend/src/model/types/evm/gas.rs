@@ -2,7 +2,7 @@ use candid::{CandidType, Deserialize};
 
 use crate::model::{
     errors::{RampError, Result},
-    state::{mutate_state, read_state},
+    memory::heap::{mutate_state, read_state},
 };
 
 #[derive(Deserialize, CandidType, Debug)]

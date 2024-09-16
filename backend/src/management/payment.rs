@@ -9,12 +9,13 @@ use crate::{
     icp::vault::Ic2P2ramp as ICPRamp,
     model::{
         errors::{RampError, Result},
-        state::{self, storage},
+        memory::stable::orders,
         types::{
             evm::{
                 gas::{self, MethodGasUsage},
                 logs::TransactionAction,
             },
+            get_fee,
             order::{Order, OrderState},
             PaymentProvider, PaymentProviderType,
         },
@@ -27,7 +28,7 @@ pub async fn handle_evm_payment_completion(
     chain_id: u64,
     gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -83,7 +84,7 @@ pub async fn handle_icp_payment_completion(
     order_id: u64,
     ledger_principal: &Principal,
 ) -> Result<String> {
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -92,7 +93,7 @@ pub async fn handle_icp_payment_completion(
     let onramper_principal = Principal::from_text(&order.onramper_address.address).unwrap();
 
     let amount = NumTokens::from(order.base.crypto.amount);
-    let fee = state::get_fee(ledger_principal)?;
+    let fee = get_fee(ledger_principal)?;
 
     let to_account = Account {
         owner: onramper_principal,

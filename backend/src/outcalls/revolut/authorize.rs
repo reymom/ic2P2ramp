@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{errors::Result, outcalls::revolut::jws, state::read_state};
+use crate::{errors::Result, model::memory::heap::read_state, outcalls::revolut::jws};
 
 #[derive(Serialize, Debug)]
 struct JwtClaims {

@@ -10,7 +10,7 @@ use crate::{
     model::{
         errors::{RampError, Result},
         helpers,
-        state::{read_state, storage},
+        memory::{heap::read_state, stable},
         types::{order::OrderState, PaymentProvider},
     },
     outcalls::revolut::pay,
@@ -72,13 +72,13 @@ pub async fn wait_for_revolut_access_token(
     max_attempts: u32,
     interval_seconds: u64,
 ) -> Result<String> {
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = storage::get_user(&order.onramper_user_id)?;
+    let user = stable::users::get_user(&order.onramper_user_id)?;
     user.validate_session(&session_token)?;
 
     let (

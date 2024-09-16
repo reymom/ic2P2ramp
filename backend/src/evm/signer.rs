@@ -11,7 +11,7 @@ use std::str::FromStr;
 
 use super::fees::FeeEstimates;
 use crate::model::errors::{RampError, Result};
-use crate::state::read_state;
+use crate::model::memory::heap::read_state;
 
 pub struct SignRequest {
     pub chain_id: Option<U64>,

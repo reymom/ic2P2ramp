@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use crate::errors::Result;
 use crate::management::random;
 use crate::model::errors::RampError;
-use crate::model::state::read_state;
+use crate::model::memory::heap::read_state;
 
 #[derive(Serialize)]
 pub struct JWSHeader {

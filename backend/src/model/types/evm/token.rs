@@ -4,7 +4,7 @@ use candid::CandidType;
 
 use crate::model::{
     errors::{RampError, Result},
-    state::{mutate_state, read_state},
+    memory::heap::{mutate_state, read_state},
 };
 
 #[derive(CandidType, Clone, Debug)]

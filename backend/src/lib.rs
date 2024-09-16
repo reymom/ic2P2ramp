@@ -7,8 +7,6 @@ mod outcalls;
 use candid::Principal;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
-use model::state::heap::logs;
-use model::types::evm::logs::{EvmTransactionLog, TransactionAction};
 use num_traits::cast::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -24,16 +22,18 @@ use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
 use model::errors::{self, RampError, Result};
-use model::state::{
-    self, initialize_state, mutate_state, read_state, storage, upgrade, InitArg, State,
+use model::memory::{
+    heap::{self, initialize_state, mutate_state, read_state, upgrade, InitArg, State},
+    stable,
 };
 use model::types::evm::{
     chains,
     gas::{self, MethodGasUsage},
+    logs::{EvmTransactionLog, TransactionAction},
     token::{self, Token, TokenManager},
 };
 use model::types::{
-    self,
+    self, get_fee, is_icp_token_supported,
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
@@ -185,7 +185,7 @@ async fn register_evm_tokens(
 
 #[ic_cdk::query]
 fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
-    state::get_fee(&ledger_principal)
+    get_fee(&ledger_principal)
 }
 
 #[ic_cdk::query]
@@ -201,7 +201,7 @@ async fn transfer_canister_funds(
 ) -> Result<()> {
     guards::only_controller()?;
 
-    let fee = state::get_fee(&ledger_canister)?;
+    let fee = get_fee(&ledger_canister)?;
     let to_account = Account {
         owner: to_principal,
         subaccount: None,
@@ -288,8 +288,8 @@ async fn authenticate_user(
     auth_data: Option<AuthenticationData>,
 ) -> Result<User> {
     login_address.validate()?;
-    let user_id = storage::find_user_by_login_address(&login_address)?;
-    let user = storage::get_user(&user_id)?;
+    let user_id = stable::users::find_user_by_login_address(&login_address)?;
+    let user = stable::users::get_user(&user_id)?;
     user.verify_user_auth(auth_data)?;
 
     user_management::set_session(user_id, &Session::new().await?)
@@ -314,7 +314,7 @@ async fn generate_evm_auth_message(login_address: LoginAddress) -> Result<String
         ))
     }?;
 
-    let user_id = storage::find_user_by_login_address(&login_address)?;
+    let user_id = stable::users::find_user_by_login_address(&login_address)?;
     let auth_message = format!(
         "Please sign this message to authenticate: {}\nNonce: {}",
         address,
@@ -328,7 +328,7 @@ async fn generate_evm_auth_message(login_address: LoginAddress) -> Result<String
 
 #[ic_cdk::query]
 fn refetch_user(user_id: u64, token: String) -> Result<User> {
-    let user = storage::get_user(&user_id)?;
+    let user = stable::users::get_user(&user_id)?;
     user.validate_session(&token)?;
     Ok(user)
 }
@@ -336,13 +336,13 @@ fn refetch_user(user_id: u64, token: String) -> Result<User> {
 #[ic_cdk::query]
 fn get_user(user_id: u64) -> Result<User> {
     guards::only_controller()?;
-    storage::get_user(&user_id)
+    stable::users::get_user(&user_id)
 }
 
 #[ic_cdk::update]
 fn remove_user(user_id: u64) -> Result<User> {
     guards::only_controller()?;
-    storage::remove_user(&user_id)
+    stable::users::remove_user(&user_id)
 }
 
 #[ic_cdk::update]
@@ -414,9 +414,9 @@ fn get_transaction_log(
     user_id: u64,
     session_token: String,
 ) -> Result<Option<EvmTransactionLog>> {
-    let user = storage::get_user(&user_id)?;
+    let user = stable::users::get_user(&user_id)?;
     user.validate_session(&session_token)?;
-    Ok(logs::get_transaction_log(order_id))
+    Ok(heap::logs::get_transaction_log(order_id))
 }
 
 #[ic_cdk::update]
@@ -433,7 +433,7 @@ async fn create_order(
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
-    let user = storage::get_user(&offramper_user_id)?;
+    let user = stable::users::get_user(&offramper_user_id)?;
     user.validate_session(&session_token)?;
     user.is_banned()?;
     user.is_offramper()?;
@@ -451,7 +451,7 @@ async fn create_order(
                 token::evm_token_is_approved(chain_id, &token)?;
             };
         }
-        Blockchain::ICP { ledger_principal } => state::is_icp_token_supported(&ledger_principal)?,
+        Blockchain::ICP { ledger_principal } => is_icp_token_supported(&ledger_principal)?,
         _ => return Err(RampError::UnsupportedBlockchain),
     }
 
@@ -479,12 +479,12 @@ async fn lock_order(
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let user = storage::get_user(&onramper_user_id)?;
+    let user = stable::users::get_user(&onramper_user_id)?;
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
     user.is_banned()?;
 
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -595,13 +595,13 @@ async fn unlock_order(
     session_token: String,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = storage::get_user(&order.onramper_user_id)?;
+    let user = stable::users::get_user(&order.onramper_user_id)?;
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
 
@@ -610,13 +610,13 @@ async fn unlock_order(
 
 #[ic_cdk::update]
 async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(order) => order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = storage::get_user(&order.offramper_user_id)?;
+    let user = stable::users::get_user(&order.offramper_user_id)?;
     user.is_offramper()?;
     user.validate_session(&session_token)?;
 
@@ -626,7 +626,7 @@ async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
                 Principal::from_text(&order.offramper_address.address).unwrap();
 
             let amount = NumTokens::from(order.crypto.amount);
-            let fee = state::get_fee(ledger_principal)?;
+            let fee = get_fee(ledger_principal)?;
 
             let to_account = Account {
                 owner: offramper_principal,
@@ -672,7 +672,7 @@ async fn verify_transaction(
         transaction_id
     );
 
-    let order_state = storage::get_order(&order_id)?;
+    let order_state = stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -682,7 +682,7 @@ async fn verify_transaction(
         .offramper_providers
         .get(&order.onramper_provider.provider_type())
         .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type()))?;
-    let user = storage::get_user(&order.onramper_user_id)?;
+    let user = stable::users::get_user(&order.onramper_user_id)?;
     user.validate_session(&session_token)?;
 
     match &order.clone().onramper_provider {

@@ -1,75 +1,26 @@
-use candid::Principal;
-use ethers_core::types::U256;
-use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use ic_cdk_timers::{clear_timer, set_timer, TimerId};
-use icrc_ledger_types::icrc1::transfer::NumTokens;
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
-use crate::types::{
-    evm::chains::ChainState,
-    evm::logs::EvmTransactionLog,
-    payment::{paypal::PayPalState, revolut::RevolutState},
-};
+use super::State;
 use crate::{
-    errors::{RampError, Result},
     management,
+    model::{
+        errors::{RampError, Result},
+        types::evm::logs::EvmTransactionLog,
+    },
 };
 
 const LOCK_DURATION_TIME_SECONDS: u64 = 120; // 1 hour
 
 thread_local! {
-    static STATE: RefCell<Option<State>> = RefCell::default();
+    pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
 
     static USER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
-
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
-
     static LOCKED_ORDER_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::default();
 
-    static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
-}
-
-#[derive(Clone, Debug)]
-pub struct State {
-    pub chains: HashMap<u64, ChainState>,
-    pub ecdsa_pub_key: Option<Vec<u8>>,
-    pub ecdsa_key_id: EcdsaKeyId,
-    pub evm_address: Option<String>,
-    pub paypal: PayPalState,
-    pub revolut: RevolutState,
-    pub proxy_url: String,
-    pub icp_fees: HashMap<Principal, NumTokens>,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum InvalidStateError {
-    InvalidEthereumContractAddress(String),
-}
-
-/// Mutates (part of) the current state using `f`.
-///
-/// Panics if there is no state.
-pub fn mutate_state<F, R>(f: F) -> R
-where
-    F: FnOnce(&mut State) -> R,
-{
-    STATE.with_borrow_mut(|s| f(s.as_mut().expect("BUG: state is not initialized")))
-}
-
-pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {
-    STATE.with_borrow(|s| f(s.as_ref().expect("BUG: state is not initialized")))
-}
-
-pub fn initialize_state(state: State) {
-    STATE.set(Some(state));
-}
-
-pub fn increment_nonce(chain_id: u64) {
-    mutate_state(|state| {
-        if let Some(chain_state) = state.chains.get_mut(&chain_id) {
-            chain_state.nonce += U256::from(1);
-        }
-    });
+    pub(crate) static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
+    pub(crate) static TRANSACTION_LOG_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::new(HashMap::new());
 }
 
 pub fn generate_order_id() -> u64 {
@@ -113,27 +64,9 @@ pub fn clear_order_timer(order_id: u64) -> Result<()> {
     })
 }
 
-pub fn get_fee(ledger_principal: &Principal) -> Result<NumTokens> {
-    read_state(|state| {
-        state
-            .icp_fees
-            .get(ledger_principal)
-            .cloned()
-            .ok_or_else(|| RampError::LedgerPrincipalNotSupported(ledger_principal.to_string()))
-    })
-}
-
-pub fn is_icp_token_supported(ledger_principal: &Principal) -> Result<()> {
-    read_state(|state| {
-        if state.icp_fees.contains_key(ledger_principal) {
-            Ok(())
-        } else {
-            Err(RampError::LedgerPrincipalNotSupported(
-                ledger_principal.to_string(),
-            ))
-        }
-    })
-}
+// -----------
+// For Upgrade
+// -----------
 
 pub(crate) fn get_user_id_counter() -> u64 {
     USER_ID_COUNTER.with(|counter| *counter.borrow())

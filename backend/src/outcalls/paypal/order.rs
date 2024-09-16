@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::{RampError, Result},
-    state::read_state,
+    model::memory::heap::read_state,
 };
 
 #[derive(Serialize, Deserialize, Debug)]

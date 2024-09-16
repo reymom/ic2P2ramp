@@ -7,7 +7,7 @@ use serde::Deserialize;
 use super::auth::get_revolut_access_token;
 use crate::{
     errors::{RampError, Result},
-    state::read_state,
+    model::memory::heap::read_state,
 };
 
 #[derive(Deserialize, Debug)]
