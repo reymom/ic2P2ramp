@@ -1,3 +1,12 @@
+import ethereumLogo from '../assets/blockchains/ethereum-logo.png';
+import polygonMaticLogo from '../assets/blockchains/polygon-matic.svg';
+import mantleLogo from '../assets/blockchains/mantle.png';
+import usdcLogo from '../assets/blockchains/usdc-logo.png';
+import usdtLogo from '../assets/blockchains/tether-usdt-seeklogo.svg';
+
+import icpLogo from '../assets/blockchains/icp-logo.svg';
+import ckBTCLogo from '../assets/blockchains/ckBTC-logo.svg';
+
 export interface TokenMapping {
   name: string;
   address: string;
@@ -38,7 +47,11 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
       ? process.env.CONTRACT_BASE_SEPOLIA
       : '',
     native: { name: 'ETH', address: 'native', decimals: 18 },
-    usdt: { name: 'USDT', address: '', decimals: 18 },
+    usdt: {
+      name: 'USDT',
+      address: '',
+      decimals: 18,
+    },
     usdc: {
       name: 'USDC',
       address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
@@ -94,4 +107,14 @@ export const tokenCanisters = {
     process.env.FRONTEND_ICP_ENV === 'production'
       ? 'mxzaz-hqaaa-aaaar-qaada-cai'
       : 'mc6ru-gyaaa-aaaar-qaaaq-cai',
+};
+
+export const tokenLogos: { [token_name: string]: string } = {
+  ETH: ethereumLogo,
+  MNT: mantleLogo,
+  MATIC: polygonMaticLogo,
+  USDT: usdtLogo,
+  USDC: usdcLogo,
+  ICP: icpLogo,
+  ckBTC: ckBTCLogo,
 };
