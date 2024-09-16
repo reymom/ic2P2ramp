@@ -18,6 +18,8 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
     const paypalRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (!paypalRef.current) return;
+
         if (window.paypal) {
             renderPayPalButtons();
         } else {
@@ -35,40 +37,44 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
                 paypalRef.current.innerHTML = "";
             }
         };
-    }, [amount, currency, onSuccess]);
+    }, [orderId, amount, currency, paypalId]);
 
     const renderPayPalButtons = () => {
-        if (!paypalRef.current) {
-            console.error('PayPal button container not found');
-            return;
-        }
-
-        window.paypal.Buttons({
-            fundingSource: window.paypal.FUNDING.PAYPAL,
-            createOrder: (data: any, actions: any) => {
-                return actions.order.create({
-                    purchase_units: [{
-                        amount: {
-                            value: amount.toString(),
-                            currency_code: currency
-                        },
-                        payee: {
-                            email_address: paypalId
-                        },
-                    }]
-                });
-            },
-            onApprove: async (data: any, actions: any) => {
-                const details = await actions.order.capture();
-                console.log("details = ", details);
-
-                const orderId = details.id;
-                onSuccess(orderId);
-            },
-            onError: (err: any) => {
-                console.error('PayPal Checkout onError', err);
+        try {
+            if (!paypalRef.current) {
+                console.error('PayPal button container not found');
+                return;
             }
-        }).render(`#paypal-button-container-${orderId}`);
+
+            window.paypal.Buttons({
+                fundingSource: window.paypal.FUNDING.PAYPAL,
+                createOrder: (data: any, actions: any) => {
+                    return actions.order.create({
+                        purchase_units: [{
+                            amount: {
+                                value: amount.toString(),
+                                currency_code: currency
+                            },
+                            payee: {
+                                email_address: paypalId
+                            },
+                        }]
+                    });
+                },
+                onApprove: async (data: any, actions: any) => {
+                    const details = await actions.order.capture();
+                    console.log("details = ", details);
+
+                    const orderId = details.id;
+                    onSuccess(orderId);
+                },
+                onError: (err: any) => {
+                    console.error('PayPal Checkout onError', err);
+                }
+            }).render(paypalRef.current);
+        } catch (err) {
+            console.error("PayPal button render failed:", err);
+        }
     };
 
 
