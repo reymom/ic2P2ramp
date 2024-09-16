@@ -232,12 +232,10 @@ const CreateOrder: React.FC = () => {
                 }
             } else if (blockchain === 'ICP') {
                 const decimalMultiplier = selectedToken.decimals;
-                console.log("ICP token decimal multiplier (should be 8)= ", decimalMultiplier);
                 cryptoAmountUnits = BigInt(cryptoAmount * 10 ** decimalMultiplier);
                 try {
                     const ledgerCanister = Principal.fromText(selectedToken.address);
                     const fees = await fetchIcpTransactionFee(ledgerCanister);
-                    console.log("fees = ", fees);
 
                     const result = await transferICPTokensToCanister(icpAgent!, ledgerCanister, cryptoAmountUnits, fees);
                     console.log('Transaction result:', result);
