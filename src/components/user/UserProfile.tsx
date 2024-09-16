@@ -2,21 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { AuthClient } from '@dfinity/auth-client';
-import { HttpAgent } from '@dfinity/agent';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, TransactionAddress } from '../../declarations/backend/backend.did';
 import { userTypeToString } from '../../model/utils';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';
 import { truncate } from '../../model/helper';
+import { isSessionExpired, saveUserSession } from '../../model/session';
 import { rampErrorToString } from '../../model/error';
-import { icpHost, iiUrl } from '../../model/icp';
 import { useUser } from './UserContext';
 
-import icpLogo from "../../assets/icp-logo.svg";
-import ethereumLogo from "../../assets/ethereum-logo.png";
-import { isSessionExpired, saveUserSession } from '../../model/session';
+import icpLogo from "../../assets/blockchains/icp-logo.svg";
+import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -167,7 +164,12 @@ const UserProfile: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-200">Ramped Amount:</span>
-                    <span className="font-semibold">{(Number(user.fiat_amount) / 100).toFixed(2)} $</span>
+                    <span className="font-medium flex items-center space-x-2">
+                        <span className="font-semibold">{(Number(user.fiat_amount) / 100).toFixed(2)}</span>
+                        <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
+                            $
+                        </span>
+                    </span>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="font-medium text-gray-200">Score:</span>

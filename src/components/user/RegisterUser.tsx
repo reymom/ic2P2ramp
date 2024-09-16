@@ -80,12 +80,21 @@ const RegisterUser: React.FC = () => {
             return;
         }
 
+        let tmpActor = backend;
+        if ('ICP' in loginMethod) {
+            if (!backendActor) {
+                setMessage("Internet Identity not loaded with backend actor")
+                return;
+            }
+            tmpActor = backendActor;
+        }
+
         setIsLoading(true);
         try {
-            let result = await backendActor.register_user(stringToUserType(userType), providers, loginMethod, []);
+            let result = await tmpActor.register_user(stringToUserType(userType), providers, loginMethod, []);
             if ('Err' in result) {
                 setGlobalUser(null);
-                setMessage(`Error registering user: ${rampErrorToString(result.Err)}`)
+                setMessage(`Could not register user: ${rampErrorToString(result.Err)}`)
             }
             if ('Ok' in result) {
                 if ('EVM' in loginMethod) {
