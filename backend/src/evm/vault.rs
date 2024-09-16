@@ -193,6 +193,14 @@ impl Ic2P2ramp {
         );
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
+        ic_cdk::println!(
+            "[release_funds] Releasing base currency with the following details: offramper_address = {}, onramper_address = {}, amount = {}, fees = {}, vault_manager_address = {}",
+            order.base.offramper_address.address,
+            order.onramper_address.address,
+            order.base.crypto.amount,
+            order.base.crypto.fee,
+            vault_manager_address
+        );
         let request: SignRequest;
         if let Some(token_address) = order.base.crypto.token {
             request = Self::sign_request_release_token(
@@ -202,7 +210,7 @@ impl Ic2P2ramp {
                 order.base.offramper_address.address,
                 order.onramper_address.address,
                 token_address,
-                order.base.crypto.amount - order.base.crypto.fee,
+                order.base.crypto.amount,
                 order.base.crypto.fee,
                 vault_manager_address,
             )
@@ -212,7 +220,7 @@ impl Ic2P2ramp {
                 gas,
                 fee_estimates,
                 chain_id,
-                order.base.crypto.amount - order.base.crypto.fee,
+                order.base.crypto.amount,
                 order.base.crypto.fee,
                 order.base.offramper_address.address,
                 order.onramper_address.address,
@@ -232,7 +240,7 @@ impl Ic2P2ramp {
         onramper_address: String,
         token_address: String,
         amount: u128,
-        fee: u128,
+        fees: u128,
         vault_manager_address: String,
     ) -> Result<SignRequest> {
         let abi = r#"
@@ -243,7 +251,7 @@ impl Ic2P2ramp {
                         {"internalType": "address", "name": "_onramper", "type": "address"},
                         {"internalType": "address", "name": "_token", "type": "address"},
                         {"internalType": "uint256", "name": "_amount", "type": "uint256"},
-                        {"internalType": "uint256", "name": "_fee", "type": "uint256"}
+                        {"internalType": "uint256", "name": "_fees", "type": "uint256"}
                     ],
                     "name": "releaseFunds",
                     "outputs": [],
@@ -266,7 +274,7 @@ impl Ic2P2ramp {
                 ethers_core::abi::Token::Address(helpers::parse_address(onramper_address)?),
                 ethers_core::abi::Token::Address(helpers::parse_address(token_address)?),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
-                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fee)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fees)),
             ],
         )
         .await
@@ -277,7 +285,7 @@ impl Ic2P2ramp {
         fee_estimates: FeeEstimates,
         chain_id: u64,
         amount: u128,
-        fee: u128,
+        fees: u128,
         offramper_address: String,
         onramper_address: String,
         vault_manager_address: String,
@@ -289,7 +297,7 @@ impl Ic2P2ramp {
                         {"internalType": "address", "name": "_offramper", "type": "address"},
                         {"internalType": "address", "name": "_onramper", "type": "address"},
                         {"internalType": "uint256", "name": "_amount", "type": "uint256"},
-                        {"internalType": "uint256", "name": "_fee", "type": "uint256"}
+                        {"internalType": "uint256", "name": "_fees", "type": "uint256"}
                     ],
                     "name": "releaseBaseCurrency",
                     "outputs": [],
@@ -311,7 +319,7 @@ impl Ic2P2ramp {
                 ethers_core::abi::Token::Address(helpers::parse_address(offramper_address)?),
                 ethers_core::abi::Token::Address(helpers::parse_address(onramper_address)?),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
-                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fee)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fees)),
             ],
         )
         .await
