@@ -120,7 +120,7 @@ const ResetPassword: React.FC = () => {
             </form>
             {isLoading && (
                 <div className="flex justify-center items-center space-x-2 mt-4">
-                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
                     <div className="text-sm font-medium text-gray-300">Loading...</div>
                 </div>
             )}

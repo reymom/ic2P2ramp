@@ -181,7 +181,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     setUser(updatedUser);
                     fetchIcpBalance();
 
-                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    saveUserSession(updatedUser);
                     console.log("User refetched and updated.");
                 } else {
                     console.error("Error refetching user:", result.Err);
