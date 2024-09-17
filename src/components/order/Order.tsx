@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import { useAccount } from 'wagmi';
 
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 
@@ -12,10 +11,11 @@ import { tokenLogos } from '../../constants/addresses';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { formatTimeLeft, truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
-import { estimateGasAndGasPrice, withdrawFromVault } from '../../model/evm';
+import { estimateGasAndGasPrice } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
+import { useNavigate } from 'react-router-dom';
 
 interface OrderProps {
     order: OrderState;
@@ -31,10 +31,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [loadingMessage, setLoadingMessage] = useState(defaultLoadingMessage);
     const [message, setMessage] = useState('');
     const [txHash, setTxHash] = useState<string>();
+    const [txHashError, setTxHashError] = useState<string>();
     const [remainingTime, setRemainingTime] = useState<number | null>(null);
+    const [isPayable, setIsPayable] = useState<boolean>(false);
+    const [loadingPayable, setLoadingPayable] = useState<boolean>(true);
 
-    const { chainId } = useAccount();
     const { user, userType, sessionToken, fetchIcpBalance, refetchUser } = useUser();
+    const navigate = useNavigate();
 
     const orderId = 'Created' in order ? order.Created.id
         : 'Locked' in order ? order.Locked.base.id
@@ -84,6 +87,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 if (!order.Locked.payment_done && timeLeftSeconds <= 0) {
                     setTimeout(() => {
                         refetchOrders();
+                        refetchUser();
                     }, 2500);
                 };
                 setRemainingTime(timeLeftSeconds > 0 ? timeLeftSeconds : null);
@@ -112,14 +116,37 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         }
     };
 
-    const pollTransactionLog = async (orderId: bigint, chainId: bigint) => {
+    const pollTransactionLog = async (orderId: bigint, userId: bigint, maxAttempts = 25) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
 
-        try {
-            const pollLog = async () => {
-                const logResult = await backend.get_transaction_log(orderId, chainId, sessionToken);
+        let attempts = 0;
+        let pollingTimer: NodeJS.Timeout | null = null;
+
+        const clearPolling = () => {
+            if (pollingTimer) {
+                clearTimeout(pollingTimer);
+            }
+        };
+
+        const pollLog = async () => {
+            console.log(`[pollTransactionLog] Polling attempt: ${attempts}, maxAttempts: ${maxAttempts}`);
+            if (attempts >= maxAttempts) {
+                clearPolling();
+                setMessage("Transaction is still pending after multiple attempts. Please check manually.");
+                setIsLoading(false);
+                return;
+            }
+
+            attempts += 1;
+
+            try {
+                const logResult = await backend.get_transaction_log(orderId, userId, sessionToken);
+                console.log("[pollTransactionLog] logResult = ", logResult);
+
                 if ('Ok' in logResult && logResult.Ok.length > 0 && logResult.Ok[0]) {
                     const transactionLog = logResult.Ok[0];
+                    console.log("[pollTransactionLog] Transaction Log:", transactionLog);
+
                     if ('Confirmed' in transactionLog.status) {
                         const receipt = transactionLog.status.Confirmed;
                         const successMessage = 'Commit' in transactionLog.action ?
@@ -127,31 +154,90 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 `Verified Order #${orderId}, funds are released. Refetching data...` : 'Cancel' in transactionLog.action ?
                                     `Cancelled Order #${orderId}, refetching data...` : "Transaction is successful!"
                         setMessage(successMessage);
+                        console.log("[pollTransactionLog] Success Message:", successMessage);
+
                         setTxHash(receipt.transactionHash);
                         setTimeout(() => {
                             setIsLoading(false);
                             refetchOrders();
                             refetchUser();
+
+                            navigate(
+                                'Commit' in transactionLog.action ? `/view?onramperId=${user!.id}` :
+                                    'Release' in transactionLog.action ? "/view?status=Completed" :
+                                        'Cancel' in transactionLog.action ? "/view?status=Cancelled" : ""
+                            );
                         }, 3500);
                         return;
                     } else if ('Failed' in transactionLog.status) {
-                        setMessage(`Transaction failed: ${transactionLog.status.Failed}`);
+                        console.log("[pollTransactionLog] Transaction Failed:", transactionLog.status.Failed);
+                        setMessage("Transaction failed: ");
+                        setTxHashError(txHash);
                         setIsLoading(false);
                         setTxHash(undefined);
+                        clearPolling();
                         return;
                     }
+                } else if ('Err' in logResult) {
+                    setMessage(`Transaction failed: ${rampErrorToString(logResult.Err)}`)
+                    setIsLoading(false);
+                    setTxHash(undefined);
+                    clearPolling();
+                    return;
                 }
+
                 // If still pending, poll again after a short delay
-                setTimeout(pollLog, 4000);
+                pollingTimer = setTimeout(pollLog, 4000);
+
+            } catch (error) {
+                console.error("Error polling transaction logs: ", error);
+                setMessage("Failed to retrieve transaction status");
+                setIsLoading(false);
+                clearPolling();
             };
-            // Start polling for transaction status
-            pollLog();
-        } catch (error) {
-            console.error("Error polling transaction logs: ", error);
-            setMessage("Failed to retrieve transaction status");
-            setIsLoading(false);
+        };
+
+        pollLog();
+        return () => clearPolling();
+    }
+
+    const checkIfOrderIsPayable = async (orderId: bigint, tokenSession: string): Promise<boolean> => {
+        if (user && order && 'Locked' in order) {
+            try {
+                const result = await backend.verify_order_is_payable(orderId, tokenSession);
+                if ('Ok' in result) {
+                    if (order.Locked.onramper_user_id === user.id) {
+                        return true
+                    }
+                    return false;
+                } else {
+                    console.error('Order is not payable:', result.Err);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error checking order payable status:', error);
+                return false;
+            }
+        } else {
+            return false
         }
     };
+
+    useEffect(() => {
+        const validateOrderPayable = async () => {
+            if (order && 'Locked' in order) {
+                const payable = await checkIfOrderIsPayable(order.Locked.base.id, sessionToken!);
+                setIsPayable(payable);
+                setLoadingPayable(false);
+            }
+        };
+
+        if (order && sessionToken) {
+            validateOrderPayable();
+        } else {
+            setLoadingPayable(false);
+        }
+    }, [order, sessionToken]);
 
     const commitToOrder = async (provider: PaymentProvider) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
@@ -159,7 +245,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         setIsLoading(true);
         setTxHash(undefined);
-        setLoadingMessage(`Commiting to order #${orderId} ...`);
+        setTxHashError(undefined);
+        setLoadingMessage(`Commiting to order #${orderId}...`);
 
         let gasEstimation: [] | [bigint] = [];
         if ('EVM' in orderBlockchain) {
@@ -180,14 +267,15 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
                     setTxHash(result.Ok);
-
-                    pollTransactionLog(orderId, orderBlockchain.EVM.chain_id);
+                    console.log(`[commitToOrder] Transaction Hash: ${result.Ok}`);
+                    pollTransactionLog(orderId, user.id);
                 } else {
                     setLoadingMessage(`Locked Order #${orderId}, refetching data...`);
                     setTimeout(() => {
                         setIsLoading(false);
                         refetchOrders();
                         refetchUser();
+                        navigate(`/view?onramperId=${user.id}`);
                     }, 2500);
                 }
             } else {
@@ -195,7 +283,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 setIsLoading(false);
             }
         } catch (err) {
-            setMessage(`Error commiting to order ${orderId}: ${err}`);
+            setMessage(`Error while commiting to order ${orderId}.`);
             setIsLoading(false);
             console.error(err);
         }
@@ -203,60 +291,55 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const removeOrder = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
-        if (!('Created' in order) || !orderBlockchain || !orderId) return;
+        if (!user || !('Offramper' in user?.user_type) || 'Created' in order || !orderBlockchain || !orderId) return;
+        if (!baseOrder || user.id !== baseOrder.offramper_user_id) return;
+
+        const scrollPosition = window.scrollY;
+
+        setIsLoading(true);
+        setTxHash(undefined);
+        setTxHashError(undefined);
+        setMessage(`Removing order ${orderId}...`);
 
         try {
-            setIsLoading(true);
-            setTxHash(undefined);
-            setMessage(`Removing order ${orderId}...`);
-
-            switch (blockchainToBlockchainType(orderBlockchain)) {
-                case 'EVM':
-                    const orderChainId = 'EVM' in order.Created.crypto.blockchain ? order.Created.crypto.blockchain.EVM.chain_id : undefined;
-                    if (!chainId || chainId !== Number(orderChainId)) throw new Error('Connect to same network than the order crypto');
-                    try {
-                        const receipt = await withdrawFromVault(chainId, order.Created);
-                        console.log('Transaction receipt: ', receipt);
-                        setMessage('Transaction successful!');
-                    } catch (e: any) {
-                        setMessage(`Could not delete order: ${e.message || e}`);
-                        return;
-                    }
-                    break;
-                case 'ICP':
-                    // funds are transfered to the offramper from the backend
-                    break;
-                case 'Solana':
-                    throw new Error("Solana orders are not implemented yet")
-                default:
-                    throw new Error('Blockchain not defined')
-            }
-
             const result = await backend.cancel_order(orderId, sessionToken);
             if ('Ok' in result) {
-                setMessage("Order Cancelled");
-                refetchOrders();
-                fetchIcpBalance();
+
+                if ('EVM' in orderBlockchain) {
+                    setTxHash(result.Ok)
+
+                    pollTransactionLog(orderId, user.id);
+                } else {
+                    setMessage(`Cancelled Order #${orderId}, refetching data...`);
+                    setTimeout(() => {
+                        setIsLoading(false);
+                        refetchOrders();
+                        fetchIcpBalance();
+
+                        window.scrollTo(0, scrollPosition);
+                    }, 2500);
+                }
             } else {
-                const errorMessage = rampErrorToString(result.Err);
-                setMessage(errorMessage);
+                setMessage(rampErrorToString(result.Err));
+                setIsLoading(false);
             }
         } catch (err) {
-            console.error(err);
-            setMessage(`Error removing order ${orderId}.`);
-        } finally {
+            setMessage(`Error while removing order ${orderId}.`);
             setIsLoading(false);
+            console.error(err);
         }
     };
 
     const handlePayPalSuccess = async (transactionId: string) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
         if (!('Locked' in order) || !orderId || !orderBlockchain) return;
+        if (!user || !('Onramper' in user.user_type)) return;
 
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
 
         setIsLoading(true);
         setTxHash(undefined);
+        setTxHashError(undefined);
         setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
 
         // estimate release gas
@@ -280,13 +363,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 if ('EVM' in orderBlockchain!) {
                     setTxHash(response.Ok);
 
-                    pollTransactionLog(orderId, orderBlockchain.EVM.chain_id);
+                    pollTransactionLog(orderId, user!.id);
                 } else {
-                    setMessage(`Verified Order #${orderId}, funds are released.Refetching data...`);
+                    setMessage(`Verified Order #${orderId}, funds are released. Refetching data...`);
                     setTimeout(() => {
                         setIsLoading(false);
                         refetchOrders();
                         refetchUser();
+                        navigate("/view?completed");
                     }, 2500);
                 }
             } else {
@@ -296,7 +380,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             }
         } catch (err) {
             setIsLoading(false);
-            setMessage(`Error verifying payment for order ${orderId.toString()}.`);
+            setMessage(`Error verifying payment for order ${orderId}.`);
             console.error(err);
         }
     };
@@ -466,6 +550,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     return (
         <li className={`px-14 pt-10 pb-8 border rounded-xl shadow-md ${backgroundColor} ${borderColor} ${textColor} relative`}>
+            {isLoading && (
+                <div className="absolute inset-0 rounded-xl bg-black bg-opacity-50 flex items-center justify-center z-40">
+                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin"></div>
+                </div>
+            )}
+
             {getNetworkLogo() && (
                 <div className="absolute top-2.5 left-2.5 h-8 w-8">
                     <div className="relative inline-block">
@@ -555,7 +645,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <div className="flex flex-col">
                     {commonOrderDiv}
 
-                    {user && userType === 'Onramper' && order.Locked.onramper_user_id === user.id && (
+                    {user && userType === 'Onramper' && order.Locked.onramper_user_id === user.id && !order.Locked.uncommited && (
                         <div>
                             {order.Locked.onramper_provider.hasOwnProperty('PayPal') ? (
                                 <PayPalButton
@@ -572,17 +662,31 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                         return '';
                                     })()}
                                     onSuccess={(transactionId) => handlePayPalSuccess(transactionId)}
+                                    disabled={!isPayable || isLoading}
                                 />
                             ) : order.Locked.onramper_provider.hasOwnProperty('Revolut') ? (
                                 <div>
                                     <button
-                                        className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
+                                        className={`px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
                                         onClick={handleRevolutRedirect}
+                                        disabled={!isPayable || isLoading}
                                     >
                                         Confirm Revolut Consent
                                     </button>
                                 </div>
                             ) : null}
+                        </div>
+                    )}
+
+                    {order.Locked.uncommited && (
+                        <div className="text-sm text-red-500 mt-2">
+                            This order has been uncommited in the ethereum smart contracts!
+                        </div>
+                    )}
+
+                    {!loadingPayable && !isPayable && (
+                        <div className="text-red-500 mt-2">
+                            This order cannot be paid at the moment. Please contact support or try again later.
                         </div>
                     )}
 
@@ -667,7 +771,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     <div className="text-sm font-medium text-gray-300 flex items-center">
                         {loadingMessage}&nbsp;
                         {txHash &&
-                            <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-blue-400 hover:underline">
+                            <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-blue-400 hover:underline z-50">
                                 {truncate(txHash, 8, 8)}
                             </a>
                         }
@@ -675,8 +779,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 </div>
             ) : (
                 message && (
-                    <div className="mt-4 text-sm font-medium">
+                    <div className="mt-4 text-sm font-medium flex items-center">
                         <p className="text-red-600 break-all">{message}</p>
+                        {txHash &&
+                            <a href={`${getNetworkExplorer()}/tx/${txHashError}`} target="_blank" className="text-red-500 hover:underline z-50">
+                                {truncate(txHash, 8, 8)}
+                            </a>
+                        }
                     </div>
                 )
             )}
