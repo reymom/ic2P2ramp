@@ -294,7 +294,7 @@ const CreateOrder: React.FC = () => {
             if ('Ok' in result) {
                 setMessage(`Order with ID=${result.Ok} created!`);
                 refetchUser();
-                navigate("/view");
+                navigate(`/view?offramperId=${user.id}`);
             } else {
                 const errorMessage = rampErrorToString(result.Err);
                 setMessage(errorMessage);
@@ -344,7 +344,13 @@ const CreateOrder: React.FC = () => {
         && selectedProviders.length > 0 && selectedToken !== null;
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg">
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative">
+            {isLoading && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 rounded-xl">
+                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin"></div>
+                </div>
+            )}
+
             <div className="text-center mb-8">
                 <h2 className="text-white text-2xl font-semibold">Create Offramping Order</h2>
             </div>
@@ -358,6 +364,10 @@ const CreateOrder: React.FC = () => {
                             className="py-2 px-3 w-36 border bg-gray-600 border-gray-500 rounded-l-lg text-white"
                             required
                             disabled
+                            style={{
+                                WebkitAppearance: 'none',
+                                MozAppearance: 'textfield',
+                            }}
                         />
                         <span className="py-2 px-3 bg-gray-600 border border-gray-500 rounded-r-lg text-white">$</span>
                     </div>
@@ -404,7 +414,7 @@ const CreateOrder: React.FC = () => {
                 </div>
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
-                        <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                        <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
                         <div className="text-sm font-medium text-white">Fetching Rates...</div>
                     </div>
                 )}
@@ -463,7 +473,7 @@ const CreateOrder: React.FC = () => {
 
             {isLoading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
-                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
                     <div className="text-sm font-medium text-gray-300">Processing...</div>
                 </div>
             ) : (

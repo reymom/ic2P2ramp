@@ -6,6 +6,7 @@ interface PayPalButtonProps {
     currency: string;
     paypalId: string;
     onSuccess: (transactionId: string) => void;
+    disabled: boolean;
 }
 
 declare global {
@@ -14,7 +15,7 @@ declare global {
     }
 }
 
-const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, paypalId, onSuccess }) => {
+const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, paypalId, onSuccess, disabled }) => {
     const paypalRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -81,11 +82,14 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
     return (
         <div className="mt-4">
             {paypalId !== "" ? (
-                <div ref={paypalRef} id={`paypal-button-container-${orderId}`} className="flex justify-center"></div>
+                <div
+                    ref={paypalRef}
+                    id={`paypal-button-container-${orderId}`}
+                    className={`flex justify-center ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
+                </div>
             ) : (
                 <div className="text-red-500 text-center">Please enter a PayPal ID to proceed with the payment</div>
-            )
-            }
+            )}
         </div >
     );
 }
