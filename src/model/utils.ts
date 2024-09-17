@@ -1,19 +1,10 @@
 import {
   Blockchain,
-  OrderFilter,
-  OrderStateFilter,
   PaymentProvider,
   PaymentProviderType,
   UserType,
 } from '../declarations/backend/backend.did';
-import {
-  OrderFilterTypes,
-  OrderStateFilterTypes,
-  UserTypes,
-  PaymentProviderTypes,
-  candidToEnum,
-  BlockchainTypes,
-} from './types';
+import { UserTypes, PaymentProviderTypes, BlockchainTypes } from './types';
 
 // Blockchain
 export const blockchainToBlockchainType = (
@@ -58,23 +49,4 @@ export const stringToUserType = (userType: UserTypes): UserType => {
     default:
       return { [userType]: null } as UserType;
   }
-};
-
-// -------------
-// Order Filters
-// -------------
-export const stringToOrderFilter = (
-  key: OrderFilterTypes,
-  value: any,
-): OrderFilter => {
-  return { [key]: value } as OrderFilter;
-};
-
-// -------------------
-// Order State Filters
-// -------------------
-export const stringToOrderStateFilter = (
-  key: OrderStateFilterTypes,
-): OrderStateFilter => {
-  return { [key]: null } as OrderStateFilter;
 };

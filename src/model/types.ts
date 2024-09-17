@@ -21,8 +21,6 @@ export type AddressTypes = ExtractKeys<AddressType>;
 
 export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 
-export type OrderStateFilterTypes = ExtractKeys<OrderStateFilter>;
-
 export type BlockchainTypes = ExtractKeys<Blockchain>;
 
 export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];

@@ -75,58 +75,6 @@ export const depositInVault = async (
   return receipt;
 };
 
-export const withdrawFromVault = async (chainId: number, order: Order) => {
-  if (!window.ethereum) {
-    throw new Error('No crypto wallet found. Please install it.');
-  }
-  if (!('EVM' in order.crypto.blockchain))
-    throw new Error('Order is not for EVM');
-
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send('eth_requestAccounts', []);
-  const signer = await provider.getSigner();
-
-  const vaultContractAddress = getVaultAddress(chainId);
-  const vaultContract = new ethers.Contract(
-    vaultContractAddress,
-    icP2PrampABI,
-    signer,
-  );
-
-  const isNative =
-    order.crypto.token.length === 0 ||
-    order.crypto.token[0] === ethers.ZeroAddress;
-
-  let transactionResponse;
-  if (isNative) {
-    const gasEstimate = await vaultContract.withdrawBaseCurrency.estimateGas(
-      order.crypto.amount,
-    );
-    transactionResponse = await vaultContract.withdrawBaseCurrency(
-      order.crypto.amount,
-      { gasLimit: gasEstimate },
-    );
-  } else {
-    const tokenAddress = order.crypto.token[0];
-    const gasEstimate = await vaultContract.withdrawToken.estimateGas(
-      tokenAddress,
-      order.crypto.amount,
-    );
-    transactionResponse = await vaultContract.withdrawToken(
-      tokenAddress,
-      order.crypto.amount,
-      { gasLimit: gasEstimate },
-    );
-  }
-
-  const receipt = await transactionResponse.wait();
-  if (receipt.status !== 1) {
-    throw new Error('Transaction failed!');
-  }
-
-  return receipt;
-};
-
 export const estimateGasAndGasPrice = async (
   chainId: number,
   method: MethodGasUsage,
