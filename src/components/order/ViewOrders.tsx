@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons';
-
 
 import { backend } from '../../declarations/backend';
 import { OrderFilter, OrderState } from '../../declarations/backend/backend.did';
@@ -12,9 +13,33 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [loading, setLoading] = useState(false);
     const [orders, setOrders] = useState<OrderState[]>([]);
     const [filter, setFilter] = useState<OrderFilter | null>(initialFilter);
-    const [page, setPage] = useState(1);
+
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const initialPage = Number(searchParams.get('page') || 1);
+    const [page, setPage] = useState(initialPage);
 
     const pageSize = 5;
+
+    useEffect(() => {
+        const offramperId = searchParams.get('offramperId');
+        if (offramperId) {
+            setFilter({ ByOfframperId: BigInt(offramperId) });
+            return;
+        }
+
+        const onramperId = searchParams.get('onramperId');
+        if (onramperId) {
+            setFilter({ ByOnramperId: BigInt(onramperId) });
+            return;
+        }
+
+        const status = searchParams.get('status')
+        if (status) {
+            setFilter({ ByState: { [status]: null } } as OrderFilter);
+            return;
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         fetchOrders();
@@ -54,11 +79,17 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     const handleNextPage = () => {
-        setPage((prevPage) => prevPage + 1);
+        const nextPage = page + 1
+        setPage(nextPage);
+        setSearchParams({ page: nextPage.toString() });
     };
 
     const handlePreviousPage = () => {
-        setPage((prevPage) => (prevPage > 1 ? prevPage - 1 : 1));
+        if (page > 1) {
+            const prevPage = page - 1;
+            setPage(prevPage);
+            setSearchParams({ page: prevPage.toString() });
+        }
     };
 
     const bottomPagination =
@@ -81,7 +112,6 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
     return (
         <div className="container mx-auto p-4 bg-gray-700 border rounded-md text-white">
-            {/* <h2 className="text-xl font-semibold mb-4">View Orders</h2> */}
             <div className="flex justify-between items-center mb-4">
                 <button
                     onClick={handlePreviousPage}
@@ -91,7 +121,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                     <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
                 <div className="flex flex-grow mx-2">
-                    <OrderFilters setFilter={setFilter} />
+                    <OrderFilters setFilter={setFilter} currentFilter={filter} />
                 </div>
                 <button
                     onClick={handleNextPage}
@@ -104,7 +134,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
             {loading ? (
                 <div className="mt-4 flex justify-center items-center space-x-2">
-                    <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-600 rounded-full animate-spin"></div>
+                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
                     <div className="text-sm font-medium text-gray-300">Fetching orders...</div>
                 </div>
             ) : (

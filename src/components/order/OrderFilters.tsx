@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { TransactionAddress, OrderFilter, Blockchain } from '../../declarations/backend/backend.did';
-import { stringToOrderFilter, stringToOrderStateFilter } from '../../model/utils';
-import { BlockchainTypes, OrderFilterTypes, OrderStateFilterTypes } from '../../model/types';
+import { TransactionAddress, OrderFilter, Blockchain, OrderStateFilter } from '../../declarations/backend/backend.did';
+import { BlockchainTypes, OrderFilterTypes } from '../../model/types';
 import { useUser } from '../user/UserContext';
 import { getIcpTokenOptions } from '../../constants/tokens';
 import { Principal } from '@dfinity/principal';
@@ -10,11 +9,13 @@ import { truncate } from '../../model/helper';
 
 interface OrderFiltersProps {
     setFilter: (filter: OrderFilter | null) => void;
+    currentFilter: OrderFilter | null;
 }
 
-const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
+const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter }) => {
     const [filterType, setFilterType] = useState<OrderFilterTypes | null>(null);
 
+    const [selectedState, setSelectedState] = useState<OrderStateFilter | null>(null);
     const [selectedAddress, setSelectedAddress] = useState<TransactionAddress | null>(null);
     const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain | null>(null);
     const [blockchainType, setBlockchainType] = useState<BlockchainTypes | null>(null);
@@ -22,8 +23,36 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
     const { user, userType } = useUser();
 
     useEffect(() => {
+        if (currentFilter) {
+            setFilterTypeFromCurrentFilter(currentFilter);
+        }
+    }, [currentFilter]);
+
+    const setFilterTypeFromCurrentFilter = (filter: OrderFilter) => {
+        if ('ByState' in filter) {
+            setFilterType('ByState');
+            setSelectedState(filter.ByState);
+        } else if ('ByOfframperId' in filter) {
+            setFilterType('ByOfframperId');
+        } else if ('ByOnramperId' in filter) {
+            setFilterType('ByOnramperId');
+        } else if ('ByBlockchain' in filter) {
+            setFilterType('ByBlockchain');
+            setSelectedBlockchain(filter.ByBlockchain);
+        } else if ('ByOfframperAddress' in filter) {
+            setFilterType('ByOfframperAddress');
+            setSelectedAddress(filter.ByOfframperAddress);
+        } else if ('LockedByOnramper' in filter) {
+            setFilterType('LockedByOnramper');
+            setSelectedAddress(filter.LockedByOnramper);
+        } else {
+            setFilterType(null);
+        }
+    };
+
+    useEffect(() => {
         constructFilter();
-    }, [filterType, selectedBlockchain, selectedAddress])
+    }, [filterType, selectedState, selectedBlockchain, selectedAddress])
 
     const constructFilter = () => {
         if (!filterType) {
@@ -31,24 +60,25 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
             return;
         }
 
-        const [filterCategory, filterValue] = filterType.split(':');
-        switch (filterCategory) {
+        switch (filterType) {
             case "ByState":
-                setFilter(stringToOrderFilter(filterCategory, stringToOrderStateFilter(filterValue as OrderStateFilterTypes)));
+                if (selectedState) {
+                    setFilter({ ByState: selectedState });
+                }
                 break;
             case "ByOfframperAddress": case "LockedByOnramper":
                 if (selectedAddress) {
-                    setFilter(stringToOrderFilter(filterCategory, selectedAddress));
+                    setFilter({ [filterType]: selectedAddress } as OrderFilter)
                 }
                 break;
             case "ByBlockchain":
                 if (selectedBlockchain) {
-                    setFilter(stringToOrderFilter(filterCategory, selectedBlockchain));
+                    setFilter({ [filterType]: selectedBlockchain } as OrderFilter);
                 }
                 break;
             case "ByOfframperId": case "ByOnramperId":
                 if (user) {
-                    setFilter(stringToOrderFilter(filterCategory, user.id))
+                    setFilter({ [filterType]: user.id } as OrderFilter)
                 }
                 break;
             default:
@@ -66,10 +96,15 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
         if (!(value in Array(["ByOfframperAddress", "LockedByOnramper"]))) {
             setSelectedAddress(null);
         }
+        if (!value.startsWith('ByState')) setSelectedState(null);
 
         if (value === "all") {
             setFilterType(null);
             setFilter(null);
+        } else if (value.startsWith('ByState')) {
+            const stateValue = value.split(':')[1];
+            setFilterType('ByState');
+            setSelectedState({ [stateValue]: null } as OrderStateFilter);
         } else {
             setFilterType(value);
         }
@@ -101,7 +136,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter }) => {
     return (
         <div className="flex gap-4 items-center flex-grow">
             <select
-                value={filterType || 'all'}
+                value={filterType ? `${filterType}${selectedState ? `:${Object.keys(selectedState)[0]}` : ''}` : 'all'}
                 onChange={handleFilterTypeChange}
                 className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
             >
