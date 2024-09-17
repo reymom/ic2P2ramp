@@ -327,15 +327,19 @@ impl Ic2P2ramp {
 
     pub async fn withdraw_token(
         chain_id: u64,
+        offramper: String,
         token_address: String,
         amount: u128,
+        fees: u128,
     ) -> Result<String> {
         let abi = r#"
             [
                 {
                     "inputs": [
+                        {"internalType": "address", "name": "_offramper", "type": "address"},
                         {"internalType": "address", "name": "_token", "type": "address"},
-                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+                        {"internalType": "uint256", "name": "_fees", "type": "uint256"}
                     ],
                     "name": "withdrawToken",
                     "outputs": [],
@@ -357,8 +361,10 @@ impl Ic2P2ramp {
             U256::from(0),
             vault_manager_address,
             &[
+                ethers_core::abi::Token::Address(helpers::parse_address(offramper)?),
                 ethers_core::abi::Token::Address(helpers::parse_address(token_address)?),
                 ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fees)),
             ],
         )
         .await?;
@@ -366,12 +372,19 @@ impl Ic2P2ramp {
         transaction::send_signed_transaction(request, chain_id).await
     }
 
-    pub async fn withdraw_base_currency(chain_id: u64, amount: u128) -> Result<String> {
+    pub async fn withdraw_base_currency(
+        chain_id: u64,
+        offramper: String,
+        amount: u128,
+        fees: u128,
+    ) -> Result<String> {
         let abi = r#"
             [
                 {
                     "inputs": [
-                        {"internalType": "uint256", "name": "_amount", "type": "uint256"}
+                        {"internalType": "address", "name": "_offramper", "type": "address"},
+                        {"internalType": "uint256", "name": "_amount", "type": "uint256"},
+                        {"internalType": "uint256", "name": "_fees", "type": "uint256"}
                     ],
                     "name": "withdrawBaseCurrency",
                     "outputs": [],
@@ -392,9 +405,11 @@ impl Ic2P2ramp {
             chain_id,
             U256::from(0),
             vault_manager_address,
-            &[ethers_core::abi::Token::Uint(
-                ethers_core::types::U256::from(amount),
-            )],
+            &[
+                ethers_core::abi::Token::Address(helpers::parse_address(offramper)?),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(amount)),
+                ethers_core::abi::Token::Uint(ethers_core::types::U256::from(fees)),
+            ],
         )
         .await?;
 
