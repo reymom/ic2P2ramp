@@ -294,7 +294,7 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
             memory::stable::orders::unlock_order(order.base.id)?;
             Ok(format!(
                 "Unlocked ICP order for ledger: {:?}",
-                ledger_principal
+                ledger_principal.to_string()
             ))
         }
         _ => return Err(RampError::UnsupportedBlockchain),
