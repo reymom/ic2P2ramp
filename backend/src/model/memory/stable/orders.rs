@@ -31,6 +31,9 @@ where
                     None
                 }
             })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
             .skip(start_index as usize)
             .take((end_index - start_index) as usize)
             .collect()
