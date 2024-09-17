@@ -99,6 +99,7 @@ type LockedOrder = record {
   payment_done : bool;
   consent_id : opt text;
   base : Order;
+  uncommited : bool;
   onramper_user_id : nat64;
   onramper_address : TransactionAddress;
   payment_id : opt text;
@@ -187,6 +188,7 @@ type RampError = variant {
   MissingAccessToken;
   EthersAbiError : text;
   Pkcs8Error : text;
+  OrderUncommitted;
   PasswordRequired;
   ChainIdNotFound : nat64;
   PaymentDone;
@@ -223,8 +225,8 @@ type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : User; Err : RampError };
 type Result_10 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : record { nat64; nat }; Err : RampError };
-type Result_3 = variant { Ok : nat64; Err : RampError };
-type Result_4 = variant { Ok : text; Err : RampError };
+type Result_3 = variant { Ok : text; Err : RampError };
+type Result_4 = variant { Ok : nat64; Err : RampError };
 type Result_5 = variant { Ok : opt record { nat; nat }; Err : RampError };
 type Result_6 = variant { Ok : vec Token; Err : RampError };
 type Result_7 = variant { Ok : nat; Err : RampError };
@@ -295,7 +297,7 @@ service : (InitArg) -> {
   calculate_order_evm_fees : (nat64, nat64, nat, opt text, nat64, nat64) -> (
       Result_2,
     );
-  cancel_order : (nat64, text) -> (Result);
+  cancel_order : (nat64, text) -> (Result_3);
   create_order : (
       text,
       nat64,
@@ -308,13 +310,13 @@ service : (InitArg) -> {
       nat64,
       opt nat64,
       opt nat64,
-    ) -> (Result_3);
-  execute_revolut_payment : (nat64, text) -> (Result_4) query;
-  generate_evm_auth_message : (LoginAddress) -> (Result_4);
+    ) -> (Result_4);
+  execute_revolut_payment : (nat64, text) -> (Result_3) query;
+  generate_evm_auth_message : (LoginAddress) -> (Result_3);
   get_average_gas_prices : (nat64, nat64, MethodGasUsage) -> (Result_5);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_6) query;
-  get_exchange_rate : (text, text) -> (Result_4);
+  get_exchange_rate : (text, text) -> (Result_3);
   get_icp_transaction_fee : (principal) -> (Result_7) query;
   get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
       vec OrderState,
@@ -328,7 +330,7 @@ service : (InitArg) -> {
       PaymentProvider,
       TransactionAddress,
       opt nat64,
-    ) -> (Result_4);
+    ) -> (Result_3);
   refetch_user : (nat64, text) -> (Result_1) query;
   register_evm_tokens : (nat64, vec record { text; nat8; text; opt text }) -> (
       Result,
@@ -338,19 +340,20 @@ service : (InitArg) -> {
       Result_1,
     );
   remove_user : (nat64) -> (Result_1);
-  test_get_consent_url : () -> (Result_4);
+  test_get_consent_url : () -> (Result_3);
   test_get_latest_block : (nat64) -> (Result_9);
   test_get_revolut_payment_details : (text) -> (Result);
-  test_get_revolut_payment_token : (text) -> (Result_4);
-  test_paypal : () -> (Result_4);
+  test_get_revolut_payment_token : (text) -> (Result_3);
+  test_paypal : () -> (Result_3);
   transfer_canister_funds : (principal, principal, nat) -> (Result);
-  transfer_eth : (nat64, text, nat, opt nat64) -> (Result_4);
-  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result_4);
+  transfer_eth : (nat64, text, nat, opt nat64) -> (Result_3);
+  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result_3);
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
-  unlock_order : (nat64, text, opt nat64) -> (Result_4);
+  unlock_order : (nat64, text, opt nat64) -> (Result_3);
   update_password : (LoginAddress, opt text) -> (Result);
-  verify_transaction : (nat64, text, text, opt nat64) -> (Result_4);
+  verify_order_is_payable : (nat64, text) -> (Result) query;
+  verify_transaction : (nat64, text, text, opt nat64) -> (Result_3);
   view_canister_balances : () -> (Result_10) query;
-  withdraw_evm_fees : (nat64, nat, opt text) -> (Result_4);
+  withdraw_evm_fees : (nat64, nat, opt text) -> (Result_3);
 }
