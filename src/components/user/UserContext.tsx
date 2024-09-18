@@ -6,32 +6,41 @@ import { AuthClient } from '@dfinity/auth-client';
 
 import { backend, createActor } from '../../declarations/backend';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
-import { tokenCanisters } from '../../constants/addresses';
 import { UserTypes } from '../../model/types';
 import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType } from '../../model/session';
 import { icpHost, iiUrl } from '../../model/icp';
+import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/tokens';
+import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
+
+export interface Balance {
+    raw: bigint;
+    formatted: string;
+}
 
 interface UserContextProps {
+    refetchUser: () => void;
+    setUser: (user: User | null) => void;
+    setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
     user: User | null;
     userType: UserTypes;
     loginMethod: LoginAddress | null;
     sessionToken: string | null;
     password: string | null;
-    logout: () => Promise<void>;
-    icpAgent: HttpAgent | null;
-    backendActor: ActorSubclass<_SERVICE> | null,
-    principal: Principal | null;
-    icpBalance: string | null;
-    fetchIcpBalance: () => void;
-    setUser: (user: User | null) => void;
-    setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
     loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
     authenticateUser: (
         login: LoginAddress | null,
         authData?: AuthenticationData,
         backendActor?: ActorSubclass<_SERVICE>
     ) => Promise<Result_1>;
-    refetchUser: () => void;
+    logout: () => Promise<void>;
+
+    icpAgent: HttpAgent | null;
+    backendActor: ActorSubclass<_SERVICE> | null,
+    principal: Principal | null;
+    icpBalances: { [tokenName: string]: Balance } | null;
+    evmBalances: { [tokenAddress: string]: Balance } | null;
+    fetchBalances: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -44,7 +53,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [backendActor, setBackendActor] = useState<ActorSubclass<_SERVICE> | null>(null);
     const [principal, setPrincipal] = useState<Principal | null>(null);
-    const [icpBalance, setIcpBalance] = useState<string | null>(null);
+
+    const { address, chainId } = useAccount();
+    const [icpBalances, setIcpBalances] = useState<{ [tokenName: string]: Balance } | null>(null);
+    const [evmBalances, setEvmBalances] = useState<{ [tokenAddress: string]: Balance } | null>(null);
 
     const userType = getUserType(user);
 
@@ -66,8 +78,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [user]);
 
     useEffect(() => {
-        fetchIcpBalance();
+        if (principal && icpAgent) {
+            fetchIcpBalances();
+        }
     }, [principal, icpAgent]);
+
+    useEffect(() => {
+        if (chainId && address) {
+            fetchEvmBalances();
+        }
+    }, [chainId, address])
 
     const checkInternetIdentity = async () => {
         try {
@@ -179,7 +199,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 if ('Ok' in result) {
                     const updatedUser = result.Ok;
                     setUser(updatedUser);
-                    fetchIcpBalance();
+                    fetchBalances();
 
                     saveUserSession(updatedUser);
                     console.log("User refetched and updated.");
@@ -211,26 +231,78 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
-    const fetchIcpBalance = async () => {
+    const fetchBalances = async () => {
+        await fetchIcpBalances();
+        await fetchEvmBalances();
+    };
+
+    const fetchIcpBalances = async () => {
         if (!icpAgent || !principal) return;
 
         try {
-            const ledgerTokenCanister = Principal.fromText(tokenCanisters.ICP);
-            const ledger = LedgerCanister.create({ agent: icpAgent, canisterId: ledgerTokenCanister });
+            const balances: { [tokenName: string]: Balance } = {};
+            const tokenOptions = getIcpTokenOptions();
 
-            const accountIdentifier = AccountIdentifier.fromPrincipal({ principal });
-            const balanceResult = await ledger.accountBalance({
-                accountIdentifier: accountIdentifier,
-                certified: true
-            });
+            for (const token of tokenOptions) {
+                const ledger = LedgerCanister.create({
+                    agent: icpAgent,
+                    canisterId: Principal.fromText(token.address),
+                });
 
-            const balanceFloat = Number(balanceResult) / 100_000_000;
-            const balanceString = balanceFloat.toFixed(2);
+                const accountIdentifier = AccountIdentifier.fromPrincipal({ principal });
+                const balanceResult = await ledger.accountBalance({
+                    accountIdentifier: accountIdentifier,
+                    certified: true,
+                });
 
-            setIcpBalance(balanceString);
+                const balanceFloat = Number(balanceResult) / 10 ** token.decimals;
+                balances[token.name] = { raw: balanceResult, formatted: formatBalance(balanceFloat) }
+            }
+
+            setIcpBalances(balances);
         } catch (err: any) {
-            console.error('Failed to fetch ICP balance:', err);
-            setIcpBalance(null);
+            console.error('Failed to fetch ICP balances: ', err);
+            setIcpBalances(null);
+        }
+    };
+
+    const formatBalance = (balance: number): string => {
+        if (balance === 0) return "0.00";
+        if (balance < 0.0001) return balance.toExponential(2);
+        if (balance < 1) return balance.toFixed(4);
+        if (balance < 1000) return balance.toFixed(2);
+        return balance.toFixed(2);
+    };
+
+    const fetchEvmBalances = async () => {
+        if (!window.ethereum || !chainId || !address) return;
+
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send('eth_requestAccounts', []);
+            const signer = await provider.getSigner();
+
+            const balances: { [tokenAddress: string]: Balance } = {};
+            const tokenOptions = getEvmTokenOptions(chainId);
+            for (const token of tokenOptions) {
+                if (token.isNative) {
+                    const nativeBalance = await provider.getBalance(address);
+                    balances[token.name] = { raw: nativeBalance, formatted: formatBalance(Number(ethers.formatEther(nativeBalance))) };
+                } else {
+                    const tokenContract = new ethers.Contract(
+                        token.address,
+                        ['function balanceOf(address) view returns (uint256)'],
+                        signer,
+                    );
+                    const balance = await tokenContract.balanceOf(signer.address);
+                    balances[token.address] = { raw: balance, formatted: formatBalance(Number(ethers.formatUnits(balance, token.decimals))) };
+                }
+            }
+
+            setEvmBalances(balances);
+        } catch (err) {
+            console.error('Failed to fetch EVM token balances: ', err);
+            setEvmBalances(null);
         }
     };
 
@@ -241,12 +313,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             loginMethod,
             sessionToken,
             password,
-            logout,
             icpAgent,
             backendActor,
             principal,
-            icpBalance,
-            fetchIcpBalance,
+            icpBalances,
+            evmBalances,
             setUser,
             setLoginMethod: (login: LoginAddress | null, pwd?: string) => {
                 setLoginMethod(login);
@@ -255,6 +326,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             loginInternetIdentity,
             authenticateUser,
             refetchUser,
+            fetchBalances,
+            logout,
         }}>
             {children}
         </UserContext.Provider>
