@@ -3,19 +3,19 @@ import { Route, Routes } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
-import { useUser } from './components/user/UserContext';
+import { OrderFilter } from './declarations/backend/backend.did';
+import { userTypeToString } from './model/utils';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useUser } from './components/user/UserContext';
 import Menu from './components/Menu';
-import UserProfile from './components/user/UserProfile';
 import ConnectAddress from './components/ConnectAddress';
 import RegisterUser from './components/user/RegisterUser';
-import CreateOrder from './components/order/CreateOrder';
-import ViewOrders from './components/order/ViewOrders';
-import { userTypeToString } from './model/utils';
-import { OrderFilter } from './declarations/backend/backend.did';
 import ConfirmEmail from './components/user/ConfirmEmail';
 import ResetPassword from './components/user/ResetPassword';
 import ForgotPassword from './components/user/ForgotPassword';
+import UserProfile from './components/user/UserProfile';
+import CreateOrder from './components/order/CreateOrder';
+import ViewOrders from './components/order/ViewOrders';
 
 function App() {
     const { user } = useUser();
@@ -42,7 +42,7 @@ function App() {
             case "Offramper":
                 return { ByOfframperId: user.id } as OrderFilter
             case "Onramper":
-                return { ByOnramperId: user.id } as OrderFilter
+                return { ByState: { Created: null } } as OrderFilter
             default:
                 return { ByState: { Created: null } } as OrderFilter
         }
