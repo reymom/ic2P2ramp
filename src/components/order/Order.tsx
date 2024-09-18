@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
@@ -15,33 +16,36 @@ import { estimateGasAndGasPrice } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
-import { useNavigate } from 'react-router-dom';
+import DynamicDots from '../ui/DynamicDots';
 
 interface OrderProps {
     order: OrderState;
     refetchOrders: () => void;
 }
 
-const defaultLoadingMessage = "Processing Transaction ...";
-const lockTimeSeconds = 120;
+const defaultLoadingMessage = "Processing Transaction";
+const lockTimeSeconds = 600;
 
 const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, PaymentProvider]>();
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState(defaultLoadingMessage);
-    const [message, setMessage] = useState('');
-    const [txHash, setTxHash] = useState<string>();
-    const [txHashError, setTxHashError] = useState<string>();
+    const [message, setMessage] = useState<string | null>(null);
+    const [txHash, setTxHash] = useState<string | null>(null);
     const [remainingTime, setRemainingTime] = useState<number | null>(null);
     const [isPayable, setIsPayable] = useState<boolean>(false);
     const [loadingPayable, setLoadingPayable] = useState<boolean>(true);
 
-    const { user, userType, sessionToken, fetchIcpBalance, refetchUser } = useUser();
+    const { user, userType, sessionToken, fetchBalances, refetchUser } = useUser();
     const navigate = useNavigate();
 
     const orderId = 'Created' in order ? order.Created.id
         : 'Locked' in order ? order.Locked.base.id
             : null;
+
+    const committedMessage = `Locked Order #${orderId}, refetching data`;
+    const releasedMessage = `Order Verified and Funds Released. Refetching data`;
+    const cancelledMessage = `Cancelled Order #${orderId}, refetching data`;
 
     const baseOrder =
         'Created' in order ? order.Created
@@ -123,9 +127,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         let pollingTimer: NodeJS.Timeout | null = null;
 
         const clearPolling = () => {
-            if (pollingTimer) {
-                clearTimeout(pollingTimer);
-            }
+            if (pollingTimer) clearTimeout(pollingTimer);
         };
 
         const pollLog = async () => {
@@ -149,19 +151,18 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
                     if ('Confirmed' in transactionLog.status) {
                         const receipt = transactionLog.status.Confirmed;
-                        const successMessage = 'Commit' in transactionLog.action ?
-                            `Locked Order #${orderId}, refetching data...` : 'Release' in transactionLog.action ?
-                                `Verified Order #${orderId}, funds are released. Refetching data...` : 'Cancel' in transactionLog.action ?
-                                    `Cancelled Order #${orderId}, refetching data...` : "Transaction is successful!"
-                        setMessage(successMessage);
-                        console.log("[pollTransactionLog] Success Message:", successMessage);
+                        const successMessage = 'Commit' in transactionLog.action ? committedMessage
+                            : 'Release' in transactionLog.action ? releasedMessage
+                                : 'Cancel' in transactionLog.action ? cancelledMessage
+                                    : "Transaction is successful!"
 
+                        setLoadingMessage(successMessage);
                         setTxHash(receipt.transactionHash);
                         setTimeout(() => {
-                            setIsLoading(false);
                             refetchOrders();
                             refetchUser();
-
+                            fetchBalances();
+                            setIsLoading(false);
                             navigate(
                                 'Commit' in transactionLog.action ? `/view?onramperId=${user!.id}` :
                                     'Release' in transactionLog.action ? "/view?status=Completed" :
@@ -171,17 +172,15 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         return;
                     } else if ('Failed' in transactionLog.status) {
                         console.log("[pollTransactionLog] Transaction Failed:", transactionLog.status.Failed);
-                        setMessage("Transaction failed: ");
-                        setTxHashError(txHash);
+                        setMessage("Transaction failed.");
                         setIsLoading(false);
-                        setTxHash(undefined);
                         clearPolling();
                         return;
                     }
                 } else if ('Err' in logResult) {
                     setMessage(`Transaction failed: ${rampErrorToString(logResult.Err)}`)
                     setIsLoading(false);
-                    setTxHash(undefined);
+                    setTxHash(null);
                     clearPolling();
                     return;
                 }
@@ -244,9 +243,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
-        setTxHash(undefined);
-        setTxHashError(undefined);
-        setLoadingMessage(`Commiting to order #${orderId}...`);
+        setTxHash(null);
+        setMessage(null);
+        setLoadingMessage(`Committing to order #${orderId}`);
 
         let gasEstimation: [] | [bigint] = [];
         if ('EVM' in orderBlockchain) {
@@ -270,11 +269,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     console.log(`[commitToOrder] Transaction Hash: ${result.Ok}`);
                     pollTransactionLog(orderId, user.id);
                 } else {
-                    setLoadingMessage(`Locked Order #${orderId}, refetching data...`);
+                    setLoadingMessage(committedMessage);
                     setTimeout(() => {
                         setIsLoading(false);
                         refetchOrders();
                         refetchUser();
+                        fetchBalances();
                         navigate(`/view?onramperId=${user.id}`);
                     }, 2500);
                 }
@@ -283,7 +283,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 setIsLoading(false);
             }
         } catch (err) {
-            setMessage(`Error while commiting to order ${orderId}.`);
+            setMessage(`Error while committing to order ${orderId}.`);
             setIsLoading(false);
             console.error(err);
         }
@@ -291,15 +291,15 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const removeOrder = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
-        if (!user || !('Offramper' in user?.user_type) || 'Created' in order || !orderBlockchain || !orderId) return;
+        if (!user || !('Offramper' in user?.user_type) || !('Created' in order) || !orderBlockchain || !orderId) return;
         if (!baseOrder || user.id !== baseOrder.offramper_user_id) return;
 
         const scrollPosition = window.scrollY;
 
         setIsLoading(true);
-        setTxHash(undefined);
-        setTxHashError(undefined);
-        setMessage(`Removing order ${orderId}...`);
+        setTxHash(null);
+        setMessage(null)
+        setLoadingMessage(`Removing order ${orderId}`);
 
         try {
             const result = await backend.cancel_order(orderId, sessionToken);
@@ -310,11 +310,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
                     pollTransactionLog(orderId, user.id);
                 } else {
-                    setMessage(`Cancelled Order #${orderId}, refetching data...`);
+                    setLoadingMessage(cancelledMessage);
                     setTimeout(() => {
-                        setIsLoading(false);
                         refetchOrders();
-                        fetchIcpBalance();
+                        refetchUser();
+                        fetchBalances();
+                        setIsLoading(false);
 
                         window.scrollTo(0, scrollPosition);
                     }, 2500);
@@ -338,9 +339,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
 
         setIsLoading(true);
-        setTxHash(undefined);
-        setTxHashError(undefined);
-        setMessage(`Payment successful for order ${orderId}, transaction ID: ${transactionId}. Verifying...`);
+        setTxHash(null);
+        setMessage(null);
+        setLoadingMessage(`Payment received. Verifying`);
 
         // estimate release gas
         let gasEstimation: [] | [bigint] = [];
@@ -359,17 +360,16 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             // Send transaction ID to backend to verify payment
             const response = await backend.verify_transaction(orderId, sessionToken, transactionId, gasEstimation);
             if ('Ok' in response) {
-                setMessage(`Order Verified and Funds Transferred successfully!`);
                 if ('EVM' in orderBlockchain!) {
                     setTxHash(response.Ok);
-
                     pollTransactionLog(orderId, user!.id);
                 } else {
-                    setMessage(`Verified Order #${orderId}, funds are released. Refetching data...`);
+                    setLoadingMessage(releasedMessage);
                     setTimeout(() => {
-                        setIsLoading(false);
                         refetchOrders();
                         refetchUser();
+                        setIsLoading(false);
+                        fetchBalances();
                         navigate("/view?completed");
                     }, 2500);
                 }
@@ -551,8 +551,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     return (
         <li className={`px-14 pt-10 pb-8 border rounded-xl shadow-md ${backgroundColor} ${borderColor} ${textColor} relative`}>
             {isLoading && (
-                <div className="absolute inset-0 rounded-xl bg-black bg-opacity-50 flex items-center justify-center z-40">
-                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
+                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
+                    {loadingMessage && (
+                        <div className="text-white text-2xl font-bold mt-2">
+                            {loadingMessage}<DynamicDots isLoading />
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -622,10 +627,19 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         return (
                             <button
                                 onClick={() => commitToOrder(committedProvider![1])}
-                                className={`mt-3 px-4 py-2 rounded w-full font-medium ${disabled ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-700 hover:bg-green-800'}`}
-                                disabled={disabled}
+                                className={`mt-3 px-4 py-2 rounded-md w-full font-medium flex items-center justify-center ${disabled
+                                    ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-700 hover:bg-green-800'
+                                    }`}
+                                disabled={disabled || isLoading}
                             >
-                                Lock Order (1h)
+                                {isLoading ? (
+                                    <>
+                                        <div className="mr-2 w-4 h-4 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+                                        <span>Locking<DynamicDots isLoading /></span>
+                                    </>
+                                ) : (
+                                    <span>Lock Order (1h)</span>
+                                )}
                             </button>
                         );
                     })()}
@@ -634,9 +648,17 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     {user && userType === 'Offramper' && order.Created.offramper_user_id === user.id && (
                         <button
                             onClick={removeOrder}
-                            className="mt-3 px-4 py-2 bg-red-700 rounded w-full font-medium hover:bg-red-800"
+                            disabled={isLoading}
+                            className="mt-3 px-4 py-2 bg-red-700 rounded-md w-full font-medium hover:bg-red-800 flex justify-center items-center"
                         >
-                            Remove
+                            {isLoading ? (
+                                <>
+                                    <div className="mr-2 w-4 h-4 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+                                    Removing<DynamicDots isLoading />
+                                </>
+                            ) : (
+                                "Remove"
+                            )}
                         </button>
                     )}
                 </div>
@@ -680,7 +702,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
                     {order.Locked.uncommited && (
                         <div className="text-sm text-red-500 mt-2">
-                            This order has been uncommited in the ethereum smart contracts!
+                            This order has been uncommited in the evm smart contracts!
                         </div>
                     )}
 
@@ -695,7 +717,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             (Locked for {formatTimeLeft(remainingTime)})
                         </div>
                     )}
-
                 </div>
             )}
             {'Completed' in order && (
@@ -765,29 +786,24 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     <div><strong>Status:</strong> Cancelled</div>
                 </div>
             )}
-            {isLoading ? (
-                <div className="mt-4 flex justify-center items-center space-x-2">
-                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-300 flex items-center">
-                        {loadingMessage}&nbsp;
-                        {txHash &&
-                            <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-blue-400 hover:underline z-50">
-                                {truncate(txHash, 8, 8)}
-                            </a>
-                        }
-                    </div>
+
+            {!message && txHash && (
+                <div className="relative mt-2 text-xs text-blue-400 z-50 flex items-center justify-center text-center">
+                    <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="hover:underline z-50">
+                        View Transaction {truncate(txHash, 5, 5)}
+                    </a>
                 </div>
-            ) : (
-                message && (
-                    <div className="mt-4 text-sm font-medium flex items-center">
-                        <p className="text-red-600 break-all">{message}</p>
-                        {txHash &&
-                            <a href={`${getNetworkExplorer()}/tx/${txHashError}`} target="_blank" className="text-red-500 hover:underline z-50">
-                                {truncate(txHash, 8, 8)}
-                            </a>
-                        }
-                    </div>
-                )
+            )}
+
+            {message && (
+                <div className="relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
+                    <p className="text-red-600">{message}&nbsp;</p>
+                    {txHash &&
+                        <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-red-500 hover:underline z-50">
+                            View tx: {truncate(txHash, 6, 6)}
+                        </a>
+                    }
+                </div>
             )}
         </li>
     );

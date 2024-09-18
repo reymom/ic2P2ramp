@@ -21,7 +21,7 @@ const Menu: React.FC = () => {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
     const { isConnected } = useAccount();
-    const { user, icpBalance, loginInternetIdentity, logout } = useUser();
+    const { user, icpBalances, loginInternetIdentity, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -151,10 +151,10 @@ const Menu: React.FC = () => {
                             <div className="p-4 space-y-4">
                                 {renderLinks()}
                             </div>
-                            {icpBalance && (
+                            {icpBalances && icpBalances['ICP'] && (
                                 <div className="p-4">
                                     <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
-                                        {icpBalance} ICP
+                                        {icpBalances['ICP'].formatted} ICP
                                     </div>
                                 </div>
                             )}
@@ -226,10 +226,10 @@ const Menu: React.FC = () => {
 
                                     <div className="items-center text-center">
                                         <hr className="border-t border-gray-300 w-full my-2" />
-                                        {icpBalance ? (
+                                        {icpBalances && icpBalances['ICP'] ? (
                                             <div className="relative flex justify-center items-center border border-gray-300 rounded-md px-3 py-2 text-green-800 text-center font-medium">
                                                 <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
-                                                <span className="text-lg">{icpBalance} ICP</span>
+                                                <span className="text-lg">{icpBalances['ICP'].formatted} ICP</span>
                                             </div>
                                         ) : (
                                             <div
