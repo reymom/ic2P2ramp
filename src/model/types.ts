@@ -2,7 +2,6 @@ import {
   AddressType,
   Blockchain,
   OrderFilter,
-  OrderStateFilter,
   PaymentProviderType,
   UserType,
 } from '../declarations/backend/backend.did';

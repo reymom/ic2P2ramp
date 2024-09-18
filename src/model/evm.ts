@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import { getVaultAddress } from '../constants/addresses';
-import { MethodGasUsage, Order } from '../declarations/backend/backend.did';
+import { MethodGasUsage } from '../declarations/backend/backend.did';
 import { TokenOption } from '../constants/tokens';
 import { backend } from '../declarations/backend';
 
@@ -24,55 +24,88 @@ export const depositInVault = async (
     signer,
   );
 
-  let transactionResponse;
-  if (selectedToken.isNative) {
-    const gasEstimate = await vaultContract.depositBaseCurrency.estimateGas({
-      value: cryptoAmount,
-    });
+  try {
+    let transactionResponse;
+    if (selectedToken.isNative) {
+      const gasEstimate = await vaultContract.depositBaseCurrency.estimateGas({
+        value: cryptoAmount,
+      });
 
-    transactionResponse = await vaultContract.depositBaseCurrency({
-      value: cryptoAmount,
-      gasLimit: gasEstimate,
-    });
-  } else if (selectedToken.address !== '') {
-    // approve the vault contract to spend the tokens
-    const tokenContract = new ethers.Contract(
-      selectedToken.address,
-      [
-        'function approve(address spender, uint256 amount) external returns (bool)',
-      ],
-      signer,
-    );
-
-    const approveTx = await tokenContract.approve(
-      getVaultAddress(chainId),
-      cryptoAmount,
-    );
-    await approveTx.wait();
-
-    // make deposit
-    const gasEstimate = await vaultContract.depositToken.estimateGas(
-      selectedToken.address,
-      cryptoAmount,
-    );
-
-    transactionResponse = await vaultContract.depositToken(
-      selectedToken.address,
-      cryptoAmount,
-      {
+      transactionResponse = await vaultContract.depositBaseCurrency({
+        value: cryptoAmount,
         gasLimit: gasEstimate,
-      },
+      });
+    } else if (selectedToken.address !== '') {
+      // approve the vault contract to spend the tokens
+      const tokenContract = new ethers.Contract(
+        selectedToken.address,
+        [
+          'function approve(address spender, uint256 amount) external returns (bool)',
+        ],
+        signer,
+      );
+
+      const approveTx = await tokenContract.approve(
+        getVaultAddress(chainId),
+        cryptoAmount,
+      );
+      await approveTx.wait();
+
+      // make deposit
+      const gasEstimate = await vaultContract.depositToken.estimateGas(
+        selectedToken.address,
+        cryptoAmount,
+      );
+
+      transactionResponse = await vaultContract.depositToken(
+        selectedToken.address,
+        cryptoAmount,
+        {
+          gasLimit: gasEstimate,
+        },
+      );
+    } else {
+      throw new Error('No token selected');
+    }
+
+    const receipt = await transactionResponse.wait();
+    if (receipt.status !== 1) {
+      throw new Error('Transaction failed on-chain.');
+    }
+    return receipt;
+  } catch (error: any) {
+    console.log(
+      'error.code = ',
+      error.code || '...',
+      'error.message = ',
+      error.message || '...',
     );
-  } else {
-    throw new Error('No token selected');
+    if (ethers.isError(error, 'CALL_EXCEPTION')) {
+      throw new Error(
+        'Transaction reverted. Please check if the token contract allows this operation or if you have enough balance.',
+      );
+    } else if (ethers.isError(error, 'INSUFFICIENT_FUNDS')) {
+      throw new Error(
+        'Transaction failed due to insufficient funds. Please make sure your wallet has enough ETH for gas fees.',
+      );
+    } else if (ethers.isError(error, 'NONCE_EXPIRED')) {
+      throw new Error(
+        'Transaction failed due to a nonce error. Try resubmitting the transaction.',
+      );
+    } else if (ethers.isError(error, 'ACTION_REJECTED')) {
+      throw new Error('Transaction failed, user rejected the signature.');
+    } else if (error.code) {
+      throw new Error(
+        `Error code: ${error.code}. Please check the details and try again.`,
+      );
+    } else {
+      throw new Error(
+        `Transaction failed: ${
+          error.message || 'Unknown error occurred. Please try again.'
+        }`,
+      );
+    }
   }
-
-  const receipt = await transactionResponse.wait();
-  if (receipt.status !== 1) {
-    throw new Error('Transaction failed!');
-  }
-
-  return receipt;
 };
 
 export const estimateGasAndGasPrice = async (
