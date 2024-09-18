@@ -8,7 +8,7 @@ import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
 import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, defaultCommitEvmGas, defaultReleaseEvmGas } from '../../constants/tokens';
 import { tokenCanisters } from '../../constants/addresses';
-import { NetworkIds } from '../../constants/networks';
+import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
@@ -16,6 +16,8 @@ import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
+import { truncate } from '../../model/helper';
+import DynamicDots from '../ui/DynamicDots';
 
 const RATE_CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -23,18 +25,31 @@ const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();
     const [currency, setCurrency] = useState<string>("USD");
     const [cryptoAmount, setCryptoAmount] = useState(0);
+    const [cryptoAmountUnits, setCryptoAmoutnUnits] = useState<bigint | null>(null);
     const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
     const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
     const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain>();
     const [blockchainType, setBlockchainType] = useState<BlockchainTypes>();
-    const [message, setMessage] = useState('');
+    const [message, setMessage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+    const [txHash, setTxHash] = useState<string | null>(null);
     const [loadingRate, setLoadingRate] = useState(false);
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
     const { chain, chainId, address } = useAccount();
-    const { user, sessionToken, icpAgent, principal, fetchIcpBalance, refetchUser, logout } = useUser();
+    const {
+        user,
+        sessionToken,
+        icpAgent,
+        principal,
+        icpBalances,
+        evmBalances,
+        fetchBalances,
+        refetchUser,
+        logout
+    } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -158,6 +173,22 @@ const CreateOrder: React.FC = () => {
         }
     }, [cryptoAmount, exchangeRate]);
 
+    useEffect(() => {
+        if (selectedBlockchain && selectedToken && cryptoAmount > 0) {
+            const roundedCryptoAmount = cryptoAmount.toFixed(selectedToken.decimals);
+            if ('EVM' in selectedBlockchain) {
+
+                setCryptoAmoutnUnits(
+
+                    selectedToken.isNative ? ethers.parseEther(roundedCryptoAmount)
+                        : ethers.parseUnits(roundedCryptoAmount, selectedToken.decimals)
+                );
+            } else if ('ICP' in selectedBlockchain) {
+                setCryptoAmoutnUnits(BigInt(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals))
+            }
+        }
+    }, [cryptoAmount, selectedBlockchain, selectedToken])
+
     const handleProviderSelection = (provider: PaymentProvider) => {
         if (selectedProviders.length === 0) {
             setSelectedProviders([provider]);
@@ -172,8 +203,20 @@ const CreateOrder: React.FC = () => {
         });
     };
 
+    useEffect(() => {
+        if (message) {
+            const timer = setTimeout(() => {
+                setMessage(null);
+                setTxHash(null);
+            }, 20000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [message]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setTxHash(null);
 
         if (!user) {
             setMessage('User Not Found');
@@ -188,10 +231,11 @@ const CreateOrder: React.FC = () => {
         if (!chainId) throw new Error('Chain id is not available')
         if (!selectedBlockchain) throw new Error('No blockchain selected');
         if (!selectedToken) throw new Error('No token selected');
+        if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
 
         try {
             setIsLoading(true);
-            setMessage('Creating offramping order...');
+            setLoadingMessage("Creating order");
 
             const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
                 const providerType: PaymentProviderType = providerToProviderType(provider);
@@ -200,21 +244,16 @@ const CreateOrder: React.FC = () => {
 
             const selectedAddress = user.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
             if (!selectedAddress) {
-                setMessage('No address available for the selected blockchain');
+                setMessage('No address available for the selected blockchain.');
+                setIsLoading(false);
                 return;
             }
 
-            let cryptoAmountUnits: bigint;
             let gasEstimateLock: [bigint] | [] = [];
             let gasEstimateRelease: [bigint] | [] = [];
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
-                cryptoAmountUnits = selectedToken.isNative ? ethers.parseEther(cryptoAmount.toString())
-                    : ethers.parseUnits(
-                        cryptoAmount.toString(),
-                        selectedToken.decimals
-                    );
-
+                setLoadingMessage("Estimating order gas");
                 try {
                     const gasForCommit = await estimateGasAndGasPrice(
                         chainId,
@@ -246,34 +285,37 @@ const CreateOrder: React.FC = () => {
 
                     if (cryptoFee >= cryptoAmountUnits) {
                         console.error('[validateOrderFees] Total fees exceed crypto amount');
-                        setMessage("Fees for commit and release will probably exceed the crypto amount!");
+                        setMessage("Fees for commit and release will probably exceed the crypto amount.");
+                        setIsLoading(false);
                         return;
                     }
 
+                    setLoadingMessage("Depositing funds to vault")
                     const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
+                    setTxHash(receipt.hash);
                     console.log('Transaction receipt: ', receipt);
-
-                    setMessage('Transaction successful!');
                 } catch (e: any) {
-                    setMessage(`Transaction failed: ${e.message || e}`);
+                    setMessage(`${e.message || e}`);
+                    setIsLoading(false);
                     return;
                 }
             } else if (blockchain === 'ICP') {
-                const decimalMultiplier = selectedToken.decimals;
-                cryptoAmountUnits = BigInt(cryptoAmount * 10 ** decimalMultiplier);
                 try {
+                    setLoadingMessage("Transfering funds to vault");
                     const ledgerCanister = Principal.fromText(selectedToken.address);
                     const fees = await fetchIcpTransactionFee(ledgerCanister);
 
                     const result = await transferICPTokensToCanister(icpAgent!, ledgerCanister, cryptoAmountUnits, fees);
                     console.log('Transaction result:', result);
-                    setMessage('Transaction successful!');
-                    fetchIcpBalance();
+
+                    fetchBalances();
                 } catch (e: any) {
-                    setMessage(`Transaction failed: ${e.message || e}`);
+                    setMessage(`${e.message || e}`);
+                    setIsLoading(false);
                     return;
                 }
             } else {
+                setIsLoading(false);
                 throw new Error('Unsupported blockchain selected');
             }
 
@@ -292,15 +334,17 @@ const CreateOrder: React.FC = () => {
             );
 
             if ('Ok' in result) {
-                setMessage(`Order with ID=${result.Ok} created!`);
+                setIsLoading(false);
                 refetchUser();
                 navigate(`/view?offramperId=${user.id}`);
             } else {
+                setIsLoading(false);
                 const errorMessage = rampErrorToString(result.Err);
                 setMessage(errorMessage);
             }
         } catch (error) {
-            setMessage(`Error creating offramp order, error = ${error}`);
+            setMessage(`Error creating offramp order, error: ${error}`);
+            setIsLoading(false);
         } finally {
             setIsLoading(false);
         }
@@ -339,21 +383,51 @@ const CreateOrder: React.FC = () => {
         }
     }
 
-    const validInputs = user !== null && selectedBlockchain !== undefined && fiatAmount !== undefined && fiatAmount > 0
+    const getAvailableBalance = () => {
+        if (blockchainType === 'ICP' && selectedToken && icpBalances) {
+            return icpBalances[selectedToken.name];
+        } else if (blockchainType === 'EVM' && selectedToken && evmBalances) {
+            if (selectedToken.isNative) return evmBalances[selectedToken.name] || '0';
+            return evmBalances[selectedToken.address];
+        }
+        return null
+    };
+
+    const validInputs = user !== null
+        && selectedBlockchain !== undefined
+        && fiatAmount !== undefined && fiatAmount > 0
         && (isValidAddressMessage() === undefined || isValidAddressMessage() === false)
-        && selectedProviders.length > 0 && selectedToken !== null;
+        && selectedProviders.length > 0
+        && selectedToken !== null
+        && cryptoAmountUnits && cryptoAmountUnits > 0
+        && (getAvailableBalance() ? cryptoAmountUnits <= getAvailableBalance()!.raw : true);
+
+    const getNetwork = (): NetworkProps | undefined => {
+        return (chainId ?
+            Object.values(NetworkIds).find(network => network.id === Number(chainId)) : undefined);
+    }
+
+    const getNetworkExplorer = (): string | undefined => {
+        return getNetwork()?.explorer
+    }
 
     return (
         <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative">
             {isLoading && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 rounded-xl">
-                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
+                    <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
+                    {loadingMessage && (
+                        <div className="text-white text-2xl font-bold mt-2">
+                            {loadingMessage}<DynamicDots isLoading />
+                        </div>
+                    )}
                 </div>
             )}
 
             <div className="text-center mb-8">
                 <h2 className="text-white text-2xl font-semibold">Create Offramping Order</h2>
             </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex justify-between items-center mb-4">
                     <label className="block text-white w-24">Fiat:</label>
@@ -372,16 +446,30 @@ const CreateOrder: React.FC = () => {
                         <span className="py-2 px-3 bg-gray-600 border border-gray-500 rounded-r-lg text-white">$</span>
                     </div>
                 </div>
-                <div className="flex justify-between items-center mb-4">
+
+                <div className="flex justify-between items-center mb-4 relative">
                     <label className="text-white w-24">Crypto:</label>
                     <input
                         type="number"
                         value={cryptoAmount}
-                        onChange={(e) => setCryptoAmount(Number(e.target.value))}
-                        className="flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                        onChange={(e) => setCryptoAmount(selectedToken ? Number(Number(e.target.value).toFixed(selectedToken.decimals)) : Number(e.target.value))}
+                        className={
+                            `flex-grow py-2 px-3 border ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-500"
+                            } bg-gray-600 outline-none rounded-md focus:ring ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900"
+                            } text-white`
+                        }
                         required
+                        style={{
+                            appearance: 'textfield',
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'textfield',
+                        }}
                     />
+                    <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">
+                        max: {getAvailableBalance() ? getAvailableBalance()!.formatted : "0.00"} {selectedToken?.name}
+                    </span>
                 </div>
+
                 <div className="flex justify-between items-center mb-4">
                     <label className="text-white w-24">Blockchain:</label>
                     <select
@@ -397,6 +485,7 @@ const CreateOrder: React.FC = () => {
                         {user?.addresses.some(addr => 'Solana' in addr.address_type) && <option value="Solana">Solana</option>}
                     </select>
                 </div>
+
                 <div className="flex justify-between items-center mb-4">
                     <label className="text-white w-24">Token:</label>
                     <select
@@ -412,6 +501,7 @@ const CreateOrder: React.FC = () => {
                         ))}
                     </select>
                 </div>
+
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
@@ -462,23 +552,36 @@ const CreateOrder: React.FC = () => {
 
                 <hr className="border-t border-gray-500 w-full my-4" />
 
-                <button
-                    type="submit"
-                    className={`px-4 py-2 rounded-md ${validInputs ? 'bg-green-800 text-white hover:bg-green-900 focus:outline-none' : 'bg-gray-500 text-white cursor-not-allowed'}`}
-                    disabled={!validInputs}
-                >
-                    Create Order
-                </button>
+                <div className="flex justify-center">
+                    <button
+                        type="submit"
+                        className={`px-4 py-2 rounded-md flex items-center justify-center space-x-2 ${validInputs ?
+                            'bg-green-800 text-white hover:bg-green-900 focus:outline-none'
+                            : 'bg-gray-500 text-white cursor-not-allowed'}`
+                        }
+                        disabled={!validInputs}
+                    >
+                        {isLoading ? (
+                            <>
+                                <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+                                <span>Creating<DynamicDots isLoading /></span>
+                            </>
+                        ) : (
+                            <span>Create Order</span>
+                        )}
+                    </button>
+                </div>
             </form>
 
-            {isLoading ? (
-                <div className="mt-4 flex justify-center items-center space-x-2">
-                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-300">Processing...</div>
+            {txHash && (
+                <div className="text-blue-400 relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
+                    <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="hover:underline z-50">
+                        View tx: {truncate(txHash, 6, 6)}
+                    </a>
                 </div>
-            ) : (
-                message && <p className="mt-4 text-sm font-medium text-red-600 break-all">{message}</p>
+
             )}
+            {!isLoading && message && <p className="mt-4 text-sm font-medium text-red-600">{message}</p>}
         </div>
     );
 }

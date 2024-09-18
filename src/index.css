@@ -1,3 +1,18 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+input[type='number'] {
+  appearance: textfield; /* General appearance */
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none; /* Chrome, Safari */
+  margin: 0; /* Removes margin that may cause spin buttons to appear */
+}
+
+input[type='number']::-moz-spin-box {
+  appearance: none; /* Firefox */
+  -moz-appearance: textfield;
+}
