@@ -1,14 +1,14 @@
 <p align="center">
-<img src="assets/p2ploan.png" width="250">
+<img src="src/assets/icR-logo.png" width="250">
 </p>
 
 <div align="center">
-<span style="font-size:40px; font-weight:bold">ic2p2ramp</span>
+<span style="font-size:40px; font-weight:bold">icRamp</span>
 </div>
 
 #
 
-**IC2P2Ramp** is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. This protocol simplifies onramping and offramping digital assets with a secure, user-friendly platform, eliminating the need for centralized exchanges and reducing trust issues.
+**icRamp** is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. This protocol simplifies onramping and offramping digital assets with a secure, user-friendly platform, eliminating the need for centralized exchanges and reducing trust issues.
 
 Created for [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30), this project leverages multiple ICP canisters for enhanced functionality, including HTTPS outcalls, EVM RPC communication, and real-time exchange rate retrieval. For the associated EVM smart contracts used in the frontend and backend canisters, visit the [iC2P2Ramp-circuits](https://github.com/reymom/ic2P2ramp-circuits) repository.
 
@@ -50,11 +50,11 @@ The Exchange Rate Canister retrieves and provides exchange rates for various ass
 
 ### Backend Canister
 
-The Backend Canister handles the core business logic of the IC2P2Ramp protocol. It manages orders, communicates with the EVM RPC canister for blockchain interactions with the escrow in different EVM blockchains, such as Mantle and Polygon, and verifies paypal payments using the HTTPS Outcalls canister.
+The Backend Canister handles the core business logic of the icRamp protocol. It manages orders, communicates with the EVM RPC canister for blockchain interactions with the escrow in different EVM blockchains, such as Mantle and Polygon, and verifies paypal payments using the HTTPS Outcalls canister.
 
 ### Frontend Canister
 
-The Frontend Canister provides a user-friendly interface for interacting with the IC2P2Ramp protocol. Users can create and manage orders, view exchange rates, make payments and perform other related onramping and offramping operations.
+The Frontend Canister provides a user-friendly interface for interacting with the icRamp protocol. Users can create and manage orders, view exchange rates, make payments and perform other related onramping and offramping operations.
 
 <p align="center" style="margin-top:25px">
 <img src="assets/blockchain_interaction_diagram.png" style="border-radius:10px">
