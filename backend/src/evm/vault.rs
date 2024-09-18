@@ -253,7 +253,7 @@ impl Ic2P2ramp {
                         {"internalType": "uint256", "name": "_amount", "type": "uint256"},
                         {"internalType": "uint256", "name": "_fees", "type": "uint256"}
                     ],
-                    "name": "releaseFunds",
+                    "name": "releaseToken",
                     "outputs": [],
                     "stateMutability": "nonpayable",
                     "type": "function"
@@ -263,7 +263,7 @@ impl Ic2P2ramp {
 
         transaction::create_sign_request(
             abi,
-            "releaseFunds",
+            "releaseToken",
             gas,
             fee_estimates,
             chain_id,

@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-const LOCK_DURATION_TIME_SECONDS: u64 = 120; // 1 hour
+const LOCK_DURATION_TIME_SECONDS: u64 = 600; //10 min
 
 thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
