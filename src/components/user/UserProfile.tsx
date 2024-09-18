@@ -94,11 +94,7 @@ const UserProfile: React.FC = () => {
         try {
             const result = await backend.add_user_payment_provider(user.id, sessionToken, newProvider);
             if ('Ok' in result) {
-                const updatedProviders = [...user.payment_providers, newProvider];
-                const updatedUser = { ...user, payment_providers: updatedProviders };
-
-                setUser(updatedUser);
-                saveUserSession(updatedUser);
+                refetchUser();
             } else {
                 setMessage(rampErrorToString(result.Err));
             }
@@ -123,11 +119,7 @@ const UserProfile: React.FC = () => {
         try {
             const result = await backend.add_user_transaction_address(user.id, sessionToken, addingAddress);
             if ('Ok' in result) {
-                const updatedAddresses = [...user.addresses, addingAddress];
-                const updatedUser = { ...user, addresses: updatedAddresses };
-
-                setUser(updatedUser);
-                saveUserSession(updatedUser);
+                refetchUser();
             } else {
                 setMessage(`Failed to update address: ${rampErrorToString(result.Err)}`)
             }
@@ -152,6 +144,13 @@ const UserProfile: React.FC = () => {
         }
         return false;
     };
+
+    const addButtonContent = (loadingButton: boolean) =>
+        loadingButton ? (
+            <div className="w-5 h-5 px-3 py-3 border-t border-b rounded-full animate-spin"></div>
+        ) : (
+            "Add"
+        )
 
     return (
         <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative">
@@ -257,10 +256,11 @@ const UserProfile: React.FC = () => {
                                     disabled={!address || isAddressInUserAddresses(address)}
                                     onClick={() => handleAddAddress(address!)}
                                     className={
-                                        `ml-2 px-4 py-2 text-white font-semibold rounded-md w-1/4
+                                        `ml-2 px-4 py-2 text-white font-semibold rounded-md w-1/4 flex justify-center items-center 
                                     ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`
-                                    }>
-                                    Add
+                                    }
+                                >
+                                    {addButtonContent(loadingAddAddress)}
                                 </button>
                             </div>
                         ) : (
@@ -285,13 +285,17 @@ const UserProfile: React.FC = () => {
                                     type="text"
                                     value={principal.toString()}
                                     readOnly
-                                    className="px-3 py-2 border text-white border-gray-500 w-full rounded-md bg-gray-600"
+                                    className="px-3 py-2 h-full border text-white border-gray-500 w-full rounded-md bg-gray-600"
                                 />
                                 <button
-                                    disabled={isAddressInUserAddresses(principal.toString()) || (isAddressInUserAddresses(principal.toString()))}
+                                    disabled={isAddressInUserAddresses(principal.toString()) || (isAddressInUserAddresses(principal.toString()) || loadingAddAddress)}
                                     onClick={() => handleAddAddress(principal.toString())}
-                                    className={`ml-2 px-4 py-2 text-white w-1/4 font-semibold rounded-md ${!principal || isAddressInUserAddresses(principal.toString()) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`}>
-                                    Add
+                                    className={`ml-2 px-4 py-2 text-white w-1/4 font-semibold rounded-md flex justify-center items-center ${!principal || isAddressInUserAddresses(principal.toString())
+                                        ? 'bg-gray-500 cursor-not-allowed'
+                                        : 'bg-indigo-700 hover:bg-indigo-800'} 
+                                        ${loadingAddAddress ? 'cursor-not-allowed' : ''}`
+                                    }>
+                                    {addButtonContent(loadingAddAddress)}
                                 </button>
                             </div>
                         ) : (
@@ -306,13 +310,6 @@ const UserProfile: React.FC = () => {
                         )
                     ) : null}
                 </div>
-
-                {loadingAddAddress && (
-                    <div className="flex justify-center items-center space-x-2">
-                        <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-300">Adding Address...</div>
-                    </div>
-                )}
 
                 <hr className="border-t border-gray-500 w-full" />
 
@@ -363,7 +360,7 @@ const UserProfile: React.FC = () => {
                         type="text"
                         value={providerId}
                         onChange={(e) => setProviderId(e.target.value)}
-                        placeholder="Introduce ID"
+                        placeholder="ID"
                         className="w-full px-3 py-2 border border-gray-500 rounded-md bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-900"
                     />
 
@@ -391,17 +388,15 @@ const UserProfile: React.FC = () => {
                         </>
                     )}
 
-                    <button onClick={handleAddProvider} className="px-4 py-2 bg-indigo-700 text-white font-medium rounded-md hover:bg-indigo-800">
-                        Add
+                    <button
+                        disabled={loadingAddProvider}
+                        onClick={handleAddProvider}
+                        className={`px-4 py-2 bg-indigo-700 text-white font-medium rounded-md hover:bg-indigo-800 ${loadingAddProvider
+                            ? 'cursor-not-allowed' : ''}`
+                        }>
+                        {addButtonContent(loadingAddProvider)}
                     </button>
                 </div>
-
-                {loadingAddProvider && (
-                    <div className="flex justify-center items-center space-x-2">
-                        <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-300">Adding Provider...</div>
-                    </div>
-                )}
 
                 <hr className="border-t border-gray-500 w-full" />
 

@@ -229,7 +229,7 @@ const ConnectAddress: React.FC = () => {
                         required
                     />
                 </div>
-                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md text-xl">
+                <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
                     <FontAwesomeIcon icon={faKey} className="text-white h-5 w-5" />
                     <input
                         type={isPasswordVisible ? 'text' : 'password'}

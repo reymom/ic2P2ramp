@@ -298,26 +298,27 @@ const RegisterUser: React.FC = () => {
 
             <hr className="border-t border-gray-500 my-6" />
 
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
                 <button
                     onClick={() => navigate("/view")}
                     className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring focus:ring-gray-300"
                 >
                     Skip
                 </button>
+
+                {isLoading ? (
+                    <div className="flex items-center space-x-2">
+                        <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
+                        <div className="text-sm font-medium text-gray-300">Registering...</div>
+                    </div>
+                ) : null}
+
                 <button onClick={handleSubmit} className="px-4 py-2 bg-green-800 text-white rounded-md hover:bg-green-900 focus:outline-none focus:ring focus:ring-green-600">
                     Register
                 </button>
             </div>
 
-            {isLoading ? (
-                <div className="mt-6 flex justify-center items-center space-x-2">
-                    <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                    <div className="text-sm font-medium text-gray-300">Processing...</div>
-                </div>
-            ) : (
-                message && <p className="mt-4 text-sm font-medium text-red-600 break-all">{message}</p>
-            )}
+            {!isLoading && message && <p className="mt-4 text-sm font-medium text-red-600">{message}</p>}
         </div>
     );
 };
