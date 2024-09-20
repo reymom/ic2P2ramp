@@ -1,18 +1,18 @@
 import { ethers } from 'ethers';
+
+import { backend } from '../declarations/backend';
+import { MethodGasUsage } from '../declarations/backend/backend.did';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import { getVaultAddress } from '../constants/addresses';
-import { MethodGasUsage } from '../declarations/backend/backend.did';
 import { TokenOption } from '../constants/tokens';
-import { backend } from '../declarations/backend';
 
 export const depositInVault = async (
   chainId: number,
   selectedToken: TokenOption,
   cryptoAmount: bigint,
 ) => {
-  if (!window.ethereum) {
+  if (!window.ethereum)
     throw new Error('No crypto wallet found. Please install it.');
-  }
 
   const provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send('eth_requestAccounts', []);
@@ -74,37 +74,7 @@ export const depositInVault = async (
     }
     return receipt;
   } catch (error: any) {
-    console.log(
-      'error.code = ',
-      error.code || '...',
-      'error.message = ',
-      error.message || '...',
-    );
-    if (ethers.isError(error, 'CALL_EXCEPTION')) {
-      throw new Error(
-        'Transaction reverted. Please check if the token contract allows this operation or if you have enough balance.',
-      );
-    } else if (ethers.isError(error, 'INSUFFICIENT_FUNDS')) {
-      throw new Error(
-        'Transaction failed due to insufficient funds. Please make sure your wallet has enough ETH for gas fees.',
-      );
-    } else if (ethers.isError(error, 'NONCE_EXPIRED')) {
-      throw new Error(
-        'Transaction failed due to a nonce error. Try resubmitting the transaction.',
-      );
-    } else if (ethers.isError(error, 'ACTION_REJECTED')) {
-      throw new Error('Transaction failed, user rejected the signature.');
-    } else if (error.code) {
-      throw new Error(
-        `Error code: ${error.code}. Please check the details and try again.`,
-      );
-    } else {
-      throw new Error(
-        `Transaction failed: ${
-          error.message || 'Unknown error occurred. Please try again.'
-        }`,
-      );
-    }
+    throw new Error(handleWeb3Error(error));
   }
 };
 
@@ -160,5 +130,25 @@ export const estimateOrderFees = async (
   } catch (error) {
     console.error('[estimateOrderFees] Error:', error);
     throw error;
+  }
+};
+
+export const handleWeb3Error = (error: any): string => {
+  console.log('Web3 error:', error);
+
+  if (ethers.isError(error, 'CALL_EXCEPTION')) {
+    return 'Transaction reverted. Please check if the token contract allows this operation or if you have enough balance.';
+  } else if (ethers.isError(error, 'INSUFFICIENT_FUNDS')) {
+    return 'Transaction failed due to insufficient funds. Please make sure your wallet has enough ETH for gas fees.';
+  } else if (ethers.isError(error, 'NONCE_EXPIRED')) {
+    return 'Transaction failed due to a nonce error. Try resubmitting the transaction.';
+  } else if (ethers.isError(error, 'ACTION_REJECTED')) {
+    return 'Transaction failed, user rejected the signature.';
+  } else if (error.code) {
+    return `Error code: ${error.code}. Please check the details and try again.`;
+  } else {
+    return `Transaction failed: ${
+      error.message || 'Unknown error occurred. Please try again.'
+    }`;
   }
 };
