@@ -24,7 +24,7 @@ use management::{
 };
 use model::errors::{self, RampError, Result};
 use model::memory::{
-    heap::{self, initialize_state, mutate_state, read_state, upgrade, InstallArg, State, STATE},
+    heap::{self, initialize_state, read_state, setup_timers, upgrade, InstallArg, State, STATE},
     stable,
 };
 use model::types::evm::{
@@ -47,20 +47,6 @@ use outcalls::{
     revolut::{self, token as revolut_token},
     xrc_rates::{self, Asset, AssetClass},
 };
-
-fn setup_timers() {
-    ic_cdk_timers::set_timer(Duration::ZERO, || {
-        ic_cdk::spawn(async {
-            let public_key = evm::signer::get_public_key().await;
-            let evm_address = evm::signer::pubkey_bytes_to_address(&public_key);
-            ic_cdk::println!("[setup_timers] evm_address = {}", evm_address);
-            mutate_state(|s| {
-                s.ecdsa_pub_key = Some(public_key);
-                s.evm_address = Some(evm_address);
-            });
-        })
-    });
-}
 
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
