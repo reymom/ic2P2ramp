@@ -12,19 +12,19 @@ pub enum MethodGasUsage {
     ReleaseNative,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasRecord {
     gas: u128,
     gas_price: u128,
     block_number: u128,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasUsage {
     records: Vec<GasRecord>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct ChainGasTracking {
     pub commit_gas: GasUsage,
     pub release_token_gas: GasUsage,

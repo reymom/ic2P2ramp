@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use candid::Principal;
+use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
@@ -11,7 +11,7 @@ use crate::model::types::{
 
 use super::heap::STATE;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct State {
     pub chains: HashMap<u64, ChainState>,
     pub ecdsa_pub_key: Option<Vec<u8>>,
@@ -44,4 +44,13 @@ pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {
 
 pub fn initialize_state(state: State) {
     STATE.set(Some(state));
+}
+
+pub(super) fn get_state() -> State {
+    STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("BUG: state is not initialized")
+            .clone()
+    })
 }

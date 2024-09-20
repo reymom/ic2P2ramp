@@ -1,6 +1,10 @@
+use core::fmt;
+
+use candid::{CandidType, Deserialize};
+
 use crate::model::memory::heap::{mutate_state, read_state};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, CandidType, Deserialize)]
 pub struct RevolutState {
     pub access_token: Option<String>,
     pub token_expiration: Option<u64>,
@@ -10,6 +14,18 @@ pub struct RevolutState {
     pub private_key_der: Vec<u8>,
     pub kid: String,
     pub tan: String,
+}
+
+impl fmt::Debug for RevolutState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RevolutConfig")
+            .field("client_id", &self.client_id)
+            .field("api_url", &self.api_url)
+            .field("proxy_url", &self.proxy_url)
+            .field("kid", &self.kid)
+            .field("tan", &self.tan)
+            .finish()
+    }
 }
 
 pub fn get_revolut_token() -> Option<(String, u64)> {

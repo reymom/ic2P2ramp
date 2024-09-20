@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use candid::CandidType;
+use candid::{CandidType, Deserialize};
 
 use crate::model::{
     errors::{RampError, Result},
     memory::heap::{mutate_state, read_state},
 };
 
-#[derive(CandidType, Clone, Debug)]
+#[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct Token {
     pub address: String,
     pub decimals: u8,

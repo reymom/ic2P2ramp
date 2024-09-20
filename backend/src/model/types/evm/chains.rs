@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use candid::{CandidType, Deserialize};
 use ethers_core::types::U256;
 
 use crate::{
@@ -10,19 +11,29 @@ use crate::{
 
 use super::{gas::ChainGasTracking, token::Token};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct ChainState {
     pub vault_manager_address: String,
     pub rpc_services: RpcServices,
-    pub nonce: U256,
+    pub nonce: u128,
     pub approved_tokens: HashMap<String, Token>,
     pub gas_tracking: ChainGasTracking,
+}
+
+impl ChainState {
+    pub fn get_nonce_as_u256(&self) -> U256 {
+        U256::from(self.nonce)
+    }
+
+    pub fn increment_nonce(&mut self) {
+        self.nonce += 1;
+    }
 }
 
 pub fn increment_nonce(chain_id: u64) {
     mutate_state(|state| {
         if let Some(chain_state) = state.chains.get_mut(&chain_id) {
-            chain_state.nonce += U256::from(1);
+            chain_state.increment_nonce();
         }
     });
 }

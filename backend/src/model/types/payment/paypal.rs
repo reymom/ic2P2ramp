@@ -1,6 +1,8 @@
+use candid::{CandidType, Deserialize};
+
 use crate::model::memory::heap::{mutate_state, read_state};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct PayPalState {
     pub access_token: Option<String>,
     pub token_expiration: Option<u64>,
