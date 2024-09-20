@@ -6,10 +6,9 @@ use crate::evm::{fees, transaction, vault::Ic2P2ramp};
 use crate::management::user as user_management;
 use crate::model::types::order::LockedOrder;
 use crate::types::{
-    calculate_fees,
     evm::{logs::TransactionAction, token},
     get_icp_fee,
-    order::{Order, OrderFilter, OrderState, OrderStateFilter},
+    order::{calculate_fees, Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 use crate::{
@@ -49,7 +48,6 @@ pub async fn calculate_order_evm_fees(
         let token = token::get_evm_token(chain_id, &token_address)?;
         let rate = helpers::get_eth_token_rate(token.rate_symbol).await?;
         ic_cdk::println!("[calculate_order_evm_fees] token rate = {:?}", rate);
-        // token::add_token_rate(token_address, rate);
 
         let scale_factor = 10u128.pow(18 - token.decimals as u32);
         blockchain_fees = ((blockchain_fees as f64 * rate) / scale_factor as f64) as u128;
@@ -227,7 +225,7 @@ pub async fn lock_order(
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     })??;
 
-    memory::heap::set_order_timer(order_id).await;
+    memory::heap::set_order_timer(order_id);
 
     Ok(())
 }

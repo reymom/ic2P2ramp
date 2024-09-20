@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-const LOCK_DURATION_TIME_SECONDS: u64 = 600; //10 min
+pub(crate) const LOCK_DURATION_TIME_SECONDS: u64 = 1800; // 30 min
 
 thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
@@ -19,8 +19,8 @@ thread_local! {
     static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
     static LOCKED_ORDER_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::default();
 
-    pub(crate) static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
-    pub(crate) static TRANSACTION_LOG_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::new(HashMap::new());
+    pub(super) static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
+    pub(super) static TRANSACTION_LOG_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::new(HashMap::new());
 }
 
 pub fn generate_order_id() -> u64 {
@@ -39,7 +39,7 @@ pub fn generate_user_id() -> u64 {
     })
 }
 
-pub async fn set_order_timer(order_id: u64) {
+pub fn set_order_timer(order_id: u64) {
     let duration = LOCK_DURATION_TIME_SECONDS;
     let timer_id = set_timer(Duration::from_secs(duration), move || {
         ic_cdk::spawn(async move {
@@ -68,26 +68,22 @@ pub fn clear_order_timer(order_id: u64) -> Result<()> {
 // For Upgrade
 // -----------
 
-pub(crate) fn get_user_id_counter() -> u64 {
+pub(super) fn get_user_id_counter() -> u64 {
     USER_ID_COUNTER.with(|counter| *counter.borrow())
 }
 
-pub(crate) fn set_user_id_counter(value: u64) {
+pub(super) fn set_user_id_counter(value: u64) {
     USER_ID_COUNTER.with(|counter| *counter.borrow_mut() = value);
 }
 
-pub(crate) fn get_order_id_counter() -> u64 {
+pub(super) fn get_order_id_counter() -> u64 {
     ORDER_ID_COUNTER.with(|counter| *counter.borrow())
 }
 
-pub(crate) fn set_order_id_counter(value: u64) {
+pub(super) fn set_order_id_counter(value: u64) {
     ORDER_ID_COUNTER.with(|counter| *counter.borrow_mut() = value);
 }
 
-pub(crate) fn get_locked_order_timers() -> HashMap<u64, TimerId> {
+pub(super) fn get_locked_order_timers() -> HashMap<u64, TimerId> {
     LOCKED_ORDER_TIMERS.with(|timers| timers.borrow().clone())
-}
-
-pub(crate) fn set_locked_order_timers(timers: HashMap<u64, TimerId>) {
-    LOCKED_ORDER_TIMERS.with(|map| *map.borrow_mut() = timers);
 }

@@ -1,8 +1,8 @@
-use candid::{CandidType, Deserialize};
-use ethers_core::types::U256;
-use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use std::collections::HashMap;
 use std::{fmt, str::FromStr};
+
+use candid::{CandidType, Deserialize};
+use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
 use crate::{
@@ -82,7 +82,7 @@ impl TryFrom<InitArg> for State {
                 ChainState {
                     vault_manager_address: config.vault_manager_address,
                     rpc_services: config.services,
-                    nonce: U256::zero(),
+                    nonce: 0,
                     approved_tokens: HashMap::new(),
                     gas_tracking: ChainGasTracking::default(),
                 },
