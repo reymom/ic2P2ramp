@@ -5,6 +5,7 @@ use super::signer::{self, SignRequest};
 use super::transaction;
 
 use crate::errors::Result;
+use crate::model::errors::RampError;
 use crate::model::{
     helpers,
     types::{evm::chains, order::LockedOrder},
@@ -13,7 +14,7 @@ use crate::model::{
 pub struct Ic2P2ramp;
 
 impl Ic2P2ramp {
-    const DEFAULT_GAS: u64 = 100_000;
+    pub(crate) const DEFAULT_GAS: u64 = 100_000;
     // Gas margin of 20%
     const GAS_MULTIPLIER_NUM: u64 = 12;
     const GAS_MULTIPLIER_DEN: u64 = 10;
@@ -332,6 +333,10 @@ impl Ic2P2ramp {
         amount: u128,
         fees: u128,
     ) -> Result<String> {
+        if amount < fees {
+            return Err(RampError::FundsBelowFees);
+        }
+
         let abi = r#"
             [
                 {
@@ -378,6 +383,11 @@ impl Ic2P2ramp {
         amount: u128,
         fees: u128,
     ) -> Result<String> {
+        // ) -> Result<(String, SignRequest)> {
+        if amount < fees {
+            return Err(RampError::FundsBelowFees);
+        }
+
         let abi = r#"
             [
                 {
@@ -413,7 +423,10 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        transaction::send_signed_transaction(request, chain_id).await
+        let tx_hash = transaction::send_signed_transaction(request, chain_id).await?;
+
+        // return Ok(tx_hash, request)
+        return Ok(tx_hash);
     }
 
     pub async fn transfer(
@@ -442,6 +455,11 @@ impl Ic2P2ramp {
             .await?;
         } else {
             let gas_cost = fee_estimates.max_fee_per_gas * gas;
+
+            if U256::from(value) < gas_cost {
+                return Err(RampError::FundsBelowFees);
+            }
+
             let transfer_value = U256::from(value) - gas_cost;
 
             request = signer::create_sign_request(

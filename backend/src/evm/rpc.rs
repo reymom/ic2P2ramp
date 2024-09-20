@@ -410,6 +410,21 @@ impl Service {
         )
         .await
     }
+    pub async fn eth_get_transaction_count(
+        &self,
+        arg0: RpcServices,
+        arg1: Option<RpcConfig>,
+        arg2: GetTransactionCountArgs,
+        cycles: u128,
+    ) -> Result<(MultiGetTransactionCountResult,)> {
+        ic_cdk::api::call::call_with_payment128(
+            self.0,
+            "eth_getTransactionCount",
+            (arg0, arg1, arg2),
+            cycles,
+        )
+        .await
+    }
     pub async fn eth_get_transaction_receipt(
         &self,
         arg0: RpcServices,

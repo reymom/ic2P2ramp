@@ -6,7 +6,8 @@ use ethers_core::types::U256;
 use super::{
     fees::FeeEstimates,
     rpc::{
-        GetTransactionReceiptResult, MultiGetTransactionReceiptResult,
+        BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
+        MultiGetTransactionCountResult, MultiGetTransactionReceiptResult,
         MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
         SendRawTransactionStatus, TransactionReceipt, EVM_RPC,
     },
@@ -15,7 +16,11 @@ use super::{
 
 use crate::{
     errors::{RampError, Result},
-    model::{helpers, memory::heap::logs},
+    model::{
+        helpers,
+        memory::heap::{logs, read_state},
+        types::evm::chains,
+    },
     types::evm::{
         chains::{get_rpc_providers, increment_nonce},
         logs::TransactionAction,
@@ -169,6 +174,7 @@ pub fn spawn_transaction_checker<F>(
     interval: Duration,
     order_id: u64,
     action: TransactionAction,
+    // sign_request: SignRequest,
     on_success: F,
 ) where
     F: Fn(TransactionReceipt) + 'static,
@@ -180,6 +186,7 @@ pub fn spawn_transaction_checker<F>(
         max_attempts: u32,
         interval: Duration,
         order_id: u64,
+        // sign_request: SignRequest,
         on_success: F,
     ) where
         F: Fn(TransactionReceipt) + 'static,
@@ -199,6 +206,11 @@ pub fn spawn_transaction_checker<F>(
                     TransactionStatus::Pending if attempts < max_attempts => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Pending...");
                         logs::update_transaction_log(order_id, TransactionStatus::Pending);
+
+                        // if attempts == max_attempts - 1 {
+                        // retry_with_bumped_fees(sign_request.clone(), chain_id, order_id).await;
+                        // }
+
                         schedule_check(
                             tx_hash.clone(),
                             chain_id,
@@ -206,6 +218,7 @@ pub fn spawn_transaction_checker<F>(
                             max_attempts,
                             interval,
                             order_id,
+                            // sign_request.clone(),
                             on_success,
                         );
                     }
@@ -233,5 +246,72 @@ pub fn spawn_transaction_checker<F>(
         interval,
         order_id,
         on_success,
+        // on_pending,
     );
+}
+
+// pub async fn retry_with_bumped_fees<F>(
+//     mut sign_request: SignRequest,
+//     chain_id: u64,
+//     order_id: u64,
+//     on_success: F,
+// ) where
+//     F: Fn(TransactionReceipt) + 'static,
+// {
+//     ic_cdk::println!("[retry_with_bumped_fees] Retrying transaction with bumped fees.");
+
+//     // Bump gas fees
+//     sign_request.max_fee_per_gas = Some(bump_fee(sign_request.max_fee_per_gas));
+//     sign_request.max_priority_fee_per_gas =
+//         Some(bump_fee(sign_request.max_priority_fee_per_gas));
+
+//     // Resend the transaction with updated fees
+//     let new_tx_hash = send_signed_transaction(sign_request, chain_id).await?;
+
+//     // Spawn a new checker for the retried transaction
+//     spawn_transaction_checker(
+//         new_tx_hash.clone(),
+//         chain_id,
+//         60,
+//         Duration::from_secs(4),
+//         order_id,
+//         TransactionAction::Retry,
+//         // sign_request,
+//         on_success,
+//     );
+// }
+
+// fn bump_fee(current_fee: Option<U256>) -> U256 {
+//     // Bump gas fee 20%
+//     current_fee.unwrap_or(U256::zero()) * U256::from(12) / U256::from(10)
+// }
+
+pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
+    let rpc_providers = chains::get_rpc_providers(chain_id);
+    let address = read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
+
+    let cycles = 10_000_000_000;
+    match EVM_RPC
+        .eth_get_transaction_count(
+            rpc_providers,
+            None,
+            GetTransactionCountArgs {
+                address,
+                block: BlockTag::Latest,
+            },
+            cycles,
+        )
+        .await
+    {
+        Ok((res,)) => match res {
+            MultiGetTransactionCountResult::Consistent(block_result) => match block_result {
+                GetTransactionCountResult::Ok(count) => Ok(count),
+                GetTransactionCountResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
+            },
+            MultiGetTransactionCountResult::Inconsistent(_) => {
+                ic_cdk::trap("Block Result is inconsistent");
+            }
+        },
+        Err((code, message)) => Err(RampError::ICRejectionError(code, message)),
+    }
 }

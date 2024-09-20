@@ -41,7 +41,7 @@ pub async fn create_sign_request(
     let nonce = read_state(|s| {
         s.chains
             .get(&chain_id.as_u64())
-            .map(|chain_state| chain_state.nonce)
+            .map(|chain_state| chain_state.get_nonce_as_u256())
             .ok_or("Unsupported chain ID")
     })
     .unwrap();
