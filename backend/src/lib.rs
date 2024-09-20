@@ -5,6 +5,7 @@ mod model;
 mod outcalls;
 
 use candid::Principal;
+use evm::transaction::TransactionStatus;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 use num_traits::cast::ToPrimitive;
@@ -23,7 +24,7 @@ use management::{
 };
 use model::errors::{self, RampError, Result};
 use model::memory::{
-    heap::{self, initialize_state, mutate_state, read_state, upgrade, InitArg, State},
+    heap::{self, initialize_state, mutate_state, read_state, upgrade, InstallArg, State, STATE},
     stable,
 };
 use model::types::evm::{
@@ -52,6 +53,7 @@ fn setup_timers() {
         ic_cdk::spawn(async {
             let public_key = evm::signer::get_public_key().await;
             let evm_address = evm::signer::pubkey_bytes_to_address(&public_key);
+            ic_cdk::println!("[setup_timers] evm_address = {}", evm_address);
             mutate_state(|s| {
                 s.ecdsa_pub_key = Some(public_key);
                 s.evm_address = Some(evm_address);
@@ -66,14 +68,57 @@ fn pre_upgrade() {
 }
 
 #[ic_cdk::post_upgrade]
-fn post_upgrade() {
-    upgrade::post_upgrade()
+fn post_upgrade(install_arg: InstallArg) {
+    ic_cdk::println!(
+        "[post_upgrade]: upgrad canister executed with install_arg: {:?}",
+        install_arg
+    );
+
+    match install_arg {
+        InstallArg::Reinstall(_) => ic_cdk::trap("InitArg not valid for reinstall"),
+        InstallArg::Upgrade(update_arg) => {
+            upgrade::post_upgrade(update_arg.clone());
+            if let Some(update_arg) = update_arg {
+                ic_cdk::println!("[post_upgrade] some update_arg!");
+                if update_arg.ecdsa_key_id.is_some() {
+                    ic_cdk::println!("[post_upgrade] some ecdsa_key_id!");
+                    setup_timers();
+                }
+            }
+        }
+    }
+
+    let state = STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("BUG: state is not initialized")
+            .clone()
+    });
+    ic_cdk::println!("[post_upgrade]: state = {:?}", state);
 }
 
 #[ic_cdk::init]
-fn init(arg: InitArg) {
-    ic_cdk::println!("[init]: initialized minter with arg: {:?}", arg);
-    initialize_state(State::try_from(arg).expect("BUG: failed to initialize minter"));
+fn init(install_arg: InstallArg) {
+    ic_cdk::println!(
+        "[init] initialized canister with install_arg: {:?}",
+        install_arg
+    );
+
+    match install_arg {
+        InstallArg::Reinstall(init_arg) => {
+            initialize_state(State::try_from(init_arg).expect("BUG: failed to initialize minter"))
+        }
+        InstallArg::Upgrade(_) => ic_cdk::trap("UpdateArg not valid for reinstall"),
+    }
+
+    let state = STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("BUG: state is not initialized")
+            .clone()
+    });
+
+    ic_cdk::println!("[init] new state = {:?}", state);
     setup_timers();
 }
 
@@ -136,9 +181,35 @@ async fn test_get_latest_block(chain_id: u64) -> Result<Block> {
     fees::eth_get_latest_block(chain_id, evm::rpc::BlockTag::Latest).await
 }
 
+#[ic_cdk::update]
+async fn test_get_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
+    transaction::check_transaction_status(tx_hash, chain_id).await
+}
+
+#[ic_cdk::update]
+async fn test_get_transaction_count(chain_id: u64) -> Result<u128> {
+    transaction::eth_get_transaction_count(chain_id).await
+}
+
 // ----------
 // Management
 // ----------
+
+#[ic_cdk::query]
+fn print_constants() -> String {
+    format!(
+        "Order's Lock Time = {}s\n\
+        User Session's Expiration Time = {}s\n\
+        Offramper Fiat Fee = {}%\n\
+        Onramper Crypto Fee = {}%\n\
+        Default Evm Gas = {}",
+        heap::LOCK_DURATION_TIME_SECONDS,
+        Session::EXPIRATION_SECS,
+        (100. / types::order::OFFRAMPER_FIAT_FEE_DENOM as f64),
+        (100. / types::order::ADMIN_CRYPTO_FEE_DENOM as f64),
+        Ic2P2ramp::DEFAULT_GAS
+    )
+}
 
 #[ic_cdk::update]
 async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
@@ -628,6 +699,7 @@ async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
         Blockchain::EVM { chain_id } => {
             let fees = order.crypto.fee / 2;
 
+            // let sign_request: SignRequest;
             let tx_hash = if let Some(token_address) = order.crypto.token {
                 Ic2P2ramp::withdraw_token(
                     *chain_id,
@@ -654,6 +726,7 @@ async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
                 Duration::from_secs(4),
                 order_id,
                 TransactionAction::Cancel,
+                // sign_request,
                 move |receipt| {
                     let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
                     let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);

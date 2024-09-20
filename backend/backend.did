@@ -94,6 +94,7 @@ type InitArg = record {
   chains : vec ChainConfig;
   paypal : PaypalConfig;
 };
+type InstallArg = variant { Upgrade : opt UpdateArg; Reinstall : InitArg };
 type LockedOrder = record {
   locked_at : nat64;
   payment_done : bool;
@@ -223,7 +224,8 @@ type RejectionCode = variant {
 };
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : User; Err : RampError };
-type Result_10 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_10 = variant { Ok : nat; Err : RampError };
+type Result_11 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : record { nat64; nat }; Err : RampError };
 type Result_3 = variant { Ok : text; Err : RampError };
 type Result_4 = variant { Ok : nat64; Err : RampError };
@@ -277,6 +279,13 @@ type TransactionStatus = variant {
   Pending;
 };
 type TransformArgs = record { context : blob; response : HttpResponse };
+type UpdateArg = record {
+  ecdsa_key_id : opt EcdsaKeyId;
+  revolut : opt RevolutConfig;
+  proxy_url : opt text;
+  chains : opt vec ChainConfig;
+  paypal : opt PaypalConfig;
+};
 type User = record {
   id : nat64;
   user_type : UserType;
@@ -290,7 +299,7 @@ type User = record {
   hashed_password : opt text;
 };
 type UserType = variant { Offramper; Onramper };
-service : (InitArg) -> {
+service : (InstallArg) -> {
   add_user_payment_provider : (nat64, text, PaymentProvider) -> (Result);
   add_user_transaction_address : (nat64, text, TransactionAddress) -> (Result);
   authenticate_user : (LoginAddress, opt AuthenticationData) -> (Result_1);
@@ -318,6 +327,7 @@ service : (InitArg) -> {
   get_evm_tokens : (nat64) -> (Result_6) query;
   get_exchange_rate : (text, text) -> (Result_3);
   get_icp_transaction_fee : (principal) -> (Result_7) query;
+  get_lock_time : () -> (nat64) query;
   get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
       vec OrderState,
     ) query;
@@ -331,6 +341,7 @@ service : (InitArg) -> {
       TransactionAddress,
       opt nat64,
     ) -> (Result_3);
+  print_constants : () -> (text) query;
   refetch_user : (nat64, text) -> (Result_1) query;
   register_evm_tokens : (nat64, vec record { text; nat8; text; opt text }) -> (
       Result,
@@ -344,6 +355,8 @@ service : (InitArg) -> {
   test_get_latest_block : (nat64) -> (Result_9);
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_3);
+  test_get_transaction_count : (nat64) -> (Result_10);
+  test_get_transaction_status : (text, nat64) -> (TransactionStatus);
   test_paypal : () -> (Result_3);
   transfer_canister_funds : (principal, principal, nat) -> (Result);
   transfer_eth : (nat64, text, nat, opt nat64) -> (Result_3);
@@ -354,6 +367,6 @@ service : (InitArg) -> {
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, text, text, opt nat64) -> (Result_3);
-  view_canister_balances : () -> (Result_10) query;
+  view_canister_balances : () -> (Result_11) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result_3);
 }
