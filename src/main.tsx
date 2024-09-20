@@ -9,9 +9,11 @@ import {
 } from "@tanstack/react-query";
 
 import './index.css';
+import { config } from './wagmi';
+
 import App from './App';
 import { UserProvider } from './components/user/UserContext';
-import { config } from './wagmi';
+import PageTitleUpdater from './components/PageTitleUpdater';
 
 
 declare global {
@@ -29,6 +31,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
                 <RainbowKitProvider>
                     <UserProvider>
                         <BrowserRouter>
+                            <PageTitleUpdater />
                             <App />
                         </BrowserRouter>
                     </UserProvider>
