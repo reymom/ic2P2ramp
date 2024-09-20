@@ -12,6 +12,7 @@ import { icpHost, iiUrl } from '../../model/icp';
 import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/tokens';
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
+import { formatCryptoUnits } from '../../model/helper';
 
 export interface Balance {
     raw: bigint;
@@ -256,7 +257,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 });
 
                 const balanceFloat = Number(balanceResult) / 10 ** token.decimals;
-                balances[token.name] = { raw: balanceResult, formatted: formatBalance(balanceFloat) }
+                balances[token.name] = { raw: balanceResult, formatted: formatCryptoUnits(balanceFloat) }
             }
 
             setIcpBalances(balances);
@@ -264,14 +265,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to fetch ICP balances: ', err);
             setIcpBalances(null);
         }
-    };
-
-    const formatBalance = (balance: number): string => {
-        if (balance === 0) return "0.00";
-        if (balance < 0.0001) return balance.toExponential(2);
-        if (balance < 1) return balance.toFixed(4);
-        if (balance < 1000) return balance.toFixed(2);
-        return balance.toFixed(2);
     };
 
     const fetchEvmBalances = async () => {
@@ -287,7 +280,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             for (const token of tokenOptions) {
                 if (token.isNative) {
                     const nativeBalance = await provider.getBalance(address);
-                    balances[token.name] = { raw: nativeBalance, formatted: formatBalance(Number(ethers.formatEther(nativeBalance))) };
+                    balances[token.name] = { raw: nativeBalance, formatted: formatCryptoUnits(Number(ethers.formatEther(nativeBalance))) };
                 } else {
                     const tokenContract = new ethers.Contract(
                         token.address,
@@ -295,7 +288,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                         signer,
                     );
                     const balance = await tokenContract.balanceOf(signer.address);
-                    balances[token.address] = { raw: balance, formatted: formatBalance(Number(ethers.formatUnits(balance, token.decimals))) };
+                    balances[token.address] = { raw: balance, formatted: formatCryptoUnits(Number(ethers.formatUnits(balance, token.decimals))) };
                 }
             }
 

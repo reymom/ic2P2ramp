@@ -19,7 +19,7 @@ import { isSessionExpired } from '../../model/session';
 import { truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
 
-const RATE_CACHE_EXPIRY_MS = 5 * 60 * 1000;
+const RATE_CACHE_EXPIRY_MS = 20 * 60 * 1000; // 20 mins
 
 const CreateOrder: React.FC = () => {
     const [fiatAmount, setFiatAmount] = useState<number>();

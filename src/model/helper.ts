@@ -27,7 +27,23 @@ export const validatePassword = (password: string): string | null => {
 };
 
 export const formatTimeLeft = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds
+      .toString()
+      .padStart(2, '0')}`;
+  } else {
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+};
+
+export const formatCryptoUnits = (amount: number): string => {
+  if (amount === 0) return '0.00';
+  if (amount < 0.0001) return amount.toExponential(2);
+  if (amount < 1) return amount.toFixed(4);
+  if (amount < 1000) return amount.toFixed(2);
+  if (amount > 1000000000) return amount.toExponential(4);
+  return amount.toFixed(2);
 };

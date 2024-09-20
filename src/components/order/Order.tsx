@@ -10,7 +10,7 @@ import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas, TokenOption } from '../../constants/tokens';
 import { tokenLogos } from '../../constants/addresses';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
-import { formatTimeLeft, truncate } from '../../model/helper';
+import { formatCryptoUnits, formatTimeLeft, truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
 import { estimateGasAndGasPrice } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
@@ -304,10 +304,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         try {
             const result = await backend.cancel_order(orderId, sessionToken);
             if ('Ok' in result) {
-
                 if ('EVM' in orderBlockchain) {
                     setTxHash(result.Ok)
-
                     pollTransactionLog(orderId, user.id);
                 } else {
                     setLoadingMessage(cancelledMessage);
@@ -461,11 +459,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         getTokenDecimals()
                     );
                 }
-                const shortAmountEVM = parseFloat(fullAmountEVM).toPrecision(3);
+                const shortAmountEVM = formatCryptoUnits(parseFloat(fullAmountEVM));
                 return { fullAmount: fullAmountEVM, shortAmount: shortAmountEVM };
             case 'ICP': backgroundColor
                 const fullAmountICP = (Number(crypto.amount - crypto.fee) / 10 ** getTokenDecimals()).toString();
-                const shortAmountICP = parseFloat(fullAmountICP).toPrecision(3);
+                const shortAmountICP = formatCryptoUnits(parseFloat(fullAmountICP));
                 return { fullAmount: fullAmountICP, shortAmount: shortAmountICP };
             case 'Solana':
                 return { fullAmount: "Solana not implemented", shortAmount: "Solana not implemented" };
