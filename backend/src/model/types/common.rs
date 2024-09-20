@@ -62,14 +62,6 @@ pub fn contains_provider_type(
     providers.get(&provider.provider_type()).is_some()
 }
 
-pub fn calculate_fees(fiat_amount: u64, crypto_amount: u128, blockchain_fees: u128) -> (u64, u128) {
-    // Static strategy: 2% fee for the offramper, 0.1% for the admin
-    let offramper_fee = fiat_amount / 50; // 2%
-    let admin_fee = crypto_amount / 1000; // 0.1%
-
-    (offramper_fee, blockchain_fees + admin_fee)
-}
-
 // ---------
 // Addresses
 // ---------

@@ -8,6 +8,6 @@ pub mod user;
 
 pub use blockchain::{get_icp_fee, is_icp_token_supported, Blockchain};
 pub use common::{
-    calculate_fees, contains_provider_type, AuthenticationData, LoginAddress, PaymentProvider,
-    PaymentProviderType, TransactionAddress,
+    contains_provider_type, AuthenticationData, LoginAddress, PaymentProvider, PaymentProviderType,
+    TransactionAddress,
 };

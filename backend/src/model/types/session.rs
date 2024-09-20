@@ -12,7 +12,7 @@ pub struct Session {
 }
 
 impl Session {
-    const EXPIRATION_SECS: u64 = 43200; // 12h
+    pub(crate) const EXPIRATION_SECS: u64 = 43200; // 12h
 
     pub async fn new() -> Result<Self> {
         Ok(Session {
