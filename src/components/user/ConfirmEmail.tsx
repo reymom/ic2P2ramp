@@ -5,7 +5,6 @@ import { backend } from '../../declarations/backend';
 import { getTempUserData, clearTempUserData } from '../../model/emailConfirmation';
 import { rampErrorToString } from '../../model/error';
 import { stringToUserType } from '../../model/utils';
-import { useUser } from '../user/UserContext';
 
 const ConfirmEmail: React.FC = () => {
     const [message, setMessage] = useState('');
@@ -22,14 +21,6 @@ const ConfirmEmail: React.FC = () => {
         }
     }, [searchParams]);
 
-    useEffect(() => {
-        const tempUserData = getTempUserData();
-        if (!tempUserData) {
-            navigate("/");
-            return;
-        }
-    }, [navigate])
-
     const confirmEmail = (token: string) => {
         const tempUserData = getTempUserData();
 
@@ -44,8 +35,9 @@ const ConfirmEmail: React.FC = () => {
             )
                 .then((result) => {
                     if ('Ok' in result) {
+                        const email = 'Email' in tempUserData.loginMethod && tempUserData.loginMethod.Email.email
+                        navigate(`/?auth=true&email=${email}&pwd=${tempUserData.password}`);
                         clearTempUserData();
-                        navigate(tempUserData.userType === "Onramper" ? "/view" : "/create");
                     } else {
                         setMessage(rampErrorToString(result.Err));
                     }
@@ -55,6 +47,7 @@ const ConfirmEmail: React.FC = () => {
                 })
                 .finally(() => {
                     setIsLoading(false);
+                    clearTempUserData();
                 });
         } else {
             setMessage('Invalid or expired confirmation token.');

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ethers } from 'ethers';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider } from '../../declarations/backend/backend.did';
@@ -10,6 +9,7 @@ import { rampErrorToString } from '../../model/error';
 import { truncate } from '../../model/helper';
 import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '../../model/emailConfirmation';
 import { useUser } from './UserContext';
+import DynamicDots from '../ui/DynamicDots';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -21,7 +21,7 @@ const RegisterUser: React.FC = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { authenticateUser, setUser: setGlobalUser, user, loginMethod, password, backendActor } = useUser();
+    const { setUser: setGlobalUser, user, loginMethod, password, backendActor } = useUser();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -97,51 +97,15 @@ const RegisterUser: React.FC = () => {
                 setMessage(`Could not register user: ${rampErrorToString(result.Err)}`)
             }
             if ('Ok' in result) {
-                if ('EVM' in loginMethod) {
-                    await handleEvmSignature();
-                } else {
-                    try {
-                        const result = await authenticateUser(loginMethod, { signature: [], password: [] });
-                        if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
-                        if ('Ok' in result) navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
-                    } catch (error) {
-                        setMessage(`Failed to authenticate user: ${error}`);
-                    }
-                    navigate(userType === "Onramper" ? "/view" : "/create");
-                }
-
+                navigate('/?auth=true');
             }
         } catch (error) {
             setMessage(`Failed to register user: ${error}`);
         } finally {
             setIsLoading(false);
+            setMessage("");
         }
     };
-
-    const handleEvmSignature = async () => {
-        try {
-            const result = await backend.generate_evm_auth_message(loginMethod!);
-
-            if ('Err' in result) {
-                setGlobalUser(null);
-                setMessage(`Failed to generate evm nonce ${rampErrorToString(result.Err)}`);
-            }
-            if ('Ok' in result) {
-                const provider = new ethers.BrowserProvider(window.ethereum);
-                const signer = await provider.getSigner();
-                const signature = await signer.signMessage(result.Ok);
-                try {
-                    const result = await authenticateUser(loginMethod, { signature: [signature], password: [] });
-                    if ('Err' in result) setMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
-                    if ('Ok' in result) navigate("Offramper" in result.Ok.user_type ? "/create" : "/view");
-                } catch (error) {
-                    setMessage(`Failed to authenticate user: ${error}`);
-                }
-            }
-        } catch (error) {
-            setMessage(`Failed to generate evm nonce: ${error}`);
-        }
-    }
 
     const handleEmailConfirmation = async () => {
         if (!loginMethod || !password || !('Email' in loginMethod)) {
@@ -309,7 +273,7 @@ const RegisterUser: React.FC = () => {
                 {isLoading ? (
                     <div className="flex items-center space-x-2">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-gray-300">Registering...</div>
+                        <div className="text-sm font-medium text-gray-300">Registering<DynamicDots isLoading /></div>
                     </div>
                 ) : null}
 
@@ -319,7 +283,7 @@ const RegisterUser: React.FC = () => {
             </div>
 
             {!isLoading && message && <p className="mt-4 text-sm font-medium text-red-600">{message}</p>}
-        </div>
+        </div >
     );
 };
 
