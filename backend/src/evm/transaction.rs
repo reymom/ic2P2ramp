@@ -34,6 +34,10 @@ pub enum TransactionStatus {
     Pending,
 }
 
+pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 4;
+pub(crate) const MAX_ATTEMPTS_PER_RETRY: u16 = 40;
+pub(crate) const ATTEMPT_INTERVAL_SECONDS: u64 = 4;
+
 pub async fn create_sign_request(
     abi: &str,
     function_name: &str,
@@ -168,13 +172,12 @@ pub async fn _wait_for_transaction_confirmation(
 }
 
 pub fn spawn_transaction_checker<F>(
+    retry_attempt: u8,
     tx_hash: String,
     chain_id: u64,
-    max_attempts: u32,
-    interval: Duration,
     order_id: u64,
-    action: TransactionAction,
-    // sign_request: SignRequest,
+    action: Option<TransactionAction>,
+    sign_request: SignRequest,
     on_success: F,
 ) where
     F: Fn(TransactionReceipt) + 'static,
@@ -182,16 +185,15 @@ pub fn spawn_transaction_checker<F>(
     fn schedule_check<F>(
         tx_hash: String,
         chain_id: u64,
-        attempts: u32,
-        max_attempts: u32,
-        interval: Duration,
+        attempt: u16,
+        retry_attempt: u8,
         order_id: u64,
-        // sign_request: SignRequest,
+        sign_request: SignRequest,
         on_success: F,
     ) where
         F: Fn(TransactionReceipt) + 'static,
     {
-        ic_cdk_timers::set_timer(interval, move || {
+        ic_cdk_timers::set_timer(Duration::from_secs(ATTEMPT_INTERVAL_SECONDS), move || {
             ic_cdk::println!("[schedule_check] spawning...");
             ic_cdk::spawn(async move {
                 match check_transaction_status(tx_hash.clone(), chain_id).await {
@@ -203,24 +205,31 @@ pub fn spawn_transaction_checker<F>(
                         );
                         on_success(receipt);
                     }
-                    TransactionStatus::Pending if attempts < max_attempts => {
+                    TransactionStatus::Pending if attempt < MAX_ATTEMPTS_PER_RETRY - 1 => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Pending...");
                         logs::update_transaction_log(order_id, TransactionStatus::Pending);
-
-                        // if attempts == max_attempts - 1 {
-                        // retry_with_bumped_fees(sign_request.clone(), chain_id, order_id).await;
-                        // }
 
                         schedule_check(
                             tx_hash.clone(),
                             chain_id,
-                            attempts + 1,
-                            max_attempts,
-                            interval,
+                            attempt + 1,
+                            retry_attempt,
                             order_id,
-                            // sign_request.clone(),
+                            sign_request,
                             on_success,
                         );
+                    }
+                    TransactionStatus::Pending if attempt == MAX_ATTEMPTS_PER_RETRY - 1 => {
+                        ic_cdk::spawn(async move {
+                            retry_with_bumped_fees(
+                                sign_request,
+                                chain_id,
+                                order_id,
+                                retry_attempt,
+                                on_success,
+                            )
+                            .await;
+                        });
                     }
                     TransactionStatus::Failed(err) => {
                         ic_cdk::println!("[schedule_check] Transaction failed: {:?}", err);
@@ -237,54 +246,72 @@ pub fn spawn_transaction_checker<F>(
         });
     }
 
-    logs::add_transaction_log(order_id, action);
-    schedule_check(
-        tx_hash,
-        chain_id,
-        0,
-        max_attempts,
-        interval,
-        order_id,
-        on_success,
-        // on_pending,
-    );
+    if action.is_none() && retry_attempt == 0 {
+        ic_cdk::println!("action is not defined, schedule check stopped");
+        return;
+    } else if retry_attempt == 0 {
+        logs::add_transaction_log(order_id, action.unwrap());
+    }
+
+    if retry_attempt < MAX_RETRY_ATTEMPTS {
+        schedule_check(
+            tx_hash,
+            chain_id,
+            0,
+            retry_attempt,
+            order_id,
+            sign_request,
+            on_success,
+        );
+    }
 }
 
-// pub async fn retry_with_bumped_fees<F>(
-//     mut sign_request: SignRequest,
-//     chain_id: u64,
-//     order_id: u64,
-//     on_success: F,
-// ) where
-//     F: Fn(TransactionReceipt) + 'static,
-// {
-//     ic_cdk::println!("[retry_with_bumped_fees] Retrying transaction with bumped fees.");
+pub async fn retry_with_bumped_fees<F>(
+    mut sign_request: SignRequest,
+    chain_id: u64,
+    order_id: u64,
+    retry_attempt: u8,
+    on_success: F,
+) where
+    F: Fn(TransactionReceipt) + 'static,
+{
+    ic_cdk::println!("[retry_with_bumped_fees] Retrying transaction with bumped fees.");
 
-//     // Bump gas fees
-//     sign_request.max_fee_per_gas = Some(bump_fee(sign_request.max_fee_per_gas));
-//     sign_request.max_priority_fee_per_gas =
-//         Some(bump_fee(sign_request.max_priority_fee_per_gas));
+    // Bump gas fees
+    sign_request.max_fee_per_gas = Some(bump_fee(sign_request.max_fee_per_gas));
+    sign_request.max_priority_fee_per_gas = Some(bump_fee(sign_request.max_priority_fee_per_gas));
 
-//     // Resend the transaction with updated fees
-//     let new_tx_hash = send_signed_transaction(sign_request, chain_id).await?;
+    // Resend the transaction with updated fees
+    match send_signed_transaction(sign_request.clone(), chain_id).await {
+        Ok(new_tx_hash) => {
+            ic_cdk::println!(
+                "[retry_with_bumped_fees] New transaction hash: {}",
+                new_tx_hash
+            );
+            // Spawn a new checker for the retried transaction
+            spawn_transaction_checker(
+                retry_attempt + 1,
+                new_tx_hash,
+                chain_id,
+                order_id,
+                None,
+                sign_request,
+                on_success,
+            );
+        }
+        Err(e) => {
+            ic_cdk::println!(
+                "[retry_with_bumped_fees] Failed to send transaction: {:?}",
+                e
+            );
+        }
+    }
+}
 
-//     // Spawn a new checker for the retried transaction
-//     spawn_transaction_checker(
-//         new_tx_hash.clone(),
-//         chain_id,
-//         60,
-//         Duration::from_secs(4),
-//         order_id,
-//         TransactionAction::Retry,
-//         // sign_request,
-//         on_success,
-//     );
-// }
-
-// fn bump_fee(current_fee: Option<U256>) -> U256 {
-//     // Bump gas fee 20%
-//     current_fee.unwrap_or(U256::zero()) * U256::from(12) / U256::from(10)
-// }
+fn bump_fee(current_fee: Option<U256>) -> U256 {
+    // Bump gas fee 20%
+    current_fee.unwrap_or(U256::zero()) * U256::from(12) / U256::from(10)
+}
 
 pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
     let rpc_providers = chains::get_rpc_providers(chain_id);

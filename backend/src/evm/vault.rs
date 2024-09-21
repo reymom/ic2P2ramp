@@ -29,7 +29,7 @@ impl Ic2P2ramp {
         token_address: Option<String>,
         amount: u128,
         estimated_gas: Option<u64>,
-    ) -> Result<String> {
+    ) -> Result<(String, SignRequest)> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
@@ -55,7 +55,10 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        transaction::send_signed_transaction(request, chain_id).await
+        Ok((
+            transaction::send_signed_transaction(request.clone(), chain_id).await?,
+            request,
+        ))
     }
 
     async fn sign_request_commit_deposit(
@@ -106,7 +109,7 @@ impl Ic2P2ramp {
         token_address: Option<String>,
         amount: u128,
         estimated_gas: Option<u64>,
-    ) -> Result<String> {
+    ) -> Result<(String, SignRequest)> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
@@ -132,7 +135,10 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        transaction::send_signed_transaction(request, chain_id).await
+        Ok((
+            transaction::send_signed_transaction(request.clone(), chain_id).await?,
+            request,
+        ))
     }
 
     async fn sign_request_uncommit_deposit(
@@ -332,7 +338,7 @@ impl Ic2P2ramp {
         token_address: String,
         amount: u128,
         fees: u128,
-    ) -> Result<String> {
+    ) -> Result<(String, SignRequest)> {
         if amount < fees {
             return Err(RampError::FundsBelowFees);
         }
@@ -374,7 +380,10 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        transaction::send_signed_transaction(request, chain_id).await
+        Ok((
+            transaction::send_signed_transaction(request.clone(), chain_id).await?,
+            request,
+        ))
     }
 
     pub async fn withdraw_base_currency(
@@ -382,8 +391,7 @@ impl Ic2P2ramp {
         offramper: String,
         amount: u128,
         fees: u128,
-    ) -> Result<String> {
-        // ) -> Result<(String, SignRequest)> {
+    ) -> Result<(String, SignRequest)> {
         if amount < fees {
             return Err(RampError::FundsBelowFees);
         }
@@ -423,10 +431,10 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        let tx_hash = transaction::send_signed_transaction(request, chain_id).await?;
-
-        // return Ok(tx_hash, request)
-        return Ok(tx_hash);
+        Ok((
+            transaction::send_signed_transaction(request.clone(), chain_id).await?,
+            request,
+        ))
     }
 
     pub async fn transfer(

@@ -174,12 +174,18 @@ fn print_constants() -> String {
         User Session's Expiration Time = {}s\n\
         Offramper Fiat Fee = {}%\n\
         Onramper Crypto Fee = {}%\n\
-        Default Evm Gas = {}",
+        Default Evm Gas = {}\n\
+        Evm Retry Attempts = {}\n\
+        Evm Max Attempts per Retry = {}\n\
+        Evm Attempt Interval = {}",
         heap::LOCK_DURATION_TIME_SECONDS,
         Session::EXPIRATION_SECS,
         (100. / types::order::OFFRAMPER_FIAT_FEE_DENOM as f64),
         (100. / types::order::ADMIN_CRYPTO_FEE_DENOM as f64),
-        Ic2P2ramp::DEFAULT_GAS
+        Ic2P2ramp::DEFAULT_GAS,
+        transaction::MAX_RETRY_ATTEMPTS,
+        transaction::MAX_ATTEMPTS_PER_RETRY,
+        transaction::ATTEMPT_INTERVAL_SECONDS
     )
 }
 
@@ -285,11 +291,11 @@ async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -
         read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
     if let Some(token_address) = token {
         token::evm_token_is_approved(chain_id, &token_address)?;
-        let withdraw_tx =
+        let (withdraw_tx, _) =
             Ic2P2ramp::withdraw_token(chain_id, canister_address, token_address, amount, 0).await?;
         Ok(withdraw_tx)
     } else {
-        let withdraw_tx =
+        let (withdraw_tx, _) =
             Ic2P2ramp::withdraw_base_currency(chain_id, canister_address, amount, 0).await?;
         Ok(withdraw_tx)
     }

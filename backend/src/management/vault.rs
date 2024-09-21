@@ -1,12 +1,7 @@
-use std::time::Duration;
-
 use num_traits::ToPrimitive;
 
 use crate::{
-    evm::{
-        // signer::SignRequest,
-        transaction,
-    },
+    evm::{signer::SignRequest, transaction},
     model::{
         memory,
         types::{
@@ -23,6 +18,7 @@ pub(super) fn spawn_commit_listener(
     order_id: u64,
     chain_id: u64,
     tx_hash: &str,
+    sign_request: SignRequest,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
@@ -30,12 +26,12 @@ pub(super) fn spawn_commit_listener(
     consent_url: Option<String>,
 ) {
     transaction::spawn_transaction_checker(
+        0,
         tx_hash.to_string(),
         chain_id,
-        60,
-        Duration::from_secs(4),
         order_id,
-        TransactionAction::Commit,
+        Some(TransactionAction::Commit),
+        sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
@@ -92,15 +88,15 @@ pub(super) fn spawn_uncommit_listener(
     order_id: u64,
     chain_id: u64,
     tx_hash: &str,
-    // sign_request: SignRequest,
+    sign_request: SignRequest,
 ) {
     transaction::spawn_transaction_checker(
+        0,
         tx_hash.to_string(),
         chain_id,
-        60,
-        Duration::from_secs(4),
         order_id,
-        TransactionAction::Uncommit,
+        Some(TransactionAction::Uncommit),
+        sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
@@ -125,15 +121,19 @@ pub(super) fn spawn_uncommit_listener(
     );
 }
 
-pub(super) fn spawn_cancel_order(order_id: u64, chain_id: u64, tx_hash: &str) {
+pub(super) fn spawn_cancel_order(
+    order_id: u64,
+    chain_id: u64,
+    tx_hash: &str,
+    sign_request: SignRequest,
+) {
     transaction::spawn_transaction_checker(
+        0,
         tx_hash.to_string(),
         chain_id,
-        60,
-        Duration::from_secs(4),
         order_id,
-        TransactionAction::Cancel,
-        // sign_request,
+        Some(TransactionAction::Cancel),
+        sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
@@ -168,14 +168,15 @@ pub(super) fn spawn_payment_release(
     chain_id: u64,
     tx_hash: &str,
     action_type: MethodGasUsage,
+    sign_request: SignRequest,
 ) {
     transaction::spawn_transaction_checker(
+        0,
         tx_hash.to_string(),
         chain_id,
-        60,
-        Duration::from_secs(4),
         order_id,
-        TransactionAction::Release,
+        Some(TransactionAction::Release),
+        sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);

@@ -231,7 +231,7 @@ pub async fn lock_order(
 
     match order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            let tx_hash = Ic2P2ramp::commit_deposit(
+            let (tx_hash, sign_request) = Ic2P2ramp::commit_deposit(
                 chain_id,
                 order.offramper_address.address,
                 order.crypto.token,
@@ -245,6 +245,7 @@ pub async fn lock_order(
                 order_id,
                 chain_id,
                 &tx_hash,
+                sign_request,
                 onramper_user_id,
                 onramper_provider,
                 onramper_address,
@@ -270,10 +271,42 @@ pub async fn lock_order(
     }
 }
 
-// unlock_order manages the logic for the unlock of icp orders.
-// In the case of EVM orders, first it uncommits the funds in the vault,
-// and listens for the transaction until it completes before updating the ICP order.
-// session token is optional, if it is internally called, it should be set to None.
+/// Unlocks an order, handling both ICP and EVM blockchain orders.
+///
+/// # Parameters
+///
+/// - `order_id`: The unique identifier of the order to be unlocked.
+/// - `session_token`: An optional session token used to validate the request.
+///    If the function is called internally, this can be set to `None`.
+/// - `estimated_gas`: An optional estimated gas limit for EVM transactions.
+///    This is only applicable for EVM orders.
+///
+/// # Behavior
+///
+/// - **ICP Orders**: Unlocks the order directly.
+/// - **EVM Orders**: First, uncommits the funds in the EVM vault. The function
+///   listens for the EVM transaction to complete successfully before proceeding
+///   to update the corresponding ICP order status.
+///
+/// # Returns
+///
+/// - On success: Returns a `String` representing the transaction hash or a
+///   confirmation message.
+/// - On failure: Returns a `RampError` with details about why the unlock failed.
+///
+/// # Errors
+///
+/// - Returns an error if the order cannot be found, the session is invalid,
+///   or if the EVM transaction fails.
+///
+/// # Example
+/// ```
+/// let result = unlock_order(12345, Some("session_token"), Some(21000)).await;
+/// match result {
+///     Ok(tx_hash) => println!("Transaction succeeded with hash: {}", tx_hash),
+///     Err(err) => eprintln!("Failed to unlock order: {:?}", err),
+/// }
+/// ```
 pub async fn unlock_order(
     order_id: u64,
     session_token: Option<String>,
@@ -297,7 +330,7 @@ pub async fn unlock_order(
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
             // Uncommit the deposit in the EVM vault
-            let tx_hash = Ic2P2ramp::uncommit_deposit(
+            let (tx_hash, sign_request) = Ic2P2ramp::uncommit_deposit(
                 chain_id,
                 order.base.offramper_address.address,
                 order.base.crypto.token,
@@ -307,7 +340,7 @@ pub async fn unlock_order(
             .await?;
 
             // Listener for the transaction receipt
-            vault::spawn_uncommit_listener(order_id, chain_id, &tx_hash);
+            vault::spawn_uncommit_listener(order_id, chain_id, &tx_hash, sign_request);
 
             Ok(tx_hash)
         }
@@ -338,7 +371,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
             let fees = order.crypto.fee / 2;
 
             // let sign_request: SignRequest;
-            let tx_hash = if let Some(token_address) = order.crypto.token {
+            let (tx_hash, sign_request) = if let Some(token_address) = order.crypto.token {
                 Ic2P2ramp::withdraw_token(
                     *chain_id,
                     order.offramper_address.address.clone(),
@@ -357,7 +390,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
                 .await?
             };
 
-            vault::spawn_cancel_order(order_id, *chain_id, &tx_hash);
+            vault::spawn_cancel_order(order_id, *chain_id, &tx_hash, sign_request);
 
             Ok(tx_hash)
         }

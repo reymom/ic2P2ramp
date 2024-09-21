@@ -13,6 +13,7 @@ use super::fees::FeeEstimates;
 use crate::model::errors::{RampError, Result};
 use crate::model::memory::heap::read_state;
 
+#[derive(Clone)]
 pub struct SignRequest {
     pub chain_id: Option<U64>,
     pub from: Option<String>,
