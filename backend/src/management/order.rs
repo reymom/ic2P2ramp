@@ -1,20 +1,26 @@
-use num_traits::ToPrimitive;
 use std::collections::HashMap;
-use std::time::Duration;
 
-use crate::evm::{fees, transaction, vault::Ic2P2ramp};
+use candid::Principal;
+use icrc_ledger_types::icrc1::account::Account;
+use icrc_ledger_types::icrc1::transfer::NumTokens;
+
+use crate::evm::{fees, vault::Ic2P2ramp};
+use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
-use crate::model::types::order::LockedOrder;
+use crate::model::memory::stable;
+use crate::model::types;
 use crate::types::{
-    evm::{logs::TransactionAction, token},
+    evm::token,
     get_icp_fee,
-    order::{calculate_fees, Order, OrderFilter, OrderState, OrderStateFilter},
+    order::{calculate_fees, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 use crate::{
     errors::{RampError, Result},
     model::{helpers, memory},
 };
+
+use super::{payment, vault};
 
 pub async fn calculate_order_evm_fees(
     chain_id: u64,
@@ -208,29 +214,71 @@ pub async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    consent_id: Option<String>,
-    consent_url: Option<String>,
-) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Created(order) => {
-            *order_state = OrderState::Locked(order.clone().lock(
+    estimated_gas: Option<u64>,
+) -> Result<String> {
+    let order_state = stable::orders::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Created(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+
+    if !types::contains_provider_type(&onramper_provider, &order.offramper_providers) {
+        return Err(RampError::InvalidOnramperProvider);
+    }
+
+    let (revolut_consent_id, consent_url) =
+        payment::get_revolut_consent(&order, &onramper_provider).await?;
+
+    match order.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            let tx_hash = Ic2P2ramp::commit_deposit(
+                chain_id,
+                order.offramper_address.address,
+                order.crypto.token,
+                order.crypto.amount,
+                estimated_gas,
+            )
+            .await?;
+
+            // Listener for the transaction receipt
+            vault::spawn_commit_listener(
+                order_id,
+                chain_id,
+                &tx_hash,
                 onramper_user_id,
                 onramper_provider,
                 onramper_address,
-                consent_id,
+                revolut_consent_id,
                 consent_url,
-            )?);
-            Ok(())
+            );
+
+            return Ok(tx_hash);
         }
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    })??;
+        Blockchain::ICP { .. } => {
+            memory::stable::orders::lock_order(
+                order_id,
+                onramper_user_id,
+                onramper_provider,
+                onramper_address,
+                revolut_consent_id,
+                consent_url,
+            )?;
 
-    memory::heap::set_order_timer(order_id);
-
-    Ok(())
+            return Ok(format!("order {:?} is locked!", order_id));
+        }
+        _ => return Err(RampError::UnsupportedBlockchain),
+    }
 }
 
-pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<String> {
+// unlock_order manages the logic for the unlock of icp orders.
+// In the case of EVM orders, first it uncommits the funds in the vault,
+// and listens for the transaction until it completes before updating the ICP order.
+// session token is optional, if it is internally called, it should be set to None.
+pub async fn unlock_order(
+    order_id: u64,
+    session_token: Option<String>,
+    estimated_gas: Option<u64>,
+) -> Result<String> {
     let order_state = memory::stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Locked(locked_order) => locked_order,
@@ -238,6 +286,12 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
     };
     if order.payment_done {
         return Err(RampError::PaymentDone);
+    }
+
+    if let Some(session_token) = session_token {
+        let user = stable::users::get_user(&order.onramper_user_id)?;
+        user.validate_session(&session_token)?;
+        user.validate_onramper()?;
     }
 
     match order.base.crypto.blockchain {
@@ -252,42 +306,8 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
             )
             .await?;
 
-            // Check the transaction receipt
-            transaction::spawn_transaction_checker(
-                tx_hash.clone(),
-                chain_id,
-                60,
-                Duration::from_secs(4),
-                order_id,
-                TransactionAction::Uncommit,
-                move |receipt| {
-                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
-                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
-                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
-
-                    ic_cdk::println!(
-                        "[internal_unlock_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                        gas_used,
-                        gas_price,
-                        block_number
-                    );
-
-                    // Unlock the order in the backend once the transaction succeeds
-                    if let Err(e) = memory::stable::orders::unlock_order(order.base.id) {
-                        ic_cdk::println!(
-                            "[unlock_order] failed to unlock order #{:?}, error: {:?}",
-                            order.base.id,
-                            e
-                        );
-                        if let Err(e) = set_order_uncommited(order_id) {
-                            ic_cdk::println!(
-                                "[unlock_order].[set_order_uncommited] failed: {:?}",
-                                e
-                            )
-                        }
-                    };
-                },
-            );
+            // Listener for the transaction receipt
+            vault::spawn_uncommit_listener(order_id, chain_id, &tx_hash);
 
             Ok(tx_hash)
         }
@@ -295,6 +315,75 @@ pub async fn unlock_order(order_id: u64, estimated_gas: Option<u64>) -> Result<S
             memory::stable::orders::unlock_order(order.base.id)?;
             Ok(format!(
                 "Unlocked ICP order for ledger: {:?}",
+                ledger_principal.to_string()
+            ))
+        }
+        _ => return Err(RampError::UnsupportedBlockchain),
+    }
+}
+
+pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
+    let order_state = stable::orders::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Created(order) => order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+
+    let user = stable::users::get_user(&order.offramper_user_id)?;
+    user.is_offramper()?;
+    user.validate_session(&session_token)?;
+
+    match &order.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            let fees = order.crypto.fee / 2;
+
+            // let sign_request: SignRequest;
+            let tx_hash = if let Some(token_address) = order.crypto.token {
+                Ic2P2ramp::withdraw_token(
+                    *chain_id,
+                    order.offramper_address.address.clone(),
+                    token_address.clone(),
+                    order.crypto.amount,
+                    fees,
+                )
+                .await?
+            } else {
+                Ic2P2ramp::withdraw_base_currency(
+                    *chain_id,
+                    order.offramper_address.address.clone(),
+                    order.crypto.amount,
+                    fees,
+                )
+                .await?
+            };
+
+            vault::spawn_cancel_order(order_id, *chain_id, &tx_hash);
+
+            Ok(tx_hash)
+        }
+        Blockchain::ICP { ledger_principal } => {
+            let offramper_principal =
+                Principal::from_text(&order.offramper_address.address).unwrap();
+
+            let amount = NumTokens::from(order.crypto.amount);
+            let fee = get_icp_fee(ledger_principal)?;
+
+            let to_account = Account {
+                owner: offramper_principal,
+                subaccount: None,
+            };
+            ic_cdk::println!("[cancel] amount = {}, fee: {}", amount, fee);
+            ICPRamp::transfer(
+                *ledger_principal,
+                to_account,
+                amount - fee.clone(),
+                Some(fee),
+            )
+            .await?;
+
+            memory::stable::orders::cancel_order(order_id)?;
+            Ok(format!(
+                "Cancelled ICP order for ledger: {:?}",
                 ledger_principal.to_string()
             ))
         }
@@ -332,30 +421,10 @@ pub fn set_payment_id(order_id: u64, payment_id: String) -> Result<()> {
     })?
 }
 
-pub fn cancel_order(order_id: u64) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Created(_) => {
-            *order_state = OrderState::Cancelled(order_id);
-            Ok(())
-        }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-    })?
-}
-
 pub fn set_order_completed(order_id: u64) -> Result<()> {
     memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
             *order_state = OrderState::Completed(order.clone().complete());
-            Ok(())
-        }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
-    })?
-}
-
-pub fn set_order_uncommited(order_id: u64) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Locked(order) => {
-            order.uncommit();
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),

@@ -1,21 +1,15 @@
-use std::time::Duration;
-
 use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
-use num_traits::cast::ToPrimitive;
 
 use crate::{
-    evm::{transaction, vault::Ic2P2ramp},
+    evm::vault::Ic2P2ramp,
     icp::vault::Ic2P2ramp as ICPRamp,
     management,
     model::{
         errors::{RampError, Result},
         memory::stable::orders,
         types::{
-            evm::{
-                gas::{self, MethodGasUsage},
-                logs::TransactionAction,
-            },
+            evm::gas::MethodGasUsage,
             get_icp_fee,
             order::{Order, OrderState},
             PaymentProvider, PaymentProviderType,
@@ -149,44 +143,7 @@ pub async fn handle_evm_payment_completion(
     };
     let tx_hash = Ic2P2ramp::release_funds(order, chain_id, gas).await?;
 
-    transaction::spawn_transaction_checker(
-        tx_hash.clone(),
-        chain_id,
-        60,
-        Duration::from_secs(4),
-        order_id,
-        TransactionAction::Release,
-        move |receipt| {
-            let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
-            let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
-            let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
-
-            ic_cdk::println!(
-                "[verify_transaction] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                gas_used,
-                gas_price,
-                block_number
-            );
-
-            if !(gas_used == 0 || gas_price == 0) {
-                let _ = gas::register_gas_usage(
-                    chain_id,
-                    gas_used,
-                    gas_price,
-                    block_number,
-                    &action_type,
-                );
-            }
-
-            // Update order state to completed
-            match super::order::set_order_completed(order_id) {
-                Ok(_) => {
-                    ic_cdk::println!("[verify_transaction] order {:?} completed", order_id)
-                }
-                Err(e) => ic_cdk::trap(format!("could not complete order: {:?}", e).as_str()),
-            }
-        },
-    );
+    management::vault::spawn_payment_release(order_id, chain_id, &tx_hash, action_type);
     Ok(tx_hash)
 }
 

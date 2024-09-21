@@ -1,5 +1,6 @@
 use crate::errors::{RampError, Result};
-use crate::model::memory::heap::clear_order_timer;
+use crate::model::memory::heap::{clear_order_timer, set_order_timer};
+use crate::model::types::{PaymentProvider, TransactionAddress};
 use crate::types::order::{Order, OrderState};
 
 use super::storage::ORDERS;
@@ -55,7 +56,41 @@ where
     })
 }
 
+pub fn lock_order(
+    order_id: u64,
+    onramper_user_id: u64,
+    onramper_provider: PaymentProvider,
+    onramper_address: TransactionAddress,
+    revolut_consent_id: Option<String>,
+    consent_url: Option<String>,
+) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Created(order) => {
+            *order_state = OrderState::Locked(order.clone().lock(
+                onramper_user_id,
+                onramper_provider,
+                onramper_address,
+                revolut_consent_id,
+                consent_url,
+            )?);
+            Ok(())
+        }
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    })??;
+
+    set_order_timer(order_id);
+    Ok(())
+}
+
 pub fn unlock_order(order_id: u64) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            order.uncommit();
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })??;
+
     mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
             super::users::mutate_user(order.onramper_user_id, |user| {
@@ -72,4 +107,14 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
     })??;
 
     clear_order_timer(order_id)
+}
+
+pub fn cancel_order(order_id: u64) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Created(_) => {
+            *order_state = OrderState::Cancelled(order_id);
+            Ok(())
+        }
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
 }

@@ -43,7 +43,7 @@ pub fn set_order_timer(order_id: u64) {
     let duration = LOCK_DURATION_TIME_SECONDS;
     let timer_id = set_timer(Duration::from_secs(duration), move || {
         ic_cdk::spawn(async move {
-            if let Err(e) = management::order::unlock_order(order_id, None).await {
+            if let Err(e) = management::order::unlock_order(order_id, None, None).await {
                 ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
             }
         });

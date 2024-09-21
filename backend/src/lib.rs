@@ -4,18 +4,16 @@ mod management;
 mod model;
 mod outcalls;
 
+use std::collections::{HashMap, HashSet};
+
 use candid::Principal;
-use evm::transaction::TransactionStatus;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
-use num_traits::cast::ToPrimitive;
-use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 
 use evm::{
     fees,
-    rpc::{Block, BlockTag, TransactionReceipt},
-    transaction,
+    rpc::{Block, BlockTag},
+    transaction::{self, TransactionStatus},
     vault::Ic2P2ramp,
 };
 use icp::vault::Ic2P2ramp as ICPRamp;
@@ -30,7 +28,7 @@ use model::memory::{
 use model::types::evm::{
     chains,
     gas::{self, MethodGasUsage},
-    logs::{EvmTransactionLog, TransactionAction},
+    logs::EvmTransactionLog,
     token::{self, Token, TokenManager},
 };
 use model::types::{
@@ -111,18 +109,6 @@ fn init(install_arg: InstallArg) {
 #[ic_cdk::query]
 fn get_evm_address() -> String {
     read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
-}
-
-#[ic_cdk::update]
-async fn transfer_eth(
-    chain_id: u64,
-    to: String,
-    amount: u128,
-    estimated_gas: Option<u64>,
-) -> Result<String> {
-    guards::only_controller()?;
-    helpers::validate_evm_address(&to)?;
-    Ic2P2ramp::transfer(chain_id, &to, amount, None, estimated_gas).await
 }
 
 // -----
@@ -247,6 +233,7 @@ fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
 
 #[ic_cdk::query]
 async fn view_canister_balances() -> Result<HashMap<String, f64>> {
+    guards::only_controller()?;
     ICPRamp::get_canister_balances().await
 }
 
@@ -545,109 +532,14 @@ async fn lock_order(
     user.validate_onramper()?;
     user.is_banned()?;
 
-    let order_state = stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Created(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
-
-    if !types::contains_provider_type(&onramper_provider, &order.offramper_providers) {
-        return Err(RampError::InvalidOnramperProvider);
-    }
-
-    let (revolut_consent_id, consent_url) =
-        payment_management::get_revolut_consent(&order, &onramper_provider).await?;
-
-    match order.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
-            let tx_hash = Ic2P2ramp::commit_deposit(
-                chain_id,
-                order.offramper_address.address,
-                order.crypto.token,
-                order.crypto.amount,
-                estimated_gas,
-            )
-            .await?;
-            transaction::spawn_transaction_checker(
-                tx_hash.clone(),
-                chain_id,
-                60,
-                Duration::from_secs(4),
-                order_id,
-                TransactionAction::Commit,
-                move |receipt: TransactionReceipt| {
-                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
-                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
-                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
-
-                    if !(gas_used == 0 || gas_price == 0) {
-                        match gas::register_gas_usage(
-                            chain_id,
-                            gas_used,
-                            gas_price,
-                            block_number,
-                            &MethodGasUsage::Commit,
-                        ) {
-                            Ok(()) => ic_cdk::println!(
-                                "[lock_order].[register_gas_usage] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                                gas_used,
-                                gas_price,
-                                block_number
-                            ),
-                            Err(err) => ic_cdk::println!("[lock_order].[register_gas_usage] error: {:?}", err),
-                        }
-                    } else {
-                        ic_cdk::println!(
-                            "[lock_order] Gas Used: {}, Gas Price: {}",
-                            gas_used,
-                            gas_price
-                        );
-                    }
-
-                    let onramper_provider = onramper_provider.clone();
-                    let onramper_address = onramper_address.clone();
-                    let revolut_consent_id = revolut_consent_id.clone();
-                    let consent_url = consent_url.clone();
-
-                    ic_cdk::spawn(async move {
-                        match order_management::lock_order(
-                            order_id,
-                            onramper_user_id,
-                            onramper_provider,
-                            onramper_address,
-                            revolut_consent_id,
-                            consent_url,
-                        )
-                        .await
-                        {
-                            Ok(()) => ic_cdk::println!("order {:?} is locked!", order_id),
-                            Err(err) => {
-                                ic_cdk::println!(
-                                    "order {:?} failed to be locked: {:?}",
-                                    order_id,
-                                    err
-                                )
-                            }
-                        };
-                    });
-                },
-            );
-            Ok(tx_hash)
-        }
-        Blockchain::ICP { .. } => {
-            order_management::lock_order(
-                order_id,
-                onramper_user_id,
-                onramper_provider.clone(),
-                onramper_address.clone(),
-                revolut_consent_id.clone(),
-                consent_url.clone(),
-            )
-            .await?;
-            Ok(format!("order {:?} is locked!", order_id))
-        }
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }
+    order_management::lock_order(
+        order_id,
+        onramper_user_id,
+        onramper_provider,
+        onramper_address,
+        estimated_gas,
+    )
+    .await
 }
 
 #[ic_cdk::update]
@@ -666,111 +558,12 @@ async fn unlock_order(
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
 
-    order_management::unlock_order(order_id, estimated_gas).await
+    order_management::unlock_order(order_id, Some(session_token), estimated_gas).await
 }
 
 #[ic_cdk::update]
 async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
-    let order_state = stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Created(order) => order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
-
-    let user = stable::users::get_user(&order.offramper_user_id)?;
-    user.is_offramper()?;
-    user.validate_session(&session_token)?;
-
-    match &order.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
-            let fees = order.crypto.fee / 2;
-
-            // let sign_request: SignRequest;
-            let tx_hash = if let Some(token_address) = order.crypto.token {
-                Ic2P2ramp::withdraw_token(
-                    *chain_id,
-                    order.offramper_address.address.clone(),
-                    token_address.clone(),
-                    order.crypto.amount,
-                    fees,
-                )
-                .await?
-            } else {
-                Ic2P2ramp::withdraw_base_currency(
-                    *chain_id,
-                    order.offramper_address.address.clone(),
-                    order.crypto.amount,
-                    fees,
-                )
-                .await?
-            };
-
-            transaction::spawn_transaction_checker(
-                tx_hash.clone(),
-                *chain_id,
-                60,
-                Duration::from_secs(4),
-                order_id,
-                TransactionAction::Cancel,
-                // sign_request,
-                move |receipt| {
-                    let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
-                    let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
-                    let block_number = receipt.blockNumber.0.to_u128().unwrap_or(0);
-
-                    ic_cdk::println!(
-                        "[cancel_order] Gas Used: {}, Gas Price: {}, Block Number: {}",
-                        gas_used,
-                        gas_price,
-                        block_number
-                    );
-
-                    // Cancel the order in the backend once the transaction succeeds
-                    match order_management::cancel_order(order_id) {
-                        Ok(_) => {
-                            ic_cdk::println!("order {:?} is cancelled!", order_id);
-                        }
-                        Err(e) => {
-                            ic_cdk::println!(
-                                "[cancel_order] failed to cancel order #{:?}, error: {:?}",
-                                order_id,
-                                e
-                            );
-                        }
-                    }
-                },
-            );
-
-            Ok(tx_hash)
-        }
-        Blockchain::ICP { ledger_principal } => {
-            let offramper_principal =
-                Principal::from_text(&order.offramper_address.address).unwrap();
-
-            let amount = NumTokens::from(order.crypto.amount);
-            let fee = get_icp_fee(ledger_principal)?;
-
-            let to_account = Account {
-                owner: offramper_principal,
-                subaccount: None,
-            };
-            ic_cdk::println!("[cancel] amount = {:?}", amount);
-            ic_cdk::println!("[cancel] fee = {:?}", fee);
-            ICPRamp::transfer(
-                *ledger_principal,
-                to_account,
-                amount - fee.clone(),
-                Some(fee),
-            )
-            .await?;
-            order_management::cancel_order(order_id)?;
-            Ok(format!(
-                "Cancelled ICP order for ledger: {:?}",
-                ledger_principal.to_string()
-            ))
-        }
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }
+    order_management::cancel_order(order_id, session_token).await
 }
 
 // ---------------
