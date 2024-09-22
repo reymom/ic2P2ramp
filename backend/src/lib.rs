@@ -165,6 +165,22 @@ async fn test_get_transaction_count(chain_id: u64) -> Result<u128> {
     transaction::eth_get_transaction_count(chain_id).await
 }
 
+#[ic_cdk::update]
+async fn test_get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
+    guards::only_controller()?;
+
+    let base_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: crypto_symbol.to_string(),
+    };
+    let quote_asset = Asset {
+        class: AssetClass::FiatCurrency,
+        symbol: fiat_symbol.to_string(),
+    };
+
+    xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await
+}
+
 // ----------
 // Management
 // ----------
@@ -302,26 +318,6 @@ async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -
             Ic2P2ramp::withdraw_base_currency(chain_id, canister_address, amount, 0).await?;
         Ok(withdraw_tx)
     }
-}
-
-// ---------
-// XRC Rate
-// ---------
-
-#[ic_cdk::update]
-async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
-    guards::only_controller()?;
-
-    let base_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: crypto_symbol.to_string(),
-    };
-    let quote_asset = Asset {
-        class: AssetClass::FiatCurrency,
-        symbol: fiat_symbol.to_string(),
-    };
-
-    xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await
 }
 
 // -----
