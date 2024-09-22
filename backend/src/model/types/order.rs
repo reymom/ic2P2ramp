@@ -10,8 +10,8 @@ use crate::{
 
 use super::{
     blockchain::{Blockchain, Crypto},
-    common::{AddressType, PaymentProvider, PaymentProviderType},
-    TransactionAddress,
+    common::AddressType,
+    PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 
 const MAX_ORDER_SIZE: u32 = 8000;
@@ -171,7 +171,7 @@ impl Onramper {
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct RevolutConsent {
-    id: String,
+    pub id: String,
     url: String,
 }
 
@@ -201,6 +201,13 @@ impl LockedOrder {
 
     pub fn uncommit(&mut self) {
         self.uncommited = true;
+    }
+
+    pub fn payment_amount_matches(&self, received_amount: &str) -> bool {
+        let total_expected_amount = (self.price + self.offramper_fee) as f64 / 100.0;
+        let received_amount_as_float = received_amount.parse::<f64>().unwrap_or(0.0);
+
+        (received_amount_as_float - total_expected_amount).abs() < f64::EPSILON
     }
 }
 
