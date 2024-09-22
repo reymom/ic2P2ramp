@@ -6,7 +6,7 @@ use crate::{
     management,
     model::{
         errors::{RampError, Result},
-        types::evm::logs::EvmTransactionLog,
+        types::{evm::logs::EvmTransactionLog, exchange_rate::ExchangeRateCache},
     },
 };
 
@@ -21,6 +21,7 @@ thread_local! {
 
     pub(super) static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());
     pub(super) static TRANSACTION_LOG_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::new(HashMap::new());
+    pub(super) static EXCHANGE_RATE_CACHE: RefCell<HashMap<(String, String), ExchangeRateCache>> = RefCell::new(HashMap::new());
 }
 
 pub fn generate_order_id() -> u64 {

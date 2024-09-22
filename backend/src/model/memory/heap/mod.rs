@@ -1,11 +1,13 @@
 mod heap;
 mod init;
 pub mod logs;
+mod rate;
 mod state;
 pub mod upgrade;
 
 pub use heap::*;
 pub use init::InitArg;
+pub use rate::*;
 pub use state::*;
 pub use upgrade::UpdateArg;
 

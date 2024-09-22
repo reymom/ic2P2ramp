@@ -1,7 +1,10 @@
 use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::call::call_with_payment128;
 
-use crate::errors::{RampError, Result};
+use crate::{
+    errors::{RampError, Result},
+    model::memory::heap,
+};
 
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
 
@@ -70,7 +73,7 @@ enum GetExchangeRateResult {
     Err(ExchangeRateError),
 }
 
-pub async fn get_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
+pub async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
     let request = GetExchangeRateRequest {
         base_asset,
         quote_asset,
@@ -95,5 +98,16 @@ pub async fn get_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<
             Ok(float_rate / float_divisor)
         }
         GetExchangeRateResult::Err(err) => Err(RampError::ExchangeRateError(err)),
+    }
+}
+
+pub async fn get_cached_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
+    match heap::get_cached_rate(base_asset.clone(), quote_asset.clone()) {
+        Some(cache) => Ok(cache),
+        None => {
+            let rate = get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?;
+            heap::cache_exchange_rate(base_asset, quote_asset, rate);
+            Ok(rate)
+        }
     }
 }

@@ -84,7 +84,7 @@ pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
         symbol: token_symbol.to_string(),
     };
 
-    match xrc_rates::get_exchange_rate(base_asset, quote_asset).await {
+    match xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await {
         Ok(rate) => Ok(rate),
         Err(err) => Err(err),
     }

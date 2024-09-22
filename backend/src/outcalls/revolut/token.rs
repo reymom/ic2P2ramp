@@ -78,7 +78,7 @@ pub async fn wait_for_revolut_access_token(
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = stable::users::get_user(&order.onramper_user_id)?;
+    let user = stable::users::get_user(&order.onramper.user_id)?;
     user.validate_session(&session_token)?;
 
     let (
@@ -91,22 +91,22 @@ pub async fn wait_for_revolut_access_token(
         creditor_id,
         creditor_name,
     ) = {
-        let PaymentProvider::Revolut { scheme, id, name } = order.onramper_provider else {
+        let PaymentProvider::Revolut { scheme, id, name } = order.onramper.provider else {
             return Err(RampError::InvalidOnramperProvider);
         };
         let name = match name.clone() {
             Some(name) => name,
             None => return Err(RampError::InvalidOnramperProvider),
         };
-        let consent_id = match order.consent_id.clone() {
-            Some(consent_id) => consent_id,
+        let consent_id = match order.revolut_consent {
+            Some(consent_id) => consent_id.id,
             None => return Err(RampError::InvalidOnramperProvider),
         };
 
         (
             consent_id.clone(),
-            order.base.fiat_amount.to_string(),
-            order.base.currency_symbol,
+            (order.price as f64 / 100.).to_string(),
+            order.base.currency,
             scheme.clone(),
             id.clone(),
             scheme.clone(),

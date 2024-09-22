@@ -94,6 +94,9 @@ pub enum RampError {
     #[error("Vault manager address not found for chain ID: {0}")]
     VaultManagerAddressNotFound(u64),
 
+    #[error("Currency Symbol not found")]
+    CurrencySymbolNotFound(),
+
     #[error("Token is unregistered")]
     UnregisteredEvmToken,
 
