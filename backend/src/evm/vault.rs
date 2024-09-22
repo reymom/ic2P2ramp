@@ -187,7 +187,7 @@ impl Ic2P2ramp {
         order: LockedOrder,
         chain_id: u64,
         estimated_gas: Option<u64>,
-    ) -> Result<String> {
+    ) -> Result<(String, SignRequest)> {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
@@ -203,7 +203,7 @@ impl Ic2P2ramp {
         ic_cdk::println!(
             "[release_funds] Releasing base currency with the following details: offramper_address = {}, onramper_address = {}, amount = {}, fees = {}, vault_manager_address = {}",
             order.base.offramper_address.address,
-            order.onramper_address.address,
+            order.onramper.address.address,
             order.base.crypto.amount,
             order.base.crypto.fee,
             vault_manager_address
@@ -215,7 +215,7 @@ impl Ic2P2ramp {
                 fee_estimates,
                 chain_id,
                 order.base.offramper_address.address,
-                order.onramper_address.address,
+                order.onramper.address.address,
                 token_address,
                 order.base.crypto.amount,
                 order.base.crypto.fee,
@@ -230,13 +230,16 @@ impl Ic2P2ramp {
                 order.base.crypto.amount,
                 order.base.crypto.fee,
                 order.base.offramper_address.address,
-                order.onramper_address.address,
+                order.onramper.address.address,
                 vault_manager_address,
             )
             .await?;
         }
 
-        transaction::send_signed_transaction(request, chain_id).await
+        Ok((
+            transaction::send_signed_transaction(request.clone(), chain_id).await?,
+            request,
+        ))
     }
 
     async fn sign_request_release_token(
