@@ -18,6 +18,7 @@ pub struct ChainConfig {
     pub chain_id: u64,
     pub vault_manager_address: String,
     pub services: RpcServices,
+    pub currency_symbol: String,
 }
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
@@ -83,6 +84,7 @@ impl TryFrom<InitArg> for State {
                     vault_manager_address: config.vault_manager_address,
                     rpc_services: config.services,
                     nonce: 0,
+                    currency_symbol: config.currency_symbol,
                     approved_tokens: HashMap::new(),
                     gas_tracking: ChainGasTracking::default(),
                 },
@@ -112,7 +114,7 @@ impl TryFrom<InitArg> for State {
                 tan: revolut.tan,
             },
             proxy_url,
-            icp_fees: HashMap::new(),
+            icp_tokens: HashMap::new(),
         };
         Ok(state)
     }

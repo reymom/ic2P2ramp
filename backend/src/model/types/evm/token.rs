@@ -12,8 +12,6 @@ pub struct Token {
     pub address: String,
     pub decimals: u8,
     pub rate_symbol: String,
-    pub rate: Option<f64>,           // Optional token rate
-    pub description: Option<String>, // Optional metadata
 }
 
 impl Token {
@@ -22,17 +20,7 @@ impl Token {
             address,
             decimals,
             rate_symbol: rate_symbol.to_string(),
-            rate: None,
-            description: None,
         }
-    }
-
-    // pub fn set_rate(&mut self, rate: f64) {
-    //     self.rate = Some(rate);
-    // }
-
-    pub fn set_description(&mut self, desc: Option<String>) {
-        self.description = desc;
     }
 }
 

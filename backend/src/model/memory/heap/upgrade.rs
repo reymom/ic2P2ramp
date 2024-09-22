@@ -108,6 +108,7 @@ pub fn post_upgrade(update_arg: Option<UpdateArg>) {
                         vault_manager_address: config.vault_manager_address,
                         rpc_services: config.services,
                         nonce: 0,
+                        currency_symbol: config.currency_symbol,
                         approved_tokens: HashMap::new(),
                         gas_tracking: ChainGasTracking::default(),
                     });

@@ -16,6 +16,7 @@ pub struct ChainState {
     pub vault_manager_address: String,
     pub rpc_services: RpcServices,
     pub nonce: u128,
+    pub currency_symbol: String,
     pub approved_tokens: HashMap<String, Token>,
     pub gas_tracking: ChainGasTracking,
 }
@@ -59,6 +60,22 @@ pub fn get_vault_manager_address(chain_id: u64) -> Result<String> {
                     Err(RampError::VaultManagerAddressNotFound(chain_id))
                 } else {
                     Ok(chain_state.vault_manager_address.clone())
+                }
+            })
+    })
+}
+
+pub fn get_currency_symbol(chain_id: u64) -> Result<String> {
+    read_state(|state| {
+        state
+            .chains
+            .get(&chain_id)
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))
+            .and_then(|chain_state| {
+                if chain_state.currency_symbol.is_empty() {
+                    Err(RampError::CurrencySymbolNotFound())
+                } else {
+                    Ok(chain_state.currency_symbol.clone())
                 }
             })
     })
