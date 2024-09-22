@@ -1,5 +1,6 @@
 use crate::errors::{RampError, Result};
 use crate::model::memory::heap::{clear_order_timer, set_order_timer};
+use crate::model::types::order::RevolutConsent;
 use crate::model::types::{PaymentProvider, TransactionAddress};
 use crate::types::order::{Order, OrderState};
 
@@ -58,20 +59,22 @@ where
 
 pub fn lock_order(
     order_id: u64,
+    price: u64,
+    offramper_fee: u64,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    revolut_consent_id: Option<String>,
-    consent_url: Option<String>,
+    revolut_consent: Option<RevolutConsent>,
 ) -> Result<()> {
     mutate_order(&order_id, |order_state| match order_state {
         OrderState::Created(order) => {
             *order_state = OrderState::Locked(order.clone().lock(
+                price,
+                offramper_fee,
                 onramper_user_id,
                 onramper_provider,
                 onramper_address,
-                revolut_consent_id,
-                consent_url,
+                revolut_consent,
             )?);
             Ok(())
         }
@@ -93,12 +96,12 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
 
     mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            super::users::mutate_user(order.onramper_user_id, |user| {
+            super::users::mutate_user(order.onramper.user_id, |user| {
                 user.decrease_score();
             })?;
             ic_cdk::println!(
                 "[unlock_order] score decreased for user #{:?}",
-                order.onramper_user_id
+                order.onramper.user_id
             );
             *order_state = OrderState::Created(order.base.clone());
             Ok(())

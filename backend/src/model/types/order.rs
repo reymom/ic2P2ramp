@@ -19,12 +19,13 @@ const MAX_ORDER_SIZE: u32 = 8000;
 pub(crate) const OFFRAMPER_FIAT_FEE_DENOM: u64 = 40; // 2.5%
 pub(crate) const ADMIN_CRYPTO_FEE_DENOM: u128 = 200; // 0.5%
 
-pub fn calculate_fees(fiat_amount: u64, crypto_amount: u128, blockchain_fees: u128) -> (u64, u128) {
-    // Static strategy
-    let offramper_fee = fiat_amount / OFFRAMPER_FIAT_FEE_DENOM;
-    let admin_fee = crypto_amount / ADMIN_CRYPTO_FEE_DENOM;
+pub fn get_fiat_fee(fiat_amount: u64) -> u64 {
+    fiat_amount / OFFRAMPER_FIAT_FEE_DENOM
+}
 
-    (offramper_fee, blockchain_fees + admin_fee)
+pub fn get_crypto_fee(crypto_amount: u128, blockchain_fees: u128) -> u128 {
+    let admin_fee = crypto_amount / ADMIN_CRYPTO_FEE_DENOM;
+    blockchain_fees + admin_fee
 }
 
 pub type OrderId = u64;
@@ -66,27 +67,23 @@ impl Storable for OrderState {
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct Order {
     pub id: u64,
-    pub offramper_user_id: u64,
     pub created_at: u64,
-    pub fiat_amount: u64,
-    pub offramper_fee: u64,
-    pub currency_symbol: String,
+    pub currency: String,
+    pub offramper_user_id: u64,
+    pub offramper_address: TransactionAddress,
     pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     pub crypto: Crypto,
-    pub offramper_address: TransactionAddress,
 }
 
 impl Order {
     pub fn new(
+        currency: String,
         offramper_user_id: u64,
-        fiat_amount: u64,
-        currency_symbol: String,
+        offramper_address: TransactionAddress,
         offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
         blockchain: Blockchain,
         token: Option<String>,
         crypto_amount: u128,
-        offramper_address: TransactionAddress,
-        offramper_fee: u64,
         crypto_fee: u128,
     ) -> Result<Self> {
         offramper_address.validate()?;
@@ -105,14 +102,12 @@ impl Order {
         let order_id = memory::heap::generate_order_id();
         let order = Order {
             id: order_id.clone(),
-            offramper_user_id,
+            currency,
             created_at: time(),
-            fiat_amount,
-            offramper_fee,
-            currency_symbol,
+            offramper_user_id,
+            offramper_address,
             offramper_providers,
             crypto: Crypto::new(blockchain, token, crypto_amount, crypto_fee),
-            offramper_address,
         };
         ic_cdk::println!("[new order] order = {:?}", order);
 
@@ -121,11 +116,12 @@ impl Order {
 
     pub fn lock(
         self,
+        price: u64,
+        offramper_fee: u64,
         onramper_user_id: u64,
         onramper_provider: PaymentProvider,
         onramper_address: TransactionAddress,
-        consent_id: Option<String>,
-        consent_url: Option<String>,
+        revolut_consent: Option<RevolutConsent>,
     ) -> Result<LockedOrder> {
         // Check if the address type matches the blockchain type
         match (
@@ -144,31 +140,58 @@ impl Order {
 
         Ok(LockedOrder {
             base: self,
-            onramper_user_id,
-            onramper_address,
-            onramper_provider,
-            consent_id,
-            consent_url,
+            locked_at: time(),
+            price,
+            offramper_fee,
+            onramper: Onramper::new(onramper_user_id, onramper_provider, onramper_address),
+            revolut_consent,
             payment_done: false,
             payment_id: None,
-            locked_at: time(),
             uncommited: false,
         })
     }
 }
 
 #[derive(CandidType, Deserialize, Clone)]
+pub struct Onramper {
+    pub user_id: u64,
+    pub provider: PaymentProvider,
+    pub address: TransactionAddress,
+}
+
+impl Onramper {
+    pub fn new(user_id: u64, provider: PaymentProvider, address: TransactionAddress) -> Self {
+        Onramper {
+            user_id,
+            provider,
+            address,
+        }
+    }
+}
+
+#[derive(CandidType, Deserialize, Clone)]
+pub struct RevolutConsent {
+    id: String,
+    url: String,
+}
+
+impl RevolutConsent {
+    pub fn new(id: String, url: String) -> Self {
+        RevolutConsent { id, url }
+    }
+}
+
+#[derive(CandidType, Deserialize, Clone)]
 pub struct LockedOrder {
     pub base: Order,
-    pub onramper_user_id: u64,
-    pub onramper_provider: PaymentProvider,
-    pub onramper_address: TransactionAddress,
-    pub consent_id: Option<String>,
-    pub consent_url: Option<String>,
-    pub payment_done: bool,
-    pub payment_id: Option<String>,
-    pub uncommited: bool,
     pub locked_at: u64,
+    pub price: u64,
+    pub offramper_fee: u64,
+    pub onramper: Onramper,
+    pub revolut_consent: Option<RevolutConsent>,
+    pub payment_id: Option<String>,
+    pub payment_done: bool,
+    pub uncommited: bool,
 }
 
 impl LockedOrder {
@@ -185,7 +208,7 @@ impl LockedOrder {
 pub struct CompletedOrder {
     pub onramper: TransactionAddress,
     pub offramper: TransactionAddress,
-    pub fiat_amount: u64,
+    pub price: u64,
     pub offramper_fee: u64,
     pub blockchain: Blockchain,
     pub completed_at: u64,
@@ -195,10 +218,10 @@ impl From<LockedOrder> for CompletedOrder {
     fn from(locked_order: LockedOrder) -> Self {
         let base = locked_order.base;
         CompletedOrder {
-            onramper: locked_order.onramper_address,
+            onramper: locked_order.onramper.address,
             offramper: base.offramper_address,
-            fiat_amount: base.fiat_amount,
-            offramper_fee: base.offramper_fee,
+            price: locked_order.price,
+            offramper_fee: locked_order.offramper_fee,
             blockchain: base.crypto.blockchain,
             completed_at: time(),
         }
