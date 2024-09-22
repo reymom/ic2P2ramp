@@ -8,12 +8,13 @@ use crate::evm::{fees, vault::Ic2P2ramp};
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
 use crate::model::memory::stable;
-use crate::model::types;
+use crate::model::types::evm::chains;
+use crate::model::types::icp::get_icp_token;
 use crate::model::types::order::get_fiat_fee;
-use crate::outcalls::xrc_rates::{Asset, AssetClass};
+use crate::model::types::{self, icp};
+use crate::outcalls::xrc_rates::{get_cached_exchange_rate, Asset, AssetClass};
 use crate::types::{
     evm::token,
-    get_icp_fee,
     order::{get_crypto_fee, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
@@ -101,9 +102,17 @@ pub async fn create_order(
             .await?
         }
         Blockchain::ICP { ledger_principal } => {
-            let icp_fee: u128 = get_icp_fee(&ledger_principal)?.0.try_into().map_err(|e| {
-                RampError::InternalError(format!("icp fee cannot be converted to u128: {:?}", e))
-            })?;
+            let icp_fee: u128 =
+                get_icp_token(&ledger_principal)?
+                    .fee
+                    .0
+                    .try_into()
+                    .map_err(|e| {
+                        RampError::InternalError(format!(
+                            "icp fee cannot be converted to u128: {:?}",
+                            e
+                        ))
+                    })?;
 
             get_crypto_fee(crypto_amount, icp_fee * 2)
         }
@@ -207,27 +216,21 @@ pub fn get_orders(
 }
 
 pub async fn calculate_price_and_fee(
-    order_id: u64,
-    crypto_amount: u64,
-    fiat_symbol: &str,
+    currency: &str,
+    crypto_amount: u128,
     crypto_symbol: &str,
 ) -> Result<(u64, u64)> {
-    // Get the exchange rate from the cache or XRC
     let base_asset = Asset {
         class: AssetClass::Cryptocurrency,
         symbol: crypto_symbol.to_string(),
     };
     let quote_asset = Asset {
         class: AssetClass::FiatCurrency,
-        symbol: fiat_symbol.to_string(),
+        symbol: currency.to_string(),
     };
+    let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
 
-    let exchange_rate = get_cached_exchange_rate(&base_asset, &quote_asset).await?;
-
-    // Calculate the fiat amount
-    let fiat_amount = (crypto_amount as f64 * exchange_rate) as u64;
-
-    // Calculate the offramper fee based on the fiat amount
+    let fiat_amount = (crypto_amount as f64 * exchange_rate * 100.) as u64;
     let fiat_fee = get_fiat_fee(fiat_amount);
 
     Ok((fiat_amount, fiat_fee))
@@ -235,8 +238,6 @@ pub async fn calculate_price_and_fee(
 
 pub async fn lock_order(
     order_id: u64,
-    price: u64,
-    offramper_fee: u64,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
@@ -252,9 +253,18 @@ pub async fn lock_order(
         return Err(RampError::InvalidOnramperProvider);
     }
 
+    let crypto_symbol = match order.crypto.blockchain {
+        Blockchain::EVM { chain_id } => chains::get_currency_symbol(chain_id),
+        Blockchain::ICP { ledger_principal } => Ok(icp::get_icp_token(&ledger_principal)?.symbol),
+        _ => return Err(RampError::UnsupportedBlockchain),
+    }?;
+
+    let (price, offramper_fee) =
+        calculate_price_and_fee(&order.currency, order.crypto.amount, &crypto_symbol).await?;
+
     let revolut_consent = payment::get_revolut_consent(
         order.offramper_providers,
-        price,
+        &(price as f64 / 100.).to_string(),
         &order.currency,
         &onramper_provider,
     )
@@ -432,7 +442,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
                 Principal::from_text(&order.offramper_address.address).unwrap();
 
             let amount = NumTokens::from(order.crypto.amount);
-            let fee = get_icp_fee(ledger_principal)?;
+            let fee = get_icp_token(ledger_principal)?.fee;
 
             let to_account = Account {
                 owner: offramper_principal,

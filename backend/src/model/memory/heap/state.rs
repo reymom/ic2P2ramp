@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
-use icrc_ledger_types::icrc1::transfer::NumTokens;
 
 use crate::model::types::{
     evm::chains::ChainState,
+    icp::IcpToken,
     payment::{paypal::PayPalState, revolut::RevolutState},
 };
 
@@ -20,7 +20,7 @@ pub struct State {
     pub paypal: PayPalState,
     pub revolut: RevolutState,
     pub proxy_url: String,
-    pub icp_fees: HashMap<Principal, NumTokens>,
+    pub icp_tokens: HashMap<Principal, IcpToken>,
 }
 
 #[derive(Debug, Eq, PartialEq)]

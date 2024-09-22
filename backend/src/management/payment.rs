@@ -12,7 +12,7 @@ use crate::{
         memory::stable::orders,
         types::{
             evm::gas::MethodGasUsage,
-            get_icp_fee,
+            icp::get_icp_token,
             order::{LockedOrder, OrderState, RevolutConsent},
             PaymentProvider, PaymentProviderType,
         },
@@ -29,9 +29,6 @@ pub async fn verify_paypal_payment(
     ic_cdk::println!("[verify_transaction] Obtained PayPal access token");
     let capture_details = paypal::order::fetch_paypal_order(&access_token, transaction_id).await?;
 
-    // Verify the captured payment details (amounts are in cents)
-    let total_expected_amount = (order.price + order.offramper_fee) as f64 / 100.0;
-
     let received_amount: f64 = capture_details
         .purchase_units
         .iter()
@@ -39,7 +36,7 @@ pub async fn verify_paypal_payment(
         .map(|capture| capture.amount.value.parse::<f64>().unwrap())
         .sum();
 
-    let amount_matches = (received_amount - total_expected_amount).abs() < f64::EPSILON;
+    let amount_matches = order.payment_amount_matches(&received_amount.to_string());
     let currency_matches =
         capture_details.purchase_units[0].amount.currency_code == order.base.currency;
 
@@ -83,9 +80,8 @@ pub async fn verify_revolut_payment(
         revolut::transaction::fetch_revolut_payment_details(&transaction_id).await?;
 
     // Verify the captured payment details (amounts are in cents)
-    let total_expected_amount = (order.price + order.offramper_fee) as f64 / 100.0;
-    let amount_matches = payment_details.data.initiation.instructed_amount.amount
-        == total_expected_amount.to_string();
+    let amount_matches =
+        order.payment_amount_matches(&payment_details.data.initiation.instructed_amount.amount);
     let currency_matches =
         payment_details.data.initiation.instructed_amount.currency == order.base.currency;
 
@@ -170,7 +166,7 @@ pub async fn handle_icp_payment_completion(
     let onramper_principal = Principal::from_text(&order.onramper.address.address).unwrap();
 
     let amount = NumTokens::from(order.base.crypto.amount);
-    let fee = get_icp_fee(ledger_principal)?;
+    let fee = get_icp_token(ledger_principal)?.fee;
 
     let to_account = Account {
         owner: onramper_principal,
@@ -191,7 +187,7 @@ pub async fn handle_icp_payment_completion(
 
 pub async fn get_revolut_consent(
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
-    fiat_amount: u64,
+    fiat_amount: &str,
     currency_symbol: &str,
     onramper_provider: &PaymentProvider,
 ) -> Result<Option<RevolutConsent>> {
@@ -212,7 +208,7 @@ pub async fn get_revolut_consent(
             } = offramper_provider
             {
                 let consent_id = revolut::consent::create_account_access_consent(
-                    &fiat_amount.to_string(),
+                    fiat_amount,
                     currency_symbol,
                     onramper_scheme,
                     onramper_id,

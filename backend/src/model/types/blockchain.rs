@@ -1,10 +1,4 @@
 use candid::{CandidType, Deserialize, Principal};
-use icrc_ledger_types::icrc1::transfer::NumTokens;
-
-use crate::model::{
-    errors::{RampError, Result},
-    memory::heap::read_state,
-};
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Blockchain {
@@ -30,26 +24,4 @@ impl Crypto {
             fee,
         }
     }
-}
-
-pub fn get_icp_fee(ledger_principal: &Principal) -> Result<NumTokens> {
-    read_state(|state| {
-        state
-            .icp_fees
-            .get(ledger_principal)
-            .cloned()
-            .ok_or_else(|| RampError::LedgerPrincipalNotSupported(ledger_principal.to_string()))
-    })
-}
-
-pub fn is_icp_token_supported(ledger_principal: &Principal) -> Result<()> {
-    read_state(|state| {
-        if state.icp_fees.contains_key(ledger_principal) {
-            Ok(())
-        } else {
-            Err(RampError::LedgerPrincipalNotSupported(
-                ledger_principal.to_string(),
-            ))
-        }
-    })
 }
