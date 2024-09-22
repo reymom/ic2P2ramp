@@ -3,9 +3,9 @@ use ic_stable_structures::{storable::Bound, Storable};
 use std::{borrow::Cow, collections::HashSet};
 
 use super::{
-    common::{LoginAddress, PaymentProvider, TransactionAddress},
+    common::{LoginAddress, TransactionAddress},
     session::Session,
-    AuthenticationData,
+    AuthenticationData, PaymentProvider,
 };
 use crate::{
     errors::{RampError, Result},

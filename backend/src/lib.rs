@@ -32,7 +32,9 @@ use model::types::evm::{
     token::{self, Token, TokenManager},
 };
 use model::types::{
-    self, get_icp_fee, is_icp_token_supported,
+    self,
+    exchange_rate::CACHE_DURATION,
+    icp::{get_icp_token, is_icp_token_supported, IcpToken},
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
@@ -172,6 +174,7 @@ fn print_constants() -> String {
     format!(
         "Order's Lock Time = {}s\n\
         User Session's Expiration Time = {}s\n\
+        Exchange Rate Cache Duration = {}s\n\
         Offramper Fiat Fee = {}%\n\
         Onramper Crypto Fee = {}%\n\
         Default Evm Gas = {}\n\
@@ -179,6 +182,7 @@ fn print_constants() -> String {
         Evm Max Attempts per Retry = {}\n\
         Evm Attempt Interval = {}",
         heap::LOCK_DURATION_TIME_SECONDS,
+        CACHE_DURATION,
         Session::EXPIRATION_SECS,
         (100. / types::order::OFFRAMPER_FIAT_FEE_DENOM as f64),
         (100. / types::order::ADMIN_CRYPTO_FEE_DENOM as f64),
@@ -189,10 +193,15 @@ fn print_constants() -> String {
     )
 }
 
+#[ic_cdk::query]
+fn get_icp_token_info(ledger_principal: Principal) -> Result<IcpToken> {
+    get_icp_token(&ledger_principal)
+}
+
 #[ic_cdk::update]
 async fn register_icp_tokens(icp_canisters: Vec<String>) -> Result<()> {
     guards::only_controller()?;
-    ICPRamp::set_icp_fees(icp_canisters).await
+    ICPRamp::register_icp_token(icp_canisters).await
 }
 
 #[ic_cdk::query]
@@ -212,29 +221,21 @@ async fn get_evm_tokens(chain_id: u64) -> Result<Vec<Token>> {
 }
 
 #[ic_cdk::update]
-async fn register_evm_tokens(
-    chain_id: u64,
-    tokens: Vec<(String, u8, String, Option<String>)>,
-) -> Result<()> {
+async fn register_evm_tokens(chain_id: u64, tokens: Vec<(String, u8, String)>) -> Result<()> {
     guards::only_controller()?;
 
     let mut new_tokens = TokenManager::new();
-    for (token_address, decimals, rate_symbol, desc) in tokens {
+    for (token_address, decimals, rate_symbol) in tokens {
         helpers::validate_evm_address(&token_address)?;
 
-        let mut new_token = Token::new(token_address.clone(), decimals, &rate_symbol);
-        new_token.set_description(desc);
-
-        new_tokens.add_token(token_address, new_token)
+        new_tokens.add_token(
+            token_address.clone(),
+            Token::new(token_address.clone(), decimals, &rate_symbol),
+        );
     }
 
     token::approve_evm_tokens(chain_id, new_tokens.tokens);
     Ok(())
-}
-
-#[ic_cdk::query]
-fn get_icp_transaction_fee(ledger_principal: Principal) -> Result<candid::Nat> {
-    get_icp_fee(&ledger_principal)
 }
 
 #[ic_cdk::query]
@@ -251,7 +252,7 @@ async fn transfer_canister_funds(
 ) -> Result<()> {
     guards::only_controller()?;
 
-    let fee = get_icp_fee(&ledger_canister)?;
+    let fee = get_icp_token(&ledger_canister)?.fee;
     let to_account = Account {
         owner: to_principal,
         subaccount: None,
@@ -287,6 +288,8 @@ async fn transfer_evm_funds(
 
 #[ic_cdk::update]
 async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -> Result<String> {
+    guards::only_controller()?;
+
     let canister_address =
         read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
     if let Some(token_address) = token {
@@ -306,7 +309,9 @@ async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -
 // ---------
 
 #[ic_cdk::update]
-async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<String> {
+async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
+    guards::only_controller()?;
+
     let base_asset = Asset {
         class: AssetClass::Cryptocurrency,
         symbol: crypto_symbol.to_string(),
@@ -316,10 +321,7 @@ async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result
         symbol: fiat_symbol.to_string(),
     };
 
-    match xrc_rates::get_exchange_rate(base_asset, quote_asset).await {
-        Ok(rate) => Ok(rate.to_string()),
-        Err(err) => Err(err),
-    }
+    xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await
 }
 
 // -----
@@ -520,14 +522,26 @@ async fn create_order(
     .await
 }
 
+#[ic_cdk::update]
+async fn calculate_order_price(
+    currency: String,
+    crypto_amount: u128,
+    crypto_symbol: String,
+) -> Result<(u64, u64)> {
+    order_management::calculate_price_and_fee(&currency, crypto_amount, &crypto_symbol).await
+}
+
+#[ic_cdk::query]
+async fn get_offramper_fee(price: u64) -> u64 {
+    price / types::order::OFFRAMPER_FIAT_FEE_DENOM
+}
+
 // async fn top_up_order() -> Result<()>
 
 #[ic_cdk::update]
 async fn lock_order(
     order_id: u64,
     session_token: String,
-    price: u64,         // calculate this here?
-    offramper_fee: u64, // calculate here
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
@@ -540,8 +554,6 @@ async fn lock_order(
 
     order_management::lock_order(
         order_id,
-        price,
-        offramper_fee,
         onramper_user_id,
         onramper_provider,
         onramper_address,
@@ -610,7 +622,7 @@ async fn verify_transaction(
         PaymentProvider::PayPal { id: onramper_id } => {
             ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
 
-            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order).await?
+            payment_management::verify_paypal_payment(&onramper_id, &transaction_id, &order).await?
         }
 
         PaymentProvider::Revolut {
@@ -621,9 +633,9 @@ async fn verify_transaction(
             ic_cdk::println!("[verify_transaction] Handling Revolut payment verification");
 
             payment_management::verify_revolut_payment(
-                onramper_id,
+                &onramper_id,
                 &transaction_id,
-                onramper_scheme,
+                &onramper_scheme,
                 &order,
             )
             .await?
