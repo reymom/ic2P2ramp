@@ -436,15 +436,13 @@ async fn get_average_gas_prices(
 #[ic_cdk::update]
 async fn calculate_order_evm_fees(
     chain_id: u64,
-    fiat_amount: u64,
     crypto_amount: u128,
     token: Option<String>,
     estimated_gas_lock: u64,
     estimated_gas_withdraw: u64,
-) -> Result<(u64, u128)> {
+) -> Result<u128> {
     order_management::calculate_order_evm_fees(
         chain_id,
-        fiat_amount,
         crypto_amount,
         token.clone(),
         estimated_gas_lock,
@@ -476,8 +474,7 @@ fn get_transaction_log(
 #[ic_cdk::update]
 async fn create_order(
     session_token: String,
-    fiat_amount: u64,
-    fiat_symbol: String,
+    currency: String,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
     token_address: Option<String>,
@@ -510,24 +507,27 @@ async fn create_order(
     }
 
     order_management::create_order(
+        &currency,
         offramper_user_id,
-        fiat_amount,
-        fiat_symbol,
+        offramper_address,
         offramper_providers,
         blockchain,
         token_address,
         crypto_amount,
-        offramper_address,
         estimated_gas_lock,
         estimated_gas_withdraw,
     )
     .await
 }
 
+// async fn top_up_order() -> Result<()>
+
 #[ic_cdk::update]
 async fn lock_order(
     order_id: u64,
     session_token: String,
+    price: u64,         // calculate this here?
+    offramper_fee: u64, // calculate here
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
@@ -540,6 +540,8 @@ async fn lock_order(
 
     order_management::lock_order(
         order_id,
+        price,
+        offramper_fee,
         onramper_user_id,
         onramper_provider,
         onramper_address,
@@ -560,7 +562,7 @@ async fn unlock_order(
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = stable::users::get_user(&order.onramper_user_id)?;
+    let user = stable::users::get_user(&order.onramper.user_id)?;
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
 
@@ -604,12 +606,11 @@ async fn verify_transaction(
 
     let order = order_management::verify_order_is_payable(order_id, &session_token)?;
 
-    match &order.clone().onramper_provider {
+    match &order.clone().onramper.provider {
         PaymentProvider::PayPal { id: onramper_id } => {
             ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
 
-            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order.base)
-                .await?
+            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order).await?
         }
 
         PaymentProvider::Revolut {
@@ -623,7 +624,7 @@ async fn verify_transaction(
                 onramper_id,
                 &transaction_id,
                 onramper_scheme,
-                &order.base,
+                &order,
             )
             .await?
         }

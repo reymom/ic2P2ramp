@@ -9,10 +9,12 @@ use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
 use crate::model::memory::stable;
 use crate::model::types;
+use crate::model::types::order::get_fiat_fee;
+use crate::outcalls::xrc_rates::{Asset, AssetClass};
 use crate::types::{
     evm::token,
     get_icp_fee,
-    order::{calculate_fees, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter},
+    order::{get_crypto_fee, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter},
     Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 use crate::{
@@ -24,12 +26,11 @@ use super::{payment, vault};
 
 pub async fn calculate_order_evm_fees(
     chain_id: u64,
-    fiat_amount: u64,
     crypto_amount: u128,
     token: Option<String>,
     estimated_gas_lock: u64,
     estimated_gas_withdraw: u64,
-) -> Result<(u64, u128)> {
+) -> Result<u128> {
     let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
         + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
     ic_cdk::println!(
@@ -63,22 +64,21 @@ pub async fn calculate_order_evm_fees(
         );
     }
 
-    Ok(calculate_fees(fiat_amount, crypto_amount, blockchain_fees))
+    Ok(get_crypto_fee(crypto_amount, blockchain_fees))
 }
 
 pub async fn create_order(
+    currency: &str,
     offramper_user_id: u64,
-    fiat_amount: u64,
-    currency_symbol: String,
+    offramper_address: TransactionAddress,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
     token: Option<String>,
     crypto_amount: u128,
-    offramper_address: TransactionAddress,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
-    let (offramper_fee, crypto_fee) = match blockchain {
+    let crypto_fee = match blockchain {
         Blockchain::EVM { chain_id } => {
             let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
                 RampError::InvalidInput(
@@ -93,7 +93,6 @@ pub async fn create_order(
 
             calculate_order_evm_fees(
                 chain_id,
-                fiat_amount,
                 crypto_amount,
                 token.clone(),
                 estimated_gas_lock,
@@ -106,7 +105,7 @@ pub async fn create_order(
                 RampError::InternalError(format!("icp fee cannot be converted to u128: {:?}", e))
             })?;
 
-            calculate_fees(fiat_amount, crypto_amount, icp_fee * 2)
+            get_crypto_fee(crypto_amount, icp_fee * 2)
         }
         _ => return Err(RampError::UnsupportedBlockchain),
     };
@@ -116,15 +115,13 @@ pub async fn create_order(
     }
 
     let order = Order::new(
+        currency.to_string(),
         offramper_user_id,
-        fiat_amount,
-        currency_symbol,
+        offramper_address,
         offramper_providers,
         blockchain,
         token,
         crypto_amount,
-        offramper_address,
-        offramper_fee,
         crypto_fee,
     )?;
 
@@ -163,7 +160,7 @@ pub fn get_orders(
         ),
         Some(OrderFilter::ByOnramperId(onramper_id)) => memory::stable::orders::filter_orders(
             |order_state| match order_state {
-                OrderState::Locked(order) => order.onramper_user_id == onramper_id,
+                OrderState::Locked(order) => order.onramper.user_id == onramper_id,
                 _ => false,
             },
             page,
@@ -180,7 +177,7 @@ pub fn get_orders(
         ),
         Some(OrderFilter::LockedByOnramper(address)) => memory::stable::orders::filter_orders(
             |order_state| match order_state {
-                OrderState::Locked(order) => order.onramper_address == address,
+                OrderState::Locked(order) => order.onramper.address == address,
                 _ => false,
             },
             page,
@@ -209,8 +206,37 @@ pub fn get_orders(
     }
 }
 
+pub async fn calculate_price_and_fee(
+    order_id: u64,
+    crypto_amount: u64,
+    fiat_symbol: &str,
+    crypto_symbol: &str,
+) -> Result<(u64, u64)> {
+    // Get the exchange rate from the cache or XRC
+    let base_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: crypto_symbol.to_string(),
+    };
+    let quote_asset = Asset {
+        class: AssetClass::FiatCurrency,
+        symbol: fiat_symbol.to_string(),
+    };
+
+    let exchange_rate = get_cached_exchange_rate(&base_asset, &quote_asset).await?;
+
+    // Calculate the fiat amount
+    let fiat_amount = (crypto_amount as f64 * exchange_rate) as u64;
+
+    // Calculate the offramper fee based on the fiat amount
+    let fiat_fee = get_fiat_fee(fiat_amount);
+
+    Ok((fiat_amount, fiat_fee))
+}
+
 pub async fn lock_order(
     order_id: u64,
+    price: u64,
+    offramper_fee: u64,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
@@ -226,8 +252,13 @@ pub async fn lock_order(
         return Err(RampError::InvalidOnramperProvider);
     }
 
-    let (revolut_consent_id, consent_url) =
-        payment::get_revolut_consent(&order, &onramper_provider).await?;
+    let revolut_consent = payment::get_revolut_consent(
+        order.offramper_providers,
+        price,
+        &order.currency,
+        &onramper_provider,
+    )
+    .await?;
 
     match order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
@@ -244,13 +275,14 @@ pub async fn lock_order(
             vault::spawn_commit_listener(
                 order_id,
                 chain_id,
+                price,
+                offramper_fee,
                 &tx_hash,
                 sign_request,
                 onramper_user_id,
                 onramper_provider,
                 onramper_address,
-                revolut_consent_id,
-                consent_url,
+                revolut_consent,
             );
 
             return Ok(tx_hash);
@@ -258,11 +290,12 @@ pub async fn lock_order(
         Blockchain::ICP { .. } => {
             memory::stable::orders::lock_order(
                 order_id,
+                price,
+                offramper_fee,
                 onramper_user_id,
                 onramper_provider,
                 onramper_address,
-                revolut_consent_id,
-                consent_url,
+                revolut_consent,
             )?;
 
             return Ok(format!("order {:?} is locked!", order_id));
@@ -322,7 +355,7 @@ pub async fn unlock_order(
     }
 
     if let Some(session_token) = session_token {
-        let user = stable::users::get_user(&order.onramper_user_id)?;
+        let user = stable::users::get_user(&order.onramper.user_id)?;
         user.validate_session(&session_token)?;
         user.validate_onramper()?;
     }
@@ -427,14 +460,8 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
     memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            user_management::update_onramper_payment(
-                order.onramper_user_id,
-                order.base.fiat_amount,
-            )?;
-            user_management::update_offramper_payment(
-                order.base.offramper_user_id,
-                order.base.fiat_amount,
-            )?;
+            user_management::update_onramper_payment(order.onramper.user_id, order.price)?;
+            user_management::update_offramper_payment(order.base.offramper_user_id, order.price)?;
             order.payment_done = true;
             Ok(())
         }
@@ -479,10 +506,10 @@ pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<Loc
     order
         .base
         .offramper_providers
-        .get(&order.onramper_provider.provider_type())
-        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper_provider.provider_type()))?;
+        .get(&order.onramper.provider.provider_type())
+        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
 
-    let user = memory::stable::users::get_user(&order.onramper_user_id)?;
+    let user = memory::stable::users::get_user(&order.onramper.user_id)?;
     user.validate_session(session_token)?;
     user.is_banned()?;
     user.validate_onramper()?;

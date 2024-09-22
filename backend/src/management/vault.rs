@@ -9,6 +9,7 @@ use crate::{
                 gas::{self, MethodGasUsage},
                 logs::TransactionAction,
             },
+            order::RevolutConsent,
             PaymentProvider, TransactionAddress,
         },
     },
@@ -17,13 +18,14 @@ use crate::{
 pub(super) fn spawn_commit_listener(
     order_id: u64,
     chain_id: u64,
+    price: u64,
+    offramper_fee: u64,
     tx_hash: &str,
     sign_request: SignRequest,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    revolut_consent_id: Option<String>,
-    consent_url: Option<String>,
+    revolut_consent: Option<RevolutConsent>,
 ) {
     transaction::spawn_transaction_checker(
         0,
@@ -31,7 +33,7 @@ pub(super) fn spawn_commit_listener(
         chain_id,
         order_id,
         Some(TransactionAction::Commit),
-        sign_request,
+        sign_request.clone(),
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
             let gas_price = receipt.effectiveGasPrice.0.to_u128().unwrap_or(0);
@@ -61,19 +63,14 @@ pub(super) fn spawn_commit_listener(
                 );
             }
 
-            let onramper_provider = onramper_provider.clone();
-            let onramper_address = onramper_address.clone();
-
-            let revolut_consent_id = revolut_consent_id.clone();
-            let consent_url = consent_url.clone();
-
             match memory::stable::orders::lock_order(
                 order_id,
+                price,
+                offramper_fee,
                 onramper_user_id,
-                onramper_provider,
-                onramper_address,
-                revolut_consent_id,
-                consent_url,
+                onramper_provider.clone(),
+                onramper_address.clone(),
+                revolut_consent.clone(),
             ) {
                 Ok(()) => ic_cdk::println!("order {:?} is locked!", order_id),
                 Err(err) => {
@@ -166,8 +163,8 @@ pub(super) fn spawn_cancel_order(
 pub(super) fn spawn_payment_release(
     order_id: u64,
     chain_id: u64,
-    tx_hash: &str,
     action_type: MethodGasUsage,
+    tx_hash: &str,
     sign_request: SignRequest,
 ) {
     transaction::spawn_transaction_checker(
