@@ -10,13 +10,16 @@ import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas, TokenOption } from '../../constants/tokens';
 import { tokenLogos } from '../../constants/addresses';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
-import { formatCryptoUnits, formatTimeLeft, truncate } from '../../model/helper';
+import { formatCryptoUnits, formatPrice, formatTimeLeft, truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
 import { estimateGasAndGasPrice } from '../../model/evm';
 import { PaymentProviderTypes } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
 import DynamicDots from '../ui/DynamicDots';
+import { fetchOrderPrice } from '../../model/rate';
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 interface OrderProps {
     order: OrderState;
@@ -24,14 +27,18 @@ interface OrderProps {
 }
 
 const defaultLoadingMessage = "Processing Transaction";
-const lockTimeSeconds = 600;
+const PRICE_DIFFERENCE_THRESHOLD = 0.025;
+const CACHE_EXPIRY_MS = 1800000; // 30 min, but backend is caching it to 10 minuts
+const LOCK_TIME_SECONDS = 1800;
 
 const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, PaymentProvider]>();
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState(defaultLoadingMessage);
-    const [message, setMessage] = useState<string | null>(null);
+    const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
+    const [loadingPrice, setLoadingPrice] = useState<boolean>(false);
     const [txHash, setTxHash] = useState<string | null>(null);
+    const [message, setMessage] = useState<string | null>(null);
     const [remainingTime, setRemainingTime] = useState<number | null>(null);
     const [isPayable, setIsPayable] = useState<boolean>(false);
     const [loadingPayable, setLoadingPayable] = useState<boolean>(true);
@@ -56,10 +63,46 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             : 'Completed' in order ? order.Completed.blockchain
                 : null;
 
-    const orderFiatAmount = 'Created' in order ? order.Created.fiat_amount + order.Created.offramper_fee
-        : 'Locked' in order ? order.Locked.base.fiat_amount + order.Locked.base.offramper_fee
-            : 'Completed' in order ? order.Completed.fiat_amount + order.Completed.offramper_fee
-                : null;
+    useEffect(() => {
+        const getCurrentPrice = async () => {
+            if ('Locked' in order) {
+                setCurrentPrice(order.Locked.price + order.Locked.offramper_fee);
+                return;
+            };
+            if (!('Created' in order)) return;
+
+            const cachedPriceData = localStorage.getItem(`order_${orderId}_price`);
+            if (cachedPriceData) {
+                const { price, timestamp } = JSON.parse(cachedPriceData);
+                const now = Date.now();
+                if (now - timestamp < CACHE_EXPIRY_MS) {
+                    setCurrentPrice(BigInt(price));
+                    return;
+                }
+            }
+
+            if (!baseOrder || !token || !token.rateSymbol) return;
+            setLoadingPrice(true);
+            fetchOrderPrice(baseOrder.currency, baseOrder.crypto)
+                .then(([price, offramperFee]) => {
+                    const totalPrice = price + offramperFee;
+                    localStorage.setItem(`order_${orderId}_price`, JSON.stringify({
+                        price: Number(totalPrice),
+                        timestamp: Date.now(),
+                    }));
+                    setCurrentPrice(totalPrice);
+                    setLoadingPrice(false);
+                })
+                .catch((err) => {
+                    console.error("Error fetching order price:", err);
+                    setLoadingPrice(false);
+                    setCurrentPrice(null);
+                    setMessage(err);
+                });
+        }
+
+        getCurrentPrice();
+    }, []);
 
     const getToken = (): TokenOption | undefined => {
         const crypto = 'Created' in order ? order.Created.crypto
@@ -85,7 +128,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         if ('Locked' in order) {
             const calculateRemainingTime = () => {
                 const currentTime = Number(Date.now() * 1_000_000);
-                const expiryTime = Number(order.Locked.locked_at) + lockTimeSeconds * 1_000_000_000;
+                const expiryTime = Number(order.Locked.locked_at) + LOCK_TIME_SECONDS * 1_000_000_000;
                 const timeLeftSeconds = (expiryTime - currentTime) / 1_000_000_000;
 
                 if (!order.Locked.payment_done && timeLeftSeconds <= 0) {
@@ -205,7 +248,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             try {
                 const result = await backend.verify_order_is_payable(orderId, tokenSession);
                 if ('Ok' in result) {
-                    if (order.Locked.onramper_user_id === user.id) {
+                    if (order.Locked.onramper.user_id === user.id) {
                         return true
                     }
                     return false;
@@ -236,7 +279,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         } else {
             setLoadingPayable(false);
         }
-    }, [order, sessionToken]);
+    }, [sessionToken]);
 
     const commitToOrder = async (provider: PaymentProvider) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
@@ -245,7 +288,27 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setIsLoading(true);
         setTxHash(null);
         setMessage(null);
-        setLoadingMessage(`Committing to order #${orderId}`);
+        setLoadingMessage("Fetching order price");
+
+        try {
+            const [orderPrice, offramperFee] = await fetchOrderPrice(baseOrder!.currency, baseOrder!.crypto);
+            const priceDifference = Math.abs(Number((orderPrice + offramperFee - currentPrice!) / currentPrice!));
+            // if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
+            const confirm = window.confirm(
+                `The real price differs significantly from the previously estimated price. 
+                    Real price: $${formatPrice(Number(orderPrice + offramperFee))}, estimated price: $${formatPrice(Number(currentPrice))}. 
+                    Do you want to proceed?`
+            );
+            if (!confirm) {
+                setIsLoading(false);
+                return;
+            }
+            // }
+        } catch (e) {
+            console.error("[commitToOrder] e: ", e);
+            setMessage("Could not set order price.");
+            return;
+        }
 
         let gasEstimation: [] | [bigint] = [];
         if ('EVM' in orderBlockchain) {
@@ -387,7 +450,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
         if (!('Locked' in order) || !orderId) return;
 
-        const consentUrl = order.Locked.consent_url?.[0];
+        const consentUrl = order.Locked.revolut_consent[0]?.url;
         if (consentUrl) {
             console.log('Listening for Revolut transaction confirmation...');
             backend.execute_revolut_payment(orderId, sessionToken)
@@ -396,11 +459,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         } else {
             console.error('Consent URL is not available.');
         }
-    }
+    };
 
     const getTokenName = (): string => {
         return token ? token.name : ""
-    }
+    };
 
     const getTokenSymbol = (): string => {
         return token ? token.rateSymbol : "Unknown";
@@ -409,18 +472,18 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const getTokenDecimals = (): number => {
         if (!token) throw new Error("Token not found");
         return token.decimals
-    }
+    };
 
     const tokenLogo = tokenLogos[getTokenName()] || null;
 
     const getNetwork = (): NetworkProps | undefined => {
         return (orderBlockchain && 'EVM' in orderBlockchain) ?
             Object.values(NetworkIds).find(network => network.id === Number(orderBlockchain.EVM.chain_id)) : undefined
-    }
+    };
 
     const getNetworkExplorer = (): string | undefined => {
         return getNetwork()?.explorer
-    }
+    };
 
     const getNetworkLogo = (): string | undefined => {
         if (!orderBlockchain) return "";
@@ -429,17 +492,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         } else if ('ICP' in orderBlockchain) {
             return icpLogo
         }
-    }
+    };
 
     const getNetworkName = (): string | undefined => {
         if (!orderBlockchain) return "";
         if ('EVM' in orderBlockchain) {
             return getNetwork()!.name;
         } else if ('ICP' in orderBlockchain) return 'ICP';
-    }
-
-    const formatFiatAmount = () => {
-        return (Number(orderFiatAmount) / 100).toFixed(2);
     };
 
     const formatCryptoAmount = () => {
@@ -468,7 +527,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             case 'Solana':
                 return { fullAmount: "Solana not implemented", shortAmount: "Solana not implemented" };
         }
-    }
+    };
+
+    const cryptoAmount = formatCryptoAmount();
 
     let backgroundColor =
         'Created' in order ? "bg-blue-900 bg-opacity-30"
@@ -488,20 +549,25 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const commonOrderDiv = crypto && token && (
         <div className="space-y-3">
+
             {/* Fiat and Crypto Amount */}
             <div className="text-lg flex justify-between">
                 <span className="opacity-90">Price:</span>
                 <span className="font-medium flex items-center space-x-2">
-                    <span>{formatFiatAmount()}</span>
+                    <span>
+                        {loadingPrice ? (
+                            <DynamicDots isLoading={loadingPrice} />
+                        ) : currentPrice ? formatPrice(Number(currentPrice)) : ""}
+                    </span>
                     <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
-                        $
+                        <FontAwesomeIcon icon={CURRENCY_ICON_MAP[baseOrder!.currency]} className="text-gray-300" />
                     </span>
                 </span>
             </div>
             <div className="text-lg flex justify-between">
                 <span className="opacity-90">Amount:</span>
-                <span className="font-medium flex items-center space-x-2" title={formatCryptoAmount()?.fullAmount}>
-                    <span>{formatCryptoAmount()?.shortAmount}</span>
+                <span className="font-medium flex items-center space-x-2" title={cryptoAmount?.fullAmount}>
+                    <span>{cryptoAmount?.shortAmount}</span>
                     {tokenLogo && (
                         <img
                             src={tokenLogo}
@@ -544,7 +610,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 </div>
             )}
         </div>
-    )
+    );
 
     return (
         <li className={`px-14 pt-10 pb-8 border rounded-xl shadow-md ${backgroundColor} ${borderColor} ${textColor} relative`}>
@@ -665,49 +731,47 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <div className="flex flex-col">
                     {commonOrderDiv}
 
-                    {user && userType === 'Onramper' && order.Locked.onramper_user_id === user.id && !order.Locked.uncommited && (
-                        <div>
-                            {order.Locked.onramper_provider.hasOwnProperty('PayPal') ? (
-                                <PayPalButton
-                                    orderId={order.Locked.base.id.toString()}
-                                    amount={Number(order.Locked.base.fiat_amount + order.Locked.base.offramper_fee) / 100.}
-                                    currency={order.Locked.base.currency_symbol}
-                                    paypalId={(() => {
-                                        const provider = order.Locked.base.offramper_providers.find(
-                                            provider => 'PayPal' in provider[1]
-                                        );
-                                        if (provider && 'PayPal' in provider[1]) {
-                                            return provider[1].PayPal.id;
-                                        }
-                                        return '';
-                                    })()}
-                                    onSuccess={(transactionId) => handlePayPalSuccess(transactionId)}
-                                    disabled={!isPayable || isLoading}
-                                />
-                            ) : order.Locked.onramper_provider.hasOwnProperty('Revolut') ? (
-                                <div>
-                                    <button
-                                        className={`px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
-                                        onClick={handleRevolutRedirect}
+                    {user && userType === 'Onramper' && order.Locked.onramper.user_id === user.id && !order.Locked.uncommited && (
+                        <>
+                            <div>
+                                {order.Locked.onramper.provider.hasOwnProperty('PayPal') ? (
+                                    <PayPalButton
+                                        orderId={order.Locked.base.id.toString()}
+                                        amount={Number(order.Locked.price + order.Locked.offramper_fee) / 100.}
+                                        currency={order.Locked.base.currency}
+                                        paypalId={(() => {
+                                            const provider = order.Locked.base.offramper_providers.find(
+                                                provider => 'PayPal' in provider[1]
+                                            );
+                                            if (provider && 'PayPal' in provider[1]) {
+                                                return provider[1].PayPal.id;
+                                            }
+                                            return '';
+                                        })()}
+                                        onSuccess={(transactionId) => handlePayPalSuccess(transactionId)}
                                         disabled={!isPayable || isLoading}
-                                    >
-                                        Confirm Revolut Consent
-                                    </button>
-                                </div>
-                            ) : null}
-                        </div>
-                    )}
-
-                    {order.Locked.uncommited && (
-                        <div className="text-sm text-red-500 mt-2">
-                            This order has been uncommited in the evm smart contracts!
-                        </div>
-                    )}
-
-                    {!loadingPayable && !isPayable && (
-                        <div className="text-red-500 mt-2">
-                            This order cannot be paid at the moment. Please contact support or try again later.
-                        </div>
+                                    />
+                                ) : order.Locked.onramper.provider.hasOwnProperty('Revolut') ? (
+                                    <div>
+                                        <button
+                                            className={`px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
+                                            onClick={handleRevolutRedirect}
+                                            disabled={!isPayable || isLoading}
+                                        >
+                                            Confirm Revolut Consent
+                                        </button>
+                                    </div>
+                                ) : null}
+                            </div>
+                            <div className="text-red-500 mt-2">
+                                {!order.Locked.payment_done && !loadingPayable && !isPayable && (
+                                    "This order cannot be paid at the moment. Please contact support or try again later."
+                                )}
+                                {order.Locked.payment_done && (
+                                    "Payment is validated but couldn't release your funds. Please contact support to solve this issue."
+                                )}
+                            </div>
+                        </>
                     )}
 
                     {remainingTime !== null && (
@@ -722,7 +786,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     <div className="text-lg flex justify-between">
                         <span className="opacity-90">Fiat Amount:</span>
                         <span className="font-medium flex items-center space-x-2">
-                            <span>{formatFiatAmount()}</span>
+                            <span>{formatPrice(Number(order.Completed.price))}</span>
                             <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
                                 $
                             </span>
