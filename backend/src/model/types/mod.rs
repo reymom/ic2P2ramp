@@ -8,7 +8,7 @@ pub mod payment;
 pub mod session;
 pub mod user;
 
-pub use blockchain::Blockchain;
+pub use blockchain::{Blockchain, Crypto};
 pub use common::{AuthenticationData, LoginAddress, TransactionAddress};
 pub use payment::providers::{contains_provider_type, PaymentProvider, PaymentProviderType};
 

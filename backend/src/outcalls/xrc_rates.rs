@@ -73,11 +73,11 @@ enum GetExchangeRateResult {
     Err(ExchangeRateError),
 }
 
-pub async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
+async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
     let request = GetExchangeRateRequest {
         base_asset,
         quote_asset,
-        timestamp: None,
+        timestamp: Some(ic_cdk::api::time() / 1_000_000_000),
     };
 
     // Every XRC call needs 1B cycles.
@@ -105,6 +105,7 @@ pub async fn get_cached_exchange_rate(base_asset: Asset, quote_asset: Asset) -> 
     match heap::get_cached_rate(base_asset.clone(), quote_asset.clone()) {
         Some(cache) => Ok(cache),
         None => {
+            ic_cdk::println!("[get_cached_exchange_rate] Recalculating cache...");
             let rate = get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?;
             heap::cache_exchange_rate(base_asset, quote_asset, rate);
             Ok(rate)
