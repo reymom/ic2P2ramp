@@ -206,6 +206,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     console.log("User refetched and updated.");
                 } else {
                     console.error("Error refetching user:", result.Err);
+                    logout();
                 }
             })
             .catch((error) => {
