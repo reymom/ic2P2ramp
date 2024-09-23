@@ -118,3 +118,14 @@ pub fn get_average_gas(
         Ok(gas_tracking.average_gas(current_block, max_blocks_in_past))
     })
 }
+
+pub fn get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
+    read_state(|state| {
+        Ok(state
+            .chains
+            .get(&chain_id)
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?
+            .gas_tracking
+            .clone())
+    })
+}

@@ -11,17 +11,18 @@ use crate::{
         memory::stable::storage::HEAP_STATE,
         types::{
             evm::{chains::ChainState, gas::ChainGasTracking},
+            exchange_rate::ExchangeRateCache,
             payment::{paypal::PayPalState, revolut::RevolutState},
         },
     },
 };
 
 use super::{
-    clear_order_timer, get_locked_order_timers, get_order_id_counter, get_state,
-    get_user_id_counter,
+    clear_order_timer, get_exchange_rate_cache, get_locked_order_timers, get_order_id_counter,
+    get_state, get_user_id_counter,
     init::{ChainConfig, PaypalConfig, RevolutConfig},
-    initialize_state, set_order_id_counter, set_order_timer, set_user_id_counter, State,
-    LOCK_DURATION_TIME_SECONDS,
+    initialize_state, set_exchange_rate_cache, set_order_id_counter, set_order_timer,
+    set_user_id_counter, State, LOCK_DURATION_TIME_SECONDS,
 };
 
 const MAX_HEAP_SIZE: u32 = 128 * 1024; // 128KB
@@ -37,10 +38,11 @@ pub struct UpdateArg {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct SerializableHeap {
-    pub user_id_counter: u64,
-    pub order_id_counter: u64,
-    pub locked_order_timers: HashMap<u64, u64>,
-    pub state: State,
+    user_id_counter: u64,
+    order_id_counter: u64,
+    locked_order_timers: HashMap<u64, u64>,
+    exchange_rate_cache: HashMap<(String, String), ExchangeRateCache>,
+    state: State,
 }
 
 impl Storable for SerializableHeap {
@@ -63,6 +65,7 @@ impl SerializableHeap {
         user_id_counter: u64,
         order_id_counter: u64,
         locked_order_timers: HashMap<u64, TimerId>,
+        exchange_rate_cache: HashMap<(String, String), ExchangeRateCache>,
         state: State,
     ) -> Self {
         SerializableHeap {
@@ -72,6 +75,7 @@ impl SerializableHeap {
                 .into_iter()
                 .map(|(order_id, _)| (order_id, ic_cdk::api::time() + LOCK_DURATION_TIME_SECONDS))
                 .collect(),
+            exchange_rate_cache,
             state,
         }
     }
@@ -98,32 +102,22 @@ pub fn pre_upgrade() {
         get_user_id_counter(),
         get_order_id_counter(),
         get_locked_order_timers(),
+        get_exchange_rate_cache(),
         get_state().into(),
     );
 
     HEAP_STATE.with(|heap| {
         heap.borrow_mut().insert(0, serializable_state);
     });
-
-    // ic_cdk::storage::stable_save((serializable_state,)).expect("failed to save state");
 }
 
 pub fn post_upgrade(update_arg: Option<UpdateArg>) {
-    // let (serializable_heap,): (SerializableHeap,) =
-    //     ic_cdk::storage::stable_restore().expect("failed to restore state");
-
-    // set_user_id_counter(serializable_heap.user_id_counter);
-    // set_order_id_counter(serializable_heap.order_id_counter);
-    // serializable_heap.clone().set_locked_order_timers();
-
-    // let mut state: State = serializable_heap.state.clone().into();
-
-    // initialize_state(state);
     HEAP_STATE.with(|heap| {
         if let Some(serializable_heap) = heap.borrow().get(&0) {
             set_user_id_counter(serializable_heap.user_id_counter);
             set_order_id_counter(serializable_heap.order_id_counter);
             serializable_heap.clone().set_locked_order_timers();
+            set_exchange_rate_cache(serializable_heap.exchange_rate_cache);
 
             let state: State = serializable_heap.state.clone().into();
 
@@ -162,7 +156,6 @@ fn update_state(update_arg: UpdateArg, mut state: State) {
 
     if let Some(ecdsa_key_id) = update_arg.ecdsa_key_id {
         state.ecdsa_key_id = ecdsa_key_id;
-        // setup_timers();
     };
 
     // Update PayPal

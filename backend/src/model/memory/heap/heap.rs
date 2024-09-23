@@ -24,11 +24,7 @@ thread_local! {
     pub(super) static EXCHANGE_RATE_CACHE: RefCell<HashMap<(String, String), ExchangeRateCache>> = RefCell::new(HashMap::new());
 }
 
-pub fn tmp_get_logs() -> HashMap<u64, EvmTransactionLog> {
-    EVM_TRANSACTION_LOGS.with_borrow(|logs| logs.clone())
-}
-
-pub fn tmp_get_rates() -> HashMap<(String, String), ExchangeRateCache> {
+pub fn tmp_get_rate() -> HashMap<(String, String), ExchangeRateCache> {
     EXCHANGE_RATE_CACHE.with_borrow(|logs| logs.clone())
 }
 
@@ -95,4 +91,12 @@ pub(super) fn set_order_id_counter(value: u64) {
 
 pub(super) fn get_locked_order_timers() -> HashMap<u64, TimerId> {
     LOCKED_ORDER_TIMERS.with(|timers| timers.borrow().clone())
+}
+
+pub(super) fn get_exchange_rate_cache() -> HashMap<(String, String), ExchangeRateCache> {
+    EXCHANGE_RATE_CACHE.with_borrow(|logs| logs.clone())
+}
+
+pub(super) fn set_exchange_rate_cache(rates: HashMap<(String, String), ExchangeRateCache>) {
+    EXCHANGE_RATE_CACHE.with_borrow_mut(|r| *r = rates);
 }
