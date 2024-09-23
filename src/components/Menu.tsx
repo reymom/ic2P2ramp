@@ -28,6 +28,7 @@ const Menu: React.FC = () => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        setIsProfileDropdownOpen(false);
         const handleResize = () => {
             setIsMobile(window.innerWidth < 1024);
         };

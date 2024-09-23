@@ -78,9 +78,13 @@ const CreateOrder: React.FC = () => {
     useEffect(() => {
         if (blockchainType) {
             let tokens: TokenOption[] = [];
-
             if (blockchainType === 'EVM') {
-                if (!chainId || !isValidChainId(chainId)) return;
+                if (!chainId || !isValidChainId(chainId)) {
+                    setSelectedBlockchain(undefined);
+                    setSelectedToken(null);
+                    return
+                };
+                setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
                 tokens = getEvmTokenOptions(chainId);
             } else if (blockchainType === 'ICP') {
                 if (!icpAgent) return;
