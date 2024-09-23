@@ -27,6 +27,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
           chain_id = 11155111 : nat64;
           vault_manager_address = \"${CONTRACT_BASE_SEPOLIA}\";
           services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+          currency_symbol = \"ETH\";
         }
       };
       paypal = null;
@@ -53,6 +54,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
             };
           }
         };
+        currency_symbol = \"ETH\";
       }
     };
     paypal = null;
