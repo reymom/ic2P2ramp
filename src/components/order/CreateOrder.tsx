@@ -4,6 +4,9 @@ import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { Principal } from '@dfinity/principal';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
 import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, defaultCommitEvmGas, defaultReleaseEvmGas } from '../../constants/tokens';
@@ -16,27 +19,32 @@ import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../../model/evm';
 import { BlockchainTypes } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
-import { truncate } from '../../model/helper';
+import { formatPrice, truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
+import CurrencySelect from '../ui/CurrencySelect';
+import { fetchOrderPrice, getExchangeRate } from '../../model/rate';
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 
-const RATE_CACHE_EXPIRY_MS = 20 * 60 * 1000; // 20 mins
+// const RATE_CACHE_EXPIRY_MS = 20 * 60 * 1000; // 20 mins
 
 const CreateOrder: React.FC = () => {
-    const [fiatAmount, setFiatAmount] = useState<number>();
     const [currency, setCurrency] = useState<string>("USD");
     const [cryptoAmount, setCryptoAmount] = useState(0);
-    const [cryptoAmountUnits, setCryptoAmoutnUnits] = useState<bigint | null>(null);
+    const [cryptoAmountUnits, setCryptoAmountUnits] = useState<bigint | null>(null);
     const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
     const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
     const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain>();
     const [blockchainType, setBlockchainType] = useState<BlockchainTypes>();
+    const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
+
     const [message, setMessage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
     const [txHash, setTxHash] = useState<string | null>(null);
     const [loadingRate, setLoadingRate] = useState(false);
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
-    const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
+    const [estimatedPrice, setEstimatedPrice] = useState<string | null>(null);
+    const [offramperFeeCents, setOfframperFeeCents] = useState<number | null>(null);
 
     const { chain, chainId, address } = useAccount();
     const {
@@ -112,79 +120,55 @@ const CreateOrder: React.FC = () => {
         }
     };
 
-    const getExchangeRateFromXRC = async (token: string) => {
-        if (token === "") return;
-
-        const isEth = token === "ETH";
-        const cacheKey = isEth ? `${token}_global_exchange_rate` : `${token}_${chainId}_exchange_rate`;
-        const cachedRate = localStorage.getItem(cacheKey);
-        if (cachedRate) {
-            const { rate, timestamp } = JSON.parse(cachedRate);
-            const currentTime = Date.now();
-
-            // If cache is still valid, use the cached rate
-            if (currentTime - timestamp < RATE_CACHE_EXPIRY_MS) {
-                console.log("[exchangeRate] Using cached rate");
-                setExchangeRate(rate);
-                return;
-            }
-        }
-
-        setLoadingRate(true);
+    const fetchOfframperFee = async (price: number) => {
         try {
-            const result = await backend.get_exchange_rate(currency, token);
-            console.log("[exchangeRate] result = ", result);
-            if ('Ok' in result) {
-                const rate = parseFloat(result.Ok);
-                setExchangeRate(rate);
-
-                // Cache the new rate with timestamp
-                localStorage.setItem(
-                    cacheKey,
-                    JSON.stringify({ rate, timestamp: Date.now() })
-                );
-            } else {
-                const errorMessage = rampErrorToString(result.Err);
-                console.error(errorMessage);
-                setExchangeRate(null);
-            }
+            const fee = await backend.get_offramper_fee(BigInt(Math.round(price * 100)));
+            setOfframperFeeCents(Number(fee));
         } catch (error) {
-            console.error(error);
-            setExchangeRate(null);
-        } finally {
-            setLoadingRate(false);
+            console.error("Error fetching offramper fee:", error);
         }
     };
 
     useEffect(() => {
-        if (selectedToken) {
-            let symbol = selectedToken.rateSymbol;
-            if (symbol.includes("USD")) {
-                setExchangeRate(1);
-                return;
+        const fetchPriceRate = async () => {
+            try {
+                setLoadingRate(true);
+                console.log("selectedToken = ", selectedToken);
+                let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol);
+                setExchangeRate(Number(priceRate))
+                setLoadingRate(false);
+            } catch (error) {
+                setLoadingRate(false);
+                setMessage("Could not estimate current price rates. You can still create the order, the final price is set dynamically when the order is locked.")
+
             }
-            getExchangeRateFromXRC(symbol);
         }
-    }, [selectedToken]);
+
+        if (selectedToken) {
+            fetchPriceRate();
+        }
+    }, [selectedToken, currency]);
 
     useEffect(() => {
-        if (exchangeRate !== null) {
-            setFiatAmount(cryptoAmount * exchangeRate);
+        if (exchangeRate) {
+            let price = cryptoAmount * exchangeRate;
+            setEstimatedPrice(price.toFixed(2));
+            fetchOfframperFee(price);
         }
-    }, [cryptoAmount, exchangeRate]);
+    }, [exchangeRate, cryptoAmount]);
 
     useEffect(() => {
         if (selectedBlockchain && selectedToken && cryptoAmount > 0) {
             const roundedCryptoAmount = cryptoAmount.toFixed(selectedToken.decimals);
             if ('EVM' in selectedBlockchain) {
 
-                setCryptoAmoutnUnits(
+                setCryptoAmountUnits(
 
                     selectedToken.isNative ? ethers.parseEther(roundedCryptoAmount)
                         : ethers.parseUnits(roundedCryptoAmount, selectedToken.decimals)
                 );
             } else if ('ICP' in selectedBlockchain) {
-                setCryptoAmoutnUnits(BigInt(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals))
+                setCryptoAmountUnits(BigInt(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals))
             }
         }
     }, [cryptoAmount, selectedBlockchain, selectedToken])
@@ -271,16 +255,15 @@ const CreateOrder: React.FC = () => {
                     console.log("[createOrder] gasReleaseEstimate = ", gasForRelease);
                     gasEstimateRelease = [gasForRelease[0]];
 
-                    const [offramperFee, cryptoFee] = await estimateOrderFees(
+                    const cryptoFee = await estimateOrderFees(
                         BigInt(chainId),
-                        BigInt(Math.ceil(fiatAmount! * 100)),
                         cryptoAmountUnits,
                         selectedToken.isNative ? [] : [selectedToken.address],
                         gasForCommit[0],
                         gasForRelease[0],
                     );
                     console.log(
-                        `[estimateOrderFees] Offramper fee = ${offramperFee}, Crypto fee = ${cryptoFee}`,
+                        `[estimateOrderFees] Offramper fee = ${offramperFeeCents}, Crypto fee = ${cryptoFee}`,
                     );
 
                     if (cryptoFee >= cryptoAmountUnits) {
@@ -321,7 +304,7 @@ const CreateOrder: React.FC = () => {
 
             const result = await backend.create_order(
                 sessionToken,
-                BigInt(Math.ceil(fiatAmount! * 100)),
+                // BigInt(Math.ceil(fiatAmount! * 100)),
                 currency,
                 providerTuples,
                 selectedBlockchain,
@@ -395,7 +378,6 @@ const CreateOrder: React.FC = () => {
 
     const validInputs = user !== null
         && selectedBlockchain !== undefined
-        && fiatAmount !== undefined && fiatAmount > 0
         && (isValidAddressMessage() === undefined || isValidAddressMessage() === false)
         && selectedProviders.length > 0
         && selectedToken !== null
@@ -412,12 +394,12 @@ const CreateOrder: React.FC = () => {
     }
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative">
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative text-white">
             {isLoading && (
                 <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
                     <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
                     {loadingMessage && (
-                        <div className="text-white text-2xl font-bold mt-2">
+                        <div className="text-2xl font-bold mt-2">
                             {loadingMessage}<DynamicDots isLoading />
                         </div>
                     )}
@@ -425,26 +407,52 @@ const CreateOrder: React.FC = () => {
             )}
 
             <div className="text-center mb-8">
-                <h2 className="text-white text-2xl font-semibold">Create Offramping Order</h2>
+                <h2 className="text-2xl font-semibold relative">
+                    Create Order
+                </h2>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex justify-between items-center mb-4">
-                    <label className="block text-white w-24">Fiat:</label>
-                    <div className="flex-grow flex items-center">
+
+                    {/* Label and Info Icon */}
+                    <div className="w-24 flex-none flex items-center justify-center relative">
+                        <label>Price:</label>
+                        <span className="text-gray-400 group pointer-events-none">
+                            <FontAwesomeIcon icon={faInfoCircle} className="cursor-pointer items-center ml-2 pointer-events-auto" />
+                            <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-56 bg-gray-500 text-sm text-gray-300 p-3 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+                                <p className="mb-2">
+                                    Current price calculated using a decentralized oracle (XRC canister).
+                                    Prices are always updated to the current market price.
+                                </p>
+                                {offramperFeeCents ? (
+                                    <p className="font-semibold">
+                                        You will collect a fee of:
+                                        {<span className="text-green-200">
+                                            <FontAwesomeIcon icon={CURRENCY_ICON_MAP[currency]} className="ml-2" />
+                                            {formatPrice(offramperFeeCents)}
+                                        </span>}
+                                    </p>
+                                ) : (
+                                    <p>Introduce token and amount to estimate how much you will earn from fees.</p>
+                                )}
+                            </div>
+                        </span>
+                    </div>
+
+                    {/* Price Input and Currency Dropdown */}
+                    <div className="flex-grow flex items-center w-full">
                         <input
                             type="number"
-                            value={fiatAmount?.toFixed(2)}
-                            className="py-2 px-3 w-36 border bg-gray-600 border-gray-500 rounded-l-lg text-white"
+                            value={estimatedPrice ? estimatedPrice : "0.00"}
+                            className="py-2 px-3 w-full border bg-gray-600 border-gray-500 rounded-l-lg flex-grow"
                             required
                             disabled
-                            style={{
-                                WebkitAppearance: 'none',
-                                MozAppearance: 'textfield',
-                            }}
+                            style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                         />
-                        <span className="py-2 px-3 bg-gray-600 border border-gray-500 rounded-r-lg text-white">$</span>
+                        <CurrencySelect selected={currency} onChange={setCurrency} />
                     </div>
+
                 </div>
 
                 <div className="flex justify-between items-center mb-4 relative">
@@ -505,7 +513,7 @@ const CreateOrder: React.FC = () => {
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-white">Fetching Rates...</div>
+                        <div className="text-sm font-medium text-white">Estimating Prices...</div>
                     </div>
                 )}
 
