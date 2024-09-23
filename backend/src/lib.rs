@@ -20,8 +20,8 @@ use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
-use model::errors::{self, RampError, Result};
 use model::memory::{
+    self,
     heap::{self, initialize_state, read_state, setup_timers, upgrade, InstallArg, State, STATE},
     stable,
 };
@@ -33,13 +33,17 @@ use model::types::evm::{
 };
 use model::types::{
     self,
-    exchange_rate::CACHE_DURATION,
+    exchange_rate::{ExchangeRateCache, CACHE_DURATION},
     icp::{get_icp_token, is_icp_token_supported, IcpToken},
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
     AuthenticationData, Blockchain, LoginAddress, PaymentProvider, PaymentProviderType,
     TransactionAddress,
+};
+use model::{
+    errors::{self, RampError, Result},
+    types::Crypto,
 };
 use model::{guards, helpers};
 use outcalls::{
@@ -122,6 +126,16 @@ async fn test_paypal() -> Result<String> {
     paypal::auth::get_paypal_access_token().await
 }
 
+#[ic_cdk::query]
+async fn test_get_evm_logs() -> HashMap<u64, EvmTransactionLog> {
+    heap::tmp_get_logs()
+}
+
+#[ic_cdk::query]
+async fn test_get_evm_rates() -> HashMap<(String, String), ExchangeRateCache> {
+    heap::tmp_get_rates()
+}
+
 #[ic_cdk::update]
 async fn test_get_consent_url() -> Result<String> {
     let consent_id = revolut::consent::create_account_access_consent(
@@ -165,10 +179,12 @@ async fn test_get_transaction_count(chain_id: u64) -> Result<u128> {
     transaction::eth_get_transaction_count(chain_id).await
 }
 
-#[ic_cdk::update]
-async fn test_get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
-    guards::only_controller()?;
+// ----------
+// Management
+// ----------
 
+#[ic_cdk::update]
+async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
     let base_asset = Asset {
         class: AssetClass::Cryptocurrency,
         symbol: crypto_symbol.to_string(),
@@ -180,10 +196,6 @@ async fn test_get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> R
 
     xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await
 }
-
-// ----------
-// Management
-// ----------
 
 #[ic_cdk::query]
 fn print_constants() -> String {
@@ -459,6 +471,11 @@ fn get_orders(
 }
 
 #[ic_cdk::query]
+fn get_order(order_id: u64) -> Result<OrderState> {
+    memory::stable::orders::get_order(&order_id)
+}
+
+#[ic_cdk::query]
 fn get_transaction_log(
     order_id: u64,
     user_id: u64,
@@ -519,12 +536,8 @@ async fn create_order(
 }
 
 #[ic_cdk::update]
-async fn calculate_order_price(
-    currency: String,
-    crypto_amount: u128,
-    crypto_symbol: String,
-) -> Result<(u64, u64)> {
-    order_management::calculate_price_and_fee(&currency, crypto_amount, &crypto_symbol).await
+async fn calculate_order_price(currency: String, crypto: Crypto) -> Result<(u64, u64)> {
+    order_management::calculate_price_and_fee(&currency, &crypto).await
 }
 
 #[ic_cdk::query]
@@ -600,6 +613,22 @@ fn verify_order_is_payable(order_id: u64, session_token: String) -> Result<()> {
 }
 
 #[ic_cdk::update]
+async fn retry_order_completion(order_id: u64, gas: Option<u64>) -> Result<String> {
+    guards::only_controller()?;
+
+    let order_state = memory::stable::orders::get_order(&order_id)?;
+    let order = match order_state {
+        OrderState::Locked(locked_order) => locked_order,
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
+    };
+    if !order.payment_done {
+        return Err(RampError::PaymentVerificationFailed);
+    };
+
+    payment_management::handle_payment_completion(&order, gas).await
+}
+
+#[ic_cdk::update]
 async fn verify_transaction(
     order_id: u64,
     session_token: String,
@@ -638,24 +667,7 @@ async fn verify_transaction(
         }
     }
 
-    match order.base.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
-            let tx_hash = payment_management::handle_evm_payment_completion(
-                order_id,
-                chain_id,
-                estimated_gas,
-            )
-            .await?;
-            return Ok(tx_hash);
-        }
-        Blockchain::ICP { ledger_principal } => {
-            let index =
-                payment_management::handle_icp_payment_completion(order_id, &ledger_principal)
-                    .await?;
-            return Ok(index);
-        }
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }
+    payment_management::handle_payment_completion(&order, estimated_gas).await
 }
 
 ic_cdk::export_candid!();
