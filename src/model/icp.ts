@@ -16,9 +16,9 @@ export const iiUrl =
 
 export const fetchIcpTransactionFee = async (ledgerPrincipal: Principal) => {
   try {
-    const feeResult = await backend.get_icp_transaction_fee(ledgerPrincipal);
+    const feeResult = await backend.get_icp_token_info(ledgerPrincipal);
     if ('Ok' in feeResult) {
-      return BigInt(feeResult.Ok);
+      return BigInt(feeResult.Ok.fee);
     } else {
       throw new Error(rampErrorToString(feeResult.Err));
     }

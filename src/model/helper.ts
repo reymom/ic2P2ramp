@@ -47,3 +47,7 @@ export const formatCryptoUnits = (amount: number): string => {
   if (amount > 1000000000) return amount.toExponential(4);
   return amount.toFixed(2);
 };
+
+export const formatPrice = (centsAmount: number): string => {
+  return (centsAmount / 100).toFixed(2);
+};

@@ -105,16 +105,14 @@ export const estimateGasAndGasPrice = async (
 
 export const estimateOrderFees = async (
   chainId: bigint,
-  fiatAmount: bigint,
   cryptoAmount: bigint,
   token: [] | [string],
   gasForCommit: bigint,
   gasForRelease: bigint,
-): Promise<[bigint, bigint]> => {
+): Promise<bigint> => {
   try {
     const estimateOrderFees = await backend.calculate_order_evm_fees(
       chainId,
-      fiatAmount,
       cryptoAmount,
       token,
       gasForCommit,
