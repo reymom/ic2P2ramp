@@ -20,11 +20,6 @@ use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
-use model::memory::{
-    self,
-    heap::{self, initialize_state, read_state, setup_timers, upgrade, InstallArg, State, STATE},
-    stable,
-};
 use model::types::evm::{
     chains,
     gas::{self, MethodGasUsage},
@@ -46,6 +41,16 @@ use model::{
     types::Crypto,
 };
 use model::{guards, helpers};
+use model::{
+    memory::{
+        self,
+        heap::{
+            self, initialize_state, read_state, setup_timers, upgrade, InstallArg, State, STATE,
+        },
+        stable,
+    },
+    types::evm::gas::ChainGasTracking,
+};
 use outcalls::{
     paypal,
     revolut::{self, token as revolut_token},
@@ -127,13 +132,13 @@ async fn test_paypal() -> Result<String> {
 }
 
 #[ic_cdk::query]
-async fn test_get_evm_logs() -> HashMap<u64, EvmTransactionLog> {
-    heap::tmp_get_logs()
+async fn test_get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
+    gas::get_gas_tracking(chain_id)
 }
 
 #[ic_cdk::query]
 async fn test_get_evm_rates() -> HashMap<(String, String), ExchangeRateCache> {
-    heap::tmp_get_rates()
+    heap::tmp_get_rate()
 }
 
 #[ic_cdk::update]

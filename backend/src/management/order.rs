@@ -38,7 +38,7 @@ pub async fn calculate_order_evm_fees(
         total_gas_estimation
     );
 
-    let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+    let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
     ic_cdk::println!(
         "[calculate_order_evm_fees] fee_estimates = {:?}",
         fee_estimates
