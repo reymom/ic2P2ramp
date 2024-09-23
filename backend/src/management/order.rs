@@ -7,16 +7,15 @@ use icrc_ledger_types::icrc1::transfer::NumTokens;
 use crate::evm::{fees, vault::Ic2P2ramp};
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
-use crate::model::memory::stable;
-use crate::model::types::evm::chains;
-use crate::model::types::icp::get_icp_token;
-use crate::model::types::order::get_fiat_fee;
-use crate::model::types::{self, icp};
 use crate::outcalls::xrc_rates::{get_cached_exchange_rate, Asset, AssetClass};
 use crate::types::{
+    self,
     evm::token,
-    order::{get_crypto_fee, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter},
-    Blockchain, PaymentProvider, PaymentProviderType, TransactionAddress,
+    icp::get_icp_token,
+    order::{
+        get_crypto_fee, get_fiat_fee, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+    },
+    Blockchain, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 use crate::{
     errors::{RampError, Result},
@@ -215,14 +214,10 @@ pub fn get_orders(
     }
 }
 
-pub async fn calculate_price_and_fee(
-    currency: &str,
-    crypto_amount: u128,
-    crypto_symbol: &str,
-) -> Result<(u64, u64)> {
+pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
     let base_asset = Asset {
         class: AssetClass::Cryptocurrency,
-        symbol: crypto_symbol.to_string(),
+        symbol: crypto.get_symbol()?,
     };
     let quote_asset = Asset {
         class: AssetClass::FiatCurrency,
@@ -230,10 +225,9 @@ pub async fn calculate_price_and_fee(
     };
     let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
 
-    let fiat_amount = (crypto_amount as f64 * exchange_rate * 100.) as u64;
-    let fiat_fee = get_fiat_fee(fiat_amount);
+    let fiat_amount = (crypto.to_whole_units()? * exchange_rate * 100.) as u64;
 
-    Ok((fiat_amount, fiat_fee))
+    Ok((fiat_amount, get_fiat_fee(fiat_amount)))
 }
 
 pub async fn lock_order(
@@ -243,7 +237,7 @@ pub async fn lock_order(
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = stable::orders::get_order(&order_id)?;
+    let order_state = memory::stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -253,14 +247,7 @@ pub async fn lock_order(
         return Err(RampError::InvalidOnramperProvider);
     }
 
-    let crypto_symbol = match order.crypto.blockchain {
-        Blockchain::EVM { chain_id } => chains::get_currency_symbol(chain_id),
-        Blockchain::ICP { ledger_principal } => Ok(icp::get_icp_token(&ledger_principal)?.symbol),
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }?;
-
-    let (price, offramper_fee) =
-        calculate_price_and_fee(&order.currency, order.crypto.amount, &crypto_symbol).await?;
+    let (price, offramper_fee) = calculate_price_and_fee(&order.currency, &order.crypto).await?;
 
     let revolut_consent = payment::get_revolut_consent(
         order.offramper_providers,
@@ -365,7 +352,7 @@ pub async fn unlock_order(
     }
 
     if let Some(session_token) = session_token {
-        let user = stable::users::get_user(&order.onramper.user_id)?;
+        let user = memory::stable::users::get_user(&order.onramper.user_id)?;
         user.validate_session(&session_token)?;
         user.validate_onramper()?;
     }
@@ -399,13 +386,13 @@ pub async fn unlock_order(
 }
 
 pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
-    let order_state = stable::orders::get_order(&order_id)?;
+    let order_state = memory::stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(order) => order,
         _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     };
 
-    let user = stable::users::get_user(&order.offramper_user_id)?;
+    let user = memory::stable::users::get_user(&order.offramper_user_id)?;
     user.is_offramper()?;
     user.validate_session(&session_token)?;
 

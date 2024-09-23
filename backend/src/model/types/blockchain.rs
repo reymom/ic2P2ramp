@@ -1,5 +1,12 @@
 use candid::{CandidType, Deserialize, Principal};
 
+use crate::model::errors::{RampError, Result};
+
+use super::{
+    evm::{chains, token},
+    icp,
+};
+
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Blockchain {
     EVM { chain_id: u64 },
@@ -23,5 +30,37 @@ impl Crypto {
             amount,
             fee,
         }
+    }
+
+    pub fn get_symbol(&self) -> Result<String> {
+        match &self.blockchain {
+            Blockchain::EVM { chain_id } => chains::get_currency_symbol(*chain_id),
+            Blockchain::ICP { ledger_principal } => {
+                Ok(icp::get_icp_token(&ledger_principal)?.symbol)
+            }
+            _ => return Err(RampError::UnsupportedBlockchain),
+        }
+    }
+
+    fn get_decimals(&self) -> Result<u8> {
+        match &self.blockchain {
+            Blockchain::EVM { chain_id } => {
+                if let Some(token_address) = &self.token {
+                    Ok(token::get_evm_token(*chain_id, token_address)?.decimals)
+                } else {
+                    Ok(18)
+                }
+            }
+            Blockchain::ICP { ledger_principal } => {
+                Ok(icp::get_icp_token(ledger_principal)?.decimals)
+            }
+            _ => return Err(RampError::UnsupportedBlockchain),
+        }
+    }
+
+    pub fn to_whole_units(&self) -> Result<f64> {
+        let decimals = self.get_decimals()?;
+        let divisor = 10u128.pow(decimals as u32);
+        Ok((self.amount as f64) / (divisor as f64))
     }
 }
