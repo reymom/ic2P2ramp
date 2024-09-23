@@ -34,7 +34,7 @@ impl Ic2P2ramp {
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
 
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
         ic_cdk::println!(
             "[commit_deposit] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas,
@@ -114,7 +114,7 @@ impl Ic2P2ramp {
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
 
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
         ic_cdk::println!(
             "[commit_deposit] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas,
@@ -191,7 +191,7 @@ impl Ic2P2ramp {
         let gas = U256::from(Ic2P2ramp::get_final_gas(
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
         ic_cdk::println!(
             "[release_funds] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
             gas,
@@ -363,7 +363,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
         let request = transaction::create_sign_request(
@@ -415,7 +415,7 @@ impl Ic2P2ramp {
             ]
         "#;
 
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
         let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
 
         let request = transaction::create_sign_request(
@@ -451,7 +451,7 @@ impl Ic2P2ramp {
             estimated_gas.unwrap_or(Self::DEFAULT_GAS),
         ));
 
-        let fee_estimates = fees::get_fee_estimates(9, chain_id).await;
+        let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
 
         let request: SignRequest;
         if let Some(token_address) = token_address {

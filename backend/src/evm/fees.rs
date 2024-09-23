@@ -25,8 +25,8 @@ pub async fn fee_history(
     block_count: Nat,
     newest_block: BlockTag,
     reward_percentiles: Option<Vec<u8>>,
-) -> FeeHistory {
-    let rpc_providers = chains::get_rpc_providers(chain_id);
+) -> Result<FeeHistory> {
+    let rpc_providers = chains::get_rpc_providers(chain_id)?;
 
     let fee_history_args: FeeHistoryArgs = FeeHistoryArgs {
         blockCount: block_count,
@@ -42,16 +42,16 @@ pub async fn fee_history(
     {
         Ok((res,)) => match res {
             MultiFeeHistoryResult::Consistent(fee_history) => match fee_history {
-                FeeHistoryResult::Ok(fee_history) => fee_history.unwrap(),
-                FeeHistoryResult::Err(e) => {
-                    ic_cdk::trap(format!("Error: {:?}", e).as_str());
-                }
+                FeeHistoryResult::Ok(fee_history) => fee_history.ok_or_else(|| {
+                    RampError::InternalError("Could not find fee history".to_string())
+                }),
+                FeeHistoryResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
             },
-            MultiFeeHistoryResult::Inconsistent(_) => {
-                ic_cdk::trap("Fee history is inconsistent");
-            }
+            MultiFeeHistoryResult::Inconsistent(_) => Err(RampError::InternalError(
+                "Fee history is inconsistent".to_string(),
+            )),
         },
-        Err(e) => ic_cdk::trap(format!("Error: {:?}", e).as_str()),
+        Err((code, msg)) => Err(RampError::ICRejectionError(code, msg)),
     }
 }
 
@@ -62,7 +62,7 @@ fn median_index(length: usize) -> usize {
     (length - 1) / 2
 }
 
-pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> FeeEstimates {
+pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEstimates> {
     // let max_fee_per_gas = U256::from(100_000_000_000u64);
     // let max_priority_fee_per_gas = U256::from(2_000_000_000);
 
@@ -78,12 +78,16 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> FeeEstimates {
         BlockTag::Latest,
         Some(vec![95]),
     )
-    .await;
+    .await?;
 
     let median_index = median_index(block_count.into());
 
     // baseFeePerGas
-    let base_fee_per_gas = fee_history.baseFeePerGas.last().unwrap().clone();
+    let base_fee_per_gas = fee_history
+        .baseFeePerGas
+        .last()
+        .ok_or_else(|| RampError::InternalError("baseFeePerGas is empty".to_string()))?
+        .clone();
 
     // obtain the 95th percentile of the tips for the past 9 blocks
     let mut percentile_95: Vec<Nat> = fee_history
@@ -105,10 +109,10 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> FeeEstimates {
         .add(base_fee_per_gas)
         .max(Nat::from(MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS));
 
-    FeeEstimates {
+    Ok(FeeEstimates {
         max_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
         max_priority_fee_per_gas: nat_to_u256(&median_reward),
-    }
+    })
 }
 
 pub fn nat_to_u256(n: &Nat) -> U256 {
@@ -117,7 +121,7 @@ pub fn nat_to_u256(n: &Nat) -> U256 {
 }
 
 pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<Block> {
-    let rpc_providers = chains::get_rpc_providers(chain_id);
+    let rpc_providers = chains::get_rpc_providers(chain_id)?;
 
     let cycles = 10_000_000_000;
     match EVM_RPC
@@ -129,9 +133,9 @@ pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<
                 GetBlockByNumberResult::Ok(block) => Ok(block),
                 GetBlockByNumberResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
             },
-            MultiGetBlockByNumberResult::Inconsistent(_) => {
-                ic_cdk::trap("Block Result is inconsistent");
-            }
+            MultiGetBlockByNumberResult::Inconsistent(_) => Err(RampError::InternalError(
+                "Block Result is inconsistent".to_string(),
+            )),
         },
         Err((code, message)) => Err(RampError::ICRejectionError(code, message)),
     }

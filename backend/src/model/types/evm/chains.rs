@@ -39,14 +39,13 @@ pub fn increment_nonce(chain_id: u64) {
     });
 }
 
-pub fn get_rpc_providers(chain_id: u64) -> RpcServices {
+pub fn get_rpc_providers(chain_id: u64) -> Result<RpcServices> {
     read_state(|s| {
         s.chains
             .get(&chain_id)
             .map(|chain_state| chain_state.rpc_services.clone())
-            .ok_or("Unsupported chain ID")
+            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))
     })
-    .unwrap()
 }
 
 pub fn get_vault_manager_address(chain_id: u64) -> Result<String> {

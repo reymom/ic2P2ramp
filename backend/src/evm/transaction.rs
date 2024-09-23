@@ -85,7 +85,7 @@ pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Res
 }
 
 pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
-    let rpc_providers = get_rpc_providers(chain_id);
+    let rpc_providers = get_rpc_providers(chain_id).unwrap();
     let cycles = 10_000_000_000;
 
     let arg: Option<RpcConfig> = Some(RpcConfig {
@@ -112,7 +112,7 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
 
 pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
     let cycles = 10_000_000_000;
-    let rpc_providers = get_rpc_providers(chain_id);
+    let rpc_providers = get_rpc_providers(chain_id).unwrap();
     let arg: Option<RpcConfig> = None;
     let res = EVM_RPC
         .eth_get_transaction_receipt(rpc_providers, arg, tx_hash, cycles)
@@ -314,7 +314,7 @@ fn bump_fee(current_fee: Option<U256>) -> U256 {
 }
 
 pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
-    let rpc_providers = chains::get_rpc_providers(chain_id);
+    let rpc_providers = chains::get_rpc_providers(chain_id)?;
     let address = read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
 
     let cycles = 10_000_000_000;
