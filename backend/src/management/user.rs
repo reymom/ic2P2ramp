@@ -116,13 +116,15 @@ pub fn set_session(user_id: u64, session: &Session) -> Result<User> {
     })?
 }
 
-pub fn update_onramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
+pub fn update_onramper_payment(user_id: u64, fiat_amount: u64, currency: &str) -> Result<()> {
     users::mutate_user(user_id, |user| {
-        user.update_fiat_amount(fiat_amount);
+        user.update_fiat_amount(fiat_amount, currency);
         user.increase_score();
     })
 }
 
-pub fn update_offramper_payment(user_id: u64, fiat_amount: u64) -> Result<()> {
-    users::mutate_user(user_id, |user| user.update_fiat_amount(fiat_amount))
+pub fn update_offramper_payment(user_id: u64, fiat_amount: u64, currency: &str) -> Result<()> {
+    users::mutate_user(user_id, |user| {
+        user.update_fiat_amount(fiat_amount, currency)
+    })
 }

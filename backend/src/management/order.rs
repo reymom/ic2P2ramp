@@ -457,8 +457,16 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
     memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
         OrderState::Locked(order) => {
-            user_management::update_onramper_payment(order.onramper.user_id, order.price)?;
-            user_management::update_offramper_payment(order.base.offramper_user_id, order.price)?;
+            user_management::update_onramper_payment(
+                order.onramper.user_id,
+                order.price,
+                &order.base.currency,
+            )?;
+            user_management::update_offramper_payment(
+                order.base.offramper_user_id,
+                order.price,
+                &order.base.currency,
+            )?;
             order.payment_done = true;
             Ok(())
         }

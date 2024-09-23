@@ -1,6 +1,9 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_stable_structures::{storable::Bound, Storable};
-use std::{borrow::Cow, collections::HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 use super::{
     common::{LoginAddress, TransactionAddress},
@@ -28,7 +31,7 @@ pub struct User {
     pub user_type: UserType,
     pub payment_providers: HashSet<PaymentProvider>,
     pub addresses: HashSet<TransactionAddress>,
-    pub fiat_amount: u64, // received for offramper or payed by onramper
+    pub fiat_amounts: HashMap<String, u64>, // offramped or onramped funds
     pub score: i32,
     pub login: LoginAddress,
     pub hashed_password: Option<String>,  // for email login
@@ -54,7 +57,7 @@ impl User {
             id: memory::heap::generate_user_id(),
             user_type,
             payment_providers: HashSet::new(),
-            fiat_amount: 0,
+            fiat_amounts: HashMap::new(),
             score: 1,
             login: login_address,
             hashed_password,
@@ -138,8 +141,8 @@ impl User {
             .validate(token)
     }
 
-    pub fn update_fiat_amount(&mut self, amount: u64) {
-        self.fiat_amount += amount;
+    pub fn update_fiat_amount(&mut self, amount: u64, currency: &str) {
+        *self.fiat_amounts.entry(currency.to_string()).or_insert(0) += amount;
     }
 
     pub fn decrease_score(&mut self) {

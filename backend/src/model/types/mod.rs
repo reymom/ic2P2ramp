@@ -44,7 +44,7 @@ mod tests {
 
         let retrieved_user = map.get(&0).unwrap();
         assert_eq!(user.payment_providers, retrieved_user.payment_providers);
-        assert_eq!(user.fiat_amount, retrieved_user.fiat_amount);
+        assert_eq!(user.fiat_amounts, retrieved_user.fiat_amounts);
         assert_eq!(user.score, retrieved_user.score);
 
         // Update user
