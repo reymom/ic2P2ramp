@@ -24,6 +24,14 @@ thread_local! {
     pub(super) static EXCHANGE_RATE_CACHE: RefCell<HashMap<(String, String), ExchangeRateCache>> = RefCell::new(HashMap::new());
 }
 
+pub fn tmp_get_logs() -> HashMap<u64, EvmTransactionLog> {
+    EVM_TRANSACTION_LOGS.with_borrow(|logs| logs.clone())
+}
+
+pub fn tmp_get_rates() -> HashMap<(String, String), ExchangeRateCache> {
+    EXCHANGE_RATE_CACHE.with_borrow(|logs| logs.clone())
+}
+
 pub fn generate_order_id() -> u64 {
     ORDER_ID_COUNTER.with(|counter| {
         let mut counter = counter.borrow_mut();

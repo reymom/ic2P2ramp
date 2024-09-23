@@ -1,14 +1,18 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use ic_cdk_timers::TimerId;
+use ic_stable_structures::{storable::Bound, Storable};
 
 use crate::{
     management,
-    model::types::{
-        evm::{chains::ChainState, gas::ChainGasTracking},
-        payment::{paypal::PayPalState, revolut::RevolutState},
+    model::{
+        memory::stable::storage::HEAP_STATE,
+        types::{
+            evm::{chains::ChainState, gas::ChainGasTracking},
+            payment::{paypal::PayPalState, revolut::RevolutState},
+        },
     },
 };
 
@@ -19,6 +23,8 @@ use super::{
     initialize_state, set_order_id_counter, set_order_timer, set_user_id_counter, State,
     LOCK_DURATION_TIME_SECONDS,
 };
+
+const MAX_HEAP_SIZE: u32 = 128 * 1024; // 128KB
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct UpdateArg {
@@ -35,6 +41,21 @@ pub struct SerializableHeap {
     pub order_id_counter: u64,
     pub locked_order_timers: HashMap<u64, u64>,
     pub state: State,
+}
+
+impl Storable for SerializableHeap {
+    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: MAX_HEAP_SIZE,
+        is_fixed_size: false,
+    };
 }
 
 impl SerializableHeap {
@@ -80,74 +101,95 @@ pub fn pre_upgrade() {
         get_state().into(),
     );
 
-    ic_cdk::storage::stable_save((serializable_state,)).expect("failed to save state");
+    HEAP_STATE.with(|heap| {
+        heap.borrow_mut().insert(0, serializable_state);
+    });
+
+    // ic_cdk::storage::stable_save((serializable_state,)).expect("failed to save state");
 }
 
 pub fn post_upgrade(update_arg: Option<UpdateArg>) {
-    let (serializable_heap,): (SerializableHeap,) =
-        ic_cdk::storage::stable_restore().expect("failed to restore state");
+    // let (serializable_heap,): (SerializableHeap,) =
+    //     ic_cdk::storage::stable_restore().expect("failed to restore state");
 
-    set_user_id_counter(serializable_heap.user_id_counter);
-    set_order_id_counter(serializable_heap.order_id_counter);
-    serializable_heap.clone().set_locked_order_timers();
+    // set_user_id_counter(serializable_heap.user_id_counter);
+    // set_order_id_counter(serializable_heap.order_id_counter);
+    // serializable_heap.clone().set_locked_order_timers();
 
-    let mut state: State = serializable_heap.state.clone().into();
+    // let mut state: State = serializable_heap.state.clone().into();
 
-    if let Some(update_arg) = update_arg {
-        // Update or add chains
-        if let Some(chains) = update_arg.chains {
-            for config in chains {
-                state
-                    .chains
-                    .entry(config.chain_id)
-                    .and_modify(|chain_state| {
-                        chain_state.vault_manager_address = config.vault_manager_address.clone();
-                        chain_state.rpc_services = config.services.clone();
-                    })
-                    .or_insert(ChainState {
-                        vault_manager_address: config.vault_manager_address,
-                        rpc_services: config.services,
-                        nonce: 0,
-                        currency_symbol: config.currency_symbol,
-                        approved_tokens: HashMap::new(),
-                        gas_tracking: ChainGasTracking::default(),
-                    });
+    // initialize_state(state);
+    HEAP_STATE.with(|heap| {
+        if let Some(serializable_heap) = heap.borrow().get(&0) {
+            set_user_id_counter(serializable_heap.user_id_counter);
+            set_order_id_counter(serializable_heap.order_id_counter);
+            serializable_heap.clone().set_locked_order_timers();
+
+            let state: State = serializable_heap.state.clone().into();
+
+            if let Some(update_arg) = update_arg {
+                update_state(update_arg, state.clone());
             }
+
+            initialize_state(state);
+        } else {
+            ic_cdk::trap("Failed to restore heap state");
         }
+    });
+}
 
-        if let Some(ecdsa_key_id) = update_arg.ecdsa_key_id {
-            state.ecdsa_key_id = ecdsa_key_id;
-            // setup_timers();
-        };
-
-        // Update PayPal
-        if let Some(paypal_config) = update_arg.paypal {
-            state.paypal = PayPalState {
-                access_token: None, // Reset access token on upgrade
-                token_expiration: None,
-                client_id: paypal_config.client_id,
-                client_secret: paypal_config.client_secret,
-                api_url: paypal_config.api_url,
-            };
-        }
-
-        if let Some(revolut_config) = update_arg.revolut {
-            state.revolut = RevolutState {
-                access_token: None, // Reset access token on update
-                token_expiration: None,
-                client_id: revolut_config.client_id,
-                api_url: revolut_config.api_url,
-                proxy_url: revolut_config.proxy_url,
-                private_key_der: revolut_config.private_key_der,
-                kid: revolut_config.kid,
-                tan: revolut_config.tan,
-            };
-        }
-
-        if let Some(proxy_url) = update_arg.proxy_url {
-            state.proxy_url = proxy_url;
+fn update_state(update_arg: UpdateArg, mut state: State) {
+    // Update or add chains
+    if let Some(chains) = update_arg.chains {
+        for config in chains {
+            state
+                .chains
+                .entry(config.chain_id)
+                .and_modify(|chain_state| {
+                    chain_state.vault_manager_address = config.vault_manager_address.clone();
+                    chain_state.rpc_services = config.services.clone();
+                })
+                .or_insert(ChainState {
+                    vault_manager_address: config.vault_manager_address,
+                    rpc_services: config.services,
+                    nonce: 0,
+                    currency_symbol: config.currency_symbol,
+                    approved_tokens: HashMap::new(),
+                    gas_tracking: ChainGasTracking::default(),
+                });
         }
     }
 
-    initialize_state(state);
+    if let Some(ecdsa_key_id) = update_arg.ecdsa_key_id {
+        state.ecdsa_key_id = ecdsa_key_id;
+        // setup_timers();
+    };
+
+    // Update PayPal
+    if let Some(paypal_config) = update_arg.paypal {
+        state.paypal = PayPalState {
+            access_token: None, // Reset access token on upgrade
+            token_expiration: None,
+            client_id: paypal_config.client_id,
+            client_secret: paypal_config.client_secret,
+            api_url: paypal_config.api_url,
+        };
+    }
+
+    if let Some(revolut_config) = update_arg.revolut {
+        state.revolut = RevolutState {
+            access_token: None, // Reset access token on update
+            token_expiration: None,
+            client_id: revolut_config.client_id,
+            api_url: revolut_config.api_url,
+            proxy_url: revolut_config.proxy_url,
+            private_key_der: revolut_config.private_key_der,
+            kid: revolut_config.kid,
+            tan: revolut_config.tan,
+        };
+    }
+
+    if let Some(proxy_url) = update_arg.proxy_url {
+        state.proxy_url = proxy_url;
+    }
 }
