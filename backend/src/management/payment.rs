@@ -9,12 +9,11 @@ use crate::{
     management,
     model::{
         errors::{RampError, Result},
-        memory::stable::orders,
         types::{
             evm::gas::MethodGasUsage,
             icp::get_icp_token,
-            order::{LockedOrder, OrderState, RevolutConsent},
-            PaymentProvider, PaymentProviderType,
+            order::{LockedOrder, RevolutConsent},
+            Blockchain, PaymentProvider, PaymentProviderType,
         },
     },
     outcalls::{paypal, revolut},
@@ -127,24 +126,33 @@ pub async fn verify_revolut_payment(
     }
 }
 
-pub async fn handle_evm_payment_completion(
-    order_id: u64,
+pub async fn handle_payment_completion(order: &LockedOrder, gas: Option<u64>) -> Result<String> {
+    match order.base.crypto.blockchain {
+        Blockchain::EVM { chain_id } => {
+            let tx_hash = handle_evm_payment_completion(order, chain_id, gas).await?;
+            return Ok(tx_hash);
+        }
+        Blockchain::ICP { ledger_principal } => {
+            let index = handle_icp_payment_completion(order, &ledger_principal).await?;
+            return Ok(index);
+        }
+        _ => return Err(RampError::UnsupportedBlockchain),
+    }
+}
+
+async fn handle_evm_payment_completion(
+    order: &LockedOrder,
     chain_id: u64,
     gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
     let mut action_type = MethodGasUsage::ReleaseNative;
     if let Some(_) = order.base.crypto.token {
         action_type = MethodGasUsage::ReleaseToken
     };
-    let (tx_hash, sign_request) = Ic2P2ramp::release_funds(order, chain_id, gas).await?;
+    let (tx_hash, sign_request) = Ic2P2ramp::release_funds(order.clone(), chain_id, gas).await?;
 
     management::vault::spawn_payment_release(
-        order_id,
+        order.base.id,
         chain_id,
         action_type,
         &tx_hash,
@@ -153,16 +161,10 @@ pub async fn handle_evm_payment_completion(
     Ok(tx_hash)
 }
 
-pub async fn handle_icp_payment_completion(
-    order_id: u64,
+async fn handle_icp_payment_completion(
+    order: &LockedOrder,
     ledger_principal: &Principal,
 ) -> Result<String> {
-    let order_state = orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
-
     let onramper_principal = Principal::from_text(&order.onramper.address.address).unwrap();
 
     let amount = NumTokens::from(order.base.crypto.amount);
@@ -180,7 +182,7 @@ pub async fn handle_icp_payment_completion(
     )
     .await?;
 
-    super::order::set_order_completed(order_id)?;
+    super::order::set_order_completed(order.base.id)?;
 
     Ok(index.to_string())
 }
