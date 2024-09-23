@@ -8,14 +8,15 @@ import { PaymentProvider, TransactionAddress } from '../../declarations/backend/
 import { userTypeToString } from '../../model/utils';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';
 import { truncate } from '../../model/helper';
-import { isSessionExpired, saveUserSession } from '../../model/session';
+import { isSessionExpired } from '../../model/session';
 import { rampErrorToString } from '../../model/error';
 import { useUser } from './UserContext';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSyncAlt, faSync } from '@fortawesome/free-solid-svg-icons';
+import { faSync } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -29,7 +30,7 @@ const UserProfile: React.FC = () => {
     const [loadingAddProvider, setLoadingAddProvider] = useState(false);
 
     const { address, isConnected } = useAccount();
-    const { user, sessionToken, principal, setUser, loginInternetIdentity, refetchUser, logout } = useUser();
+    const { user, sessionToken, principal, loginInternetIdentity, refetchUser, logout } = useUser();
     const navigate = useNavigate();
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -172,19 +173,27 @@ const UserProfile: React.FC = () => {
                         <span className="font-medium text-gray-200">User Type:</span>
                         <span className="font-semibold">{userTypeToString(user.user_type)}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="font-medium text-gray-200">Ramped Amount:</span>
-                        <span className="font-medium flex items-center space-x-2">
-                            <span className="font-semibold">{(Number(user.fiat_amount) / 100).toFixed(2)}</span>
-                            <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
-                                $
-                            </span>
-                        </span>
-                    </div>
+
                     <div className="flex justify-between items-center">
                         <span className="font-medium text-gray-200">Score:</span>
                         <span className={`font-semibold ${user.score > 0 ? "text-green-400" : "text-red-400"}`}>{user.score}</span>
                     </div>
+
+                    {/* Ramped Amounts */}
+                    <div className="flex justify-between items-start">
+                        <span className="font-medium text-gray-200">Ramped Amount:</span>
+                        <div className="space-y-2 flex flex-col items-end">
+                            {user.fiat_amounts.map(([currency, amount]) => (
+                                <div key={currency} className="flex items-center space-x-2">
+                                    <span className="font-semibold">{(Number(amount) / 100).toFixed(2)}</span>
+                                    <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
+                                        <FontAwesomeIcon icon={CURRENCY_ICON_MAP[currency]} />
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                 </div>
 
                 <hr className="border-t border-gray-500 w-full" />
