@@ -2,10 +2,13 @@
   "backend": {
     "ic": "psg6r-kiaaa-aaaap-qkeaq-cai"
   },
+  "backend_prod": {
+    "ic": "phbp4-laaaa-aaaap-qkeda-cai"
+  },
   "frontend": {
     "ic": "gginw-waaaa-aaaap-qhlwa-cai"
   },
-  "icrc1_ledger_canister": {
-    "ic": "ajbqv-7qaaa-aaaap-qhtza-cai"
+  "frontend_prod": {
+    "ic": "paaji-gyaaa-aaaap-qkedq-cai"
   }
 }
