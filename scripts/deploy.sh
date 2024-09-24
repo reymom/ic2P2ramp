@@ -22,7 +22,11 @@ source "$DIR/../.env" || {
 # Start the local replica in the background
 dfx start --clean --background
 
+# Local network
 dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet)
+
+# Transfer cycles from identity to wallet
+dfx cycles top-up --network ic $(dfx identity get-wallet --network ic) 1_000_000_000_000
 
 dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
 
@@ -30,7 +34,7 @@ dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 
 cargo build --release --target wasm32-unknown-unknown --package backend
 
 # Create the canister with specified cycles
-dfx canister create --with-cycles 5_000_000_000_000 backend
+dfx canister create --with-cycles 1_000_000_000_000 backend --ic
 
 # Install the canister with initial state arguments
 dfx canister install --wasm target/wasm32-unknown-unknown/release/backend.wasm backend --mode reinstall --argument "(

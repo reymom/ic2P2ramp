@@ -78,7 +78,7 @@ dfx deploy backend --argument "(
   variant { 
     Reinstall = record {
       ecdsa_key_id = record {
-        name = \"dfx_test_key\";
+        name = \"test_key_1\";
         curve = variant { secp256k1 };
       };
       chains = vec {
@@ -144,7 +144,7 @@ dfx deploy backend --argument "(
       proxy_url = \"https://ic2p2ramp.xyz\";
     }
   }
-)"
+)" --ic
 
 dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
 dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {

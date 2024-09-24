@@ -97,3 +97,16 @@ dfx deploy backend --upgrade-unchanged --argument "(
     proxy_url = null;
   }
 )"
+
+# Change proxy url
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant {
+    Upgrade = opt record {
+      ecdsa_key_id = null;
+      chains = null;
+      paypal = null;
+      revolut = null;
+      proxy_url = opt \"testing\";
+    }
+  }
+)" --ic
