@@ -112,17 +112,16 @@ pub fn pre_upgrade() {
 }
 
 pub fn post_upgrade(update_arg: Option<UpdateArg>) {
-    HEAP_STATE.with(|heap| {
-        if let Some(serializable_heap) = heap.borrow().get(&0) {
+    HEAP_STATE.with_borrow(|heap| {
+        if let Some(serializable_heap) = heap.get(&0) {
             set_user_id_counter(serializable_heap.user_id_counter);
             set_order_id_counter(serializable_heap.order_id_counter);
             serializable_heap.clone().set_locked_order_timers();
             set_exchange_rate_cache(serializable_heap.exchange_rate_cache);
 
-            let state: State = serializable_heap.state.clone().into();
-
+            let mut state: State = serializable_heap.state.clone().into();
             if let Some(update_arg) = update_arg {
-                update_state(update_arg, state.clone());
+                update_state(update_arg, &mut state);
             }
 
             initialize_state(state);
@@ -132,7 +131,7 @@ pub fn post_upgrade(update_arg: Option<UpdateArg>) {
     });
 }
 
-fn update_state(update_arg: UpdateArg, mut state: State) {
+fn update_state(update_arg: UpdateArg, state: &mut State) {
     // Update or add chains
     if let Some(chains) = update_arg.chains {
         for config in chains {

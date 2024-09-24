@@ -65,7 +65,7 @@ fn pre_upgrade() {
 #[ic_cdk::post_upgrade]
 fn post_upgrade(install_arg: InstallArg) {
     ic_cdk::println!(
-        "[post_upgrade]: upgrad canister executed with install_arg: {:?}",
+        "[post_upgrade]: upgrade canister executed with install_arg: {:?}",
         install_arg
     );
 
@@ -74,9 +74,7 @@ fn post_upgrade(install_arg: InstallArg) {
         InstallArg::Upgrade(update_arg) => {
             upgrade::post_upgrade(update_arg.clone());
             if let Some(update_arg) = update_arg {
-                ic_cdk::println!("[post_upgrade] some update_arg!");
                 if update_arg.ecdsa_key_id.is_some() {
-                    ic_cdk::println!("[post_upgrade] some ecdsa_key_id!");
                     setup_timers();
                 }
             }
@@ -137,7 +135,7 @@ async fn test_get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
 }
 
 #[ic_cdk::query]
-async fn test_get_evm_rates() -> HashMap<(String, String), ExchangeRateCache> {
+async fn test_get_rates() -> HashMap<(String, String), ExchangeRateCache> {
     heap::tmp_get_rate()
 }
 
