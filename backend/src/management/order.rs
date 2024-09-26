@@ -75,6 +75,54 @@ pub async fn calculate_order_evm_fees(
     Ok(get_crypto_fee(crypto_amount, blockchain_fees))
 }
 
+async fn order_crypto_fee(
+    blockchain: Blockchain,
+    crypto_amount: u128,
+    token: Option<String>,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
+) -> Result<u128> {
+    match blockchain {
+        Blockchain::EVM { chain_id } => {
+            let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
+                SystemError::InvalidInput(
+                    "Gas estimation for locking is required for EVM".to_string(),
+                )
+            })?;
+            let estimated_gas_withdraw = estimated_gas_withdraw.ok_or_else(|| {
+                SystemError::InvalidInput(
+                    "Gas estimation for withdrawing is required for EVM".to_string(),
+                )
+            })?;
+
+            calculate_order_evm_fees(
+                chain_id,
+                crypto_amount,
+                token.clone(),
+                estimated_gas_lock,
+                estimated_gas_withdraw,
+            )
+            .await
+        }
+        Blockchain::ICP { ledger_principal } => {
+            let icp_fee: u128 =
+                get_icp_token(&ledger_principal)?
+                    .fee
+                    .0
+                    .try_into()
+                    .map_err(|e| {
+                        SystemError::InternalError(format!(
+                            "icp fee cannot be converted to u128: {:?}",
+                            e
+                        ))
+                    })?;
+
+            Ok(get_crypto_fee(crypto_amount, icp_fee * 2))
+        }
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+    }
+}
+
 pub async fn validate_deposit_tx(
     blockchain: &Blockchain,
     evm_input: Option<EvmOrderInput>,
@@ -151,45 +199,14 @@ pub async fn create_order(
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
-    let crypto_fee = match blockchain {
-        Blockchain::EVM { chain_id } => {
-            let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
-                SystemError::InvalidInput(
-                    "Gas estimation for locking is required for EVM".to_string(),
-                )
-            })?;
-            let estimated_gas_withdraw = estimated_gas_withdraw.ok_or_else(|| {
-                SystemError::InvalidInput(
-                    "Gas estimation for withdrawing is required for EVM".to_string(),
-                )
-            })?;
-
-            calculate_order_evm_fees(
-                chain_id,
-                crypto_amount,
-                token.clone(),
-                estimated_gas_lock,
-                estimated_gas_withdraw,
-            )
-            .await?
-        }
-        Blockchain::ICP { ledger_principal } => {
-            let icp_fee: u128 =
-                get_icp_token(&ledger_principal)?
-                    .fee
-                    .0
-                    .try_into()
-                    .map_err(|e| {
-                        SystemError::InternalError(format!(
-                            "icp fee cannot be converted to u128: {:?}",
-                            e
-                        ))
-                    })?;
-
-            get_crypto_fee(crypto_amount, icp_fee * 2)
-        }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
-    };
+    let crypto_fee = order_crypto_fee(
+        blockchain.clone(),
+        crypto_amount,
+        token.clone(),
+        estimated_gas_lock,
+        estimated_gas_withdraw,
+    )
+    .await?;
 
     if crypto_fee >= crypto_amount {
         return Err(BlockchainError::FundsBelowFees)?;
@@ -208,6 +225,33 @@ pub async fn create_order(
 
     memory::stable::orders::insert_order(&order);
     Ok(order.id)
+}
+
+pub async fn topup_order(
+    order: &Order,
+    amount: u128,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
+) -> Result<()> {
+    let crypto_fee = order_crypto_fee(
+        order.crypto.blockchain.clone(),
+        order.crypto.amount,
+        order.crypto.token.clone(),
+        estimated_gas_lock,
+        estimated_gas_withdraw,
+    )
+    .await?;
+
+    if crypto_fee >= order.crypto.amount + amount {
+        return Err(BlockchainError::FundsBelowFees)?;
+    };
+
+    memory::stable::orders::mutate_order(&order.id, |order| {
+        let order = order.created_mut()?;
+        order.crypto.amount += amount;
+        order.crypto.fee = crypto_fee;
+        Ok(())
+    })?
 }
 
 pub fn get_orders(

@@ -27,6 +27,13 @@ impl OrderState {
         }
     }
 
+    pub fn created_mut(&mut self) -> Result<&mut Order> {
+        match self {
+            OrderState::Created(order) => Ok(order),
+            _ => Err(OrderError::InvalidOrderState(self.to_string()).into()),
+        }
+    }
+
     pub fn locked(&self) -> Result<LockedOrder> {
         match self {
             OrderState::Locked(order) => Ok(order.clone()),

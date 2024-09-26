@@ -609,29 +609,37 @@ async fn get_offramper_fee(price: u64) -> u64 {
     price / types::orders::fees::OFFRAMPER_FIAT_FEE_DENOM
 }
 
-// #[ic_cdk::update]
-// async fn freeze_order(order_id: u64, user_id: u64, session_token: String) -> Result<()> {
-//     let order = orders::get_order(&order_id)?.created()?;
-//     let user = memory::stable::users::get_user(&user_id)?;
-//     user.validate_session(&session_token)?;
-//     if !order.offramper_user_id == user_id {
-//         return Err(RampError::Unauthorized);
-//     }
-//     orders::set_processing_order(&order_id)
-// }
+#[ic_cdk::update]
+async fn freeze_order(order_id: u64, user_id: u64, session_token: String) -> Result<()> {
+    let order = orders::get_order(&order_id)?.created()?;
+    let user = memory::stable::users::get_user(&user_id)?;
+    user.validate_session(&session_token)?;
+    if !order.offramper_user_id == user_id {
+        return Err(UserError::Unauthorized.into());
+    }
+    orders::set_processing_order(&order_id)
+}
 
-// #[ic_cdk::query]
-// async fn top_up_order(order_id: u64, user_id: u64, session_token: String, ) -> Result<()> {
-//     let order = orders::get_order(&order_id)?.created()?;
-//     order.is_processing()?;
-//     let user = memory::stable::users::get_user(&user_id)?;
-//     user.validate_session(&session_token)?;
-//     if !order.offramper_user_id == user_id {
-//         return Err(RampError::Unauthorized);
-//     }
-//     orders::top_up()
-//     orders::unset_processing_order(&order_id)
-// }
+#[ic_cdk::query]
+async fn top_up_order(
+    order_id: u64,
+    user_id: u64,
+    session_token: String,
+    amount: u128,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
+) -> Result<()> {
+    let order = orders::get_order(&order_id)?.created()?;
+    order.is_processing()?;
+    let user = memory::stable::users::get_user(&user_id)?;
+    user.validate_session(&session_token)?;
+    if !order.offramper_user_id == user_id {
+        return Err(UserError::Unauthorized.into());
+    }
+    order_management::topup_order(&order, amount, estimated_gas_lock, estimated_gas_withdraw)
+        .await?;
+    orders::unset_processing_order(&order_id)
+}
 
 #[ic_cdk::update]
 async fn lock_order(
