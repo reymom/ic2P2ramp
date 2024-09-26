@@ -28,6 +28,24 @@ type Blockchain = variant {
   ICP : record { ledger_principal : principal };
   Solana;
 };
+type BlockchainError = variant {
+  InvalidAddress;
+  TransactionTimeout;
+  _TransactionFailed : text;
+  UnsupportedBlockchain;
+  LedgerPrincipalNotSupported : text;
+  EvmLogError : text;
+  EthersAbiError : text;
+  ChainIdNotFound : nat64;
+  NonceTooLow;
+  NonceLockTimeout : nat64;
+  FundsBelowFees;
+  UnregisteredEvmToken;
+  EmptyTransactionHash;
+  NonceTooHigh;
+  VaultManagerAddressNotFound : nat64;
+  InsufficientFunds;
+};
 type ChainConfig = record {
   currency_symbol : text;
   chain_id : nat64;
@@ -53,6 +71,7 @@ type Crypto = record {
   blockchain : Blockchain;
   amount : nat;
 };
+type DepositEvent = record { token : opt text; user : text; amount : nat };
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -138,6 +157,7 @@ type LogEntry = record {
   logIndex : opt nat;
   removed : bool;
 };
+type LogEvent = variant { Deposit : DepositEvent };
 type LoginAddress = variant {
   EVM : record { address : text };
   ICP : record { principal_id : text };
@@ -159,6 +179,20 @@ type Order = record {
   offramper_providers : vec record { PaymentProviderType; PaymentProvider };
   offramper_address : TransactionAddress;
   processing : bool;
+};
+type OrderError = variant {
+  OrderProcessing;
+  PaymentVerificationFailed;
+  InvalidOnramperProvider;
+  OrderTimerNotFound;
+  OrderNotProcessing;
+  MissingDebtorAccount;
+  OrderNotFound;
+  InvalidOfframperProvider;
+  MissingAccessToken;
+  OrderUncommitted;
+  PaymentDone;
+  InvalidOrderState : text;
 };
 type OrderFilter = variant {
   ByOfframperId : nat64;
@@ -186,59 +220,10 @@ type PaypalConfig = record {
   client_secret : text;
 };
 type RampError = variant {
-  InvalidAddress;
-  OrderProcessing;
-  HttpRequestError : record { nat64; text };
-  TransactionTimeout;
-  _TransactionFailed : text;
-  RpcError : text;
-  UserNotOfframper;
-  PaymentVerificationFailed;
-  InvalidInput : text;
-  UserNotOnramper;
-  ICRejectionError : record { RejectionCode; text };
-  InvalidOnramperProvider;
-  UserBanned;
-  OrderTimerNotFound;
-  ExchangeRateError : ExchangeRateError;
-  SignatureRequired;
-  UnsupportedBlockchain;
-  SessionNotFound;
-  ParseFloatError : text;
-  MissingDebtorAccount;
-  LedgerPrincipalNotSupported : text;
-  OrderNotFound;
-  InvalidOfframperProvider;
-  ProviderNotInUser : PaymentProviderType;
-  InvalidSignature;
-  MissingAccessToken;
-  EthersAbiError : text;
-  Pkcs8Error : text;
-  OrderUncommitted;
-  PasswordRequired;
-  ChainIdNotFound : nat64;
-  PaymentDone;
-  TokenExpired;
-  ParseError : text;
-  NonceTooLow;
-  CurrencySymbolNotFound : record {};
-  NonceLockTimeout : nat64;
-  TokenInvalid;
-  FundsBelowFees;
-  OnlyController;
-  UnregisteredEvmToken;
-  EmptyTransactionHash;
-  InvalidOrderState : text;
-  NonceTooHigh;
-  RsaError : text;
-  CanisterCallError : text;
-  InternalError : text;
-  Utf8Error;
-  VaultManagerAddressNotFound : nat64;
-  UserNotFound;
-  UnauthorizedPrincipal;
-  InvalidPassword;
-  InsufficientFunds;
+  SystemError : SystemError;
+  OrderError : OrderError;
+  UserError : UserError;
+  BlockchainError : BlockchainError;
 };
 type RejectionCode = variant {
   NoError;
@@ -255,7 +240,8 @@ type Result_10 = variant { Ok : OrderState; Err : RampError };
 type Result_11 = variant { Ok : opt EvmTransactionLog; Err : RampError };
 type Result_12 = variant { Ok : ChainGasTracking; Err : RampError };
 type Result_13 = variant { Ok : Block; Err : RampError };
-type Result_14 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_14 = variant { Ok : LogEvent; Err : RampError };
+type Result_15 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : nat; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
 type Result_4 = variant { Ok : text; Err : RampError };
@@ -280,6 +266,21 @@ type RpcServices = variant {
   EthMainnet : opt vec EthMainnetService;
 };
 type Session = record { token : text; expires_at : nat64 };
+type SystemError = variant {
+  HttpRequestError : record { nat64; text };
+  RpcError : text;
+  InvalidInput : text;
+  ICRejectionError : record { RejectionCode; text };
+  ExchangeRateError : ExchangeRateError;
+  ParseFloatError : text;
+  Pkcs8Error : text;
+  ParseError : text;
+  CurrencySymbolNotFound : record {};
+  RsaError : text;
+  CanisterCallError : text;
+  InternalError : text;
+  Utf8Error;
+};
 type Token = record { decimals : nat8; address : text; rate_symbol : text };
 type TransactionAction = variant { Release; Uncommit; Cancel; Commit };
 type TransactionAddress = record { address_type : AddressType; address : text };
@@ -323,6 +324,23 @@ type User = record {
   addresses : vec TransactionAddress;
   session : opt Session;
   hashed_password : opt text;
+};
+type UserError = variant {
+  UserNotOfframper;
+  UserNotOnramper;
+  UserBanned;
+  SignatureRequired;
+  SessionNotFound;
+  ProviderNotInUser : PaymentProviderType;
+  InvalidSignature;
+  PasswordRequired;
+  TokenExpired;
+  Unauthorized;
+  TokenInvalid;
+  OnlyController;
+  UserNotFound;
+  UnauthorizedPrincipal;
+  InvalidPassword;
 };
 type UserType = variant { Offramper; Onramper };
 service : (InstallArg) -> {
@@ -378,6 +396,7 @@ service : (InstallArg) -> {
   test_get_consent_url : () -> (Result_4);
   test_get_gas_tracking : (nat64) -> (Result_12) query;
   test_get_latest_block : (nat64) -> (Result_13);
+  test_get_log_event : (nat64, text) -> (Result_14);
   test_get_rates : () -> (
       vec record { record { text; text }; ExchangeRateCache },
     ) query;
@@ -394,6 +413,6 @@ service : (InstallArg) -> {
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, text, text, opt nat64) -> (Result_4);
-  view_canister_balances : () -> (Result_14) query;
+  view_canister_balances : () -> (Result_15) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result_4);
 }

@@ -11,6 +11,7 @@ use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use evm::{
+    event::{self, LogEvent},
     fees,
     rpc::{Block, BlockTag},
     transaction,
@@ -20,14 +21,7 @@ use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
-use model::errors::{self, RampError, Result};
-use model::memory::{
-    self,
-    heap::{
-        self, initialize_state, logs, read_state, setup_timers, upgrade, InstallArg, State, STATE,
-    },
-    stable::{self, orders},
-};
+use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
 use model::types::{
     self,
     evm::{
@@ -37,14 +31,24 @@ use model::types::{
         token::{self, Token, TokenManager},
     },
     exchange_rate::{ExchangeRateCache, CACHE_DURATION},
-    icp::{get_icp_token, is_icp_token_supported, IcpToken},
-    order::{OrderFilter, OrderState},
+    icp::{get_icp_token, IcpToken},
+    orders::{EvmOrderInput, OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
     AuthenticationData, Blockchain, Crypto, LoginAddress, PaymentProvider, PaymentProviderType,
     TransactionAddress,
 };
-use model::{guards, helpers};
+use model::{
+    guards, helpers,
+    memory::{
+        self,
+        heap::{
+            self, initialize_state, logs, read_state, setup_timers, upgrade, InstallArg, State,
+            STATE,
+        },
+        stable::{self, orders, spent_transactions},
+    },
+};
 use outcalls::{
     paypal,
     revolut::{self, token as revolut_token},
@@ -176,6 +180,20 @@ async fn test_get_transaction_count(chain_id: u64) -> Result<u128> {
     transaction::eth_get_transaction_count(chain_id).await
 }
 
+#[ic_cdk::update]
+async fn test_get_log_event(chain_id: u64, tx_hash: String) -> Result<LogEvent> {
+    match transaction::check_transaction_status(tx_hash, chain_id).await {
+        TransactionStatus::Confirmed(receipt) => {
+            let log_entry = receipt
+                .logs
+                .get(0)
+                .ok_or_else(|| BlockchainError::EvmLogError("Empty Log Entries".to_string()))?;
+            event::parse_deposit_event(log_entry)
+        }
+        _ => Err(BlockchainError::EmptyTransactionHash.into()),
+    }
+}
+
 // -------------
 // EVM Conflicts
 // -------------
@@ -251,8 +269,8 @@ fn print_constants() -> String {
         CACHE_DURATION,
         chains::LOCK_NONCE_TIME_SECONDS,
         Session::EXPIRATION_SECS,
-        (100. / types::order::OFFRAMPER_FIAT_FEE_DENOM as f64),
-        (100. / types::order::ADMIN_CRYPTO_FEE_DENOM as f64),
+        (100. / types::orders::fees::OFFRAMPER_FIAT_FEE_DENOM as f64),
+        (100. / types::orders::fees::ADMIN_CRYPTO_FEE_DENOM as f64),
         Ic2P2ramp::DEFAULT_GAS,
         transaction::MAX_RETRY_ATTEMPTS,
         transaction::MAX_ATTEMPTS_PER_RETRY,
@@ -277,7 +295,7 @@ async fn get_evm_tokens(chain_id: u64) -> Result<Vec<Token>> {
         let chain_state = state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
 
         Ok(chain_state
             .approved_tokens
@@ -371,6 +389,10 @@ async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -
     }
 }
 
+#[ic_cdk::update]
+async fn clean_old_spent_transactions() {
+    spent_transactions::discard_old_transactions()
+}
 // -----
 // USERS
 // -----
@@ -412,7 +434,7 @@ async fn generate_evm_auth_message(login_address: LoginAddress) -> Result<String
     let address = if let LoginAddress::EVM { address } = login_address.clone() {
         Ok(address)
     } else {
-        Err(RampError::InvalidInput(
+        Err(SystemError::InvalidInput(
             "Login address is not of type EVM".to_string(),
         ))
     }?;
@@ -535,8 +557,7 @@ async fn create_order(
     crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
-    estimated_gas_lock: Option<u64>,
-    estimated_gas_withdraw: Option<u64>,
+    evm_input: Option<EvmOrderInput>,
 ) -> Result<u64> {
     let user = stable::users::get_user(&offramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -545,22 +566,20 @@ async fn create_order(
 
     for (provider_type, provider) in &offramper_providers {
         if !user.payment_providers.contains(&provider) {
-            return Err(RampError::ProviderNotInUser(provider_type.clone()));
+            return Err(UserError::ProviderNotInUser(provider_type.clone()))?;
         }
     }
 
-    match blockchain {
-        Blockchain::EVM { chain_id } => {
-            chains::chain_is_supported(chain_id)?;
-            if let Some(token) = token_address.clone() {
-                token::evm_token_is_approved(chain_id, &token)?;
-            };
-        }
-        Blockchain::ICP { ledger_principal } => is_icp_token_supported(&ledger_principal)?,
-        _ => return Err(RampError::UnsupportedBlockchain),
-    }
+    let tx_hash = order_management::validate_deposit_tx(
+        &blockchain,
+        evm_input.clone(),
+        offramper_address.clone().address,
+        crypto_amount,
+        token_address.clone(),
+    )
+    .await?;
 
-    order_management::create_order(
+    let order_id = order_management::create_order(
         &currency,
         offramper_user_id,
         offramper_address,
@@ -568,10 +587,16 @@ async fn create_order(
         blockchain,
         token_address,
         crypto_amount,
-        estimated_gas_lock,
-        estimated_gas_withdraw,
+        evm_input.clone().map(|evm| evm.estimated_gas_lock),
+        evm_input.map(|evm| evm.estimated_gas_withdraw),
     )
-    .await
+    .await?;
+
+    if let Some(tx_hash) = tx_hash {
+        spent_transactions::mark_tx_hash_as_processed(tx_hash);
+    };
+
+    Ok(order_id)
 }
 
 #[ic_cdk::update]
@@ -581,11 +606,32 @@ async fn calculate_order_price(currency: String, crypto: Crypto) -> Result<(u64,
 
 #[ic_cdk::query]
 async fn get_offramper_fee(price: u64) -> u64 {
-    price / types::order::OFFRAMPER_FIAT_FEE_DENOM
+    price / types::orders::fees::OFFRAMPER_FIAT_FEE_DENOM
 }
 
+// #[ic_cdk::update]
+// async fn freeze_order(order_id: u64, user_id: u64, session_token: String) -> Result<()> {
+//     let order = orders::get_order(&order_id)?.created()?;
+//     let user = memory::stable::users::get_user(&user_id)?;
+//     user.validate_session(&session_token)?;
+//     if !order.offramper_user_id == user_id {
+//         return Err(RampError::Unauthorized);
+//     }
+//     orders::set_processing_order(&order_id)
+// }
+
 // #[ic_cdk::query]
-// async fn top_up_order() -> Result<()>
+// async fn top_up_order(order_id: u64, user_id: u64, session_token: String, ) -> Result<()> {
+//     let order = orders::get_order(&order_id)?.created()?;
+//     order.is_processing()?;
+//     let user = memory::stable::users::get_user(&user_id)?;
+//     user.validate_session(&session_token)?;
+//     if !order.offramper_user_id == user_id {
+//         return Err(RampError::Unauthorized);
+//     }
+//     orders::top_up()
+//     orders::unset_processing_order(&order_id)
+// }
 
 #[ic_cdk::update]
 async fn lock_order(
@@ -667,13 +713,9 @@ fn verify_order_is_payable(order_id: u64, session_token: String) -> Result<()> {
 async fn retry_order_completion(order_id: u64, gas: Option<u64>) -> Result<String> {
     guards::only_controller()?;
 
-    let order_state = memory::stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if !order.payment_done {
-        return Err(RampError::PaymentVerificationFailed);
+        return Err(OrderError::PaymentVerificationFailed)?;
     };
 
     payment_management::handle_payment_completion(&order, gas).await
