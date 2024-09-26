@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use candid::CandidType;
 use ethers_core::types::U256;
 
 use super::{
@@ -11,28 +10,20 @@ use super::{
         MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
         SendRawTransactionStatus, TransactionReceipt, EVM_RPC,
     },
-    signer::{self, SignRequest},
+    signer,
 };
-
 use crate::{
     errors::{RampError, Result},
     model::{
         helpers,
         memory::heap::{logs, read_state},
-        types::evm::chains,
     },
     types::evm::{
-        chains::{get_rpc_providers, increment_nonce},
-        logs::TransactionAction,
+        chains::{self, get_rpc_providers, release_nonce},
+        logs::{TransactionAction, TransactionStatus},
+        request::SignRequest,
     },
 };
-
-#[derive(Debug, Clone, CandidType)]
-pub enum TransactionStatus {
-    Confirmed(TransactionReceipt),
-    Failed(String),
-    Pending,
-}
 
 pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 4;
 pub(crate) const MAX_ATTEMPTS_PER_RETRY: u16 = 40;
@@ -57,7 +48,7 @@ pub async fn create_sign_request(
         .encode_input(inputs)
         .map_err(|e| RampError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
 
-    Ok(signer::create_sign_request(
+    signer::create_sign_request(
         value,
         chain_id.into(),
         Some(to_address.clone()),
@@ -66,7 +57,7 @@ pub async fn create_sign_request(
         Some(data),
         fee_estimates,
     )
-    .await)
+    .await
 }
 
 pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
@@ -75,7 +66,7 @@ pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Res
     match send_raw_transaction(tx.clone(), chain_id).await {
         SendRawTransactionStatus::Ok(transaction_hash) => {
             ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
-            increment_nonce(chain_id);
+            release_nonce(chain_id);
             transaction_hash.ok_or(RampError::EmptyTransactionHash)
         }
         SendRawTransactionStatus::NonceTooLow => Err(RampError::NonceTooLow),
@@ -165,13 +156,14 @@ pub async fn _wait_for_transaction_confirmation(
                     attempt
                 );
             }
+            TransactionStatus::Unresolved(tx, _) => return Err(RampError::_TransactionFailed(tx)),
         }
         helpers::delay(interval).await;
     }
     Err(RampError::TransactionTimeout)
 }
 
-pub fn spawn_transaction_checker<F>(
+pub fn spawn_transaction_checker<F, G>(
     retry_attempt: u8,
     tx_hash: String,
     chain_id: u64,
@@ -179,10 +171,12 @@ pub fn spawn_transaction_checker<F>(
     action: Option<TransactionAction>,
     sign_request: SignRequest,
     on_success: F,
+    on_fail: G,
 ) where
     F: Fn(TransactionReceipt) + 'static,
+    G: Fn() + 'static,
 {
-    fn schedule_check<F>(
+    fn schedule_check<F, G>(
         tx_hash: String,
         chain_id: u64,
         attempt: u16,
@@ -190,11 +184,13 @@ pub fn spawn_transaction_checker<F>(
         order_id: u64,
         sign_request: SignRequest,
         on_success: F,
+        on_fail: G,
     ) where
         F: Fn(TransactionReceipt) + 'static,
+        G: Fn() + 'static,
     {
         ic_cdk_timers::set_timer(Duration::from_secs(ATTEMPT_INTERVAL_SECONDS), move || {
-            ic_cdk::println!("[schedule_check] spawning...");
+            ic_cdk::println!("[schedule_check] spawning attempt number: {}", attempt);
             ic_cdk::spawn(async move {
                 match check_transaction_status(tx_hash.clone(), chain_id).await {
                     TransactionStatus::Confirmed(receipt) => {
@@ -217,28 +213,33 @@ pub fn spawn_transaction_checker<F>(
                             order_id,
                             sign_request,
                             on_success,
+                            on_fail,
                         );
                     }
                     TransactionStatus::Pending if attempt == MAX_ATTEMPTS_PER_RETRY - 1 => {
                         ic_cdk::spawn(async move {
                             retry_with_bumped_fees(
                                 sign_request,
+                                tx_hash,
                                 chain_id,
                                 order_id,
                                 retry_attempt,
                                 on_success,
+                                on_fail,
                             )
                             .await;
                         });
                     }
                     TransactionStatus::Failed(err) => {
-                        ic_cdk::println!("[schedule_check] Transaction failed: {:?}", err);
+                        ic_cdk::println!("[schedule_check] TransactionStatus::Failed: {:?}", err);
+                        on_fail();
                         logs::update_transaction_log(order_id, TransactionStatus::Failed(err));
                     }
                     _ => {
                         ic_cdk::println!(
                             "[schedule_check] Transaction status check exceeded maximum attempts"
                         );
+                        on_fail();
                         logs::remove_transaction_log(order_id);
                     }
                 }
@@ -262,24 +263,47 @@ pub fn spawn_transaction_checker<F>(
             order_id,
             sign_request,
             on_success,
+            on_fail,
         );
+    } else if retry_attempt == MAX_RETRY_ATTEMPTS {
+        on_fail();
+        ic_cdk::spawn(async move {
+            match bump_dummy_transaction(sign_request.clone(), chain_id).await {
+                Ok(tx_hash) => ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash),
+                Err(e) => {
+                    ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
+                    logs::update_transaction_log(
+                        order_id,
+                        TransactionStatus::Unresolved(tx_hash, sign_request.into()),
+                    );
+                }
+            };
+        })
     }
 }
 
-pub async fn retry_with_bumped_fees<F>(
+pub async fn retry_with_bumped_fees<F, G>(
     mut sign_request: SignRequest,
+    last_tx_hash: String,
     chain_id: u64,
     order_id: u64,
     retry_attempt: u8,
     on_success: F,
+    on_fail: G,
 ) where
     F: Fn(TransactionReceipt) + 'static,
+    G: Fn() + 'static,
 {
-    ic_cdk::println!("[retry_with_bumped_fees] Retrying transaction with bumped fees.");
-
     // Bump gas fees
     sign_request.max_fee_per_gas = Some(bump_fee(sign_request.max_fee_per_gas));
     sign_request.max_priority_fee_per_gas = Some(bump_fee(sign_request.max_priority_fee_per_gas));
+
+    ic_cdk::println!(
+        "[retry_with_bumped_fees] attempt number: {}. New sign request max fee {:?}, max priority: {:?}",
+        retry_attempt,
+        sign_request.max_fee_per_gas.map(|fee| fee.as_u128()),
+        sign_request.max_priority_fee_per_gas.map(|fee| fee.as_u128())
+    );
 
     // Resend the transaction with updated fees
     match send_signed_transaction(sign_request.clone(), chain_id).await {
@@ -297,6 +321,7 @@ pub async fn retry_with_bumped_fees<F>(
                 None,
                 sign_request,
                 on_success,
+                on_fail,
             );
         }
         Err(e) => {
@@ -304,6 +329,17 @@ pub async fn retry_with_bumped_fees<F>(
                 "[retry_with_bumped_fees] Failed to send transaction: {:?}",
                 e
             );
+            on_fail();
+            match bump_dummy_transaction(sign_request.clone(), chain_id).await {
+                Ok(tx_hash) => ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash),
+                Err(e) => {
+                    ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
+                    logs::update_transaction_log(
+                        order_id,
+                        TransactionStatus::Unresolved(last_tx_hash, sign_request.into()),
+                    );
+                }
+            };
         }
     }
 }
@@ -311,6 +347,18 @@ pub async fn retry_with_bumped_fees<F>(
 fn bump_fee(current_fee: Option<U256>) -> U256 {
     // Bump gas fee 20%
     current_fee.unwrap_or(U256::zero()) * U256::from(12) / U256::from(10)
+}
+
+pub async fn bump_dummy_transaction(sign_request: SignRequest, chain_id: u64) -> Result<String> {
+    let sign_request: SignRequest = SignRequest {
+        data: None,
+        value: Some(U256::zero()),
+        max_fee_per_gas: Some(bump_fee(sign_request.max_fee_per_gas)),
+        max_priority_fee_per_gas: Some(bump_fee(sign_request.max_priority_fee_per_gas)),
+        ..sign_request
+    };
+
+    send_signed_transaction(sign_request.clone(), chain_id).await
 }
 
 pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
