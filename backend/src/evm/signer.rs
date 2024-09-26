@@ -10,10 +10,12 @@ use ic_cdk::api::management_canister::ecdsa::{
 };
 
 use super::fees::FeeEstimates;
-use crate::model::errors::{RampError, Result};
+use crate::errors::{BlockchainError, Result, UserError};
 use crate::model::memory::heap::read_state;
-use crate::model::types::evm::chains::{self, get_nonce};
-use crate::model::types::evm::request::SignRequest;
+use crate::types::evm::{
+    chains::{self, get_nonce},
+    request::SignRequest,
+};
 
 pub async fn create_sign_request(
     value: U256,
@@ -158,13 +160,15 @@ pub fn pubkey_bytes_to_address(pubkey_bytes: &[u8]) -> String {
 
 pub fn verify_signature(evm_address: &str, message: &str, signature: &str) -> Result<()> {
     let recovered_address = Signature::from_str(signature)
-        .map_err(|_| RampError::InvalidSignature)?
+        .map_err(|_| UserError::InvalidSignature)?
         .recover(message)
-        .map_err(|_| RampError::InvalidSignature)?;
+        .map_err(|_| UserError::InvalidSignature)?;
 
-    if recovered_address == Address::from_str(evm_address).map_err(|_| RampError::InvalidAddress)? {
+    if recovered_address
+        == Address::from_str(evm_address).map_err(|_| BlockchainError::InvalidAddress)?
+    {
         Ok(())
     } else {
-        Err(RampError::InvalidSignature)
+        Err(UserError::InvalidSignature)?
     }
 }

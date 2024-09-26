@@ -13,7 +13,7 @@ use super::{
     signer,
 };
 use crate::{
-    errors::{RampError, Result},
+    errors::{BlockchainError, Result, SystemError},
     model::{
         helpers,
         memory::heap::{logs, read_state},
@@ -40,13 +40,13 @@ pub async fn create_sign_request(
     inputs: &[ethers_core::abi::Token],
 ) -> Result<SignRequest> {
     let contract = ethers_core::abi::Contract::load(abi.as_bytes())
-        .map_err(|e| RampError::EthersAbiError(format!("Contract load error: {:?}", e)))?;
-    let function = contract
-        .function(function_name)
-        .map_err(|e| RampError::EthersAbiError(format!("Function not found error: {:?}", e)))?;
+        .map_err(|e| BlockchainError::EthersAbiError(format!("Contract load error: {:?}", e)))?;
+    let function = contract.function(function_name).map_err(|e| {
+        BlockchainError::EthersAbiError(format!("Function not found error: {:?}", e))
+    })?;
     let data = function
         .encode_input(inputs)
-        .map_err(|e| RampError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
+        .map_err(|e| BlockchainError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
 
     signer::create_sign_request(
         value,
@@ -67,11 +67,11 @@ pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Res
         SendRawTransactionStatus::Ok(transaction_hash) => {
             ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
             release_nonce(chain_id);
-            transaction_hash.ok_or(RampError::EmptyTransactionHash)
+            transaction_hash.ok_or_else(|| BlockchainError::EmptyTransactionHash.into())
         }
-        SendRawTransactionStatus::NonceTooLow => Err(RampError::NonceTooLow),
-        SendRawTransactionStatus::NonceTooHigh => Err(RampError::NonceTooHigh),
-        SendRawTransactionStatus::InsufficientFunds => Err(RampError::InsufficientFunds),
+        SendRawTransactionStatus::NonceTooLow => Err(BlockchainError::NonceTooLow)?,
+        SendRawTransactionStatus::NonceTooHigh => Err(BlockchainError::NonceTooHigh)?,
+        SendRawTransactionStatus::InsufficientFunds => Err(BlockchainError::InsufficientFunds)?,
     }
 }
 
@@ -145,22 +145,24 @@ pub async fn _wait_for_transaction_confirmation(
                 return Ok(());
             }
             TransactionStatus::Failed(err) => {
-                return Err(RampError::_TransactionFailed(err));
+                return Err(BlockchainError::_TransactionFailed(err))?;
             }
             TransactionStatus::Pending => {
                 if attempt + 1 >= max_attempts {
-                    return Err(RampError::TransactionTimeout);
+                    return Err(BlockchainError::TransactionTimeout)?;
                 }
                 ic_cdk::println!(
                     "[wait_for_transaction_confirmation] Transaction is pending in attempt={:?}",
                     attempt
                 );
             }
-            TransactionStatus::Unresolved(tx, _) => return Err(RampError::_TransactionFailed(tx)),
+            TransactionStatus::Unresolved(tx, _) => {
+                return Err(BlockchainError::_TransactionFailed(tx))?
+            }
         }
         helpers::delay(interval).await;
     }
-    Err(RampError::TransactionTimeout)
+    Err(BlockchainError::TransactionTimeout)?
 }
 
 pub fn spawn_transaction_checker<F, G>(
@@ -381,12 +383,14 @@ pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
         Ok((res,)) => match res {
             MultiGetTransactionCountResult::Consistent(block_result) => match block_result {
                 GetTransactionCountResult::Ok(count) => Ok(count),
-                GetTransactionCountResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
+                GetTransactionCountResult::Err(e) => {
+                    Err(SystemError::RpcError(format!("{:?}", e)))?
+                }
             },
             MultiGetTransactionCountResult::Inconsistent(_) => {
                 ic_cdk::trap("Block Result is inconsistent");
             }
         },
-        Err((code, message)) => Err(RampError::ICRejectionError(code, message)),
+        Err((code, message)) => Err(SystemError::ICRejectionError(code, message))?,
     }
 }

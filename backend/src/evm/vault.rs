@@ -4,11 +4,11 @@ use super::fees::{self, FeeEstimates};
 use super::signer;
 use super::transaction;
 
-use crate::errors::{RampError, Result};
+use crate::errors::{BlockchainError, Result};
 use crate::model::helpers;
 use crate::types::{
     evm::{chains, request::SignRequest},
-    order::LockedOrder,
+    orders::LockedOrder,
 };
 
 pub struct Ic2P2ramp;
@@ -343,7 +343,7 @@ impl Ic2P2ramp {
         fees: u128,
     ) -> Result<(String, SignRequest)> {
         if amount < fees {
-            return Err(RampError::FundsBelowFees);
+            return Err(BlockchainError::FundsBelowFees)?;
         }
 
         let abi = r#"
@@ -396,7 +396,7 @@ impl Ic2P2ramp {
         fees: u128,
     ) -> Result<(String, SignRequest)> {
         if amount < fees {
-            return Err(RampError::FundsBelowFees);
+            return Err(BlockchainError::FundsBelowFees)?;
         }
 
         let abi = r#"
@@ -468,7 +468,7 @@ impl Ic2P2ramp {
             let gas_cost = fee_estimates.max_fee_per_gas * gas;
 
             if U256::from(value) < gas_cost {
-                return Err(RampError::FundsBelowFees);
+                return Err(BlockchainError::FundsBelowFees)?;
             }
 
             let transfer_value = U256::from(value) - gas_cost;

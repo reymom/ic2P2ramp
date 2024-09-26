@@ -8,7 +8,7 @@ use super::rpc::{
     MultiFeeHistoryResult, MultiGetBlockByNumberResult, EVM_RPC,
 };
 use crate::{
-    model::errors::{RampError, Result},
+    errors::{Result, SystemError},
     types::evm::chains,
 };
 
@@ -43,15 +43,15 @@ pub async fn fee_history(
         Ok((res,)) => match res {
             MultiFeeHistoryResult::Consistent(fee_history) => match fee_history {
                 FeeHistoryResult::Ok(fee_history) => fee_history.ok_or_else(|| {
-                    RampError::InternalError("Could not find fee history".to_string())
+                    SystemError::InternalError("Could not find fee history".to_string()).into()
                 }),
-                FeeHistoryResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
+                FeeHistoryResult::Err(e) => Err(SystemError::RpcError(format!("{:?}", e)))?,
             },
-            MultiFeeHistoryResult::Inconsistent(_) => Err(RampError::InternalError(
+            MultiFeeHistoryResult::Inconsistent(_) => Err(SystemError::InternalError(
                 "Fee history is inconsistent".to_string(),
-            )),
+            ))?,
         },
-        Err((code, msg)) => Err(RampError::ICRejectionError(code, msg)),
+        Err((code, msg)) => Err(SystemError::ICRejectionError(code, msg))?,
     }
 }
 
@@ -86,7 +86,7 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEsti
     let base_fee_per_gas = fee_history
         .baseFeePerGas
         .last()
-        .ok_or_else(|| RampError::InternalError("baseFeePerGas is empty".to_string()))?
+        .ok_or_else(|| SystemError::InternalError("baseFeePerGas is empty".to_string()))?
         .clone();
 
     // obtain the 95th percentile of the tips for the past 9 blocks
@@ -131,12 +131,12 @@ pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<
         Ok((res,)) => match res {
             MultiGetBlockByNumberResult::Consistent(block_result) => match block_result {
                 GetBlockByNumberResult::Ok(block) => Ok(block),
-                GetBlockByNumberResult::Err(e) => Err(RampError::RpcError(format!("{:?}", e))),
+                GetBlockByNumberResult::Err(e) => Err(SystemError::RpcError(format!("{:?}", e)))?,
             },
-            MultiGetBlockByNumberResult::Inconsistent(_) => Err(RampError::InternalError(
+            MultiGetBlockByNumberResult::Inconsistent(_) => Err(SystemError::InternalError(
                 "Block Result is inconsistent".to_string(),
-            )),
+            ))?,
         },
-        Err((code, message)) => Err(RampError::ICRejectionError(code, message)),
+        Err((code, message)) => Err(SystemError::ICRejectionError(code, message))?,
     }
 }

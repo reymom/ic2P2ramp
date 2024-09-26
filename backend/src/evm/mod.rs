@@ -1,3 +1,4 @@
+pub mod event;
 pub mod fees;
 pub mod rpc;
 pub mod signer;
