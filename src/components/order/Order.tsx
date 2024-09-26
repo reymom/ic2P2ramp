@@ -1,25 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
+import { useUser } from '../user/UserContext';
 import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '../../constants/evm_tokens';
 import { ICP_TOKENS } from '../../constants/icp_tokens';
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { formatCryptoUnits, formatPrice, formatTimeLeft, truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
 import { estimateGasAndGasPrice } from '../../model/evm';
 import { PaymentProviderTypes, TokenOption } from '../../model/types';
-import PayPalButton from '../PaypalButton';
-import { useUser } from '../user/UserContext';
-import DynamicDots from '../ui/DynamicDots';
 import { fetchOrderPrice } from '../../model/rate';
-import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import PayPalButton from '../ui/PaypalButton';
+import DynamicDots from '../ui/DynamicDots';
 
 interface OrderProps {
     order: OrderState;
@@ -46,30 +46,72 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const { user, userType, sessionToken, fetchBalances, refetchUser } = useUser();
     const navigate = useNavigate();
 
-    const orderId = 'Created' in order ? order.Created.id
-        : 'Locked' in order ? order.Locked.base.id
-            : null;
+    const [orderState, setOrderState] = useState(order);
+
+    const orderId = useMemo(() => {
+        return 'Created' in orderState ? orderState.Created.id
+            : 'Locked' in orderState ? orderState.Locked.base.id
+                : null;
+    }, [orderState]);
+
+    const baseOrder = useMemo(() => {
+        return 'Created' in orderState ? orderState.Created
+            : 'Locked' in orderState ? orderState.Locked.base
+                : null;
+    }, [orderState]);
+
+    const orderBlockchain = useMemo(() => {
+        return 'Created' in orderState ? orderState.Created.crypto.blockchain
+            : 'Locked' in orderState ? orderState.Locked.base.crypto.blockchain
+                : 'Completed' in orderState ? orderState.Completed.blockchain
+                    : null;
+    }, [orderState]);
 
     const committedMessage = `Locked Order #${orderId}, refetching data`;
     const releasedMessage = `Order Verified and Funds Released. Refetching data`;
     const cancelledMessage = `Cancelled Order #${orderId}, refetching data`;
 
-    const baseOrder =
-        'Created' in order ? order.Created
-            : 'Locked' in order ? order.Locked.base : null
+    const getToken = (): TokenOption | null => {
+        if (!baseOrder || !orderBlockchain) return null;
 
-    const orderBlockchain = 'Created' in order ? order.Created.crypto.blockchain
-        : 'Locked' in order ? order.Locked.base.crypto.blockchain
-            : 'Completed' in order ? order.Completed.blockchain
-                : null;
+        const tokens = 'EVM' in orderBlockchain ? getEvmTokens(Number(orderBlockchain.EVM.chain_id))
+            : 'ICP' in orderBlockchain ? ICP_TOKENS : null;
+        if (!tokens) return null;
+
+        const tokenAddress = 'EVM' in orderBlockchain ? baseOrder.crypto.token?.[0] ?? '' :
+            'ICP' in orderBlockchain ? orderBlockchain.ICP.ledger_principal.toString() : '';
+
+        return tokens.find(token => {
+            return token.address === tokenAddress;
+        }) ?? null;
+    }
+
+    const token = useMemo(() => {
+        return getToken();
+    }, [baseOrder, orderBlockchain]);
+
+    const fetchOrder = async (orderId: bigint) => {
+        try {
+            const res = await backend.get_order(orderId);
+            if ('Ok' in res) {
+                setOrderState(res.Ok);
+                return res.Ok
+            } else {
+                console.error("Error fetching order: ", res.Err);
+                refetchOrders();
+            }
+        } catch (err) {
+            console.error("Error fetching order: ", err);
+        }
+    };
 
     useEffect(() => {
         const getCurrentPrice = async () => {
-            if ('Locked' in order) {
-                setCurrentPrice(order.Locked.price + order.Locked.offramper_fee);
+            if ('Locked' in orderState) {
+                setCurrentPrice(orderState.Locked.price + orderState.Locked.offramper_fee);
                 return;
             };
-            if (!('Created' in order)) return;
+            if (!('Created' in orderState)) return;
 
             const cachedPriceData = localStorage.getItem(`order_${orderId}_price`);
             if (cachedPriceData) {
@@ -104,36 +146,50 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         getCurrentPrice();
     }, []);
 
-    const getToken = (): TokenOption | undefined => {
-        const crypto = 'Created' in order ? order.Created.crypto
-            : 'Locked' in order ? order.Locked.base.crypto
-                : null
-        if (!crypto) return undefined;
+    useEffect(() => {
+        let intervalId: NodeJS.Timeout | null = null;
 
-        const tokens = 'EVM' in crypto.blockchain ? getEvmTokens(Number(crypto.blockchain.EVM.chain_id))
-            : 'ICP' in crypto.blockchain ? ICP_TOKENS : null;
-        if (!tokens) return undefined;
+        if (orderId && baseOrder && baseOrder.processing) {
+            setIsLoading(true);
+            setLoadingMessage("Processing");
 
-        const tokenAddress = 'EVM' in crypto.blockchain ? crypto.token?.[0] ?? '' :
-            'ICP' in crypto.blockchain ? crypto.blockchain.ICP.ledger_principal.toString() : '';
+            intervalId = setInterval(async () => {
+                const updatedOrder = await fetchOrder(BigInt(orderId));
+                if (!updatedOrder) {
+                    clearInterval(intervalId!);
+                    refetchOrders();
+                    setIsLoading(false);
+                    return;
+                }
 
-        return tokens.find(token => {
-            return token.address === tokenAddress;
-        })
-    }
+                if (
+                    ('Created' in updatedOrder && updatedOrder.Created.processing)
+                    || ('Locked' in updatedOrder && updatedOrder.Locked.base.processing)
+                ) {
+                    return
+                }
 
-    const token = getToken();
+                clearInterval(intervalId!)
+                setIsLoading(false)
+                refetchOrders();
+            }, 5000);
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [orderId, baseOrder]);
 
     useEffect(() => {
-        if ('Locked' in order) {
+        if ('Locked' in orderState) {
             const calculateRemainingTime = () => {
                 const currentTime = Number(Date.now() * 1_000_000);
-                const expiryTime = Number(order.Locked.locked_at) + LOCK_TIME_SECONDS * 1_000_000_000;
+                const expiryTime = Number(orderState.Locked.locked_at) + LOCK_TIME_SECONDS * 1_000_000_000;
                 const timeLeftSeconds = (expiryTime - currentTime) / 1_000_000_000;
 
-                if (!order.Locked.payment_done && timeLeftSeconds <= 0) {
+                if (!orderState.Locked.payment_done && timeLeftSeconds <= 0) {
                     setTimeout(() => {
-                        refetchOrders();
+                        fetchOrder(orderState.Locked.base.id);
                         refetchUser();
                     }, 2500);
                 };
@@ -202,7 +258,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         setLoadingMessage(successMessage);
                         setTxHash(receipt.transactionHash);
                         setTimeout(() => {
-                            refetchOrders();
+                            fetchOrder(orderId);
                             refetchUser();
                             fetchBalances();
                             setIsLoading(false);
@@ -244,11 +300,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     }
 
     const checkIfOrderIsPayable = async (orderId: bigint, tokenSession: string): Promise<boolean> => {
-        if (user && order && 'Locked' in order) {
+        if (user && orderState && 'Locked' in orderState) {
             try {
                 const result = await backend.verify_order_is_payable(orderId, tokenSession);
                 if ('Ok' in result) {
-                    if (order.Locked.onramper.user_id === user.id) {
+                    if (orderState.Locked.onramper.user_id === user.id) {
                         return true
                     }
                     return false;
@@ -267,14 +323,14 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     useEffect(() => {
         const validateOrderPayable = async () => {
-            if (order && 'Locked' in order) {
-                const payable = await checkIfOrderIsPayable(order.Locked.base.id, sessionToken!);
+            if (orderState && 'Locked' in orderState) {
+                const payable = await checkIfOrderIsPayable(orderState.Locked.base.id, sessionToken!);
                 setIsPayable(payable);
                 setLoadingPayable(false);
             }
         };
 
-        if (order && sessionToken) {
+        if (orderState && sessionToken) {
             validateOrderPayable();
         } else {
             setLoadingPayable(false);
@@ -283,7 +339,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const commitToOrder = async (provider: PaymentProvider) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
-        if (!user || !('Onramper' in user.user_type) || !('Created' in order) || !(orderBlockchain) || !orderId) return;
+        if (!user || !('Onramper' in user.user_type) || !('Created' in orderState) || !(orderBlockchain) || !orderId) return;
 
         setIsLoading(true);
         setTxHash(null);
@@ -335,7 +391,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     setLoadingMessage(committedMessage);
                     setTimeout(() => {
                         setIsLoading(false);
-                        refetchOrders();
+                        fetchOrder(orderId);
                         refetchUser();
                         fetchBalances();
                         navigate(`/view?onramperId=${user.id}`);
@@ -354,7 +410,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const removeOrder = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
-        if (!user || !('Offramper' in user?.user_type) || !('Created' in order) || !orderBlockchain || !orderId) return;
+        if (!user || !('Offramper' in user?.user_type) || !('Created' in orderState) || !orderBlockchain || !orderId) return;
         if (!baseOrder || user.id !== baseOrder.offramper_user_id) return;
 
         const scrollPosition = window.scrollY;
@@ -373,7 +429,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 } else {
                     setLoadingMessage(cancelledMessage);
                     setTimeout(() => {
-                        refetchOrders();
+                        fetchOrder(orderId);
                         refetchUser();
                         fetchBalances();
                         setIsLoading(false);
@@ -394,7 +450,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const handlePayPalSuccess = async (transactionId: string) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
-        if (!('Locked' in order) || !orderId || !orderBlockchain) return;
+        if (!('Locked' in orderState) || !orderId || !orderBlockchain) return;
         if (!user || !('Onramper' in user.user_type)) return;
 
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
@@ -406,11 +462,10 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         // estimate release gas
         let gasEstimation: [] | [bigint] = [];
-        const hasToken = order.Locked.base.crypto.token.length > 0;
         if ('EVM' in orderBlockchain) {
             const gasForRelease = await estimateGasAndGasPrice(
                 Number(orderBlockchain.EVM.chain_id),
-                hasToken ? { ReleaseToken: null } : { ReleaseNative: null },
+                token ? { ReleaseToken: null } : { ReleaseNative: null },
                 defaultReleaseEvmGas
             );
             console.log("[handlePayPalSuccess] gasReleaseEstimate = ", gasForRelease);
@@ -427,7 +482,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 } else {
                     setLoadingMessage(releasedMessage);
                     setTimeout(() => {
-                        refetchOrders();
+                        fetchOrder(orderId);
                         refetchUser();
                         setIsLoading(false);
                         fetchBalances();
@@ -448,9 +503,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     const handleRevolutRedirect = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
-        if (!('Locked' in order) || !orderId) return;
+        if (!('Locked' in orderState) || !orderId) return;
 
-        const consentUrl = order.Locked.revolut_consent[0]?.url;
+        const consentUrl = orderState.Locked.revolut_consent[0]?.url;
         if (consentUrl) {
             console.log('Listening for Revolut transaction confirmation...');
             backend.execute_revolut_payment(orderId, sessionToken)
@@ -459,23 +514,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         } else {
             console.error('Consent URL is not available.');
         }
-    };
-
-    const getTokenName = (): string => {
-        return token ? token.name : ""
-    };
-
-    const getTokenLogo = (): string => {
-        return token ? token.logo : ""
-    }
-
-    const getTokenSymbol = (): string => {
-        return token ? token.rateSymbol : "Unknown";
-    };
-
-    const getTokenDecimals = (): number => {
-        if (!token) throw new Error("Token not found");
-        return token.decimals
     };
 
     const getNetwork = (): NetworkProps | undefined => {
@@ -504,26 +542,24 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     };
 
     const formatCryptoAmount = () => {
-        const crypto = 'Created' in order ? order.Created.crypto
-            : 'Locked' in order ? order.Locked.base.crypto
-                : null
-        if (!crypto) return;
+        if (!baseOrder || !orderBlockchain || !token) return;
+        let crypto = baseOrder.crypto;
 
-        switch (blockchainToBlockchainType(crypto.blockchain)) {
+        switch (blockchainToBlockchainType(orderBlockchain)) {
             case 'EVM':
                 let fullAmountEVM: string;
-                if (token?.isNative) {
+                if (token.isNative) {
                     fullAmountEVM = ethers.formatEther(crypto.amount - crypto.fee);
                 } else {
                     fullAmountEVM = ethers.formatUnits(
                         (crypto.amount - crypto.fee).toString(),
-                        getTokenDecimals()
+                        token.decimals
                     );
                 }
                 const shortAmountEVM = formatCryptoUnits(parseFloat(fullAmountEVM));
                 return { fullAmount: fullAmountEVM, shortAmount: shortAmountEVM };
             case 'ICP': backgroundColor
-                const fullAmountICP = (Number(crypto.amount - crypto.fee) / 10 ** getTokenDecimals()).toString();
+                const fullAmountICP = (Number(crypto.amount - crypto.fee) / 10 ** token.decimals).toString();
                 const shortAmountICP = formatCryptoUnits(parseFloat(fullAmountICP));
                 return { fullAmount: fullAmountICP, shortAmount: shortAmountICP };
             case 'Solana':
@@ -534,20 +570,20 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const cryptoAmount = formatCryptoAmount();
 
     let backgroundColor =
-        'Created' in order ? "bg-blue-900 bg-opacity-30"
-            : 'Locked' in order ? "bg-yellow-800 bg-opacity-30"
-                : 'Completed' in order ? "bg-green-800 bg-opacity-30"
-                    : 'Cancelled' in order ? "bg-red-800 bg-opacity-30"
+        'Created' in orderState ? "bg-blue-900 bg-opacity-30"
+            : 'Locked' in orderState ? "bg-yellow-800 bg-opacity-30"
+                : 'Completed' in orderState ? "bg-green-800 bg-opacity-30"
+                    : 'Cancelled' in orderState ? "bg-red-800 bg-opacity-30"
                         : "bg-gray-800 bg-opacity-20";
 
     let borderColor =
-        'Created' in order ? "border-blue-600"
-            : 'Locked' in order ? "border-yellow-600"
-                : 'Completed' in order ? "border-green-600"
-                    : 'Cancelled' in order ? "border-red-600"
+        'Created' in orderState ? "border-blue-600"
+            : 'Locked' in orderState ? "border-yellow-600"
+                : 'Completed' in orderState ? "border-green-600"
+                    : 'Cancelled' in orderState ? "border-red-600"
                         : "border-gray-600";
 
-    let textColor = 'Created' in order || 'Locked' in order ? "text-white" : "text-gray-200";
+    let textColor = 'Created' in orderState || 'Locked' in orderState ? "text-white" : "text-gray-200";
 
     const commonOrderDiv = crypto && token && (
         <div className="space-y-3">
@@ -570,11 +606,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <span className="opacity-90">Amount:</span>
                 <span className="font-medium flex items-center space-x-2" title={cryptoAmount?.fullAmount}>
                     <span>{cryptoAmount?.shortAmount}</span>
-                    {getTokenLogo() && (
+                    {token && (
                         <img
-                            src={getTokenLogo()}
-                            alt={getTokenSymbol()}
-                            title={getTokenSymbol()}
+                            src={token.logo}
+                            alt={token.name}
+                            title={token.name}
                             className="h-5 w-5 inline-block border border-white bg-gray-100 rounded-full"
                         />
                     )}
@@ -636,18 +672,18 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             title={getNetworkName()}
                             className="h-8 w-8"
                         />
-                        {getTokenLogo() && (
+                        {token && (
                             <img
-                                src={getTokenLogo()}
-                                alt={getTokenSymbol()}
-                                title={getTokenSymbol()}
+                                src={token.logo}
+                                alt={token.name}
+                                title={token.name}
                                 className="h-4 w-4 absolute -bottom-0.5 -right-0.5 border border-white rounded-full bg-gray-100 bg-opacity-100"
                             />
                         )}
                     </div>
                 </div>
             )}
-            {'Created' in order && (
+            {'Created' in orderState && (
                 <div className="flex flex-col">
                     {commonOrderDiv}
 
@@ -657,7 +693,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     <div className="text-lg">
                         <span className="opacity-90">Payment Methods:</span>
                         <div className="font-medium">
-                            {order.Created.offramper_providers.map((provider, index) => {
+                            {orderState.Created.offramper_providers.map((provider, index) => {
                                 let providerType = paymentProviderTypeToString(provider[0]);
 
                                 if (userType === 'Onramper') {
@@ -688,7 +724,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     {user && userType === 'Onramper' && (() => {
                         const disabled = !committedProvider ||
                             !user.addresses.some(addr =>
-                                Object.keys(addr.address_type)[0] === Object.keys(order.Created.offramper_address.address_type)[0]
+                                Object.keys(addr.address_type)[0] === Object.keys(orderState.Created.offramper_address.address_type)[0]
                             );
                         return (
                             <button
@@ -711,7 +747,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     })()}
 
                     {/* Remove Button for Offramper */}
-                    {user && userType === 'Offramper' && order.Created.offramper_user_id === user.id && (
+                    {user && userType === 'Offramper' && orderState.Created.offramper_user_id === user.id && (
                         <button
                             onClick={removeOrder}
                             disabled={isLoading}
@@ -729,20 +765,20 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     )}
                 </div>
             )}
-            {'Locked' in order && (
+            {'Locked' in orderState && (
                 <div className="flex flex-col">
                     {commonOrderDiv}
 
-                    {user && userType === 'Onramper' && order.Locked.onramper.user_id === user.id && !order.Locked.uncommited && (
+                    {user && userType === 'Onramper' && orderState.Locked.onramper.user_id === user.id && !orderState.Locked.uncommited && (
                         <>
                             <div>
-                                {order.Locked.onramper.provider.hasOwnProperty('PayPal') ? (
+                                {orderState.Locked.onramper.provider.hasOwnProperty('PayPal') ? (
                                     <PayPalButton
-                                        orderId={order.Locked.base.id.toString()}
-                                        amount={Number(order.Locked.price + order.Locked.offramper_fee) / 100.}
-                                        currency={order.Locked.base.currency}
+                                        orderId={orderState.Locked.base.id.toString()}
+                                        amount={Number(orderState.Locked.price + orderState.Locked.offramper_fee) / 100.}
+                                        currency={orderState.Locked.base.currency}
                                         paypalId={(() => {
-                                            const provider = order.Locked.base.offramper_providers.find(
+                                            const provider = orderState.Locked.base.offramper_providers.find(
                                                 provider => 'PayPal' in provider[1]
                                             );
                                             if (provider && 'PayPal' in provider[1]) {
@@ -753,7 +789,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                         onSuccess={(transactionId) => handlePayPalSuccess(transactionId)}
                                         disabled={!isPayable || isLoading}
                                     />
-                                ) : order.Locked.onramper.provider.hasOwnProperty('Revolut') ? (
+                                ) : orderState.Locked.onramper.provider.hasOwnProperty('Revolut') ? (
                                     <div>
                                         <button
                                             className={`px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
@@ -766,10 +802,10 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 ) : null}
                             </div>
                             <div className="text-red-500 mt-2">
-                                {!order.Locked.payment_done && !loadingPayable && !isPayable && (
+                                {!orderState.Locked.payment_done && !loadingPayable && !isPayable && (
                                     "This order cannot be paid at the moment. Please contact support or try again later."
                                 )}
-                                {order.Locked.payment_done && (
+                                {orderState.Locked.payment_done && (
                                     "Payment is validated but couldn't release your funds. Please contact support to solve this issue."
                                 )}
                             </div>
@@ -783,12 +819,12 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     )}
                 </div>
             )}
-            {'Completed' in order && (
+            {'Completed' in orderState && (
                 <div className="flex flex-col space-y-3">
                     <div className="text-lg flex justify-between">
                         <span className="opacity-90">Fiat Amount:</span>
                         <span className="font-medium flex items-center space-x-2">
-                            <span>{formatPrice(Number(order.Completed.price))}</span>
+                            <span>{formatPrice(Number(orderState.Completed.price))}</span>
                             <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
                                 $
                             </span>
@@ -800,16 +836,16 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         <span className="font-medium">
                             {orderBlockchain && 'EVM' in orderBlockchain ? (
                                 <a
-                                    href={`${getNetworkExplorer()}/address/${order.Completed.onramper.address}`}
+                                    href={`${getNetworkExplorer()}/address/${orderState.Completed.onramper.address}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-white hover:text-gray-400 transition-colors duration-200"
                                     title="View on Block Explorer"
                                 >
-                                    {truncate(order.Completed.onramper.address, 8, 8)}
+                                    {truncate(orderState.Completed.onramper.address, 8, 8)}
                                 </a>
                             ) :
-                                <span className="font-medium">{truncate(order.Completed.onramper.address, 8, 8)}</span>
+                                <span className="font-medium">{truncate(orderState.Completed.onramper.address, 8, 8)}</span>
                             }
                         </span>
                     </div>
@@ -818,21 +854,21 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         <span className="font-medium">
                             {orderBlockchain && 'EVM' in orderBlockchain ? (
                                 <a
-                                    href={`${getNetworkExplorer()}/address/${order.Completed.offramper.address}`}
+                                    href={`${getNetworkExplorer()}/address/${orderState.Completed.offramper.address}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-white hover:text-gray-400 transition-colors duration-200"
                                     title="View on Block Explorer"
                                 >
-                                    {truncate(order.Completed.offramper.address, 8, 8)}
+                                    {truncate(orderState.Completed.offramper.address, 8, 8)}
                                 </a>
                             ) :
-                                <span className="font-medium">{truncate(order.Completed.offramper.address, 8, 8)}</span>
+                                <span className="font-medium">{truncate(orderState.Completed.offramper.address, 8, 8)}</span>
                             }
                         </span>
                     </div>
 
-                    {'EVM' in order.Completed.blockchain && (
+                    {'EVM' in orderState.Completed.blockchain && (
                         <div className="text-lg flex justify-between">
                             <span className="opacity-80">Network:</span>
                             <img
@@ -844,9 +880,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     )}
                 </div>
             )}
-            {'Cancelled' in order && (
+            {'Cancelled' in orderState && (
                 <div className="flex flex-col space-y-3">
-                    <div><strong>Order ID:</strong> {order.Cancelled.toString()}</div>
+                    <div><strong>Order ID:</strong> {orderState.Cancelled.toString()}</div>
                     <div><strong>Status:</strong> Cancelled</div>
                 </div>
             )}
