@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
-import { AccountIdentifier, LedgerCanister } from '@dfinity/ledger-icp';
+import { IcrcLedgerCanister, BalanceParams, IcrcTokens } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
@@ -9,7 +9,8 @@ import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../.
 import { UserTypes } from '../../model/types';
 import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType } from '../../model/session';
 import { icpHost, iiUrl } from '../../model/icp';
-import { getEvmTokenOptions, getIcpTokenOptions } from '../../constants/tokens';
+import { getEvmTokens } from '../../constants/evm_tokens';
+import { ICP_TOKENS } from '../../constants/icp_tokens';
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
 import { formatCryptoUnits } from '../../model/helper';
@@ -243,19 +244,17 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const balances: { [tokenName: string]: Balance } = {};
-            const tokenOptions = getIcpTokenOptions();
 
-            for (const token of tokenOptions) {
-                const ledger = LedgerCanister.create({
+            for (const token of ICP_TOKENS) {
+                const ledger = IcrcLedgerCanister.create({
                     agent: icpAgent,
                     canisterId: Principal.fromText(token.address),
-                });
+                })
 
-                const accountIdentifier = AccountIdentifier.fromPrincipal({ principal });
-                const balanceResult = await ledger.accountBalance({
-                    accountIdentifier: accountIdentifier,
-                    certified: true,
-                });
+                const balanceParams: BalanceParams = {
+                    owner: principal,
+                };
+                const balanceResult = await ledger.balance(balanceParams);
 
                 const balanceFloat = Number(balanceResult) / 10 ** token.decimals;
                 balances[token.name] = { raw: balanceResult, formatted: formatCryptoUnits(balanceFloat) }
@@ -277,8 +276,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             const signer = await provider.getSigner();
 
             const balances: { [tokenAddress: string]: Balance } = {};
-            const tokenOptions = getEvmTokenOptions(chainId);
-            for (const token of tokenOptions) {
+            for (const token of getEvmTokens(chainId)) {
                 if (token.isNative) {
                     const nativeBalance = await provider.getBalance(address);
                     balances[token.name] = { raw: nativeBalance, formatted: formatCryptoUnits(Number(ethers.formatEther(nativeBalance))) };

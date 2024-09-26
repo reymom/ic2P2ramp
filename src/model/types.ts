@@ -6,6 +6,15 @@ import {
   UserType,
 } from '../declarations/backend/backend.did';
 
+export interface TokenOption {
+  name: string;
+  address: string;
+  decimals: number;
+  isNative: boolean;
+  rateSymbol: string;
+  logo: string;
+}
+
 type ExtractKeys<T> = T extends { [key: string]: any } ? keyof T : never;
 
 export function candidToEnum<T extends object>(obj: T): ExtractKeys<T> {
