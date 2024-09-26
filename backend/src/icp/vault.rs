@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use crate::model::errors::{RampError, Result};
-use crate::model::memory::heap::{mutate_state, read_state};
-use crate::model::types::icp::IcpToken;
 use candid::{Nat, Principal};
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::{BlockIndex, NumTokens, TransferArg, TransferError};
+
+use crate::errors::{Result, SystemError};
+use crate::model::memory::heap::{mutate_state, read_state};
+use crate::types::icp::IcpToken;
 
 pub struct Ic2P2ramp;
 
@@ -31,9 +32,9 @@ impl Ic2P2ramp {
             (args,),
         )
         .await
-        .map_err(|e| RampError::CanisterCallError(format!("Failed to call transfer: {:?}", e)))?
+        .map_err(|e| SystemError::CanisterCallError(format!("Failed to call transfer: {:?}", e)))?
         .0
-        .map_err(|e| RampError::CanisterCallError(e.to_string()))
+        .map_err(|e| SystemError::CanisterCallError(e.to_string()).into())
     }
 
     pub async fn get_canister_balances() -> Result<HashMap<String, f64>> {
@@ -52,7 +53,7 @@ impl Ic2P2ramp {
             .0
             .try_into()
             .map_err(|e| {
-                RampError::InternalError(format!("Cannot parse Nat into u128: e: {:?}", e))
+                SystemError::InternalError(format!("Cannot parse Nat into u128: e: {:?}", e))
             })?;
 
             let balance_float = balance as f64 / 10f64.powi(token.decimals as i32);
@@ -67,7 +68,7 @@ impl Ic2P2ramp {
 
         for ledger_canister in icp_canisters {
             let ledger_principal = Principal::from_text(&ledger_canister)
-                .map_err(|_| RampError::InvalidInput("Invalid ledger principal".to_string()))?;
+                .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
             let symbol = Ic2P2ramp::get_symbol(&ledger_principal).await?;
             let decimals = Ic2P2ramp::get_decimals(&ledger_principal).await?;
@@ -89,7 +90,7 @@ impl Ic2P2ramp {
             ic_cdk::call::<(Account,), (Nat,)>(ledger_principal, "icrc1_balance_of", (account,))
                 .await
                 .map_err(|e| {
-                    RampError::CanisterCallError(format!(
+                    SystemError::CanisterCallError(format!(
                         "Failed to call icrc1_balance_of: {:?}",
                         e
                     ))
@@ -105,7 +106,7 @@ impl Ic2P2ramp {
             (),
         )
         .await
-        .map_err(|e| RampError::CanisterCallError(format!("Failed to call icrc1_fee: {:?}", e)))?
+        .map_err(|e| SystemError::CanisterCallError(format!("Failed to call icrc1_fee: {:?}", e)))?
         .0,);
 
         Ok(fee_response)
@@ -116,7 +117,7 @@ impl Ic2P2ramp {
             ic_cdk::call::<(), (String,)>(*ledger_principal, "icrc1_symbol", ())
                 .await
                 .map_err(|e| {
-                    RampError::CanisterCallError(format!("Failed to call icrc1_symbol: {:?}", e))
+                    SystemError::CanisterCallError(format!("Failed to call icrc1_symbol: {:?}", e))
                 })?;
 
         Ok(symbol_response)
@@ -127,7 +128,10 @@ impl Ic2P2ramp {
             ic_cdk::call::<(), (u8,)>(*ledger_principal, "icrc1_decimals", ())
                 .await
                 .map_err(|e| {
-                    RampError::CanisterCallError(format!("Failed to call icrc1_decimals: {:?}", e))
+                    SystemError::CanisterCallError(format!(
+                        "Failed to call icrc1_decimals: {:?}",
+                        e
+                    ))
                 })?;
 
         Ok(decimals_response)

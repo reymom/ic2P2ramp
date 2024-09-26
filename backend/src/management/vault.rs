@@ -9,7 +9,7 @@ use crate::{
             logs::TransactionAction,
             request::SignRequest,
         },
-        order::RevolutConsent,
+        orders::RevolutConsent,
         PaymentProvider, TransactionAddress,
     },
 };

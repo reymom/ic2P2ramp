@@ -2,10 +2,12 @@ use std::collections::HashSet;
 
 use super::random;
 use crate::{
-    errors::{RampError, Result},
-    model::memory::stable::users,
-    model::types::session::Session,
+    model::{
+        errors::{Result, SystemError, UserError},
+        memory::stable::users,
+    },
     types::{
+        session::Session,
         user::{User, UserType},
         LoginAddress, PaymentProvider, TransactionAddress,
     },
@@ -21,13 +23,13 @@ pub async fn register_user(
 
     let hashed_password: Result<Option<String>> = match login_address.clone() {
         LoginAddress::Email { .. } => {
-            let password = password.ok_or(RampError::PasswordRequired)?;
+            let password = password.ok_or(UserError::PasswordRequired)?;
             Ok(Some(random::hash_password(&password).await?))
         }
         LoginAddress::ICP { principal_id } => {
             ic_cdk::println!("[register] caller = {:?}", ic_cdk::caller().to_string());
             if ic_cdk::caller().to_string() != principal_id {
-                return Err(RampError::UnauthorizedPrincipal);
+                return Err(UserError::UnauthorizedPrincipal)?;
             }
             Ok(None)
         }
@@ -35,9 +37,9 @@ pub async fn register_user(
     };
 
     if payment_providers.is_empty() {
-        return Err(RampError::InvalidInput(
+        return Err(SystemError::InvalidInput(
             "Provider list is empty.".to_string(),
-        ));
+        ))?;
     }
     payment_providers
         .clone()
@@ -57,12 +59,12 @@ pub async fn reset_password_user(
 ) -> Result<()> {
     login_address.validate()?;
     let hashed_password = if let LoginAddress::Email { .. } = login_address {
-        let password = new_password.ok_or(RampError::PasswordRequired)?;
+        let password = new_password.ok_or(UserError::PasswordRequired)?;
         random::hash_password(&password).await?
     } else {
-        return Err(RampError::InvalidInput(
+        return Err(SystemError::InvalidInput(
             "Login Address must be of type Email".to_string(),
-        ));
+        ))?;
     };
 
     users::reset_password_user(&login_address, hashed_password)?;

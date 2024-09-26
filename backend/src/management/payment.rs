@@ -4,17 +4,15 @@ use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use crate::{
+    errors::{BlockchainError, OrderError, Result, UserError},
     evm::vault::Ic2P2ramp,
     icp::vault::Ic2P2ramp as ICPRamp,
     management,
-    model::{
-        errors::{RampError, Result},
-        types::{
-            evm::gas::MethodGasUsage,
-            icp::get_icp_token,
-            order::{LockedOrder, RevolutConsent},
-            Blockchain, PaymentProvider, PaymentProviderType,
-        },
+    model::types::{
+        evm::gas::MethodGasUsage,
+        icp::get_icp_token,
+        orders::{LockedOrder, RevolutConsent},
+        Blockchain, PaymentProvider, PaymentProviderType,
     },
     outcalls::{paypal, revolut},
 };
@@ -44,10 +42,10 @@ pub async fn verify_paypal_payment(
         .offramper_providers
         .iter()
         .find(|(provider_type, _)| *provider_type == &PaymentProviderType::PayPal)
-        .ok_or(RampError::InvalidOfframperProvider)?;
+        .ok_or(OrderError::InvalidOfframperProvider)?;
 
     let PaymentProvider::PayPal { id: offramper_id } = offramper_provider.1 else {
-        return Err(RampError::InvalidOfframperProvider);
+        return Err(OrderError::InvalidOfframperProvider)?;
     };
 
     let offramper_matches = capture_details.purchase_units[0].payee.email_address == *offramper_id;
@@ -63,7 +61,7 @@ pub async fn verify_paypal_payment(
         management::order::set_payment_id(order.base.id, transaction_id.to_string())?;
         management::order::mark_order_as_paid(order.base.id)?;
     } else {
-        return Err(RampError::PaymentVerificationFailed);
+        return Err(OrderError::PaymentVerificationFailed)?;
     }
 
     Ok(())
@@ -86,7 +84,7 @@ pub async fn verify_revolut_payment(
 
     let onramper_account = match payment_details.data.initiation.debtor_account {
         Some(details) => details,
-        None => return Err(RampError::MissingDebtorAccount),
+        None => return Err(OrderError::MissingDebtorAccount)?,
     };
     let debtor_matches = onramper_account.scheme_name == *onramper_scheme
         && onramper_account.identification == *onramper_id;
@@ -98,7 +96,7 @@ pub async fn verify_revolut_payment(
         .offramper_providers
         .iter()
         .find(|(provider_type, _)| *provider_type == &PaymentProviderType::Revolut)
-        .ok_or(RampError::InvalidOfframperProvider)?;
+        .ok_or(OrderError::InvalidOfframperProvider)?;
 
     let PaymentProvider::Revolut {
         scheme: offramper_scheme,
@@ -106,7 +104,7 @@ pub async fn verify_revolut_payment(
         name: offramper_name,
     } = offramper_provider.1
     else {
-        return Err(RampError::InvalidOfframperProvider);
+        return Err(OrderError::InvalidOfframperProvider)?;
     };
 
     let creditor_matches = offramper_account.scheme_name == *offramper_scheme
@@ -122,7 +120,7 @@ pub async fn verify_revolut_payment(
         ic_cdk::println!("[verify_transaction] verified is true!!");
         management::order::mark_order_as_paid(order.base.id)
     } else {
-        return Err(RampError::PaymentVerificationFailed);
+        return Err(OrderError::PaymentVerificationFailed)?;
     }
 }
 
@@ -136,7 +134,7 @@ pub async fn handle_payment_completion(order: &LockedOrder, gas: Option<u64>) ->
             let index = handle_icp_payment_completion(order, &ledger_principal).await?;
             return Ok(index);
         }
-        _ => return Err(RampError::UnsupportedBlockchain),
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -201,7 +199,7 @@ pub async fn get_revolut_consent(
         } => {
             let offramper_provider = offramper_providers
                 .get(&PaymentProviderType::Revolut)
-                .ok_or_else(|| RampError::ProviderNotInUser(PaymentProviderType::Revolut))?;
+                .ok_or_else(|| UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
 
             if let PaymentProvider::Revolut {
                 scheme: offramper_scheme,
@@ -218,16 +216,16 @@ pub async fn get_revolut_consent(
                     &offramper_id,
                     &offramper_name
                         .clone()
-                        .ok_or_else(|| RampError::InvalidOfframperProvider)?,
+                        .ok_or_else(|| OrderError::InvalidOfframperProvider)?,
                 )
                 .await?;
 
                 let auth_url = revolut::authorize::get_authorization_url(&consent_id).await?;
                 Ok(Some(RevolutConsent::new(consent_id, auth_url)))
             } else {
-                return Err(RampError::InvalidOrderState(
-                    "Expected Revolut provider".to_string(),
-                ));
+                return Err(
+                    OrderError::InvalidOrderState("Expected Revolut provider".to_string()).into(),
+                );
             }
         }
         _ => Ok(None),

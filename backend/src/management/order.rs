@@ -4,22 +4,30 @@ use candid::Principal;
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
-use crate::evm::{fees, vault::Ic2P2ramp};
+use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
+use crate::evm::{
+    event::{self, LogEvent},
+    fees::{eth_get_latest_block, get_fee_estimates},
+    rpc::BlockTag,
+    transaction,
+    vault::Ic2P2ramp,
+};
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
+use crate::model::{
+    helpers,
+    memory::{self, stable::spent_transactions},
+};
 use crate::outcalls::xrc_rates::{get_cached_exchange_rate, Asset, AssetClass};
 use crate::types::{
     self,
-    evm::token,
-    icp::get_icp_token,
-    order::{
-        get_crypto_fee, get_fiat_fee, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+    evm::{chains, logs::TransactionStatus, token},
+    icp::{get_icp_token, is_icp_token_supported},
+    orders::{
+        fees::{get_crypto_fee, get_fiat_fee},
+        EvmOrderInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
     },
     Blockchain, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
-};
-use crate::{
-    errors::{RampError, Result},
-    model::{helpers, memory},
 };
 
 use super::{payment, vault};
@@ -38,7 +46,7 @@ pub async fn calculate_order_evm_fees(
         total_gas_estimation
     );
 
-    let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
+    let fee_estimates = get_fee_estimates(9, chain_id).await?;
     ic_cdk::println!(
         "[calculate_order_evm_fees] fee_estimates = {:?}",
         fee_estimates
@@ -67,6 +75,71 @@ pub async fn calculate_order_evm_fees(
     Ok(get_crypto_fee(crypto_amount, blockchain_fees))
 }
 
+pub async fn validate_deposit_tx(
+    blockchain: &Blockchain,
+    evm_input: Option<EvmOrderInput>,
+    order_offramper: String,
+    order_amount: u128,
+    order_token: Option<String>,
+) -> Result<Option<String>> {
+    match blockchain {
+        Blockchain::EVM { chain_id } => {
+            chains::chain_is_supported(*chain_id)?;
+            if let Some(token) = order_token.clone() {
+                token::evm_token_is_approved(*chain_id, &token)?;
+            };
+
+            let evm_input = evm_input.ok_or_else(|| {
+                BlockchainError::EvmLogError("EVM input data is required".to_string())
+            })?;
+
+            if spent_transactions::is_tx_hash_processed(&evm_input.tx_hash) {
+                return Err(BlockchainError::EvmLogError(
+                    "Transaction already processed".to_string(),
+                )
+                .into());
+            }
+
+            // Validate EVM transaction in the Logs
+            let log_event =
+                match transaction::check_transaction_status(evm_input.tx_hash.clone(), *chain_id)
+                    .await
+                {
+                    TransactionStatus::Confirmed(receipt) => {
+                        let log_entry = receipt.logs.get(0).ok_or_else(|| {
+                            BlockchainError::EvmLogError("Empty Log Entries".to_string())
+                        })?;
+                        event::parse_deposit_event(log_entry)?
+                    }
+                    _ => return Err(BlockchainError::EmptyTransactionHash.into()),
+                };
+
+            match log_event {
+                LogEvent::Deposit(deposit_event) => {
+                    if deposit_event.user != order_offramper
+                        || deposit_event.amount != order_amount
+                        || deposit_event.token != order_token
+                    {
+                        return Err(BlockchainError::EvmLogError(
+                            "Log details do not match order".to_string(),
+                        )
+                        .into());
+                    }
+                    let last_block = eth_get_latest_block(*chain_id, BlockTag::Latest).await?;
+                    deposit_event.expired(last_block.number)?;
+                }
+            };
+
+            Ok(Some(evm_input.tx_hash))
+        }
+        Blockchain::ICP { ledger_principal } => {
+            is_icp_token_supported(&ledger_principal)?;
+            Ok(None)
+        }
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+    }
+}
+
 pub async fn create_order(
     currency: &str,
     offramper_user_id: u64,
@@ -81,12 +154,12 @@ pub async fn create_order(
     let crypto_fee = match blockchain {
         Blockchain::EVM { chain_id } => {
             let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
-                RampError::InvalidInput(
+                SystemError::InvalidInput(
                     "Gas estimation for locking is required for EVM".to_string(),
                 )
             })?;
             let estimated_gas_withdraw = estimated_gas_withdraw.ok_or_else(|| {
-                RampError::InvalidInput(
+                SystemError::InvalidInput(
                     "Gas estimation for withdrawing is required for EVM".to_string(),
                 )
             })?;
@@ -107,7 +180,7 @@ pub async fn create_order(
                     .0
                     .try_into()
                     .map_err(|e| {
-                        RampError::InternalError(format!(
+                        SystemError::InternalError(format!(
                             "icp fee cannot be converted to u128: {:?}",
                             e
                         ))
@@ -115,11 +188,11 @@ pub async fn create_order(
 
             get_crypto_fee(crypto_amount, icp_fee * 2)
         }
-        _ => return Err(RampError::UnsupportedBlockchain),
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     };
 
     if crypto_fee >= crypto_amount {
-        return Err(RampError::FundsBelowFees);
+        return Err(BlockchainError::FundsBelowFees)?;
     }
 
     let order = Order::new(
@@ -243,14 +316,10 @@ pub async fn lock_order(
     user.validate_onramper()?;
     user.is_banned()?;
 
-    let order_state = memory::stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Created(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    let order = memory::stable::orders::get_order(&order_id)?.created()?;
 
     if !types::contains_provider_type(&onramper_provider, &order.offramper_providers) {
-        return Err(RampError::InvalidOnramperProvider);
+        return Err(OrderError::InvalidOnramperProvider)?;
     }
 
     let (price, offramper_fee) = calculate_price_and_fee(&order.currency, &order.crypto).await?;
@@ -303,7 +372,7 @@ pub async fn lock_order(
 
             return Ok(format!("order {:?} is locked!", order_id));
         }
-        _ => return Err(RampError::UnsupportedBlockchain),
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -348,13 +417,9 @@ pub async fn unlock_order(
     session_token: Option<String>,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = memory::stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if order.payment_done {
-        return Err(RampError::PaymentDone);
+        return Err(OrderError::PaymentDone)?;
     }
 
     if let Some(session_token) = session_token {
@@ -387,17 +452,12 @@ pub async fn unlock_order(
                 ledger_principal.to_string()
             ))
         }
-        _ => return Err(RampError::UnsupportedBlockchain),
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
 pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
-    let order_state = memory::stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Created(order) => order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
-
+    let order = memory::stable::orders::get_order(&order_id)?.created()?;
     let user = memory::stable::users::get_user(&order.offramper_user_id)?;
     user.is_offramper()?;
     user.validate_session(&session_token)?;
@@ -456,27 +516,29 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
                 ledger_principal.to_string()
             ))
         }
-        _ => return Err(RampError::UnsupportedBlockchain),
+        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
 pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Locked(order) => {
-            user_management::update_onramper_payment(
-                order.onramper.user_id,
-                order.price,
-                &order.base.currency,
-            )?;
-            user_management::update_offramper_payment(
-                order.base.offramper_user_id,
-                order.price,
-                &order.base.currency,
-            )?;
-            order.payment_done = true;
-            Ok(())
+    memory::stable::orders::mutate_order(&order_id, |order_state| -> Result<()> {
+        match order_state {
+            OrderState::Locked(order) => {
+                user_management::update_onramper_payment(
+                    order.onramper.user_id,
+                    order.price,
+                    &order.base.currency,
+                )?;
+                user_management::update_offramper_payment(
+                    order.base.offramper_user_id,
+                    order.price,
+                    &order.base.currency,
+                )?;
+                order.payment_done = true;
+                Ok(())
+            }
+            _ => return Err(OrderError::InvalidOrderState(order_state.to_string()))?,
         }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
     })??;
 
     memory::heap::clear_order_timer(order_id)
@@ -488,7 +550,7 @@ pub fn set_payment_id(order_id: u64, payment_id: String) -> Result<()> {
             order.payment_id = Some(payment_id);
             Ok(())
         }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
     })?
 }
 
@@ -498,27 +560,23 @@ pub fn set_order_completed(order_id: u64) -> Result<()> {
             *order_state = OrderState::Completed(order.clone().complete());
             Ok(())
         }
-        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
     })?
 }
 
 pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<LockedOrder> {
-    let order_state = memory::stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if order.payment_done {
-        return Err(RampError::PaymentDone);
+        return Err(OrderError::PaymentDone)?;
     };
     if order.uncommited {
-        return Err(RampError::OrderUncommitted);
+        return Err(OrderError::OrderUncommitted)?;
     }
     order
         .base
         .offramper_providers
         .get(&order.onramper.provider.provider_type())
-        .ok_or_else(|| RampError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
+        .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
 
     let user = memory::stable::users::get_user(&order.onramper.user_id)?;
     user.validate_session(session_token)?;
