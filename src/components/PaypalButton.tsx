@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface PayPalButtonProps {
     orderId: string
@@ -17,9 +17,33 @@ declare global {
 
 const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, paypalId, onSuccess, disabled }) => {
     const paypalRef = useRef<HTMLDivElement>(null);
+    const [paypalScriptLoaded, setPaypalScriptLoaded] = useState(false);
 
     useEffect(() => {
-        if (!paypalRef.current) return;
+        const clientId = process.env.FRONTEND_PAYPAL_CLIENT_ID;
+        if (!clientId || !paypalId) return;
+
+        const scriptId = 'paypal-sdk';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}`;
+            script.async = true;
+            script.onload = () => {
+                console.log('PayPal SDK script loaded');
+                setPaypalScriptLoaded(true);
+            };
+            script.onerror = () => {
+                console.error('Failed to load PayPal SDK script');
+            };
+            document.head.appendChild(script);
+        } else {
+            setPaypalScriptLoaded(true);
+        }
+    }, [paypalId, currency]);
+
+    useEffect(() => {
+        if (!paypalRef.current || !paypalScriptLoaded) return;
 
         if (window.paypal) {
             renderPayPalButtons();
@@ -29,7 +53,7 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
                     clearInterval(checkPaypalLoaded);
                     renderPayPalButtons();
                 }
-            }, 1000);
+            }, 500);
         }
 
         // Cleanup to remove PayPal button if component is unmounted
@@ -38,14 +62,11 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
                 paypalRef.current.innerHTML = "";
             }
         };
-    }, [orderId, amount, currency, paypalId]);
+    }, [paypalScriptLoaded, orderId, amount, currency, paypalId]);
 
     const renderPayPalButtons = () => {
         try {
-            if (!paypalRef.current) {
-                console.error('PayPal button container not found');
-                return;
-            }
+            if (!paypalRef.current) return;
 
             window.paypal.Buttons({
                 fundingSource: window.paypal.FUNDING.PAYPAL,
@@ -81,7 +102,7 @@ const PayPalButton: React.FC<PayPalButtonProps> = ({ orderId, amount, currency, 
 
     return (
         <div className="mt-4">
-            {paypalId !== "" ? (
+            {paypalId ? (
                 <div
                     ref={paypalRef}
                     id={`paypal-button-container-${orderId}`}

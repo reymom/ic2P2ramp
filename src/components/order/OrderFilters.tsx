@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Principal } from '@dfinity/principal';
+
 import { TransactionAddress, OrderFilter, Blockchain, OrderStateFilter } from '../../declarations/backend/backend.did';
+import { NetworkIds } from '../../constants/networks';
+import { ICP_TOKENS } from '../../constants/icp_tokens';
 import { BlockchainTypes, OrderFilterTypes } from '../../model/types';
 import { useUser } from '../user/UserContext';
-import { getIcpTokenOptions } from '../../constants/tokens';
-import { Principal } from '@dfinity/principal';
-import { NetworkIds } from '../../constants/networks';
 import { truncate } from '../../model/helper';
 
 interface OrderFiltersProps {
@@ -213,7 +214,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
                     className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
                 >
                     <option value="">Select ICP Token</option>
-                    {getIcpTokenOptions().map(token => (
+                    {ICP_TOKENS.map(token => (
                         <option key={token.address} value={token.address}>
                             {token.name}
                         </option>

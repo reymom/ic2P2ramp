@@ -45,27 +45,6 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
         fetchOrders();
     }, [filter, page]);
 
-    useEffect(() => {
-        const clientId = process.env.FRONTEND_PAYPAL_CLIENT_ID;
-        if (!clientId) return;
-
-        // Load PayPal SDK script only once
-        const scriptId = 'paypal-sdk';
-        if (!document.getElementById(scriptId)) {
-            const script = document.createElement('script');
-            script.id = scriptId;
-            script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD`;
-            script.async = true;
-            script.onload = () => {
-                console.log('PayPal SDK script loaded');
-            };
-            script.onerror = () => {
-                console.error('Failed to load PayPal SDK script');
-            };
-            document.head.appendChild(script);
-        }
-    }, []);
-
     const fetchOrders = async () => {
         try {
             setLoading(true);
