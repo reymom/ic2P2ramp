@@ -3,11 +3,9 @@ use std::{cell::RefCell, collections::HashMap, time::Duration};
 
 use super::State;
 use crate::{
+    errors::{OrderError, Result},
     management,
-    model::{
-        errors::{RampError, Result},
-        types::{evm::logs::EvmTransactionLog, exchange_rate::ExchangeRateCache},
-    },
+    types::{evm::logs::EvmTransactionLog, exchange_rate::ExchangeRateCache},
 };
 
 pub(crate) const LOCK_DURATION_TIME_SECONDS: u64 = 1800; // 30 min
@@ -65,7 +63,7 @@ pub fn clear_order_timer(order_id: u64) -> Result<()> {
             clear_timer(timer_id);
             Ok(())
         }
-        None => Err(RampError::OrderTimerNotFound),
+        None => Err(OrderError::OrderTimerNotFound.into()),
     })
 }
 

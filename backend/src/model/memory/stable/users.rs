@@ -1,6 +1,5 @@
-use crate::errors::{RampError, Result};
-use crate::model::types::LoginAddress;
-use crate::types::user::User;
+use crate::errors::{Result, UserError};
+use crate::types::{user::User, LoginAddress};
 
 use super::storage::USERS;
 
@@ -14,7 +13,7 @@ where
             users.insert(user_id, user);
             Ok(result)
         } else {
-            Err(RampError::UserNotFound)
+            Err(UserError::UserNotFound.into())
         }
     })
 }
@@ -26,13 +25,13 @@ pub fn insert_user(user: &User) -> Option<User> {
 pub fn remove_user(user_id: &u64) -> Result<User> {
     USERS
         .with_borrow_mut(|p| p.remove(&user_id))
-        .ok_or_else(|| RampError::UserNotFound)
+        .ok_or_else(|| UserError::UserNotFound.into())
 }
 
 pub fn get_user(user_id: &u64) -> Result<User> {
     USERS
         .with_borrow(|users| users.get(&user_id))
-        .ok_or_else(|| RampError::UserNotFound)
+        .ok_or_else(|| UserError::UserNotFound.into())
 }
 
 pub fn find_user_by_login_address(login_address: &LoginAddress) -> Result<u64> {
@@ -42,7 +41,7 @@ pub fn find_user_by_login_address(login_address: &LoginAddress) -> Result<u64> {
                 return Ok(id);
             }
         }
-        Err(RampError::UserNotFound)
+        Err(UserError::UserNotFound.into())
     })
 }
 
@@ -64,7 +63,7 @@ pub fn reset_password_user(login_address: &LoginAddress, password: String) -> Re
             users.insert(id, user);
             return Ok(id);
         } else {
-            return Err(RampError::UserNotFound);
+            return Err(UserError::UserNotFound.into());
         }
     })
 }

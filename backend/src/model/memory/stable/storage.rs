@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::model::memory::heap::upgrade::SerializableHeap;
 use crate::types::{
-    order::{OrderId, OrderState},
+    orders::{OrderId, OrderState},
     user::User,
 };
 
@@ -29,6 +29,12 @@ thread_local! {
     pub static ORDERS: RefCell<StableBTreeMap<OrderId, OrderState, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1))),
+        )
+    );
+
+    pub static PROCESSED_TX_HASHES: RefCell<StableBTreeMap<String, u64, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(3)))
         )
     );
 }

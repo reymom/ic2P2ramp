@@ -6,7 +6,7 @@ use email_address::EmailAddress;
 use ethers_core::types::{Address, H160};
 
 use crate::{
-    errors::{RampError, Result},
+    errors::{BlockchainError, Result},
     outcalls::xrc_rates::{self, Asset, AssetClass},
 };
 
@@ -41,18 +41,18 @@ pub async fn delay(duration: Duration) {
 }
 
 pub fn parse_address(address: String) -> Result<H160> {
-    address
-        .parse()
-        .map_err(|e| RampError::EthersAbiError(format!("Invalid address error: {:?}", e)))
+    address.parse().map_err(|e| {
+        BlockchainError::EthersAbiError(format!("Invalid address error: {:?}", e)).into()
+    })
 }
 
 pub fn validate_evm_address(evm_address: &str) -> Result<()> {
-    Address::from_str(evm_address).map_err(|_| RampError::InvalidAddress)?;
+    Address::from_str(evm_address).map_err(|_| BlockchainError::InvalidAddress)?;
     Ok(())
 }
 
 pub fn validate_icp_address(icp_address: &str) -> Result<()> {
-    Principal::from_text(icp_address).map_err(|_| RampError::InvalidAddress)?;
+    Principal::from_text(icp_address).map_err(|_| BlockchainError::InvalidAddress)?;
     Ok(())
 }
 
@@ -60,12 +60,12 @@ pub fn validate_email(address: &str) -> Result<()> {
     if EmailAddress::is_valid(address) {
         Ok(())
     } else {
-        Err(RampError::InvalidAddress)
+        Err(BlockchainError::InvalidAddress.into())
     }
 }
 
 pub fn validate_solana_address(_solana_address: &str) -> Result<()> {
-    // solana_sdk::pubkey::Pubkey::from_str(solana_address).map_err(|_| RampError::InvalidAddress)?;
+    // solana_sdk::pubkey::Pubkey::from_str(solana_address).map_err(|_| BlockchainError::InvalidAddress)?;
     Ok(())
 }
 
