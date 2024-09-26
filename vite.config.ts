@@ -5,10 +5,13 @@ import environment from 'vite-plugin-environment';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// dotenv.config();
-
 export default defineConfig(({ mode }) => {
-  dotenv.config({ path: `.env.${mode}` });
+  console.log('mode = ', mode);
+  if (mode) {
+    dotenv.config({ path: `.env.${mode}` });
+  } else {
+    dotenv.config();
+  }
 
   const domain = mode === 'test' ? 'sandbox.icramp.xyz' : 'app.icramp.xyz';
 
