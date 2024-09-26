@@ -4,7 +4,7 @@ use ic_cdk::api::management_canister::http_request::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{errors::RampError, model::memory::heap::read_state, Result};
+use crate::{errors::SystemError, model::memory::heap::read_state, Result};
 
 use super::jws;
 
@@ -121,14 +121,14 @@ pub async fn initiate_domestic_payment(
     let cycles: u128 = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+            let str_body = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
             ic_cdk::println!("[initiate_domestic_payment] Response body: {}", str_body);
 
             let payment_response: PaymentResponse = serde_json::from_str(&str_body)
-                .map_err(|e| RampError::ParseError(e.to_string()))?;
+                .map_err(|e| SystemError::ParseError(e.to_string()))?;
             Ok(payment_response.data.domestic_payment_id)
         }
-        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
+        Err((r, m)) => Err(SystemError::HttpRequestError(r as u64, m).into()),
     }
 }
 

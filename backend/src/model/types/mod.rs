@@ -3,7 +3,7 @@ mod common;
 pub mod evm;
 pub mod exchange_rate;
 pub mod icp;
-pub mod order;
+pub mod orders;
 pub mod payment;
 pub mod session;
 pub mod user;

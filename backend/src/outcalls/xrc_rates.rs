@@ -2,7 +2,7 @@ use candid::{CandidType, Deserialize, Principal};
 use ic_cdk::api::call::call_with_payment128;
 
 use crate::{
-    errors::{RampError, Result},
+    errors::{Result, SystemError},
     model::memory::heap,
 };
 
@@ -89,7 +89,7 @@ async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<
         cycles,
     )
     .await
-    .map_err(|e| RampError::CanisterCallError(format!("{:?}", e)))?;
+    .map_err(|e| SystemError::CanisterCallError(format!("{:?}", e)))?;
 
     match result.0 {
         GetExchangeRateResult::Ok(rate_response) => {
@@ -97,7 +97,7 @@ async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<
             let float_divisor = 10u64.pow(rate_response.metadata.decimals) as f64;
             Ok(float_rate / float_divisor)
         }
-        GetExchangeRateResult::Err(err) => Err(RampError::ExchangeRateError(err)),
+        GetExchangeRateResult::Err(err) => Err(SystemError::ExchangeRateError(err).into()),
     }
 }
 

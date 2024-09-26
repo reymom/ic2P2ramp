@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    errors::{RampError, Result},
+    errors::{Result, SystemError},
     model::memory::heap::read_state,
 };
 
@@ -136,7 +136,7 @@ pub async fn create_account_access_consent(
     let cycles: u128 = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+            let str_body = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
             ic_cdk::println!(
                 "[create_account_access_consent] Response body: {}",
                 str_body
@@ -149,15 +149,16 @@ pub async fn create_account_access_consent(
                     "[create_account_access_consent] Error response: {:?}",
                     error_response
                 );
-                Err(RampError::ParseError(format!(
+                Err(SystemError::ParseError(format!(
                     "API Error: {} - {}",
                     error_response.code, error_response.message
-                )))
+                ))
+                .into())
             } else {
-                Err(RampError::ParseError("Unknown response format".to_string()))
+                Err(SystemError::ParseError("Unknown response format".to_string()).into())
             }
         }
-        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
+        Err((r, m)) => Err(SystemError::HttpRequestError(r as u64, m).into()),
     }
 }
 

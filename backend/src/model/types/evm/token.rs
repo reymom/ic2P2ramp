@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use candid::{CandidType, Deserialize};
 
 use crate::model::{
-    errors::{RampError, Result},
+    errors::{BlockchainError, Result},
     memory::heap::{mutate_state, read_state},
 };
 
@@ -56,13 +56,13 @@ pub fn get_evm_token(chain_id: u64, token_address: &str) -> Result<Token> {
         state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))
+            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id).into())
             .and_then(|chain_state| {
                 chain_state
                     .approved_tokens
                     .get(token_address)
                     .cloned()
-                    .ok_or_else(|| RampError::UnregisteredEvmToken)
+                    .ok_or_else(|| BlockchainError::UnregisteredEvmToken.into())
             })
     })
 }

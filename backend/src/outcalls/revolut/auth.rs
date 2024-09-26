@@ -6,7 +6,7 @@ use ic_cdk::api::management_canister::http_request::{
 use ic_cdk::api::time;
 
 use crate::{
-    errors::{RampError, Result},
+    errors::{Result, SystemError},
     model::memory::heap::read_state,
     types::payment::revolut,
 };
@@ -51,11 +51,11 @@ pub async fn get_revolut_access_token() -> Result<String> {
     let cycles: u128 = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+            let str_body = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
             ic_cdk::println!("[get_revolut_access_token] Response body: {}", str_body);
 
             let access_token_response: AccessTokenResponse = serde_json::from_str(&str_body)
-                .map_err(|e| RampError::ParseError(e.to_string()))?;
+                .map_err(|e| SystemError::ParseError(e.to_string()))?;
 
             // Store the token and its expiration time in the state
             let expiration_time = access_token_response.expires_at;
@@ -67,6 +67,6 @@ pub async fn get_revolut_access_token() -> Result<String> {
 
             Ok(access_token_response.access_token)
         }
-        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
+        Err((r, m)) => Err(SystemError::HttpRequestError(r as u64, m).into()),
     }
 }

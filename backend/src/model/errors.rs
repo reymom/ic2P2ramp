@@ -10,6 +10,21 @@ pub type Result<T> = std::result::Result<T, RampError>;
 
 #[derive(Error, Debug, CandidType)]
 pub enum RampError {
+    #[error(transparent)]
+    UserError(#[from] UserError),
+
+    #[error(transparent)]
+    OrderError(#[from] OrderError),
+
+    #[error(transparent)]
+    BlockchainError(#[from] BlockchainError),
+
+    #[error(transparent)]
+    SystemError(#[from] SystemError),
+}
+
+#[derive(Error, Debug, CandidType)]
+pub enum UserError {
     #[error("Only controller is allowed")]
     OnlyController,
 
@@ -19,8 +34,11 @@ pub enum RampError {
     #[error("Password is Required")]
     PasswordRequired,
 
-    #[error("User is not authorized")]
+    #[error("User Principal is not authorized")]
     UnauthorizedPrincipal,
+
+    #[error("User is not authorized")]
+    Unauthorized,
 
     #[error("Signature is required")]
     SignatureRequired,
@@ -37,11 +55,32 @@ pub enum RampError {
     #[error("Session not Found")]
     SessionNotFound,
 
+    #[error("User Not Found")]
+    UserNotFound,
+
+    #[error("User Not Offramper")]
+    UserNotOfframper,
+
+    #[error("User Not Onramper")]
+    UserNotOnramper,
+
+    #[error("User score below zero")]
+    UserBanned,
+
+    #[error("Provider is Not Defined for User {:?}", .0)]
+    ProviderNotInUser(PaymentProviderType),
+}
+
+#[derive(Error, Debug, CandidType)]
+pub enum OrderError {
     #[error("Order Not Found")]
     OrderNotFound,
 
     #[error("Order is already being processed")]
     OrderProcessing,
+
+    #[error("Order is not ready to be processed")]
+    OrderNotProcessing,
 
     #[error("Order Timer Not Found")]
     OrderTimerNotFound,
@@ -55,41 +94,26 @@ pub enum RampError {
     #[error("Payment is already done")]
     PaymentDone,
 
-    #[error("Invalid Ethereum address")]
-    InvalidAddress,
-
-    #[error("Provider is Not Defined for User {:?}", .0)]
-    ProviderNotInUser(PaymentProviderType),
-
     #[error("Invalid onramper provider")]
     InvalidOnramperProvider,
 
     #[error("Invalid offramper provider")]
     InvalidOfframperProvider,
 
-    #[error("User Not Found")]
-    UserNotFound,
-
-    #[error("User Not Offramper")]
-    UserNotOfframper,
-
-    #[error("User Not Onramper")]
-    UserNotOnramper,
-
-    #[error("User score below zero")]
-    UserBanned,
-
-    #[error("Invalid Input: {0}")]
-    InvalidInput(String),
-
-    #[error("Internal Error: {0}")]
-    InternalError(String),
-
     #[error("Missing Debtor Account")]
     MissingDebtorAccount,
 
     #[error("Missing Revolut's Access Token")]
     MissingAccessToken,
+
+    #[error("Payment Verification Failed")]
+    PaymentVerificationFailed,
+}
+
+#[derive(Error, Debug, CandidType)]
+pub enum BlockchainError {
+    #[error("Invalid Ethereum address")]
+    InvalidAddress,
 
     #[error("Chain ID not found: {0}")]
     ChainIdNotFound(u64),
@@ -100,9 +124,6 @@ pub enum RampError {
     #[error("Timeout when waiting for nonce for chain ID: {0}")]
     NonceLockTimeout(u64),
 
-    #[error("Currency Symbol not found")]
-    CurrencySymbolNotFound(),
-
     #[error("Token is unregistered")]
     UnregisteredEvmToken,
 
@@ -111,9 +132,6 @@ pub enum RampError {
 
     #[error("Transaction timeout")]
     TransactionTimeout,
-
-    #[error("Payment Verification Failed")]
-    PaymentVerificationFailed,
 
     #[error("Ethers ABI error: {0}")]
     EthersAbiError(String),
@@ -132,6 +150,27 @@ pub enum RampError {
 
     #[error("Fees exceed the funds amount")]
     FundsBelowFees,
+
+    #[error("Ledger principal {0} not supported")]
+    LedgerPrincipalNotSupported(String),
+
+    #[error("Blockchain is not supported")]
+    UnsupportedBlockchain,
+
+    #[error("EVM Log Error: {0}")]
+    EvmLogError(String),
+}
+
+#[derive(Error, Debug, CandidType)]
+pub enum SystemError {
+    #[error("Invalid Input: {0}")]
+    InvalidInput(String),
+
+    #[error("Internal Error: {0}")]
+    InternalError(String),
+
+    #[error("Currency Symbol not found")]
+    CurrencySymbolNotFound(),
 
     #[error("Failed to parse response: {0}")]
     ParseError(String),
@@ -162,34 +201,28 @@ pub enum RampError {
 
     #[error("IC Rejection Code: {0:?}, Error: {1}")]
     ICRejectionError(RejectionCode, String),
-
-    #[error("Ledger principal {0} not supported")]
-    LedgerPrincipalNotSupported(String),
-
-    #[error("Blockchain is not supported")]
-    UnsupportedBlockchain,
 }
 
-impl From<ParseFloatError> for RampError {
+impl From<ParseFloatError> for SystemError {
     fn from(err: ParseFloatError) -> Self {
-        RampError::ParseFloatError(err.to_string())
+        SystemError::ParseFloatError(err.to_string())
     }
 }
 
-impl From<serde_json::Error> for RampError {
+impl From<serde_json::Error> for SystemError {
     fn from(err: serde_json::Error) -> Self {
-        RampError::ParseError(err.to_string())
+        SystemError::ParseError(err.to_string())
     }
 }
 
-impl From<rsa::errors::Error> for RampError {
+impl From<rsa::errors::Error> for SystemError {
     fn from(err: rsa::errors::Error) -> Self {
-        RampError::RsaError(err.to_string())
+        SystemError::RsaError(err.to_string())
     }
 }
 
-impl From<rsa::pkcs8::Error> for RampError {
+impl From<rsa::pkcs8::Error> for SystemError {
     fn from(err: rsa::pkcs8::Error) -> Self {
-        RampError::Pkcs8Error(err.to_string())
+        SystemError::Pkcs8Error(err.to_string())
     }
 }

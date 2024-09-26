@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use super::auth::get_revolut_access_token;
 use crate::{
-    errors::{RampError, Result},
+    errors::{Result, SystemError},
     model::memory::heap::read_state,
 };
 
@@ -83,24 +83,27 @@ pub async fn fetch_revolut_payment_details(
     let cycles: u128 = 10_000_000_000;
     let (response,): (HttpResponse,) = match http_request(request, cycles).await {
         Ok(response) => response,
-        Err((code, message)) => return Err(RampError::HttpRequestError(code as u64, message)),
+        Err((code, message)) => {
+            return Err(SystemError::HttpRequestError(code as u64, message).into())
+        }
     };
 
     if response.status.0 != 200u64.into() {
-        return Err(RampError::HttpRequestError(
+        return Err(SystemError::HttpRequestError(
             response.status.0.to_u64().unwrap_or_default(),
             String::from_utf8_lossy(&response.body).to_string(),
-        ));
+        )
+        .into());
     }
 
-    let response_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+    let response_body = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
     ic_cdk::println!(
         "[get_revolut_transactions] Response body: {}",
         response_body
     );
 
     let payment_details: PaymentDetailsResponse =
-        serde_json::from_str(&response_body).map_err(|e| RampError::ParseError(e.to_string()))?;
+        serde_json::from_str(&response_body).map_err(|e| SystemError::ParseError(e.to_string()))?;
 
     Ok(payment_details)
 }

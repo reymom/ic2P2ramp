@@ -4,7 +4,7 @@ use ic_cdk::api::management_canister::http_request::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    errors::{RampError, Result},
+    errors::{Result, SystemError},
     model::memory::heap::read_state,
 };
 
@@ -86,15 +86,15 @@ pub async fn fetch_paypal_order(access_token: &str, order_id: &str) -> Result<Pa
     let cycles = 10_000_000_000;
     match http_request(request, cycles).await {
         Ok((response,)) => {
-            let str_body = String::from_utf8(response.body).map_err(|_| RampError::Utf8Error)?;
+            let str_body = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
             ic_cdk::println!("[fetch_paypal_order] str_body = {:?}", str_body);
 
             let order_details: PayPalOrderDetails = serde_json::from_str(&str_body)
-                .map_err(|e| RampError::ParseError(e.to_string()))?;
+                .map_err(|e| SystemError::ParseError(e.to_string()))?;
             ic_cdk::println!("[fetch_paypal_order] order_details = {:?}", order_details);
 
             Ok(order_details)
         }
-        Err((r, m)) => Err(RampError::HttpRequestError(r as u64, m)),
+        Err((r, m)) => Err(SystemError::HttpRequestError(r as u64, m).into()),
     }
 }

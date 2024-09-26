@@ -1,6 +1,6 @@
 use candid::{CandidType, Deserialize, Principal};
 
-use crate::model::errors::{RampError, Result};
+use crate::errors::{BlockchainError, Result};
 
 use super::{
     evm::{chains, token},
@@ -38,7 +38,7 @@ impl Crypto {
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(&ledger_principal)?.symbol)
             }
-            _ => return Err(RampError::UnsupportedBlockchain),
+            _ => return Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 
@@ -54,7 +54,7 @@ impl Crypto {
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(ledger_principal)?.decimals)
             }
-            _ => return Err(RampError::UnsupportedBlockchain),
+            _ => return Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 

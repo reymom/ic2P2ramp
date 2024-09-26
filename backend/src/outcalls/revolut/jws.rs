@@ -4,9 +4,8 @@ use rsa::{pkcs8::DecodePrivateKey, PaddingScheme, RsaPrivateKey};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::errors::Result;
+use crate::errors::{Result, SystemError};
 use crate::management::random;
-use crate::model::errors::RampError;
 use crate::model::memory::heap::read_state;
 
 #[derive(Serialize)]
@@ -43,7 +42,8 @@ pub async fn create_jws_signature(payload: &str, jws_header: &JWSHeader) -> Resu
     let private_key_der = read_state(|s| s.revolut.private_key_der.clone());
 
     // Encode the JWS header and payload
-    let jws_header_json = serde_json::to_string(&jws_header)?;
+    let jws_header_json =
+        serde_json::to_string(&jws_header).map_err(|e| -> SystemError { e.into() })?;
     ic_cdk::println!("jws_header_json = {:?}", jws_header_json);
     let jws_header_encoded = general_purpose::URL_SAFE_NO_PAD.encode(jws_header_json.as_bytes());
     let payload_encoded = general_purpose::URL_SAFE_NO_PAD.encode(payload.as_bytes());
@@ -60,9 +60,12 @@ pub async fn create_jws_signature(payload: &str, jws_header: &JWSHeader) -> Resu
     rng.fill_bytes(&mut salt);
     let padding = PaddingScheme::new_pss_with_salt::<Sha256, _>(Box::new(rng), 32);
 
-    let private_key_pem = String::from_utf8(private_key_der).map_err(|_| RampError::Utf8Error)?;
-    let private_key = RsaPrivateKey::from_pkcs8_pem(&private_key_pem)?;
-    let signature = private_key.sign(padding, &hashed)?;
+    let private_key_pem = String::from_utf8(private_key_der).map_err(|_| SystemError::Utf8Error)?;
+    let private_key =
+        RsaPrivateKey::from_pkcs8_pem(&private_key_pem).map_err(|e| -> SystemError { e.into() })?;
+    let signature = private_key
+        .sign(padding, &hashed)
+        .map_err(|e| -> SystemError { e.into() })?;
 
     let signature_encoded = general_purpose::URL_SAFE_NO_PAD.encode(signature);
     let jws_signature = format!(

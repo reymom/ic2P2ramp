@@ -1,7 +1,7 @@
 use candid::{CandidType, Deserialize};
 
 use crate::model::{
-    errors::{RampError, Result},
+    errors::{BlockchainError, Result},
     memory::heap::{mutate_state, read_state},
 };
 
@@ -83,7 +83,7 @@ pub fn register_gas_usage(
         let chain_state = state
             .chains
             .get_mut(&chain_id)
-            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
 
         let gas_tracking = match action_type {
             MethodGasUsage::Commit => &mut chain_state.gas_tracking.commit_gas,
@@ -107,7 +107,7 @@ pub fn get_average_gas(
         let chain_state = state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?;
+            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
 
         let gas_tracking = match action_type {
             MethodGasUsage::Commit => &chain_state.gas_tracking.commit_gas,
@@ -124,7 +124,7 @@ pub fn get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
         Ok(state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| RampError::ChainIdNotFound(chain_id))?
+            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?
             .gas_tracking
             .clone())
     })

@@ -1,6 +1,10 @@
 use serde::Serialize;
 
-use crate::{errors::Result, model::memory::heap::read_state, outcalls::revolut::jws};
+use crate::{
+    errors::{Result, SystemError},
+    model::memory::heap::read_state,
+    outcalls::revolut::jws,
+};
 
 #[derive(Serialize, Debug)]
 struct JwtClaims {
@@ -54,7 +58,8 @@ pub async fn get_authorization_url(consent_id: &str) -> Result<String> {
     };
 
     ic_cdk::println!("jwt_claims = {:?}", jwt_claims);
-    let jwt_claims_str = serde_json::to_string(&jwt_claims)?;
+    let jwt_claims_str =
+        serde_json::to_string(&jwt_claims).map_err(|e| -> SystemError { e.into() })?;
 
     ic_cdk::println!("jwt_claims_str = {:?}", jwt_claims_str);
     let jwt = jws::create_jws_signature(&jwt_claims_str, &jws_header).await?;

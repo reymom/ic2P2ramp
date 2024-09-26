@@ -2,7 +2,7 @@ use candid::{CandidType, Deserialize};
 
 use crate::{
     management::random,
-    model::errors::{RampError, Result},
+    model::errors::{Result, UserError},
 };
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -23,10 +23,10 @@ impl Session {
 
     pub fn validate(&self, provided_token: &str) -> Result<()> {
         if self.token != provided_token {
-            return Err(RampError::TokenInvalid);
+            return Err(UserError::TokenInvalid.into());
         }
         if ic_cdk::api::time() >= self.expires_at {
-            return Err(RampError::TokenExpired);
+            return Err(UserError::TokenExpired.into());
         }
         Ok(())
     }

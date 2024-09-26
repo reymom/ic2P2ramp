@@ -11,7 +11,7 @@ use super::{
     AuthenticationData, PaymentProvider,
 };
 use crate::{
-    errors::{RampError, Result},
+    errors::{BlockchainError, Result, SystemError, UserError},
     evm::signer,
     management::random,
     model::memory,
@@ -70,14 +70,14 @@ impl User {
     pub fn is_offramper(&self) -> Result<()> {
         match self.user_type {
             UserType::Offramper => Ok(()),
-            UserType::Onramper => Err(RampError::UserNotOfframper),
+            UserType::Onramper => Err(UserError::UserNotOfframper.into()),
         }
     }
 
     pub fn validate_onramper(&self) -> Result<()> {
         match self.user_type {
             UserType::Onramper => Ok(()),
-            UserType::Offramper => Err(RampError::UserNotOnramper),
+            UserType::Offramper => Err(UserError::UserNotOnramper.into()),
         }
     }
 
@@ -85,19 +85,21 @@ impl User {
         match &self.login {
             LoginAddress::Email { .. } => {
                 let password = auth_data
-                    .ok_or_else(|| RampError::PasswordRequired)?
+                    .ok_or_else(|| UserError::PasswordRequired)?
                     .password
-                    .ok_or(RampError::PasswordRequired)?;
-                let hashed_password = self
-                    .hashed_password
-                    .clone()
-                    .ok_or(RampError::InternalError("Password not in user".to_string()))?;
+                    .ok_or(UserError::PasswordRequired)?;
+                let hashed_password =
+                    self.hashed_password
+                        .clone()
+                        .ok_or(SystemError::InternalError(
+                            "Password not in user".to_string(),
+                        ))?;
                 match random::verify_password(&password, &hashed_password) {
                     Ok(true) => {
                         return Ok(());
                     }
                     Ok(false) => {
-                        return Err(RampError::InvalidPassword);
+                        return Err(UserError::InvalidPassword.into());
                     }
                     Err(e) => {
                         return Err(e);
@@ -107,11 +109,11 @@ impl User {
             LoginAddress::EVM { address } => {
                 let signature = auth_data
                     .clone()
-                    .ok_or_else(|| RampError::SignatureRequired)?
+                    .ok_or_else(|| UserError::SignatureRequired)?
                     .signature
-                    .ok_or(RampError::SignatureRequired)?;
+                    .ok_or(UserError::SignatureRequired)?;
                 let message = self.evm_auth_message.as_ref().ok_or_else(|| {
-                    RampError::InternalError("evm auth message not in user".to_string())
+                    SystemError::InternalError("evm auth message not in user".to_string())
                 })?;
 
                 signer::verify_signature(&address, &message, &signature)?
@@ -123,12 +125,13 @@ impl User {
                 );
                 ic_cdk::println!("[verify_user_auth] principal_id = {:?}", principal_id);
                 if ic_cdk::caller()
-                    != Principal::from_text(principal_id).map_err(|_| RampError::InvalidAddress)?
+                    != Principal::from_text(principal_id)
+                        .map_err(|_| BlockchainError::InvalidAddress)?
                 {
-                    return Err(RampError::UnauthorizedPrincipal);
+                    return Err(UserError::UnauthorizedPrincipal.into());
                 }
             }
-            _ => return Err(RampError::UnauthorizedPrincipal),
+            _ => return Err(UserError::UnauthorizedPrincipal.into()),
         }
 
         Ok(())
@@ -137,7 +140,7 @@ impl User {
     pub fn validate_session(&self, token: &str) -> Result<()> {
         self.session
             .as_ref()
-            .ok_or_else(|| RampError::SessionNotFound)?
+            .ok_or_else(|| UserError::SessionNotFound)?
             .validate(token)
     }
 
@@ -155,7 +158,7 @@ impl User {
 
     pub fn is_banned(&self) -> Result<()> {
         if self.score < 0 {
-            return Err(RampError::UserBanned);
+            return Err(UserError::UserBanned.into());
         }
         Ok(())
     }

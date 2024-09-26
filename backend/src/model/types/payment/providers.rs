@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use candid::{CandidType, Deserialize};
 
-use crate::model::errors::{RampError, Result};
+use crate::errors::{Result, SystemError};
 
 #[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PaymentProviderType {
@@ -40,14 +40,14 @@ impl PaymentProvider {
         match self {
             PaymentProvider::PayPal { id } => {
                 if id.is_empty() {
-                    return Err(RampError::InvalidInput("Paypal ID is empty".to_string()));
+                    return Err(SystemError::InvalidInput("Paypal ID is empty".to_string()).into());
                 }
             }
             PaymentProvider::Revolut { scheme, id, .. } => {
                 if scheme.is_empty() || id.is_empty() {
-                    return Err(RampError::InvalidInput(
-                        "Revolut details are empty".to_string(),
-                    ));
+                    return Err(
+                        SystemError::InvalidInput("Revolut details are empty".to_string()).into(),
+                    );
                 }
             }
         }

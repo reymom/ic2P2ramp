@@ -6,14 +6,14 @@ use ic_cdk::api::management_canister::http_request::{
 };
 
 use crate::{
+    errors::{BlockchainError, OrderError, Result, SystemError},
     management::order,
     model::{
-        errors::{RampError, Result},
         helpers,
         memory::{heap::read_state, stable},
-        types::{order::OrderState, PaymentProvider},
     },
     outcalls::revolut::pay,
+    types::PaymentProvider,
 };
 
 pub async fn get_revolut_access_token(consent_id: String) -> Result<String> {
@@ -38,31 +38,33 @@ pub async fn get_revolut_access_token(consent_id: String) -> Result<String> {
         10_000_000_000,
     )
     .await
-    .map_err(|(code, msg)| RampError::HttpRequestError(code as u64, msg))?;
+    .map_err(|(code, msg)| SystemError::HttpRequestError(code as u64, msg))?;
 
-    let response_str = String::from_utf8(response.0.body).map_err(|_| RampError::Utf8Error)?;
+    let response_str = String::from_utf8(response.0.body).map_err(|_| SystemError::Utf8Error)?;
 
     if response.0.status == 404_u32 {
-        return Err(RampError::HttpRequestError(
+        return Err(SystemError::HttpRequestError(
             404,
             "No token found for the given ConsentId".to_string(),
-        ));
+        )
+        .into());
     }
 
     if response.0.status != 200_u32 {
-        return Err(RampError::HttpRequestError(
+        return Err(SystemError::HttpRequestError(
             response.0.status.0.to_u64().unwrap_or_default(),
             response_str.clone(),
-        ));
+        )
+        .into());
     }
 
     let token_response: serde_json::Value =
-        serde_json::from_str(&response_str).map_err(|e| RampError::ParseError(e.to_string()))?;
+        serde_json::from_str(&response_str).map_err(|e| SystemError::ParseError(e.to_string()))?;
 
     if let Some(access_token) = token_response.get("access_token").and_then(|v| v.as_str()) {
         Ok(access_token.to_string())
     } else {
-        Err(RampError::MissingAccessToken)
+        Err(OrderError::MissingAccessToken.into())
     }
 }
 
@@ -72,11 +74,7 @@ pub async fn wait_for_revolut_access_token(
     max_attempts: u32,
     interval_seconds: u64,
 ) -> Result<String> {
-    let order_state = stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    let order = stable::orders::get_order(&order_id)?.locked()?;
 
     let user = stable::users::get_user(&order.onramper.user_id)?;
     user.validate_session(&session_token)?;
@@ -92,15 +90,15 @@ pub async fn wait_for_revolut_access_token(
         creditor_name,
     ) = {
         let PaymentProvider::Revolut { scheme, id, name } = order.onramper.provider else {
-            return Err(RampError::InvalidOnramperProvider);
+            return Err(OrderError::InvalidOnramperProvider.into());
         };
         let name = match name.clone() {
             Some(name) => name,
-            None => return Err(RampError::InvalidOnramperProvider),
+            None => return Err(OrderError::InvalidOnramperProvider.into()),
         };
         let consent_id = match order.revolut_consent {
             Some(consent_id) => consent_id.id,
-            None => return Err(RampError::InvalidOnramperProvider),
+            None => return Err(OrderError::InvalidOnramperProvider.into()),
         };
 
         (
@@ -157,7 +155,7 @@ pub async fn wait_for_revolut_access_token(
             }
             Err(_) => {
                 if attempt + 1 >= max_attempts {
-                    return Err(RampError::TransactionTimeout);
+                    return Err(BlockchainError::TransactionTimeout.into());
                 }
                 ic_cdk::println!(
                     "[wait_for_access_token] Access token not yet available. Attempt: {}",
@@ -171,5 +169,5 @@ pub async fn wait_for_revolut_access_token(
         );
         helpers::delay(Duration::from_secs(interval_seconds)).await;
     }
-    Err(RampError::TransactionTimeout)
+    Err(BlockchainError::TransactionTimeout.into())
 }

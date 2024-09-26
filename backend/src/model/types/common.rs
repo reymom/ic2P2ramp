@@ -1,7 +1,7 @@
 use candid::{CandidType, Deserialize};
 use std::hash::Hash;
 
-use crate::errors::{RampError, Result};
+use crate::errors::{Result, SystemError};
 use crate::helpers;
 
 // ---------
@@ -21,29 +21,31 @@ impl LoginAddress {
         match self {
             LoginAddress::Email { email } => {
                 if email.is_empty() {
-                    return Err(RampError::InvalidInput("Email is empty".to_string()));
+                    return Err(SystemError::InvalidInput("Email is empty".to_string()).into());
                 }
                 helpers::validate_email(email)?
             }
             LoginAddress::EVM { address } => {
                 if address.is_empty() {
-                    return Err(RampError::InvalidInput("EVM address is empty".to_string()));
+                    return Err(
+                        SystemError::InvalidInput("EVM address is empty".to_string()).into(),
+                    );
                 }
                 helpers::validate_evm_address(address)?;
             }
             LoginAddress::ICP { principal_id } => {
                 if principal_id.is_empty() {
-                    return Err(RampError::InvalidInput(
-                        "ICP principal ID is empty".to_string(),
-                    ));
+                    return Err(
+                        SystemError::InvalidInput("ICP principal ID is empty".to_string()).into(),
+                    );
                 }
                 helpers::validate_icp_address(principal_id)?;
             }
             LoginAddress::Solana { address } => {
                 if address.is_empty() {
-                    return Err(RampError::InvalidInput(
-                        "Solana address is empty".to_string(),
-                    ));
+                    return Err(
+                        SystemError::InvalidInput("Solana address is empty".to_string()).into(),
+                    );
                 }
                 helpers::validate_solana_address(address)?;
             }
@@ -53,9 +55,10 @@ impl LoginAddress {
 
     pub fn to_transaction_address(&self) -> Result<TransactionAddress> {
         match self {
-            LoginAddress::Email { .. } => Err(RampError::InvalidInput(
+            LoginAddress::Email { .. } => Err(SystemError::InvalidInput(
                 "Cannot convert Email to TransactionAddress".to_string(),
-            )),
+            )
+            .into()),
             LoginAddress::EVM { address } => Ok(TransactionAddress {
                 address_type: AddressType::EVM,
                 address: address.clone(),
@@ -100,7 +103,7 @@ impl Hash for TransactionAddress {
 impl TransactionAddress {
     pub fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
-            return Err(RampError::InvalidInput("Address is empty".to_string()));
+            return Err(SystemError::InvalidInput("Address is empty".to_string()).into());
         }
 
         match self.address_type {
