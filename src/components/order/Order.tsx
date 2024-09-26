@@ -7,13 +7,13 @@ import icpLogo from "../../assets/blockchains/icp-logo.svg";
 import { backend } from '../../declarations/backend';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { NetworkIds, NetworkProps } from '../../constants/networks';
-import { defaultReleaseEvmGas, getEvmTokenOptions, getIcpTokenOptions, defaultCommitEvmGas, TokenOption } from '../../constants/tokens';
-import { tokenLogos } from '../../constants/addresses';
+import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '../../constants/evm_tokens';
+import { ICP_TOKENS } from '../../constants/icp_tokens';
 import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '../../model/utils';
 import { formatCryptoUnits, formatPrice, formatTimeLeft, truncate } from '../../model/helper';
 import { rampErrorToString } from '../../model/error';
 import { estimateGasAndGasPrice } from '../../model/evm';
-import { PaymentProviderTypes } from '../../model/types';
+import { PaymentProviderTypes, TokenOption } from '../../model/types';
 import PayPalButton from '../PaypalButton';
 import { useUser } from '../user/UserContext';
 import DynamicDots from '../ui/DynamicDots';
@@ -110,8 +110,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 : null
         if (!crypto) return undefined;
 
-        const tokens = 'EVM' in crypto.blockchain ? getEvmTokenOptions(Number(crypto.blockchain.EVM.chain_id))
-            : 'ICP' in crypto.blockchain ? getIcpTokenOptions() : null;
+        const tokens = 'EVM' in crypto.blockchain ? getEvmTokens(Number(crypto.blockchain.EVM.chain_id))
+            : 'ICP' in crypto.blockchain ? ICP_TOKENS : null;
         if (!tokens) return undefined;
 
         const tokenAddress = 'EVM' in crypto.blockchain ? crypto.token?.[0] ?? '' :
@@ -465,6 +465,10 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         return token ? token.name : ""
     };
 
+    const getTokenLogo = (): string => {
+        return token ? token.logo : ""
+    }
+
     const getTokenSymbol = (): string => {
         return token ? token.rateSymbol : "Unknown";
     };
@@ -473,8 +477,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         if (!token) throw new Error("Token not found");
         return token.decimals
     };
-
-    const tokenLogo = tokenLogos[getTokenName()] || null;
 
     const getNetwork = (): NetworkProps | undefined => {
         return (orderBlockchain && 'EVM' in orderBlockchain) ?
@@ -568,9 +570,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <span className="opacity-90">Amount:</span>
                 <span className="font-medium flex items-center space-x-2" title={cryptoAmount?.fullAmount}>
                     <span>{cryptoAmount?.shortAmount}</span>
-                    {tokenLogo && (
+                    {getTokenLogo() && (
                         <img
-                            src={tokenLogo}
+                            src={getTokenLogo()}
                             alt={getTokenSymbol()}
                             title={getTokenSymbol()}
                             className="h-5 w-5 inline-block border border-white bg-gray-100 rounded-full"
@@ -634,9 +636,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             title={getNetworkName()}
                             className="h-8 w-8"
                         />
-                        {tokenLogo && (
+                        {getTokenLogo() && (
                             <img
-                                src={tokenLogo}
+                                src={getTokenLogo()}
                                 alt={getTokenSymbol()}
                                 title={getTokenSymbol()}
                                 className="h-4 w-4 absolute -bottom-0.5 -right-0.5 border border-white rounded-full bg-gray-100 bg-opacity-100"

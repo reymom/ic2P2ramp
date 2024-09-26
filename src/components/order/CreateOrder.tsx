@@ -9,15 +9,15 @@ import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '../../declarations/backend';
 import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
-import { TokenOption, getIcpTokenOptions, getEvmTokenOptions, defaultCommitEvmGas, defaultReleaseEvmGas } from '../../constants/tokens';
-import { tokenCanisters } from '../../constants/addresses';
+import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '../../constants/evm_tokens';
+import { ICP_TOKENS } from '../../constants/icp_tokens';
 import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { useUser } from '../user/UserContext';
 import { rampErrorToString } from '../../model/error';
 import { blockchainToBlockchainType, providerToProviderType } from '../../model/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model/icp';
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../../model/evm';
-import { BlockchainTypes } from '../../model/types';
+import { BlockchainTypes, TokenOption } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
 import { formatPrice, truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
@@ -85,10 +85,10 @@ const CreateOrder: React.FC = () => {
                     return
                 };
                 setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
-                tokens = getEvmTokenOptions(chainId);
+                tokens = getEvmTokens(chainId);
             } else if (blockchainType === 'ICP') {
                 if (!icpAgent) return;
-                tokens = getIcpTokenOptions();
+                tokens = ICP_TOKENS;
             }
 
             setTokenOptions(tokens);
@@ -105,7 +105,7 @@ const CreateOrder: React.FC = () => {
             if (!chainId) return;
             setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
         } else if (value === "ICP") {
-            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(tokenCanisters.ICP) } });
+            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(ICP_TOKENS[0].address) } });
         } else if (value === "Solana") {
             setSelectedBlockchain({ Solana: null });
         }
