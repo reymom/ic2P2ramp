@@ -180,20 +180,21 @@ const UserProfile: React.FC = () => {
                     </div>
 
                     {/* Ramped Amounts */}
-                    <div className="flex justify-between items-start">
-                        <span className="font-medium text-gray-200">Ramped Amount:</span>
-                        <div className="space-y-2 flex flex-col items-end">
-                            {user.fiat_amounts.map(([currency, amount]) => (
-                                <div key={currency} className="flex items-center space-x-2">
-                                    <span className="font-semibold">{(Number(amount) / 100).toFixed(2)}</span>
-                                    <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
-                                        <FontAwesomeIcon icon={CURRENCY_ICON_MAP[currency]} />
-                                    </span>
-                                </div>
-                            ))}
+                    {user.fiat_amounts.length > 0 && (
+                        <div className="flex justify-between items-start">
+                            <span className="font-medium text-gray-200">Ramped Amount:</span>
+                            <div className="space-y-2 flex flex-col items-end">
+                                {user.fiat_amounts.map(([currency, amount]) => (
+                                    <div key={currency} className="flex items-center space-x-2">
+                                        <span className="font-semibold">{(Number(amount) / 100).toFixed(2)}</span>
+                                        <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
+                                            <FontAwesomeIcon icon={CURRENCY_ICON_MAP[currency]} />
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-
+                    )}
                 </div>
 
                 <hr className="border-t border-gray-500 w-full" />
