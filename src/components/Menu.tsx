@@ -198,6 +198,7 @@ const Menu: React.FC = () => {
                     </div>
                 ) : (
                     <div className="relative" ref={profileDropdownRef}>
+                        {/* Dropdown */}
                         <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 border border-gray-400 rounded-lg transition-all">
                             <FontAwesomeIcon icon={faUserCircle} size="2x" className="text-violet-800" />
                             <svg className={`w-4 h-4 ml-1 transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
