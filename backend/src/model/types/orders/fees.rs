@@ -1,5 +1,3 @@
-const MAX_ORDER_SIZE: u32 = 8000;
-
 pub(crate) const OFFRAMPER_FIAT_FEE_DENOM: u64 = 40; // 2.5%
 pub(crate) const ADMIN_CRYPTO_FEE_DENOM: u128 = 200; // 0.5%
 
