@@ -22,13 +22,12 @@ import { isSessionExpired } from '../../model/session';
 import { formatPrice, truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
 import CurrencySelect from '../ui/CurrencySelect';
-import { fetchOrderPrice, getExchangeRate } from '../../model/rate';
+import { getExchangeRate } from '../../model/rate';
 import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 
 // const RATE_CACHE_EXPIRY_MS = 20 * 60 * 1000; // 20 mins
 
 const CreateOrder: React.FC = () => {
-    const [currency, setCurrency] = useState<string>("USD");
     const [cryptoAmount, setCryptoAmount] = useState(0);
     const [cryptoAmountUnits, setCryptoAmountUnits] = useState<bigint | null>(null);
     const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
@@ -49,6 +48,7 @@ const CreateOrder: React.FC = () => {
     const { chain, chainId, address } = useAccount();
     const {
         user,
+        currency: initialCurrency,
         sessionToken,
         icpAgent,
         principal,
@@ -58,6 +58,7 @@ const CreateOrder: React.FC = () => {
         refetchUser,
         logout
     } = useUser();
+    const [currency, setCurrency] = useState<string>(initialCurrency ?? 'USD');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -454,7 +455,13 @@ const CreateOrder: React.FC = () => {
                             disabled
                             style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                         />
-                        <CurrencySelect selected={currency} onChange={setCurrency} />
+                        <CurrencySelect
+                            selected={currency}
+                            onChange={setCurrency}
+                            className="text-white border-gray-500"
+                            buttonClassName="bg-gray-600 border-gray-500 rounded-r-lg"
+                            dropdownClassName="bg-gray-600 border-gray-500 hover:bg-gray-700"
+                        />
                     </div>
 
                 </div>

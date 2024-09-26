@@ -17,6 +17,7 @@ import { faSync } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
 import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
+import CurrencySelect from '../ui/CurrencySelect';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -30,7 +31,16 @@ const UserProfile: React.FC = () => {
     const [loadingAddProvider, setLoadingAddProvider] = useState(false);
 
     const { address, isConnected } = useAccount();
-    const { user, sessionToken, principal, loginInternetIdentity, refetchUser, logout } = useUser();
+    const {
+        user,
+        currency,
+        sessionToken,
+        principal,
+        loginInternetIdentity,
+        refetchUser,
+        setCurrency,
+        logout
+    } = useUser();
     const navigate = useNavigate();
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -177,6 +187,17 @@ const UserProfile: React.FC = () => {
                     <div className="flex justify-between items-center">
                         <span className="font-medium text-gray-200">Score:</span>
                         <span className={`font-semibold ${user.score > 0 ? "text-green-400" : "text-red-400"}`}>{user.score}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                        <span className="font-medium text-gray-200">Preferred currency:</span>
+                        <CurrencySelect
+                            selected={currency}
+                            onChange={setCurrency}
+                            className="w-auto text-white text-sm border-gray-600"
+                            buttonClassName="rounded-md bg-gray-800 hover:bg-gray-900 border-gray-600"
+                            dropdownClassName="bg-gray-800 hover:bg-gray-900"
+                        />
                     </div>
 
                     {/* Ramped Amounts */}
