@@ -1,6 +1,8 @@
 use candid::CandidType;
 
-use crate::evm::transaction::TransactionStatus;
+use crate::evm::rpc::TransactionReceipt;
+
+use super::request::FailedSignRequest;
 
 #[derive(CandidType, Debug, Clone)]
 pub enum TransactionAction {
@@ -15,4 +17,12 @@ pub struct EvmTransactionLog {
     pub order_id: u64,
     pub action: TransactionAction,
     pub status: TransactionStatus,
+}
+
+#[derive(Debug, Clone, CandidType)]
+pub enum TransactionStatus {
+    Confirmed(TransactionReceipt),
+    Failed(String),
+    Pending,
+    Unresolved(String, FailedSignRequest),
 }

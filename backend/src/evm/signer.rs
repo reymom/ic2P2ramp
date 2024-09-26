@@ -1,30 +1,19 @@
+use std::str::FromStr;
+
 use ethers_core::abi::ethereum_types::{Address, U256, U64};
 use ethers_core::k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey};
 use ethers_core::types::transaction::eip1559::Eip1559TransactionRequest;
 use ethers_core::types::{Bytes, Signature};
 use ethers_core::utils::keccak256;
-
 use ic_cdk::api::management_canister::ecdsa::{
     ecdsa_public_key, sign_with_ecdsa, EcdsaPublicKeyArgument, SignWithEcdsaArgument,
 };
-use std::str::FromStr;
 
 use super::fees::FeeEstimates;
 use crate::model::errors::{RampError, Result};
 use crate::model::memory::heap::read_state;
-
-#[derive(Clone)]
-pub struct SignRequest {
-    pub chain_id: Option<U64>,
-    pub from: Option<String>,
-    pub to: Option<String>,
-    pub gas: U256,
-    pub max_fee_per_gas: Option<U256>,
-    pub max_priority_fee_per_gas: Option<U256>,
-    pub value: Option<U256>,
-    pub nonce: Option<U256>,
-    pub data: Option<Vec<u8>>,
-}
+use crate::model::types::evm::chains::{self, get_nonce};
+use crate::model::types::evm::request::SignRequest;
 
 pub async fn create_sign_request(
     value: U256,
@@ -34,20 +23,22 @@ pub async fn create_sign_request(
     gas: U256,
     data: Option<Vec<u8>>,
     fee_estimates: FeeEstimates,
-) -> SignRequest {
+) -> Result<SignRequest> {
     let FeeEstimates {
         max_fee_per_gas,
         max_priority_fee_per_gas,
     } = fee_estimates;
-    let nonce = read_state(|s| {
-        s.chains
-            .get(&chain_id.as_u64())
-            .map(|chain_state| chain_state.get_nonce_as_u256())
-            .ok_or("Unsupported chain ID")
-    })
-    .unwrap();
 
-    SignRequest {
+    let nonce_time = ic_cdk::api::time();
+    chains::wait_for_nonce_unlock(chain_id.as_u64()).await?;
+    ic_cdk::println!(
+        "[create_sign_request] --- waited for nonce for {} seconds ---",
+        (ic_cdk::api::time() - nonce_time) / 1_000_000_000
+    );
+
+    let nonce = get_nonce(chain_id.as_u64())?;
+
+    Ok(SignRequest {
         chain_id: Some(chain_id),
         to,
         from,
@@ -57,7 +48,7 @@ pub async fn create_sign_request(
         data,
         value: Some(value),
         nonce: Some(nonce),
-    }
+    })
 }
 
 pub async fn sign_transaction(req: SignRequest) -> String {

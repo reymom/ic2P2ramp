@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use ic_cdk_timers::{clear_timer, set_timer};
 
-use crate::{
-    evm::transaction::TransactionStatus,
-    model::types::evm::logs::{EvmTransactionLog, TransactionAction},
-};
+use crate::model::types::evm::logs::{EvmTransactionLog, TransactionAction, TransactionStatus};
 
 use super::heap::{EVM_TRANSACTION_LOGS, TRANSACTION_LOG_TIMERS};
 
@@ -45,6 +42,17 @@ pub fn remove_transaction_log(order_id: u64) {
 
 pub fn get_transaction_log(order_id: u64) -> Option<EvmTransactionLog> {
     EVM_TRANSACTION_LOGS.with_borrow(|logs| logs.get(&order_id).cloned())
+}
+
+pub fn get_unresolved_transactions() -> Vec<EvmTransactionLog> {
+    EVM_TRANSACTION_LOGS.with_borrow(|logs| {
+        logs.iter()
+            .filter_map(|(_, log)| match &log.status {
+                TransactionStatus::Unresolved(_, _) => Some(log.clone()),
+                _ => None,
+            })
+            .collect()
+    })
 }
 
 pub fn set_transaction_removal_timer(order_id: u64) {

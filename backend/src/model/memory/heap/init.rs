@@ -8,7 +8,7 @@ use super::state::{InvalidStateError, State};
 use crate::{
     evm::rpc::RpcServices,
     model::types::{
-        evm::{chains::ChainState, gas::ChainGasTracking},
+        evm::chains::ChainState,
         payment::{paypal::PayPalState, revolut::RevolutState},
     },
 };
@@ -80,14 +80,11 @@ impl TryFrom<InitArg> for State {
 
             chains_map.insert(
                 config.chain_id,
-                ChainState {
-                    vault_manager_address: config.vault_manager_address,
-                    rpc_services: config.services,
-                    nonce: 0,
-                    currency_symbol: config.currency_symbol,
-                    approved_tokens: HashMap::new(),
-                    gas_tracking: ChainGasTracking::default(),
-                },
+                ChainState::new(
+                    config.vault_manager_address,
+                    config.services,
+                    config.currency_symbol,
+                ),
             );
         }
 

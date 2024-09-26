@@ -10,7 +10,7 @@ use crate::{
     model::{
         memory::stable::storage::HEAP_STATE,
         types::{
-            evm::{chains::ChainState, gas::ChainGasTracking},
+            evm::chains::ChainState,
             exchange_rate::ExchangeRateCache,
             payment::{paypal::PayPalState, revolut::RevolutState},
         },
@@ -142,14 +142,11 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
                     chain_state.vault_manager_address = config.vault_manager_address.clone();
                     chain_state.rpc_services = config.services.clone();
                 })
-                .or_insert(ChainState {
-                    vault_manager_address: config.vault_manager_address,
-                    rpc_services: config.services,
-                    nonce: 0,
-                    currency_symbol: config.currency_symbol,
-                    approved_tokens: HashMap::new(),
-                    gas_tracking: ChainGasTracking::default(),
-                });
+                .or_insert(ChainState::new(
+                    config.vault_manager_address,
+                    config.services,
+                    config.currency_symbol,
+                ));
         }
     }
 

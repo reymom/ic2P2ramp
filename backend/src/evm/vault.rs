@@ -1,14 +1,14 @@
 use ethers_core::types::{Address, U256};
 
 use super::fees::{self, FeeEstimates};
-use super::signer::{self, SignRequest};
+use super::signer;
 use super::transaction;
 
-use crate::errors::Result;
-use crate::model::errors::RampError;
-use crate::model::{
-    helpers,
-    types::{evm::chains, order::LockedOrder},
+use crate::errors::{RampError, Result};
+use crate::model::helpers;
+use crate::types::{
+    evm::{chains, request::SignRequest},
+    order::LockedOrder,
 };
 
 pub struct Ic2P2ramp;
@@ -482,7 +482,7 @@ impl Ic2P2ramp {
                 None,
                 fee_estimates,
             )
-            .await;
+            .await?;
         }
 
         transaction::send_signed_transaction(request, chain_id).await
