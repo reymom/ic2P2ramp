@@ -13,44 +13,38 @@ use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 use evm::{
     fees,
     rpc::{Block, BlockTag},
-    transaction::{self, TransactionStatus},
+    transaction,
     vault::Ic2P2ramp,
 };
 use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
-use model::types::evm::{
-    chains,
-    gas::{self, MethodGasUsage},
-    logs::EvmTransactionLog,
-    token::{self, Token, TokenManager},
+use model::errors::{self, RampError, Result};
+use model::memory::{
+    self,
+    heap::{
+        self, initialize_state, logs, read_state, setup_timers, upgrade, InstallArg, State, STATE,
+    },
+    stable::{self, orders},
 };
 use model::types::{
     self,
+    evm::{
+        chains,
+        gas::{self, ChainGasTracking, MethodGasUsage},
+        logs::{EvmTransactionLog, TransactionStatus},
+        token::{self, Token, TokenManager},
+    },
     exchange_rate::{ExchangeRateCache, CACHE_DURATION},
     icp::{get_icp_token, is_icp_token_supported, IcpToken},
     order::{OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
-    AuthenticationData, Blockchain, LoginAddress, PaymentProvider, PaymentProviderType,
+    AuthenticationData, Blockchain, Crypto, LoginAddress, PaymentProvider, PaymentProviderType,
     TransactionAddress,
 };
-use model::{
-    errors::{self, RampError, Result},
-    types::Crypto,
-};
 use model::{guards, helpers};
-use model::{
-    memory::{
-        self,
-        heap::{
-            self, initialize_state, read_state, setup_timers, upgrade, InstallArg, State, STATE,
-        },
-        stable,
-    },
-    types::evm::gas::ChainGasTracking,
-};
 use outcalls::{
     paypal,
     revolut::{self, token as revolut_token},
@@ -182,6 +176,46 @@ async fn test_get_transaction_count(chain_id: u64) -> Result<u128> {
     transaction::eth_get_transaction_count(chain_id).await
 }
 
+// -------------
+// EVM Conflicts
+// -------------
+pub fn get_unresolved_transactions() -> Vec<EvmTransactionLog> {
+    logs::get_unresolved_transactions()
+}
+
+pub async fn manage_transaction_status(order_id: u64, tx_hash: String, chain_id: u64) {
+    let status = transaction::check_transaction_status(tx_hash.clone(), chain_id).await;
+
+    match status {
+        TransactionStatus::Confirmed(receipt) => {
+            ic_cdk::println!("Transaction {} confirmed!", tx_hash);
+            logs::update_transaction_log(order_id, TransactionStatus::Confirmed(receipt));
+        }
+        TransactionStatus::Failed(reason) => {
+            ic_cdk::println!("Transaction {} failed: {}", tx_hash, reason);
+            logs::update_transaction_log(order_id, TransactionStatus::Failed(reason));
+        }
+        TransactionStatus::Pending => {
+            ic_cdk::println!("Transaction {} is still pending.", tx_hash);
+        }
+        TransactionStatus::Unresolved(tx_hash, _) => {
+            ic_cdk::println!("Transaction {} is still unresolved.", tx_hash)
+        }
+    }
+}
+
+pub async fn replace_unresolved_transaction(order_id: u64, chain_id: u64) -> Result<()> {
+    match logs::get_transaction_log(order_id) {
+        Some(log) => {
+            if let TransactionStatus::Unresolved(_, sign_request) = log.status {
+                transaction::bump_dummy_transaction(sign_request.into(), chain_id).await?;
+            }
+            Ok(())
+        }
+        None => Ok(()),
+    }
+}
+
 // ----------
 // Management
 // ----------
@@ -205,6 +239,7 @@ fn print_constants() -> String {
     format!(
         "Order's Lock Time = {}s\n\
         User Session's Expiration Time = {}s\n\
+        Lock Nonce Timeout Time = {}s\n\
         Exchange Rate Cache Duration = {}s\n\
         Offramper Fiat Fee = {}%\n\
         Onramper Crypto Fee = {}%\n\
@@ -214,6 +249,7 @@ fn print_constants() -> String {
         Evm Attempt Interval = {}",
         heap::LOCK_DURATION_TIME_SECONDS,
         CACHE_DURATION,
+        chains::LOCK_NONCE_TIME_SECONDS,
         Session::EXPIRATION_SECS,
         (100. / types::order::OFFRAMPER_FIAT_FEE_DENOM as f64),
         (100. / types::order::ADMIN_CRYPTO_FEE_DENOM as f64),
@@ -548,6 +584,7 @@ async fn get_offramper_fee(price: u64) -> u64 {
     price / types::order::OFFRAMPER_FIAT_FEE_DENOM
 }
 
+// #[ic_cdk::query]
 // async fn top_up_order() -> Result<()>
 
 #[ic_cdk::update]
@@ -559,19 +596,24 @@ async fn lock_order(
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let user = stable::users::get_user(&onramper_user_id)?;
-    user.validate_session(&session_token)?;
-    user.validate_onramper()?;
-    user.is_banned()?;
+    orders::set_processing_order(&order_id)?;
 
-    order_management::lock_order(
+    match order_management::lock_order(
         order_id,
+        session_token,
         onramper_user_id,
         onramper_provider,
         onramper_address,
         estimated_gas,
     )
     .await
+    {
+        Ok(res) => Ok(res),
+        Err(e) => {
+            orders::unset_processing_order(&order_id)?;
+            Err(e)
+        }
+    }
 }
 
 #[ic_cdk::update]
@@ -580,22 +622,28 @@ async fn unlock_order(
     session_token: String,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
-    let order_state = stable::orders::get_order(&order_id)?;
-    let order = match order_state {
-        OrderState::Locked(locked_order) => locked_order,
-        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
-    };
+    orders::set_processing_order(&order_id)?;
 
-    let user = stable::users::get_user(&order.onramper.user_id)?;
-    user.validate_session(&session_token)?;
-    user.validate_onramper()?;
-
-    order_management::unlock_order(order_id, Some(session_token), estimated_gas).await
+    match order_management::unlock_order(order_id, Some(session_token), estimated_gas).await {
+        Ok(res) => Ok(res),
+        Err(e) => {
+            orders::unset_processing_order(&order_id)?;
+            Err(e)
+        }
+    }
 }
 
 #[ic_cdk::update]
 async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
-    order_management::cancel_order(order_id, session_token).await
+    orders::set_processing_order(&order_id)?;
+
+    match order_management::cancel_order(order_id, session_token).await {
+        Ok(res) => Ok(res),
+        Err(e) => {
+            orders::unset_processing_order(&order_id)?;
+            Err(e)
+        }
+    }
 }
 
 // ---------------
@@ -644,6 +692,23 @@ async fn verify_transaction(
         transaction_id
     );
 
+    orders::set_processing_order(&order_id)?;
+
+    match process_transaction(order_id, session_token, transaction_id, estimated_gas).await {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            orders::unset_processing_order(&order_id)?;
+            Err(e)
+        }
+    }
+}
+
+async fn process_transaction(
+    order_id: u64,
+    session_token: String,
+    transaction_id: String,
+    estimated_gas: Option<u64>,
+) -> Result<String> {
     let order = order_management::verify_order_is_payable(order_id, &session_token)?;
 
     match &order.clone().onramper.provider {
