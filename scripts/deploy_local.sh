@@ -144,7 +144,7 @@ dfx deploy backend --argument "(
       proxy_url = \"https://ic2p2ramp.xyz\";
     }
   }
-)" --ic
+)"
 
 dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
 dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {

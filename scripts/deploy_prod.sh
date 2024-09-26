@@ -95,6 +95,7 @@ dfx canister call backend_prod register_icp_tokens '(vec {
     "ryjl3-tyaaa-aaaaa-aaaba-cai"; 
     "lkwrt-vyaaa-aaaaq-aadhq-cai";
     "2ouva-viaaa-aaaaq-aaamq-cai";
+    "mxzaz-hqaaa-aaaar-qaada-cai";
 })' --ic
 dfx canister call backend_prod register_evm_tokens '(11155111 : nat64, vec {
     record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" }
