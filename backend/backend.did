@@ -87,6 +87,17 @@ type ExchangeRateError = variant {
   StablecoinRateNotFound;
   Pending;
 };
+type FailedSignRequest = record {
+  to : opt text;
+  gas : nat;
+  value : opt nat;
+  max_priority_fee_per_gas : opt nat;
+  data : opt blob;
+  from : opt text;
+  max_fee_per_gas : opt nat;
+  chain_id : nat64;
+  nonce : opt nat;
+};
 type GasRecord = record { gas : nat; block_number : nat; gas_price : nat };
 type GasUsage = record { records : vec GasRecord };
 type HttpHeader = record { value : text; name : text };
@@ -147,6 +158,7 @@ type Order = record {
   currency : text;
   offramper_providers : vec record { PaymentProviderType; PaymentProvider };
   offramper_address : TransactionAddress;
+  processing : bool;
 };
 type OrderFilter = variant {
   ByOfframperId : nat64;
@@ -175,6 +187,7 @@ type PaypalConfig = record {
 };
 type RampError = variant {
   InvalidAddress;
+  OrderProcessing;
   HttpRequestError : record { nat64; text };
   TransactionTimeout;
   _TransactionFailed : text;
@@ -209,6 +222,7 @@ type RampError = variant {
   ParseError : text;
   NonceTooLow;
   CurrencySymbolNotFound : record {};
+  NonceLockTimeout : nat64;
   TokenInvalid;
   FundsBelowFees;
   OnlyController;
@@ -287,6 +301,7 @@ type TransactionReceipt = record {
 type TransactionStatus = variant {
   Failed : text;
   Confirmed : TransactionReceipt;
+  Unresolved : record { text; FailedSignRequest };
   Pending;
 };
 type TransformArgs = record { context : blob; response : HttpResponse };
@@ -361,11 +376,11 @@ service : (InstallArg) -> {
   remove_user : (nat64) -> (Result_1);
   retry_order_completion : (nat64, opt nat64) -> (Result_4);
   test_get_consent_url : () -> (Result_4);
-  test_get_evm_rates : () -> (
-      vec record { record { text; text }; ExchangeRateCache },
-    ) query;
   test_get_gas_tracking : (nat64) -> (Result_12) query;
   test_get_latest_block : (nat64) -> (Result_13);
+  test_get_rates : () -> (
+      vec record { record { text; text }; ExchangeRateCache },
+    ) query;
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_4);
   test_get_transaction_count : (nat64) -> (Result_2);
