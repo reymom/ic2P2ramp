@@ -40,6 +40,9 @@ pub enum RampError {
     #[error("Order Not Found")]
     OrderNotFound,
 
+    #[error("Order is already being processed")]
+    OrderProcessing,
+
     #[error("Order Timer Not Found")]
     OrderTimerNotFound,
 
@@ -93,6 +96,9 @@ pub enum RampError {
 
     #[error("Vault manager address not found for chain ID: {0}")]
     VaultManagerAddressNotFound(u64),
+
+    #[error("Timeout when waiting for nonce for chain ID: {0}")]
+    NonceLockTimeout(u64),
 
     #[error("Currency Symbol not found")]
     CurrencySymbolNotFound(),

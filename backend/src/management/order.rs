@@ -232,11 +232,17 @@ pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<
 
 pub async fn lock_order(
     order_id: u64,
+    session_token: String,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
 ) -> Result<String> {
+    let user = memory::stable::users::get_user(&onramper_user_id)?;
+    user.validate_session(&session_token)?;
+    user.validate_onramper()?;
+    user.is_banned()?;
+
     let order_state = memory::stable::orders::get_order(&order_id)?;
     let order = match order_state {
         OrderState::Created(locked_order) => locked_order,

@@ -103,7 +103,11 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
                 "[unlock_order] score decreased for user #{:?}",
                 order.onramper.user_id
             );
-            *order_state = OrderState::Created(order.base.clone());
+
+            let mut base_order = order.base.clone();
+            base_order.unset_processing();
+
+            *order_state = OrderState::Created(base_order);
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
@@ -119,5 +123,27 @@ pub fn cancel_order(order_id: u64) -> Result<()> {
             Ok(())
         }
         _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
+}
+
+pub fn set_processing_order(order_id: &u64) -> Result<()> {
+    mutate_order(order_id, |order_state| match order_state {
+        OrderState::Created(order) => order.set_processing(),
+        OrderState::Locked(order) => order.base.set_processing(),
+        _ => Err(RampError::InvalidOrderState(order_state.to_string())),
+    })?
+}
+
+pub fn unset_processing_order(order_id: &u64) -> Result<()> {
+    mutate_order(order_id, |order_state| match order_state {
+        OrderState::Created(order) => {
+            order.unset_processing();
+            Ok(())
+        }
+        OrderState::Locked(order) => {
+            order.base.unset_processing();
+            Ok(())
+        }
+        _ => return Err(RampError::InvalidOrderState(order_state.to_string())),
     })?
 }

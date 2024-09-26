@@ -1,19 +1,20 @@
 use num_traits::ToPrimitive;
 
 use crate::{
-    evm::{signer::SignRequest, transaction},
-    model::{
-        memory,
-        types::{
-            evm::{
-                gas::{self, MethodGasUsage},
-                logs::TransactionAction,
-            },
-            order::RevolutConsent,
-            PaymentProvider, TransactionAddress,
+    evm::transaction,
+    model::memory,
+    types::{
+        evm::{
+            gas::{self, MethodGasUsage},
+            logs::TransactionAction,
+            request::SignRequest,
         },
+        order::RevolutConsent,
+        PaymentProvider, TransactionAddress,
     },
 };
+
+use super::on_fail_callback;
 
 pub(super) fn spawn_commit_listener(
     order_id: u64,
@@ -78,6 +79,7 @@ pub(super) fn spawn_commit_listener(
                 }
             };
         },
+        on_fail_callback(order_id),
     );
 }
 
@@ -115,6 +117,7 @@ pub(super) fn spawn_uncommit_listener(
                 );
             };
         },
+        on_fail_callback(order_id),
     );
 }
 
@@ -157,6 +160,7 @@ pub(super) fn spawn_cancel_order(
                 }
             }
         },
+        on_fail_callback(order_id),
     );
 }
 
@@ -204,5 +208,6 @@ pub(super) fn spawn_payment_release(
                 Err(e) => ic_cdk::trap(format!("could not complete order: {:?}", e).as_str()),
             }
         },
+        super::on_fail_callback(order_id),
     );
 }

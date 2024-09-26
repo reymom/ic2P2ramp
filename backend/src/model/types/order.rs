@@ -73,6 +73,7 @@ pub struct Order {
     pub offramper_address: TransactionAddress,
     pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     pub crypto: Crypto,
+    pub processing: bool,
 }
 
 impl Order {
@@ -108,10 +109,28 @@ impl Order {
             offramper_address,
             offramper_providers,
             crypto: Crypto::new(blockchain, token, crypto_amount, crypto_fee),
+            processing: false,
         };
         ic_cdk::println!("[new order] order = {:?}", order);
 
         Ok(order)
+    }
+
+    fn processable(&self) -> Result<()> {
+        if self.processing {
+            return Err(RampError::OrderProcessing);
+        }
+        Ok(())
+    }
+
+    pub fn set_processing(&mut self) -> Result<()> {
+        self.processable()?;
+        self.processing = true;
+        Ok(())
+    }
+
+    pub fn unset_processing(&mut self) {
+        self.processing = false;
     }
 
     pub fn lock(
@@ -138,8 +157,11 @@ impl Order {
             }
         }
 
+        let mut base_order = self.clone();
+        base_order.unset_processing();
+
         Ok(LockedOrder {
-            base: self,
+            base: base_order,
             locked_at: time(),
             price,
             offramper_fee,
