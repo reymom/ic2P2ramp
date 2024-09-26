@@ -37,6 +37,16 @@ export const clearUserSession = () => {
   localStorage.removeItem(USER_SESSION_KEY);
 };
 
+const CURRENCY_KEY = 'user_currency';
+
+export const savePreferredCurrency = (currency: string) => {
+  localStorage.setItem(CURRENCY_KEY, currency);
+};
+
+export const getPreferredCurrency = (): string | null => {
+  return localStorage.getItem(CURRENCY_KEY) ?? null;
+};
+
 // Helper function to serialize and deserialize BigInt fields as strings
 const serializeUserSession = (user: User): string => {
   return JSON.stringify(user, (_key, value) =>

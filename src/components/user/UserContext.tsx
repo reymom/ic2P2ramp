@@ -7,7 +7,7 @@ import { AuthClient } from '@dfinity/auth-client';
 import { backend, createActor } from '../../declarations/backend';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
 import { UserTypes } from '../../model/types';
-import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType } from '../../model/session';
+import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType, getPreferredCurrency, savePreferredCurrency } from '../../model/session';
 import { icpHost, iiUrl } from '../../model/icp';
 import { getEvmTokens } from '../../constants/evm_tokens';
 import { ICP_TOKENS } from '../../constants/icp_tokens';
@@ -24,9 +24,11 @@ interface UserContextProps {
     refetchUser: () => void;
     setUser: (user: User | null) => void;
     setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
+    setCurrency: (currency: string) => void;
     user: User | null;
     userType: UserTypes;
     loginMethod: LoginAddress | null;
+    currency: string;
     sessionToken: string | null;
     password: string | null;
     loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
@@ -36,6 +38,7 @@ interface UserContextProps {
         backendActor?: ActorSubclass<_SERVICE>
     ) => Promise<Result_1>;
     logout: () => Promise<void>;
+
 
     icpAgent: HttpAgent | null;
     backendActor: ActorSubclass<_SERVICE> | null,
@@ -55,6 +58,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [icpAgent, setIcpAgent] = useState<HttpAgent | null>(null);
     const [backendActor, setBackendActor] = useState<ActorSubclass<_SERVICE> | null>(null);
     const [principal, setPrincipal] = useState<Principal | null>(null);
+    const [currency, setCurrency] = useState<string>(getPreferredCurrency() ?? 'USD');
 
     const { address, chainId } = useAccount();
     const [icpBalances, setIcpBalances] = useState<{ [tokenName: string]: Balance } | null>(null);
@@ -302,6 +306,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         <UserContext.Provider value={{
             user,
             userType,
+            currency,
             loginMethod,
             sessionToken,
             password,
@@ -314,6 +319,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             setLoginMethod: (login: LoginAddress | null, pwd?: string) => {
                 setLoginMethod(login);
                 setPassword(pwd || null);
+            },
+            setCurrency: (currency: string) => {
+                savePreferredCurrency(currency);
+                setCurrency(currency);
             },
             loginInternetIdentity,
             authenticateUser,
