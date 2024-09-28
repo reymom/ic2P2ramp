@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
 import { backend } from '../declarations/backend';
-import { MethodGasUsage } from '../declarations/backend/backend.did';
+import { TransactionAction } from '../declarations/backend/backend.did';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import { getVaultAddress } from '../constants/evm_tokens';
 import { TokenOption } from '../model/types';
@@ -80,7 +80,7 @@ export const depositInVault = async (
 
 export const estimateGasAndGasPrice = async (
   chainId: number,
-  method: MethodGasUsage,
+  method: TransactionAction,
   defaultGas: bigint,
   days: number = 7,
 ): Promise<[bigint, bigint]> => {
