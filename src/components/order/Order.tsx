@@ -47,6 +47,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const navigate = useNavigate();
 
     const [orderState, setOrderState] = useState(order);
+    const [lockRefetched, setLockedRefetched] = useState(0);
 
     const orderId = useMemo(() => {
         return 'Created' in orderState ? orderState.Created.id
@@ -94,6 +95,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         try {
             const res = await backend.get_order(orderId);
             if ('Ok' in res) {
+                console.log("[fetchOrder] res.Ok = ", res.Ok)
                 setOrderState(res.Ok);
                 return res.Ok
             } else {
@@ -125,22 +127,21 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             if (!baseOrder || !token || !token.rateSymbol) return;
             setLoadingPrice(true);
-            fetchOrderPrice(baseOrder.currency, baseOrder.crypto)
-                .then(([price, offramperFee]) => {
-                    const totalPrice = price + offramperFee;
-                    localStorage.setItem(`order_${orderId}_price`, JSON.stringify({
-                        price: Number(totalPrice),
-                        timestamp: Date.now(),
-                    }));
-                    setCurrentPrice(totalPrice);
-                    setLoadingPrice(false);
-                })
-                .catch((err) => {
-                    console.error("Error fetching order price:", err);
-                    setLoadingPrice(false);
-                    setCurrentPrice(null);
-                    setMessage(err);
-                });
+
+            const priceData = await fetchOrderPrice(baseOrder.currency, baseOrder.crypto);
+            if (priceData) {
+                const [price, offramperFee] = priceData;
+                const totalPrice = price + offramperFee;
+                localStorage.setItem(`order_${orderId}_price`, JSON.stringify({
+                    price: Number(totalPrice),
+                    timestamp: Date.now(),
+                }));
+                setCurrentPrice(totalPrice);
+            } else {
+                setCurrentPrice(null);
+            }
+
+            setLoadingPrice(false);
         }
 
         getCurrentPrice();
@@ -150,6 +151,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         let intervalId: NodeJS.Timeout | null = null;
 
         if (orderId && baseOrder && baseOrder.processing) {
+            console.log("[useEffect] processing;")
             setIsLoading(true);
             setLoadingMessage("Processing");
 
@@ -187,7 +189,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 const expiryTime = Number(orderState.Locked.locked_at) + LOCK_TIME_SECONDS * 1_000_000_000;
                 const timeLeftSeconds = (expiryTime - currentTime) / 1_000_000_000;
 
-                if (!orderState.Locked.payment_done && timeLeftSeconds <= 0) {
+                if (!orderState.Locked.payment_done && timeLeftSeconds <= 0 && lockRefetched < 3) {
+                    setLockedRefetched((prev) => prev + 1);
                     setTimeout(() => {
                         fetchOrder(orderState.Locked.base.id);
                         refetchUser();
@@ -201,7 +204,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             const timer = setInterval(calculateRemainingTime, 1000);
             return () => clearInterval(timer);
         }
-    }, [order]);
+    }, [orderState]);
 
     const handleProviderSelection = (selectedProviderType: PaymentProviderTypes) => {
         if (!user) return;
@@ -241,7 +244,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             attempts += 1;
 
             try {
-                const logResult = await backend.get_transaction_log(orderId, userId, sessionToken);
+                const logResult = await backend.get_transaction_log(orderId, [[userId, sessionToken]]);
                 console.log("[pollTransactionLog] logResult = ", logResult);
 
                 if ('Ok' in logResult && logResult.Ok.length > 0 && logResult.Ok[0]) {
@@ -272,6 +275,18 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     } else if ('Failed' in transactionLog.status) {
                         console.log("[pollTransactionLog] Transaction Failed:", transactionLog.status.Failed);
                         setMessage("Transaction failed.");
+                        setIsLoading(false);
+                        clearPolling();
+                        return;
+                    } else if ('BroadcastError' in transactionLog.status) {
+                        console.log("[pollTransactionLog] Broadcasting Error: ", transactionLog.status.BroadcastError);
+                        setMessage(`Could not broadcast transaction: ${rampErrorToString(transactionLog.status.BroadcastError)}`);
+                        setIsLoading(false);
+                        clearPolling();
+                        return;
+                    } else if ('Unresolved' in transactionLog.status) {
+                        console.log("[pollTransactionLog] Unresolved transaction: ", transactionLog.status.Unresolved);
+                        setMessage(`Unresolved transaction: ${transactionLog.status.Unresolved[0]}`);
                         setIsLoading(false);
                         clearPolling();
                         return;
@@ -346,10 +361,16 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setMessage(null);
         setLoadingMessage("Fetching order price");
 
-        try {
-            const [orderPrice, offramperFee] = await fetchOrderPrice(baseOrder!.currency, baseOrder!.crypto);
-            const priceDifference = Math.abs(Number((orderPrice + offramperFee - currentPrice!) / currentPrice!));
-            // if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
+        const priceData = await fetchOrderPrice(baseOrder!.currency, baseOrder!.crypto);
+        if (!priceData) {
+            setMessage("Could not set order price");
+            setIsLoading(false);
+            return
+        }
+
+        const [orderPrice, offramperFee] = priceData;
+        const priceDifference = Math.abs(Number((orderPrice + offramperFee - currentPrice!) / currentPrice!));
+        if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
             const confirm = window.confirm(
                 `The real price differs significantly from the previously estimated price. 
                     Real price: $${formatPrice(Number(orderPrice + offramperFee))}, estimated price: $${formatPrice(Number(currentPrice))}. 
@@ -359,15 +380,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 setIsLoading(false);
                 return;
             }
-            // }
-        } catch (e) {
-            console.error("[commitToOrder] e: ", e);
-            setMessage("Could not set order price.");
-            return;
         }
 
         let gasEstimation: [] | [bigint] = [];
         if ('EVM' in orderBlockchain) {
+            setLoadingMessage("Estimating gas and price")
             const gasForCommit = await estimateGasAndGasPrice(
                 Number(orderBlockchain.EVM.chain_id),
                 { Commit: null },
@@ -378,14 +395,17 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         }
 
         const onramperAddress = user.addresses.find(addr => Object.keys(orderBlockchain)[0] in addr.address_type);
-        if (!onramperAddress) throw new Error("No address matches for user");
+        if (!onramperAddress) {
+            setIsLoading(false);
+            setMessage("No address matches for user");
+            return;
+        }
 
+        setLoadingMessage("Locking Order")
         try {
             const result = await backend.lock_order(orderId, sessionToken, user.id, provider, onramperAddress, gasEstimation);
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
-                    setTxHash(result.Ok);
-                    console.log(`[commitToOrder] Transaction Hash: ${result.Ok}`);
                     pollTransactionLog(orderId, user.id);
                 } else {
                     setLoadingMessage(committedMessage);
@@ -463,9 +483,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         // estimate release gas
         let gasEstimation: [] | [bigint] = [];
         if ('EVM' in orderBlockchain) {
+            let tx_variant = token && token.isNative ? { Native: null } : { Token: null };
+
             const gasForRelease = await estimateGasAndGasPrice(
                 Number(orderBlockchain.EVM.chain_id),
-                token ? { ReleaseToken: null } : { ReleaseNative: null },
+                { Release: tx_variant },
                 defaultReleaseEvmGas
             );
             console.log("[handlePayPalSuccess] gasReleaseEstimate = ", gasForRelease);
