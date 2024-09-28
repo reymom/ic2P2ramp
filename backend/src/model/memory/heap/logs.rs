@@ -2,34 +2,39 @@ use std::time::Duration;
 
 use ic_cdk_timers::{clear_timer, set_timer};
 
-use crate::model::types::evm::logs::{EvmTransactionLog, TransactionAction, TransactionStatus};
+use crate::model::types::evm::{
+    logs::{EvmTransactionLog, TransactionStatus},
+    transaction::TransactionAction,
+};
 
 use super::heap::{EVM_TRANSACTION_LOGS, TRANSACTION_LOG_TIMERS};
 
-pub fn add_transaction_log(order_id: u64, action: TransactionAction) {
+pub fn new_transaction_log(order_id: u64, action: TransactionAction) {
     EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {
         logs.insert(
             order_id,
             EvmTransactionLog {
                 order_id,
                 action,
-                status: TransactionStatus::Pending,
+                status: TransactionStatus::Broadcasting,
             },
         );
     });
 }
 
 pub fn update_transaction_log(order_id: u64, status: TransactionStatus) {
+    ic_cdk::println!(
+        "[update_transaction_log] order_id: {}, new status: {:?}",
+        order_id,
+        status
+    );
     EVM_TRANSACTION_LOGS.with_borrow_mut(|logs| {
         if let Some(log) = logs.get_mut(&order_id) {
             log.status = status.clone();
         }
     });
 
-    if matches!(
-        status,
-        TransactionStatus::Confirmed(_) | TransactionStatus::Failed(_)
-    ) {
+    if matches!(status, TransactionStatus::Confirmed(_)) {
         set_transaction_removal_timer(order_id);
     }
 }

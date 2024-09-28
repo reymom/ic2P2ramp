@@ -37,7 +37,9 @@ pub async fn delay(duration: Duration) {
     ic_cdk_timers::set_timer(duration, move || {
         let _ = tx.send(());
     });
-    rx.await.unwrap();
+    if let Err(e) = rx.await {
+        ic_cdk::println!("Delay timer error: {:?}", e);
+    }
 }
 
 pub fn parse_address(address: String) -> Result<H160> {

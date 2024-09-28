@@ -19,18 +19,14 @@ impl ExchangeRateCache {
     pub fn get_cached_rate(&self) -> Option<f64> {
         let current_time = ic_cdk::api::time();
 
-        let time_passed = current_time - self.timestamp;
+        let time_elapsed = current_time - self.timestamp;
         ic_cdk::println!(
             "[get_cached_rate] current_time ({}) - timestamp ({}) = {}",
-            current_time,
-            self.timestamp,
-            time_passed
+            current_time / 1_000_000_000,
+            self.timestamp / 1_000_000_000,
+            time_elapsed / 1_000_000_000
         );
-        ic_cdk::println!(
-            "[get_cached_rate] Time Left = {}",
-            time_passed - CACHE_DURATION
-        );
-        if current_time - self.timestamp < CACHE_DURATION {
+        if time_elapsed < CACHE_DURATION {
             return Some(self.rate);
         }
 

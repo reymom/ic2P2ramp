@@ -4,6 +4,15 @@ use crate::types::{Blockchain, PaymentProvider, TransactionAddress};
 
 use super::order::Order;
 
+pub struct LockInput {
+    pub price: u64,
+    pub offramper_fee: u64,
+    pub onramper_user_id: u64,
+    pub onramper_provider: PaymentProvider,
+    pub onramper_address: TransactionAddress,
+    pub revolut_consent: Option<RevolutConsent>,
+}
+
 #[derive(CandidType, Deserialize, Clone)]
 pub struct Onramper {
     pub user_id: u64,

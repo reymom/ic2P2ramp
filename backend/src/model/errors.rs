@@ -8,7 +8,7 @@ use crate::{outcalls::xrc_rates::ExchangeRateError, types::PaymentProviderType};
 
 pub type Result<T> = std::result::Result<T, RampError>;
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, Clone, CandidType)]
 pub enum RampError {
     #[error(transparent)]
     UserError(#[from] UserError),
@@ -23,7 +23,7 @@ pub enum RampError {
     SystemError(#[from] SystemError),
 }
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, CandidType, Clone)]
 pub enum UserError {
     #[error("Only controller is allowed")]
     OnlyController,
@@ -71,7 +71,7 @@ pub enum UserError {
     ProviderNotInUser(PaymentProviderType),
 }
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, CandidType, Clone)]
 pub enum OrderError {
     #[error("Order Not Found")]
     OrderNotFound,
@@ -110,7 +110,7 @@ pub enum OrderError {
     PaymentVerificationFailed,
 }
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, CandidType, Clone)]
 pub enum BlockchainError {
     #[error("Invalid Ethereum address")]
     InvalidAddress,
@@ -127,11 +127,11 @@ pub enum BlockchainError {
     #[error("Token is unregistered")]
     UnregisteredEvmToken,
 
-    #[error("Transaction failed: {0}")]
-    _TransactionFailed(String),
-
     #[error("Transaction timeout")]
     TransactionTimeout,
+
+    #[error("Inconsistent transaction status")]
+    InconsistentStatus,
 
     #[error("Ethers ABI error: {0}")]
     EthersAbiError(String),
@@ -159,9 +159,12 @@ pub enum BlockchainError {
 
     #[error("EVM Log Error: {0}")]
     EvmLogError(String),
+
+    #[error("Gas Log error: {0}")]
+    GasLogError(String),
 }
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, CandidType, Clone)]
 pub enum SystemError {
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
