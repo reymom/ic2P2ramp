@@ -8,13 +8,12 @@ use crate::{
     evm::vault::Ic2P2ramp,
     icp::vault::Ic2P2ramp as ICPRamp,
     management,
-    model::types::{
-        evm::gas::MethodGasUsage,
+    outcalls::{paypal, revolut},
+    types::{
         icp::get_icp_token,
         orders::{LockedOrder, RevolutConsent},
         Blockchain, PaymentProvider, PaymentProviderType,
     },
-    outcalls::{paypal, revolut},
 };
 
 pub async fn verify_paypal_payment(
@@ -124,45 +123,22 @@ pub async fn verify_revolut_payment(
     }
 }
 
-pub async fn handle_payment_completion(order: &LockedOrder, gas: Option<u64>) -> Result<String> {
+pub async fn handle_payment_completion(order: &LockedOrder, gas: Option<u64>) -> Result<()> {
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            let tx_hash = handle_evm_payment_completion(order, chain_id, gas).await?;
-            return Ok(tx_hash);
+            Ic2P2ramp::release_funds(order.clone(), chain_id, gas).await
         }
         Blockchain::ICP { ledger_principal } => {
-            let index = handle_icp_payment_completion(order, &ledger_principal).await?;
-            return Ok(index);
+            handle_icp_payment_completion(order, &ledger_principal).await
         }
         _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
-async fn handle_evm_payment_completion(
-    order: &LockedOrder,
-    chain_id: u64,
-    gas: Option<u64>,
-) -> Result<String> {
-    let mut action_type = MethodGasUsage::ReleaseNative;
-    if let Some(_) = order.base.crypto.token {
-        action_type = MethodGasUsage::ReleaseToken
-    };
-    let (tx_hash, sign_request) = Ic2P2ramp::release_funds(order.clone(), chain_id, gas).await?;
-
-    management::vault::spawn_payment_release(
-        order.base.id,
-        chain_id,
-        action_type,
-        &tx_hash,
-        sign_request,
-    );
-    Ok(tx_hash)
-}
-
 async fn handle_icp_payment_completion(
     order: &LockedOrder,
     ledger_principal: &Principal,
-) -> Result<String> {
+) -> Result<()> {
     let onramper_principal = Principal::from_text(&order.onramper.address.address).unwrap();
 
     let amount = NumTokens::from(order.base.crypto.amount);
@@ -172,7 +148,7 @@ async fn handle_icp_payment_completion(
         owner: onramper_principal,
         subaccount: None,
     };
-    let index = ICPRamp::transfer(
+    ICPRamp::transfer(
         *ledger_principal,
         to_account,
         amount - order.base.crypto.fee,
@@ -182,7 +158,7 @@ async fn handle_icp_payment_completion(
 
     super::order::set_order_completed(order.base.id)?;
 
-    Ok(index.to_string())
+    Ok(())
 }
 
 pub async fn get_revolut_consent(
