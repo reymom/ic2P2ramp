@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use ethers_core::abi::ethereum_types::{Address, U256, U64};
+use ethers_core::abi::ethereum_types::{Address, U256};
 use ethers_core::k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey};
 use ethers_core::types::transaction::eip1559::Eip1559TransactionRequest;
 use ethers_core::types::{Bytes, Signature};
@@ -9,49 +9,9 @@ use ic_cdk::api::management_canister::ecdsa::{
     ecdsa_public_key, sign_with_ecdsa, EcdsaPublicKeyArgument, SignWithEcdsaArgument,
 };
 
-use super::fees::FeeEstimates;
 use crate::errors::{BlockchainError, Result, UserError};
 use crate::model::memory::heap::read_state;
-use crate::types::evm::{
-    chains::{self, get_nonce},
-    request::SignRequest,
-};
-
-pub async fn create_sign_request(
-    value: U256,
-    chain_id: U64,
-    to: Option<String>,
-    from: Option<String>,
-    gas: U256,
-    data: Option<Vec<u8>>,
-    fee_estimates: FeeEstimates,
-) -> Result<SignRequest> {
-    let FeeEstimates {
-        max_fee_per_gas,
-        max_priority_fee_per_gas,
-    } = fee_estimates;
-
-    let nonce_time = ic_cdk::api::time();
-    chains::wait_for_nonce_unlock(chain_id.as_u64()).await?;
-    ic_cdk::println!(
-        "[create_sign_request] --- waited for nonce for {} seconds ---",
-        (ic_cdk::api::time() - nonce_time) / 1_000_000_000
-    );
-
-    let nonce = get_nonce(chain_id.as_u64())?;
-
-    Ok(SignRequest {
-        chain_id: Some(chain_id),
-        to,
-        from,
-        gas,
-        max_fee_per_gas: Some(max_fee_per_gas),
-        max_priority_fee_per_gas: Some(max_priority_fee_per_gas),
-        data,
-        value: Some(value),
-        nonce: Some(nonce),
-    })
-}
+use crate::types::evm::request::SignRequest;
 
 pub async fn sign_transaction(req: SignRequest) -> String {
     const EIP1559_TX_ID: u8 = 2;

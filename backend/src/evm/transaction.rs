@@ -1,27 +1,32 @@
 use std::time::Duration;
 
-use ethers_core::types::U256;
+use ethers_core::{abi, types::U256};
 
 use super::{
-    fees::FeeEstimates,
     rpc::{
         BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
         MultiGetTransactionCountResult, MultiGetTransactionReceiptResult,
-        MultiSendRawTransactionResult, RpcConfig, SendRawTransactionResult,
+        MultiSendRawTransactionResult, RpcConfig, RpcError, SendRawTransactionResult,
         SendRawTransactionStatus, TransactionReceipt, EVM_RPC,
     },
     signer,
 };
 use crate::{
-    errors::{BlockchainError, Result, SystemError},
-    model::{
-        helpers,
-        memory::heap::{logs, read_state},
+    errors::{BlockchainError, RampError, Result, SystemError},
+    evm::{fees, helper::load_contract_data, vault::Ic2P2ramp},
+    management::vault,
+    model::memory::{
+        heap::{logs, read_state},
+        stable::orders::unset_processing_order,
     },
-    types::evm::{
-        chains::{self, get_rpc_providers, release_nonce},
-        logs::{TransactionAction, TransactionStatus},
-        request::SignRequest,
+    types::{
+        evm::{
+            chains::{self, get_rpc_providers, release_and_increment_nonce, release_nonce},
+            logs::TransactionStatus,
+            request::SignRequest,
+            transaction::TransactionAction,
+        },
+        orders::LockInput,
     },
 };
 
@@ -29,44 +34,201 @@ pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 4;
 pub(crate) const MAX_ATTEMPTS_PER_RETRY: u16 = 40;
 pub(crate) const ATTEMPT_INTERVAL_SECONDS: u64 = 4;
 
-pub async fn create_sign_request(
-    abi: &str,
-    function_name: &str,
-    gas: U256,
-    fee_estimates: FeeEstimates,
+pub fn broadcast_transaction(
+    order_id: u64,
     chain_id: u64,
-    value: U256,
-    to_address: String,
-    inputs: &[ethers_core::abi::Token],
-) -> Result<SignRequest> {
-    let contract = ethers_core::abi::Contract::load(abi.as_bytes())
-        .map_err(|e| BlockchainError::EthersAbiError(format!("Contract load error: {:?}", e)))?;
-    let function = contract.function(function_name).map_err(|e| {
-        BlockchainError::EthersAbiError(format!("Function not found error: {:?}", e))
-    })?;
-    let data = function
-        .encode_input(inputs)
-        .map_err(|e| BlockchainError::EthersAbiError(format!("Encode input error: {:?}", e)))?;
+    action: TransactionAction,
+    sign_request: SignRequest,
+    lock_input: Option<LockInput>,
+    attempt: u8,
+    nonce_retry: bool,
+) {
+    ic_cdk_timers::set_timer(Duration::from_millis(200), move || {
+        ic_cdk::spawn(async move {
+            ic_cdk::println!("[broadcast_transaction] attempt = {}", attempt);
+            if nonce_retry || !chains::nonce_locked(chain_id) {
+                let mut sign_request = sign_request;
+                if !nonce_retry {
+                    let nonce = chains::get_and_lock_nonce(chain_id).unwrap();
+                    sign_request.add_nonce(nonce);
+                }
 
-    signer::create_sign_request(
-        value,
-        chain_id.into(),
-        Some(to_address.clone()),
-        None,
-        gas,
-        Some(data),
-        fee_estimates,
-    )
-    .await
+                match send_signed_transaction(sign_request.clone(), chain_id).await {
+                    Ok(tx_hash) => {
+                        release_and_increment_nonce(
+                            chain_id,
+                            sign_request.nonce.map(|nonce| nonce.as_u128()),
+                        );
+                        logs::update_transaction_log(
+                            order_id,
+                            TransactionStatus::Broadcasted(
+                                tx_hash.clone(),
+                                sign_request.clone().into(),
+                            ),
+                        );
+
+                        match action {
+                            TransactionAction::Commit => {
+                                let lock_input = match lock_input {
+                                    Some(input) => input,
+                                    None => {
+                                        release_nonce(chain_id);
+                                        let _ = unset_processing_order(&order_id);
+                                        logs::update_transaction_log(
+                                            order_id,
+                                            TransactionStatus::BroadcastError(
+                                                SystemError::InvalidInput(
+                                                    "Lock Input not found".to_string(),
+                                                )
+                                                .into(),
+                                            ),
+                                        );
+                                        return;
+                                    }
+                                };
+                                vault::spawn_commit_listener(
+                                    order_id,
+                                    chain_id,
+                                    &tx_hash,
+                                    sign_request,
+                                    lock_input,
+                                );
+                            }
+                            TransactionAction::Uncommit => vault::spawn_uncommit_listener(
+                                order_id,
+                                chain_id,
+                                &tx_hash,
+                                sign_request,
+                            ),
+                            TransactionAction::Cancel(..) => vault::spawn_cancel_listener(
+                                order_id,
+                                chain_id,
+                                &tx_hash,
+                                sign_request,
+                            ),
+                            TransactionAction::Release(transaction_variant) => {
+                                vault::spawn_release_listener(
+                                    order_id,
+                                    chain_id,
+                                    transaction_variant,
+                                    &tx_hash,
+                                    sign_request,
+                                )
+                            }
+                            TransactionAction::Transfer(..) => {
+                                ic_cdk::println!("Broadcasted tx: {}", tx_hash);
+                                logs::update_transaction_log(
+                                    order_id,
+                                    TransactionStatus::Confirmed(TransactionReceipt::default()),
+                                );
+                            }
+                        }
+                    }
+
+                    Err(RampError::BlockchainError(BlockchainError::NonceTooLow)) => {
+                        match eth_get_transaction_count(chain_id).await {
+                            Ok(tx_count) => {
+                                let sign_request = SignRequest {
+                                    nonce: Some(tx_count.into()),
+                                    ..sign_request
+                                };
+                                broadcast_transaction(
+                                    order_id,
+                                    chain_id,
+                                    action,
+                                    sign_request,
+                                    lock_input,
+                                    attempt + 1,
+                                    true,
+                                );
+                            }
+                            Err(e) => {
+                                release_nonce(chain_id);
+                                let _ = unset_processing_order(&order_id);
+                                logs::update_transaction_log(
+                                    order_id,
+                                    TransactionStatus::BroadcastError(e),
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        release_nonce(chain_id);
+                        let _ = unset_processing_order(&order_id);
+                        logs::update_transaction_log(
+                            order_id,
+                            TransactionStatus::BroadcastError(e),
+                        );
+                    }
+                }
+            } else if attempt > 20 {
+                release_nonce(chain_id);
+                let _ = unset_processing_order(&order_id);
+                logs::update_transaction_log(
+                    order_id,
+                    TransactionStatus::BroadcastError(
+                        BlockchainError::NonceLockTimeout(chain_id).into(),
+                    ),
+                )
+            } else {
+                broadcast_transaction(
+                    order_id,
+                    chain_id,
+                    action,
+                    sign_request,
+                    lock_input,
+                    attempt + 1,
+                    false,
+                );
+            }
+        })
+    });
 }
 
-pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
+pub async fn create_vault_sign_request(
+    chain_id: u64,
+    transaction_type: &TransactionAction,
+    inputs: &[abi::Token],
+    estimated_gas: Option<u64>,
+) -> Result<SignRequest> {
+    let gas = U256::from(Ic2P2ramp::get_final_gas(
+        estimated_gas.unwrap_or(Ic2P2ramp::DEFAULT_GAS),
+    ));
+
+    let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
+    ic_cdk::println!(
+        "[create_sign_request_without_nonce] gas = {:?}, max_fee_per_gas = {:?}, max_priority_fee_per_gas = {:?}",
+        gas,
+        fee_estimates.max_fee_per_gas,
+        fee_estimates.max_priority_fee_per_gas
+    );
+
+    let data = load_contract_data(
+        transaction_type.abi(),
+        transaction_type.function_name(),
+        inputs,
+    )?;
+
+    let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
+    Ok(SignRequest {
+        chain_id: Some(chain_id.into()),
+        to: Some(vault_manager_address),
+        from: None,
+        gas,
+        max_fee_per_gas: Some(fee_estimates.max_fee_per_gas),
+        max_priority_fee_per_gas: Some(fee_estimates.max_priority_fee_per_gas),
+        data: Some(data),
+        value: None,
+        nonce: None,
+    })
+}
+
+async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<String> {
     let tx = signer::sign_transaction(request).await;
 
-    match send_raw_transaction(tx.clone(), chain_id).await {
+    match send_raw_transaction(tx.clone(), chain_id).await? {
         SendRawTransactionStatus::Ok(transaction_hash) => {
             ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
-            release_nonce(chain_id);
             transaction_hash.ok_or_else(|| BlockchainError::EmptyTransactionHash.into())
         }
         SendRawTransactionStatus::NonceTooLow => Err(BlockchainError::NonceTooLow)?,
@@ -75,7 +237,7 @@ pub async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Res
     }
 }
 
-pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransactionStatus {
+async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<SendRawTransactionStatus> {
     let rpc_providers = get_rpc_providers(chain_id).unwrap();
     let cycles = 10_000_000_000;
 
@@ -88,16 +250,27 @@ pub async fn send_raw_transaction(tx: String, chain_id: u64) -> SendRawTransacti
     {
         Ok((res,)) => match res {
             MultiSendRawTransactionResult::Consistent(status) => match status {
-                SendRawTransactionResult::Ok(status) => status,
+                SendRawTransactionResult::Ok(status) => Ok(status),
+                SendRawTransactionResult::Err(RpcError::JsonRpcError(e)) => {
+                    if e.message.contains("nonce too low") {
+                        Ok(SendRawTransactionStatus::NonceTooLow)
+                    } else if e.message.contains("nonce too high") {
+                        Ok(SendRawTransactionStatus::NonceTooHigh)
+                    } else if e.message.contains("insufficient funds") {
+                        Ok(SendRawTransactionStatus::InsufficientFunds)
+                    } else {
+                        Err(SystemError::RpcError(format!("Json Rpc Error: {:?}", e)).into())
+                    }
+                }
                 SendRawTransactionResult::Err(e) => {
-                    ic_cdk::trap(format!("Error: {:?}", e).as_str());
+                    Err(SystemError::RpcError(format!("{:?}", e)).into())
                 }
             },
             MultiSendRawTransactionResult::Inconsistent(_) => {
-                ic_cdk::trap("Status is inconsistent");
+                Err(BlockchainError::InconsistentStatus.into())
             }
         },
-        Err(e) => ic_cdk::trap(format!("Error: {:?}", e).as_str()),
+        Err((code, msg)) => Err(SystemError::ICRejectionError(code, msg).into()),
     }
 }
 
@@ -133,44 +306,11 @@ pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> Transac
     }
 }
 
-pub async fn _wait_for_transaction_confirmation(
-    tx_hash: String,
-    chain_id: u64,
-    max_attempts: u32,
-    interval: Duration,
-) -> Result<()> {
-    for attempt in 0..max_attempts {
-        match check_transaction_status(tx_hash.clone(), chain_id).await {
-            TransactionStatus::Confirmed(_) => {
-                return Ok(());
-            }
-            TransactionStatus::Failed(err) => {
-                return Err(BlockchainError::_TransactionFailed(err))?;
-            }
-            TransactionStatus::Pending => {
-                if attempt + 1 >= max_attempts {
-                    return Err(BlockchainError::TransactionTimeout)?;
-                }
-                ic_cdk::println!(
-                    "[wait_for_transaction_confirmation] Transaction is pending in attempt={:?}",
-                    attempt
-                );
-            }
-            TransactionStatus::Unresolved(tx, _) => {
-                return Err(BlockchainError::_TransactionFailed(tx))?
-            }
-        }
-        helpers::delay(interval).await;
-    }
-    Err(BlockchainError::TransactionTimeout)?
-}
-
 pub fn spawn_transaction_checker<F, G>(
     retry_attempt: u8,
     tx_hash: String,
     chain_id: u64,
     order_id: u64,
-    action: Option<TransactionAction>,
     sign_request: SignRequest,
     on_success: F,
     on_fail: G,
@@ -249,13 +389,6 @@ pub fn spawn_transaction_checker<F, G>(
         });
     }
 
-    if action.is_none() && retry_attempt == 0 {
-        ic_cdk::println!("action is not defined, schedule check stopped");
-        return;
-    } else if retry_attempt == 0 {
-        logs::add_transaction_log(order_id, action.unwrap());
-    }
-
     if retry_attempt < MAX_RETRY_ATTEMPTS {
         schedule_check(
             tx_hash,
@@ -320,7 +453,6 @@ pub async fn retry_with_bumped_fees<F, G>(
                 new_tx_hash,
                 chain_id,
                 order_id,
-                None,
                 sign_request,
                 on_success,
                 on_fail,

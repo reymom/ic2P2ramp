@@ -104,7 +104,7 @@ pub struct JsonRpcResult {
 #[derive(CandidType, Debug, Deserialize)]
 pub struct JsonRpcError {
     code: isize,
-    message: String,
+    pub message: String,
 }
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -266,7 +266,7 @@ pub enum MultiGetTransactionCountResult {
     Inconsistent(Vec<(RpcService, GetTransactionCountResult)>),
 }
 
-#[derive(CandidType, Deserialize, Debug, Clone)]
+#[derive(CandidType, Deserialize, Debug, Clone, Default)]
 pub struct TransactionReceipt {
     pub to: String,
     pub status: candid::Nat,
