@@ -31,12 +31,12 @@ type Blockchain = variant {
 type BlockchainError = variant {
   InvalidAddress;
   TransactionTimeout;
-  _TransactionFailed : text;
   UnsupportedBlockchain;
   LedgerPrincipalNotSupported : text;
   EvmLogError : text;
   EthersAbiError : text;
   ChainIdNotFound : nat64;
+  GasLogError : text;
   NonceTooLow;
   NonceLockTimeout : nat64;
   FundsBelowFees;
@@ -45,6 +45,7 @@ type BlockchainError = variant {
   NonceTooHigh;
   VaultManagerAddressNotFound : nat64;
   InsufficientFunds;
+  InconsistentStatus;
 };
 type ChainConfig = record {
   currency_symbol : text;
@@ -71,7 +72,12 @@ type Crypto = record {
   blockchain : Blockchain;
   amount : nat;
 };
-type DepositEvent = record { token : opt text; user : text; amount : nat };
+type DepositEvent = record {
+  token : opt text;
+  user : text;
+  block : opt nat;
+  amount : nat;
+};
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -82,6 +88,11 @@ type EthMainnetService = variant {
   Ankr;
 };
 type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type EvmOrderInput = record {
+  estimated_gas_withdraw : nat64;
+  estimated_gas_lock : nat64;
+  tx_hash : text;
+};
 type EvmTransactionLog = record {
   status : TransactionStatus;
   action : TransactionAction;
@@ -105,17 +116,6 @@ type ExchangeRateError = variant {
   ForexQuoteAssetNotFound;
   StablecoinRateNotFound;
   Pending;
-};
-type FailedSignRequest = record {
-  to : opt text;
-  gas : nat;
-  value : opt nat;
-  max_priority_fee_per_gas : opt nat;
-  data : opt blob;
-  from : opt text;
-  max_fee_per_gas : opt nat;
-  chain_id : nat64;
-  nonce : opt nat;
 };
 type GasRecord = record { gas : nat; block_number : nat; gas_price : nat };
 type GasUsage = record { records : vec GasRecord };
@@ -164,7 +164,6 @@ type LoginAddress = variant {
   Email : record { email : text };
   Solana : record { address : text };
 };
-type MethodGasUsage = variant { ReleaseToken; ReleaseNative; Commit };
 type Onramper = record {
   provider : PaymentProvider;
   user_id : nat64;
@@ -244,8 +243,8 @@ type Result_14 = variant { Ok : LogEvent; Err : RampError };
 type Result_15 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : nat; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
-type Result_4 = variant { Ok : text; Err : RampError };
-type Result_5 = variant { Ok : nat64; Err : RampError };
+type Result_4 = variant { Ok : nat64; Err : RampError };
+type Result_5 = variant { Ok : text; Err : RampError };
 type Result_6 = variant { Ok : opt record { nat; nat }; Err : RampError };
 type Result_7 = variant { Ok : vec Token; Err : RampError };
 type Result_8 = variant { Ok : float64; Err : RampError };
@@ -266,6 +265,17 @@ type RpcServices = variant {
   EthMainnet : opt vec EthMainnetService;
 };
 type Session = record { token : text; expires_at : nat64 };
+type SignRequestCandid = record {
+  to : opt text;
+  gas : nat;
+  value : opt nat;
+  max_priority_fee_per_gas : opt nat;
+  data : opt blob;
+  from : opt text;
+  max_fee_per_gas : opt nat;
+  chain_id : nat64;
+  nonce : opt nat;
+};
 type SystemError = variant {
   HttpRequestError : record { nat64; text };
   RpcError : text;
@@ -282,7 +292,12 @@ type SystemError = variant {
   Utf8Error;
 };
 type Token = record { decimals : nat8; address : text; rate_symbol : text };
-type TransactionAction = variant { Release; Uncommit; Cancel; Commit };
+type TransactionAction = variant {
+  Release : TransactionVariant;
+  Uncommit;
+  Cancel : TransactionVariant;
+  Commit;
+};
 type TransactionAddress = record { address_type : AddressType; address : text };
 type TransactionReceipt = record {
   to : text;
@@ -300,11 +315,15 @@ type TransactionReceipt = record {
   gasUsed : nat;
 };
 type TransactionStatus = variant {
+  BroadcastError : RampError;
   Failed : text;
+  Broadcasting;
   Confirmed : TransactionReceipt;
-  Unresolved : record { text; FailedSignRequest };
+  Unresolved : record { text; SignRequestCandid };
+  Broadcasted : record { text; SignRequestCandid };
   Pending;
 };
+type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
@@ -349,7 +368,8 @@ service : (InstallArg) -> {
   authenticate_user : (LoginAddress, opt AuthenticationData) -> (Result_1);
   calculate_order_evm_fees : (nat64, nat, opt text, nat64, nat64) -> (Result_2);
   calculate_order_price : (text, Crypto) -> (Result_3);
-  cancel_order : (nat64, text) -> (Result_4);
+  cancel_order : (nat64, text) -> (Result);
+  clean_old_spent_transactions : () -> ();
   create_order : (
       text,
       text,
@@ -359,12 +379,12 @@ service : (InstallArg) -> {
       nat,
       TransactionAddress,
       nat64,
-      opt nat64,
-      opt nat64,
-    ) -> (Result_5);
-  execute_revolut_payment : (nat64, text) -> (Result_4) query;
-  generate_evm_auth_message : (LoginAddress) -> (Result_4);
-  get_average_gas_prices : (nat64, nat64, MethodGasUsage) -> (Result_6);
+      opt EvmOrderInput,
+    ) -> (Result_4);
+  execute_revolut_payment : (nat64, text) -> (Result_5) query;
+  freeze_order : (nat64, nat64, text) -> (Result);
+  generate_evm_auth_message : (LoginAddress) -> (Result_5);
+  get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_6);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_7) query;
   get_exchange_rate : (text, text) -> (Result_8);
@@ -374,7 +394,10 @@ service : (InstallArg) -> {
   get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
       vec OrderState,
     ) query;
-  get_transaction_log : (nat64, nat64, text) -> (Result_11) query;
+  get_transaction_log : (nat64, opt record { nat64; text }) -> (
+      Result_11,
+    ) query;
+  get_unresolved_transactions : () -> (vec EvmTransactionLog) query;
   get_user : (nat64) -> (Result_1) query;
   lock_order : (
       nat64,
@@ -383,7 +406,8 @@ service : (InstallArg) -> {
       PaymentProvider,
       TransactionAddress,
       opt nat64,
-    ) -> (Result_4);
+    ) -> (Result);
+  manage_transaction_status : (nat64, text, nat64) -> ();
   print_constants : () -> (text) query;
   refetch_user : (nat64, text) -> (Result_1) query;
   register_evm_tokens : (nat64, vec record { text; nat8; text }) -> (Result);
@@ -392,8 +416,10 @@ service : (InstallArg) -> {
       Result_1,
     );
   remove_user : (nat64) -> (Result_1);
-  retry_order_completion : (nat64, opt nat64) -> (Result_4);
-  test_get_consent_url : () -> (Result_4);
+  replace_unresolved_transaction : (nat64, nat64) -> (Result);
+  retry_order_completion : (nat64, opt nat64) -> (Result_5);
+  retry_order_unlock : (nat64) -> (Result);
+  test_get_consent_url : () -> (Result_5);
   test_get_gas_tracking : (nat64) -> (Result_12) query;
   test_get_latest_block : (nat64) -> (Result_13);
   test_get_log_event : (nat64, text) -> (Result_14);
@@ -401,18 +427,28 @@ service : (InstallArg) -> {
       vec record { record { text; text }; ExchangeRateCache },
     ) query;
   test_get_revolut_payment_details : (text) -> (Result);
-  test_get_revolut_payment_token : (text) -> (Result_4);
+  test_get_revolut_payment_token : (text) -> (Result_5);
   test_get_transaction_count : (nat64) -> (Result_2);
   test_get_transaction_status : (text, nat64) -> (TransactionStatus);
-  test_paypal : () -> (Result_4);
+  test_paypal : () -> (Result_5);
+  top_up_order : (
+      nat64,
+      nat64,
+      text,
+      nat,
+      opt EvmOrderInput,
+      opt nat64,
+      opt nat64,
+    ) -> (Result) query;
   transfer_canister_funds : (principal, principal, nat) -> (Result);
-  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result_4);
+  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result_5);
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
-  unlock_order : (nat64, text, opt nat64) -> (Result_4);
+  unlock_order : (nat64, text, opt nat64) -> (Result);
+  unprocess_order : (nat64) -> (Result);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
-  verify_transaction : (nat64, text, text, opt nat64) -> (Result_4);
+  verify_transaction : (nat64, text, text, opt nat64) -> (Result_5);
   view_canister_balances : () -> (Result_15) query;
-  withdraw_evm_fees : (nat64, nat, opt text) -> (Result_4);
+  withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }

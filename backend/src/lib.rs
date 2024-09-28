@@ -26,9 +26,10 @@ use model::types::{
     self,
     evm::{
         chains,
-        gas::{self, ChainGasTracking, MethodGasUsage},
+        gas::{self, ChainGasTracking},
         logs::{EvmTransactionLog, TransactionStatus},
         token::{self, Token, TokenManager},
+        transaction::TransactionAction,
     },
     exchange_rate::{ExchangeRateCache, CACHE_DURATION},
     icp::{get_icp_token, IcpToken},
@@ -197,10 +198,12 @@ async fn test_get_log_event(chain_id: u64, tx_hash: String) -> Result<LogEvent> 
 // -------------
 // EVM Conflicts
 // -------------
+#[ic_cdk::query]
 pub fn get_unresolved_transactions() -> Vec<EvmTransactionLog> {
     logs::get_unresolved_transactions()
 }
 
+#[ic_cdk::update]
 pub async fn manage_transaction_status(order_id: u64, tx_hash: String, chain_id: u64) {
     let status = transaction::check_transaction_status(tx_hash.clone(), chain_id).await;
 
@@ -219,9 +222,11 @@ pub async fn manage_transaction_status(order_id: u64, tx_hash: String, chain_id:
         TransactionStatus::Unresolved(tx_hash, _) => {
             ic_cdk::println!("Transaction {} is still unresolved.", tx_hash)
         }
+        _ => (),
     }
 }
 
+#[ic_cdk::update]
 pub async fn replace_unresolved_transaction(order_id: u64, chain_id: u64) -> Result<()> {
     match logs::get_transaction_log(order_id) {
         Some(log) => {
@@ -361,7 +366,7 @@ async fn transfer_evm_funds(
     amount: u128,
     token: Option<String>,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     guards::only_controller()?;
     helpers::validate_evm_address(&to)?;
 
@@ -372,21 +377,18 @@ async fn transfer_evm_funds(
 }
 
 #[ic_cdk::update]
-async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -> Result<String> {
+async fn withdraw_evm_fees(chain_id: u64, amount: u128, token: Option<String>) -> Result<()> {
     guards::only_controller()?;
 
     let canister_address =
         read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
-    if let Some(token_address) = token {
+    if let Some(token_address) = token.clone() {
         token::evm_token_is_approved(chain_id, &token_address)?;
-        let (withdraw_tx, _) =
-            Ic2P2ramp::withdraw_token(chain_id, canister_address, token_address, amount, 0).await?;
-        Ok(withdraw_tx)
-    } else {
-        let (withdraw_tx, _) =
-            Ic2P2ramp::withdraw_base_currency(chain_id, canister_address, amount, 0).await?;
-        Ok(withdraw_tx)
     }
+
+    Ic2P2ramp::withdraw_deposit(chain_id, 0, canister_address, token, amount, 0).await?;
+
+    Ok(())
 }
 
 #[ic_cdk::update]
@@ -497,7 +499,7 @@ fn add_user_payment_provider(
 async fn get_average_gas_prices(
     chain_id: u64,
     max_blocks_in_past: u64,
-    method: MethodGasUsage,
+    method: TransactionAction,
 ) -> Result<Option<(u128, u128)>> {
     let block = fees::eth_get_latest_block(chain_id, BlockTag::Latest).await?;
     gas::get_average_gas(chain_id, block.number, max_blocks_in_past, &method)
@@ -539,11 +541,14 @@ fn get_order(order_id: u64) -> Result<OrderState> {
 #[ic_cdk::query]
 fn get_transaction_log(
     order_id: u64,
-    user_id: u64,
-    session_token: String,
+    user_token: Option<(u64, String)>,
 ) -> Result<Option<EvmTransactionLog>> {
-    let user = stable::users::get_user(&user_id)?;
-    user.validate_session(&session_token)?;
+    if let Some(user_token) = user_token {
+        let user = stable::users::get_user(&user_token.0)?;
+        user.validate_session(&user_token.1)?;
+    } else {
+        guards::only_controller()?;
+    }
     Ok(heap::logs::get_transaction_log(order_id))
 }
 
@@ -626,6 +631,7 @@ async fn top_up_order(
     user_id: u64,
     session_token: String,
     amount: u128,
+    evm_input: Option<EvmOrderInput>,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<()> {
@@ -636,8 +642,33 @@ async fn top_up_order(
     if !order.offramper_user_id == user_id {
         return Err(UserError::Unauthorized.into());
     }
+
+    let tx_hash = order_management::validate_deposit_tx(
+        &order.crypto.blockchain,
+        evm_input.clone(),
+        order.offramper_address.clone().address,
+        amount,
+        order.crypto.token.clone(),
+    )
+    .await
+    .map_err(|e| {
+        let _ = orders::unset_processing_order(&order_id);
+        e
+    })?;
+
     order_management::topup_order(&order, amount, estimated_gas_lock, estimated_gas_withdraw)
         .await?;
+
+    if let Some(tx_hash) = tx_hash {
+        spent_transactions::mark_tx_hash_as_processed(tx_hash);
+    };
+
+    orders::unset_processing_order(&order_id)
+}
+
+#[ic_cdk::update]
+async fn unprocess_order(order_id: u64) -> Result<()> {
+    guards::only_controller()?;
     orders::unset_processing_order(&order_id)
 }
 
@@ -649,10 +680,10 @@ async fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
-    match order_management::lock_order(
+    if let Err(e) = order_management::lock_order(
         order_id,
         session_token,
         onramper_user_id,
@@ -662,12 +693,24 @@ async fn lock_order(
     )
     .await
     {
-        Ok(res) => Ok(res),
-        Err(e) => {
-            orders::unset_processing_order(&order_id)?;
-            Err(e)
-        }
-    }
+        orders::unset_processing_order(&order_id)?;
+        return Err(e);
+    };
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+async fn retry_order_unlock(order_id: u64) -> Result<()> {
+    guards::only_controller()?;
+    orders::set_processing_order(&order_id)?;
+
+    if let Err(e) = management::order::unlock_order(order_id, None, None).await {
+        orders::unset_processing_order(&order_id)?;
+        return Err(e);
+    };
+
+    Ok(())
 }
 
 #[ic_cdk::update]
@@ -675,29 +718,29 @@ async fn unlock_order(
     order_id: u64,
     session_token: String,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
-    match order_management::unlock_order(order_id, Some(session_token), estimated_gas).await {
-        Ok(res) => Ok(res),
-        Err(e) => {
-            orders::unset_processing_order(&order_id)?;
-            Err(e)
-        }
-    }
+    if let Err(e) =
+        order_management::unlock_order(order_id, Some(session_token), estimated_gas).await
+    {
+        orders::unset_processing_order(&order_id)?;
+        return Err(e);
+    };
+
+    Ok(())
 }
 
 #[ic_cdk::update]
-async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
+async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
-    match order_management::cancel_order(order_id, session_token).await {
-        Ok(res) => Ok(res),
-        Err(e) => {
-            orders::unset_processing_order(&order_id)?;
-            Err(e)
-        }
-    }
+    if let Err(e) = order_management::cancel_order(order_id, session_token).await {
+        orders::unset_processing_order(&order_id)?;
+        return Err(e);
+    };
+
+    Ok(())
 }
 
 // ---------------
@@ -718,7 +761,7 @@ fn verify_order_is_payable(order_id: u64, session_token: String) -> Result<()> {
 }
 
 #[ic_cdk::update]
-async fn retry_order_completion(order_id: u64, gas: Option<u64>) -> Result<String> {
+async fn retry_order_completion(order_id: u64, gas: Option<u64>) -> Result<()> {
     guards::only_controller()?;
 
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
@@ -735,7 +778,7 @@ async fn verify_transaction(
     session_token: String,
     transaction_id: String,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     ic_cdk::println!(
         "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",
         order_id,
@@ -744,13 +787,14 @@ async fn verify_transaction(
 
     orders::set_processing_order(&order_id)?;
 
-    match process_transaction(order_id, session_token, transaction_id, estimated_gas).await {
-        Ok(result) => Ok(result),
-        Err(e) => {
-            orders::unset_processing_order(&order_id)?;
-            Err(e)
-        }
+    if let Err(e) =
+        process_transaction(order_id, session_token, transaction_id, estimated_gas).await
+    {
+        orders::unset_processing_order(&order_id)?;
+        return Err(e);
     }
+
+    Ok(())
 }
 
 async fn process_transaction(
@@ -758,7 +802,7 @@ async fn process_transaction(
     session_token: String,
     transaction_id: String,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     let order = order_management::verify_order_is_payable(order_id, &session_token)?;
 
     match &order.clone().onramper.provider {
