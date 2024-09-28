@@ -1,16 +1,8 @@
 use candid::CandidType;
 
-use crate::evm::rpc::TransactionReceipt;
+use crate::{evm::rpc::TransactionReceipt, model::errors::RampError};
 
-use super::request::FailedSignRequest;
-
-#[derive(CandidType, Debug, Clone)]
-pub enum TransactionAction {
-    Commit,
-    Uncommit,
-    Cancel,
-    Release,
-}
+use super::{request::SignRequestCandid, transaction::TransactionAction};
 
 #[derive(CandidType, Debug, Clone)]
 pub struct EvmTransactionLog {
@@ -21,8 +13,11 @@ pub struct EvmTransactionLog {
 
 #[derive(Debug, Clone, CandidType)]
 pub enum TransactionStatus {
+    Broadcasting,
+    Broadcasted(String, SignRequestCandid),
+    BroadcastError(RampError),
     Confirmed(TransactionReceipt),
     Failed(String),
     Pending,
-    Unresolved(String, FailedSignRequest),
+    Unresolved(String, SignRequestCandid),
 }

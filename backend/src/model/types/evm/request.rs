@@ -2,7 +2,7 @@ use candid::CandidType;
 use ethers_core::abi::ethereum_types::{U256, U64};
 
 #[derive(Clone, Debug, CandidType)]
-pub struct FailedSignRequest {
+pub struct SignRequestCandid {
     pub chain_id: u64,
     pub from: Option<String>,
     pub to: Option<String>,
@@ -14,8 +14,8 @@ pub struct FailedSignRequest {
     pub data: Option<Vec<u8>>,
 }
 
-impl From<FailedSignRequest> for SignRequest {
-    fn from(failed_request: FailedSignRequest) -> SignRequest {
+impl From<SignRequestCandid> for SignRequest {
+    fn from(failed_request: SignRequestCandid) -> SignRequest {
         SignRequest {
             chain_id: Some(U64::from(failed_request.chain_id)),
             from: failed_request.from,
@@ -43,9 +43,15 @@ pub struct SignRequest {
     pub data: Option<Vec<u8>>,
 }
 
-impl From<SignRequest> for FailedSignRequest {
-    fn from(sign_request: SignRequest) -> FailedSignRequest {
-        FailedSignRequest {
+impl SignRequest {
+    pub fn add_nonce(&mut self, nonce: U256) {
+        self.nonce = Some(nonce)
+    }
+}
+
+impl From<SignRequest> for SignRequestCandid {
+    fn from(sign_request: SignRequest) -> SignRequestCandid {
+        SignRequestCandid {
             chain_id: sign_request.chain_id.map_or(0, |id| id.as_u64()),
             from: sign_request.from,
             to: sign_request.to,
