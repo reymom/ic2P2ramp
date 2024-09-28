@@ -74,6 +74,6 @@
       "packtool": "npm run --silent sources"
     }
   },
-  "output_env_file": ".env.test",
+  "output_env_file": ".env.sandbox",
   "version": 1
 }
