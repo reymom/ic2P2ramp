@@ -5,13 +5,10 @@ use crate::model::{
     memory::heap::{mutate_state, read_state},
 };
 
-#[derive(Deserialize, CandidType, Debug)]
-pub enum MethodGasUsage {
-    Commit,
-    ReleaseToken,
-    ReleaseNative,
-}
+use super::transaction::{TransactionAction, TransactionVariant};
 
+/// Represents a record of gas usage in a particular transaction on a blockchain.
+/// This includes gas consumption, the gas price at the time, and the block number the transaction occurred in.
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasRecord {
     gas: u128,
@@ -19,11 +16,14 @@ pub struct GasRecord {
     block_number: u128,
 }
 
+/// Maintains a list of gas usage records for a specific action type (e.g., Commit, Release).
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasUsage {
     records: Vec<GasRecord>,
 }
 
+/// Holds gas usage information for different transaction actions (commit, release native, release token)
+/// on a specific chain.
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct ChainGasTracking {
     pub commit_gas: GasUsage,
@@ -32,7 +32,7 @@ pub struct ChainGasTracking {
 }
 
 impl GasUsage {
-    // Record gas usage with the block number
+    /// Records the gas usage for a particular transaction, saving the gas, gas price, and block number.
     pub fn record_gas_usage(&mut self, gas: u128, gas_price: u128, block_number: u128) {
         self.records.push(GasRecord {
             gas,
@@ -41,7 +41,15 @@ impl GasUsage {
         });
     }
 
-    // Calculate average gas usage for records within the last blocks
+    /// Computes the average gas usage and gas price for recent transactions based on the block number range.
+    ///
+    /// Parameters:
+    /// - `current_block`: The current block number.
+    /// - `max_blocks_in_past`: Maximum number of blocks in the past to consider for the average.
+    ///
+    /// Returns:
+    /// - A tuple containing the average gas usage and the average gas price for transactions within the specified block range,
+    ///   or `None` if no records are found.
     pub fn average_gas(
         &self,
         current_block: u128,
@@ -72,12 +80,23 @@ impl GasUsage {
     }
 }
 
+/// Registers the gas usage for a specific chain and transaction action (e.g., Commit, Release).
+///
+/// Parameters:
+/// - `chain_id`: The chain identifier.
+/// - `gas`: Gas consumed by the transaction.
+/// - `gas_price`: Gas price at the time of the transaction.
+/// - `block_number`: Block number in which the transaction was included.
+/// - `action_type`: The type of transaction action (e.g., Commit, Release).
+///
+/// Returns:
+/// - `Result<()>`: Returns an error if the chain ID is not found.
 pub fn register_gas_usage(
     chain_id: u64,
     gas: u128,
     gas_price: u128,
     block_number: u128,
-    action_type: &MethodGasUsage,
+    action_type: &TransactionAction,
 ) -> Result<()> {
     mutate_state(|state| {
         let chain_state = state
@@ -85,23 +104,41 @@ pub fn register_gas_usage(
             .get_mut(&chain_id)
             .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
 
-        let gas_tracking = match action_type {
-            MethodGasUsage::Commit => &mut chain_state.gas_tracking.commit_gas,
-            MethodGasUsage::ReleaseToken => &mut chain_state.gas_tracking.release_token_gas,
-            MethodGasUsage::ReleaseNative => &mut chain_state.gas_tracking.release_native_gas,
+        match action_type {
+            TransactionAction::Commit => {
+                let gas_tracking = &mut chain_state.gas_tracking.commit_gas;
+                gas_tracking.record_gas_usage(gas, gas_price, block_number);
+            }
+            TransactionAction::Release(TransactionVariant::Token) => {
+                let gas_tracking = &mut chain_state.gas_tracking.release_token_gas;
+                gas_tracking.record_gas_usage(gas, gas_price, block_number);
+            }
+            TransactionAction::Release(TransactionVariant::Native) => {
+                let gas_tracking = &mut chain_state.gas_tracking.release_native_gas;
+                gas_tracking.record_gas_usage(gas, gas_price, block_number);
+            }
+            _ => (),
         };
-
-        gas_tracking.record_gas_usage(gas, gas_price, block_number);
 
         Ok(())
     })
 }
 
+/// Retrieves the average gas usage and gas price for recent transactions based on the action type (Commit, Release).
+///
+/// Parameters:
+/// - `chain_id`: The chain identifier.
+/// - `current_block`: The current block number.
+/// - `max_blocks_in_past`: The maximum number of past blocks to consider for the average.
+/// - `action_type`: The transaction action to filter (Commit, Release).
+///
+/// Returns:
+/// - `Result<Option<(u128, u128)>>`: A tuple with average gas and gas price, or `None` if no data is found.
 pub fn get_average_gas(
     chain_id: u64,
     current_block: u128,
     max_blocks_in_past: u64,
-    action_type: &MethodGasUsage,
+    action_type: &TransactionAction,
 ) -> Result<Option<(u128, u128)>> {
     read_state(|state| {
         let chain_state = state
@@ -110,15 +147,29 @@ pub fn get_average_gas(
             .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
 
         let gas_tracking = match action_type {
-            MethodGasUsage::Commit => &chain_state.gas_tracking.commit_gas,
-            MethodGasUsage::ReleaseToken => &chain_state.gas_tracking.release_token_gas,
-            MethodGasUsage::ReleaseNative => &chain_state.gas_tracking.release_native_gas,
-        };
+            &TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
+            &TransactionAction::Release(TransactionVariant::Token) => {
+                Ok(&chain_state.gas_tracking.release_token_gas)
+            }
+            &TransactionAction::Release(TransactionVariant::Native) => {
+                Ok(&chain_state.gas_tracking.release_native_gas)
+            }
+            _ => Err(BlockchainError::GasLogError(
+                "Action is not being logged".into(),
+            )),
+        }?;
 
         Ok(gas_tracking.average_gas(current_block, max_blocks_in_past))
     })
 }
 
+/// Retrieves the entire gas tracking data for a given chain.
+///
+/// Parameters:
+/// - `chain_id`: The chain identifier.
+///
+/// Returns:
+/// - `Result<ChainGasTracking>`: A `ChainGasTracking` object for the specified chain.
 pub fn get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
     read_state(|state| {
         Ok(state
