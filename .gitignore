@@ -35,6 +35,7 @@ dist-ssr
 .env.development
 .env.test
 .env.production
+.env.sandbox
 .public.env
 
 # rust
