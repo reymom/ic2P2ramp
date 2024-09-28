@@ -5,35 +5,28 @@ use crate::{
     model::memory,
     types::{
         evm::{
-            gas::{self, MethodGasUsage},
-            logs::TransactionAction,
+            gas,
             request::SignRequest,
+            transaction::{TransactionAction, TransactionVariant},
         },
-        orders::RevolutConsent,
-        PaymentProvider, TransactionAddress,
+        orders::LockInput,
     },
 };
 
 use super::on_fail_callback;
 
-pub(super) fn spawn_commit_listener(
+pub fn spawn_commit_listener(
     order_id: u64,
     chain_id: u64,
-    price: u64,
-    offramper_fee: u64,
     tx_hash: &str,
     sign_request: SignRequest,
-    onramper_user_id: u64,
-    onramper_provider: PaymentProvider,
-    onramper_address: TransactionAddress,
-    revolut_consent: Option<RevolutConsent>,
+    lock_input: LockInput,
 ) {
     transaction::spawn_transaction_checker(
         0,
         tx_hash.to_string(),
         chain_id,
         order_id,
-        Some(TransactionAction::Commit),
         sign_request.clone(),
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
@@ -46,7 +39,7 @@ pub(super) fn spawn_commit_listener(
                     gas_used,
                     gas_price,
                     block_number,
-                    &MethodGasUsage::Commit,
+                    &TransactionAction::Commit,
                 ) {
                     Ok(()) => ic_cdk::println!(
                         "[lock_order].[register_gas_usage] Gas Used: {}, Gas Price: {}, Block Number: {}",
@@ -66,12 +59,12 @@ pub(super) fn spawn_commit_listener(
 
             match memory::stable::orders::lock_order(
                 order_id,
-                price,
-                offramper_fee,
-                onramper_user_id,
-                onramper_provider.clone(),
-                onramper_address.clone(),
-                revolut_consent.clone(),
+                lock_input.price,
+                lock_input.offramper_fee,
+                lock_input.onramper_user_id,
+                lock_input.onramper_provider.clone(),
+                lock_input.onramper_address.clone(),
+                lock_input.revolut_consent.clone(),
             ) {
                 Ok(()) => ic_cdk::println!("order {:?} is locked!", order_id),
                 Err(err) => {
@@ -83,7 +76,7 @@ pub(super) fn spawn_commit_listener(
     );
 }
 
-pub(super) fn spawn_uncommit_listener(
+pub fn spawn_uncommit_listener(
     order_id: u64,
     chain_id: u64,
     tx_hash: &str,
@@ -94,7 +87,6 @@ pub(super) fn spawn_uncommit_listener(
         tx_hash.to_string(),
         chain_id,
         order_id,
-        Some(TransactionAction::Uncommit),
         sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
@@ -121,7 +113,7 @@ pub(super) fn spawn_uncommit_listener(
     );
 }
 
-pub(super) fn spawn_cancel_order(
+pub fn spawn_cancel_listener(
     order_id: u64,
     chain_id: u64,
     tx_hash: &str,
@@ -132,7 +124,6 @@ pub(super) fn spawn_cancel_order(
         tx_hash.to_string(),
         chain_id,
         order_id,
-        Some(TransactionAction::Cancel),
         sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
@@ -164,10 +155,10 @@ pub(super) fn spawn_cancel_order(
     );
 }
 
-pub(super) fn spawn_payment_release(
+pub fn spawn_release_listener(
     order_id: u64,
     chain_id: u64,
-    action_type: MethodGasUsage,
+    release_variant: TransactionVariant,
     tx_hash: &str,
     sign_request: SignRequest,
 ) {
@@ -176,7 +167,6 @@ pub(super) fn spawn_payment_release(
         tx_hash.to_string(),
         chain_id,
         order_id,
-        Some(TransactionAction::Release),
         sign_request,
         move |receipt| {
             let gas_used = receipt.gasUsed.0.to_u128().unwrap_or(0);
@@ -196,7 +186,7 @@ pub(super) fn spawn_payment_release(
                     gas_used,
                     gas_price,
                     block_number,
-                    &action_type,
+                    &TransactionAction::Release(release_variant.clone()),
                 );
             }
 
