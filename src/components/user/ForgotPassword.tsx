@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { generateConfirmationToken, sendRecoverPassword, storeTempResetPasswordData } from '../../model/emailConfirmation';
+
 import { LoginAddress } from '../../declarations/backend/backend.did';
+import { generateConfirmationToken, sendRecoverPassword, storeTempResetPasswordData } from '../../model/emailConfirmation';
+import { isInvalidPasswordError } from '../../model/error';
 import { useUser } from './UserContext';
 
 const ForgotPassword: React.FC = () => {
@@ -19,7 +21,7 @@ const ForgotPassword: React.FC = () => {
         const loginMethod: LoginAddress = { 'Email': { email } };
         try {
             const result = await authenticateUser(loginMethod, { signature: [], password: ["notapassword"] });
-            if ('Err' in result && !('InvalidPassword' in result.Err)) {
+            if ('Err' in result && !(isInvalidPasswordError(result.Err))) {
                 console.log("result.Err = ", result.Err);
                 setMessage('Email is not registered');
                 return;

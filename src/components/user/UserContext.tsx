@@ -1,4 +1,6 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister, BalanceParams, IcrcTokens } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
@@ -6,13 +8,20 @@ import { AuthClient } from '@dfinity/auth-client';
 
 import { backend, createActor } from '../../declarations/backend';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
-import { UserTypes } from '../../model/types';
-import { saveUserSession, getUserSession, clearUserSession, isSessionExpired, getSessionToken, getUserType, getPreferredCurrency, savePreferredCurrency } from '../../model/session';
-import { icpHost, iiUrl } from '../../model/icp';
 import { getEvmTokens } from '../../constants/evm_tokens';
 import { ICP_TOKENS } from '../../constants/icp_tokens';
-import { ethers } from 'ethers';
-import { useAccount } from 'wagmi';
+import {
+    saveUserSession,
+    getUserSession,
+    clearUserSession,
+    isSessionExpired,
+    getSessionToken,
+    getUserType,
+    getPreferredCurrency,
+    savePreferredCurrency
+} from '../../model/session';
+import { UserTypes } from '../../model/types';
+import { icpHost, iiUrl } from '../../model/icp';
 import { formatCryptoUnits } from '../../model/helper';
 
 export interface Balance {
@@ -60,7 +69,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [currency, setCurrency] = useState<string>(getPreferredCurrency() ?? 'USD');
 
-    const { address, chainId } = useAccount();
+    const { address, chainId, isConnected } = useAccount();
     const [icpBalances, setIcpBalances] = useState<{ [tokenName: string]: Balance } | null>(null);
     const [evmBalances, setEvmBalances] = useState<{ [tokenAddress: string]: Balance } | null>(null);
 
@@ -90,10 +99,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [principal, icpAgent]);
 
     useEffect(() => {
-        if (chainId && address) {
+        if (chainId && address && isConnected) {
             fetchEvmBalances();
         }
-    }, [chainId, address])
+    }, [chainId, address, isConnected])
 
     const checkInternetIdentity = async () => {
         try {
@@ -272,7 +281,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const fetchEvmBalances = async () => {
-        if (!window.ethereum || !chainId || !address) return;
+        if (!window.ethereum || !chainId || !address || !isConnected) return;
 
         try {
             const provider = new ethers.BrowserProvider(window.ethereum);

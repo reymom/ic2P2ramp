@@ -6,17 +6,17 @@ import { useAccount } from 'wagmi';
 
 import { backend, createActor } from '../declarations/backend';
 import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
-import { useUser } from './user/UserContext';
 import { validatePassword } from '../model/helper';
-import { rampErrorToString } from '../model/error';
+import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '../model/error';
+import { handleWeb3Error } from '../model/evm';
+import { useUser } from './user/UserContext';
+import DynamicDots from './ui/DynamicDots';
 
 // Icons
 import icpLogo from "../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
-import { handleWeb3Error } from '../model/evm';
-import DynamicDots from './ui/DynamicDots';
 
 const ConnectAddress: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -105,6 +105,11 @@ const ConnectAddress: React.FC = () => {
             return;
         }
 
+        if (!isConnected) {
+            setEvmMessage("Connect address to login");
+            return;
+        };
+
         const loginAddress: LoginAddress = { EVM: { address } };
         setLoginMethod(loginAddress)
 
@@ -138,7 +143,7 @@ const ConnectAddress: React.FC = () => {
                         setLoginMethod(null);
                         setLoadingEvm(false);
                     });
-            } else if ("UserNotFound" in result.Err) {
+            } else if (isUserNotFoundError(result.Err)) {
                 navigate("/register");
             } else {
                 setEvmMessage(`Internal error when generating evm auth session message: ${rampErrorToString(result.Err)}`)
@@ -181,7 +186,7 @@ const ConnectAddress: React.FC = () => {
                     } else {
                         navigate("/view");
                     }
-                } else if ('Err' in result && 'InvalidPassword' in result.Err) {
+                } else if (isInvalidPasswordError(result.Err)) {
                     setEmailMessage('Invalid password.');
                     setLoginMethod(null);
                     setLoadingEmail(false);
@@ -230,7 +235,7 @@ const ConnectAddress: React.FC = () => {
                 } else {
                     navigate("/view");
                 }
-            } else if ('UnauthorizedPrincipal' in result.Err) {
+            } else if (isUnauthorizedPrincipalError(result.Err)) {
                 setIIMessage('Could not authorize agent.');
                 setLoadingIcp(false);
                 setLoginMethod(null);
