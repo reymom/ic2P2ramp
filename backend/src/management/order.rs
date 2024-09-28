@@ -14,6 +14,7 @@ use crate::evm::{
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
+use crate::model::types::orders::LockInput;
 use crate::model::{
     helpers,
     memory::{self, stable::spent_transactions},
@@ -30,7 +31,7 @@ use crate::types::{
     Blockchain, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 
-use super::{payment, vault};
+use super::payment;
 
 pub async fn calculate_order_evm_fees(
     chain_id: u64,
@@ -162,17 +163,27 @@ pub async fn validate_deposit_tx(
                     _ => return Err(BlockchainError::EmptyTransactionHash.into()),
                 };
 
+            ic_cdk::println!("[validate_deposit_tx] log_event = {:?}", log_event);
             match log_event {
                 LogEvent::Deposit(deposit_event) => {
-                    if deposit_event.user != order_offramper
-                        || deposit_event.amount != order_amount
-                        || deposit_event.token != order_token
-                    {
+                    if deposit_event.user.to_lowercase() != order_offramper.to_lowercase() {
                         return Err(BlockchainError::EvmLogError(
-                            "Log details do not match order".to_string(),
+                            "Invalid Offramper Address".to_string(),
+                        )
+                        .into());
+                    };
+                    if deposit_event.amount != order_amount {
+                        return Err(BlockchainError::EvmLogError(
+                            "Invalid Crypto Amount".to_string(),
                         )
                         .into());
                     }
+                    if deposit_event.token != order_token {
+                        return Err(
+                            BlockchainError::EvmLogError("Invalid Crypto".to_string()).into()
+                        );
+                    }
+
                     let last_block = eth_get_latest_block(*chain_id, BlockTag::Latest).await?;
                     deposit_event.expired(last_block.number)?;
                 }
@@ -354,7 +365,7 @@ pub async fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     let user = memory::stable::users::get_user(&onramper_user_id)?;
     user.validate_session(&session_token)?;
     user.validate_onramper()?;
@@ -378,30 +389,24 @@ pub async fn lock_order(
 
     match order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            let (tx_hash, sign_request) = Ic2P2ramp::commit_deposit(
+            Ic2P2ramp::commit_deposit(
                 chain_id,
+                order_id,
                 order.offramper_address.address,
                 order.crypto.token,
                 order.crypto.amount,
                 estimated_gas,
+                LockInput {
+                    price,
+                    offramper_fee,
+                    onramper_user_id,
+                    onramper_provider,
+                    onramper_address,
+                    revolut_consent,
+                },
             )
             .await?;
-
-            // Listener for the transaction receipt
-            vault::spawn_commit_listener(
-                order_id,
-                chain_id,
-                price,
-                offramper_fee,
-                &tx_hash,
-                sign_request,
-                onramper_user_id,
-                onramper_provider,
-                onramper_address,
-                revolut_consent,
-            );
-
-            return Ok(tx_hash);
+            Ok(())
         }
         Blockchain::ICP { .. } => {
             memory::stable::orders::lock_order(
@@ -413,8 +418,7 @@ pub async fn lock_order(
                 onramper_address,
                 revolut_consent,
             )?;
-
-            return Ok(format!("order {:?} is locked!", order_id));
+            Ok(())
         }
         _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
@@ -460,10 +464,13 @@ pub async fn unlock_order(
     order_id: u64,
     session_token: Option<String>,
     estimated_gas: Option<u64>,
-) -> Result<String> {
+) -> Result<()> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if order.payment_done {
         return Err(OrderError::PaymentDone)?;
+    }
+    if order.uncommited {
+        return Err(OrderError::OrderUncommitted)?;
     }
 
     if let Some(session_token) = session_token {
@@ -474,65 +481,48 @@ pub async fn unlock_order(
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
-            // Uncommit the deposit in the EVM vault
-            let (tx_hash, sign_request) = Ic2P2ramp::uncommit_deposit(
+            Ic2P2ramp::uncommit_deposit(
                 chain_id,
+                order_id,
                 order.base.offramper_address.address,
                 order.base.crypto.token,
                 order.base.crypto.amount,
                 estimated_gas,
             )
             .await?;
-
-            // Listener for the transaction receipt
-            vault::spawn_uncommit_listener(order_id, chain_id, &tx_hash, sign_request);
-
-            Ok(tx_hash)
+            Ok(())
         }
-        Blockchain::ICP { ledger_principal } => {
+        Blockchain::ICP { .. } => {
             memory::stable::orders::unlock_order(order.base.id)?;
-            Ok(format!(
-                "Unlocked ICP order for ledger: {:?}",
-                ledger_principal.to_string()
-            ))
+            Ok(())
         }
         _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
-pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String> {
+pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
     let order = memory::stable::orders::get_order(&order_id)?.created()?;
     let user = memory::stable::users::get_user(&order.offramper_user_id)?;
     user.is_offramper()?;
+    if !user.addresses.contains(&order.offramper_address) {
+        return Err(UserError::Unauthorized.into());
+    }
     user.validate_session(&session_token)?;
 
     match &order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
             let fees = order.crypto.fee / 2;
 
-            // let sign_request: SignRequest;
-            let (tx_hash, sign_request) = if let Some(token_address) = order.crypto.token {
-                Ic2P2ramp::withdraw_token(
-                    *chain_id,
-                    order.offramper_address.address.clone(),
-                    token_address.clone(),
-                    order.crypto.amount,
-                    fees,
-                )
-                .await?
-            } else {
-                Ic2P2ramp::withdraw_base_currency(
-                    *chain_id,
-                    order.offramper_address.address.clone(),
-                    order.crypto.amount,
-                    fees,
-                )
-                .await?
-            };
-
-            vault::spawn_cancel_order(order_id, *chain_id, &tx_hash, sign_request);
-
-            Ok(tx_hash)
+            Ic2P2ramp::withdraw_deposit(
+                *chain_id,
+                order_id,
+                order.offramper_address.address,
+                order.crypto.token,
+                order.crypto.amount,
+                fees,
+            )
+            .await?;
+            Ok(())
         }
         Blockchain::ICP { ledger_principal } => {
             let offramper_principal =
@@ -555,10 +545,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<String
             .await?;
 
             memory::stable::orders::cancel_order(order_id)?;
-            Ok(format!(
-                "Cancelled ICP order for ledger: {:?}",
-                ledger_principal.to_string()
-            ))
+            Ok(())
         }
         _ => return Err(BlockchainError::UnsupportedBlockchain)?,
     }
