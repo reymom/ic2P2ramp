@@ -10,7 +10,7 @@ const TXS_THRESHOLD_DISCARD_BLOCKS: u128 = 30 * 7 * 24 * 60 * 5; // Assuming 5 b
 const DEPOSIT_EVENT_SIGNATURE: &str =
     "0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62";
 
-#[derive(CandidType)]
+#[derive(CandidType, Debug)]
 pub struct DepositEvent {
     pub user: String,
     pub token: Option<String>,
@@ -38,11 +38,15 @@ impl DepositEvent {
     }
 }
 
-#[derive(CandidType)]
+#[derive(CandidType, Debug)]
 pub enum LogEvent {
     Deposit(DepositEvent),
 }
 
+/// topics[0]: The hashed event signature.
+/// topics[1]: The offramper (user) address.
+/// topics[2]: The token address (or zero for native ETH).
+/// data: The amount transferred in uint256.
 pub fn parse_deposit_event(log: &LogEntry) -> Result<LogEvent> {
     if log.topics.len() != 3 {
         return Err(BlockchainError::EvmLogError("Invalid number of topics".to_string()).into());
@@ -57,10 +61,11 @@ pub fn parse_deposit_event(log: &LogEntry) -> Result<LogEvent> {
     let user_address = format!("0x{}", &log.topics[1][26..]);
 
     // Indexed parameter 2: token address (in case it's native token, it's 0x0 address)
-    let token_address = if log.topics[2] == format!("{:#x}", Address::zero()) {
+    let token_address = format!("0x{}", &log.topics[2][26..]);
+    let token_address = if token_address == format!("{:#x}", Address::zero()) {
         None
     } else {
-        Some(format!("0x{}", &log.topics[2][26..]))
+        Some(token_address)
     };
 
     // Non-indexed data: amount (hexadecimal to u128)
