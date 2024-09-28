@@ -295,6 +295,7 @@ type Token = record { decimals : nat8; address : text; rate_symbol : text };
 type TransactionAction = variant {
   Release : TransactionVariant;
   Uncommit;
+  Transfer : TransactionVariant;
   Cancel : TransactionVariant;
   Commit;
 };
@@ -417,7 +418,7 @@ service : (InstallArg) -> {
     );
   remove_user : (nat64) -> (Result_1);
   replace_unresolved_transaction : (nat64, nat64) -> (Result);
-  retry_order_completion : (nat64, opt nat64) -> (Result_5);
+  retry_order_completion : (nat64, opt nat64) -> (Result);
   retry_order_unlock : (nat64) -> (Result);
   test_get_consent_url : () -> (Result_5);
   test_get_gas_tracking : (nat64) -> (Result_12) query;
@@ -441,14 +442,14 @@ service : (InstallArg) -> {
       opt nat64,
     ) -> (Result) query;
   transfer_canister_funds : (principal, principal, nat) -> (Result);
-  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result_5);
+  transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
   unlock_order : (nat64, text, opt nat64) -> (Result);
   unprocess_order : (nat64) -> (Result);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
-  verify_transaction : (nat64, text, text, opt nat64) -> (Result_5);
+  verify_transaction : (nat64, text, text, opt nat64) -> (Result);
   view_canister_balances : () -> (Result_15) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }

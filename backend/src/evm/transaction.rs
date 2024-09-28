@@ -100,12 +100,22 @@ pub fn broadcast_transaction(
                                 &tx_hash,
                                 sign_request,
                             ),
-                            TransactionAction::Cancel(..) => vault::spawn_cancel_listener(
-                                order_id,
-                                chain_id,
-                                &tx_hash,
-                                sign_request,
-                            ),
+                            TransactionAction::Cancel(..) => {
+                                if order_id != 0 {
+                                    vault::spawn_cancel_listener(
+                                        order_id,
+                                        chain_id,
+                                        &tx_hash,
+                                        sign_request,
+                                    )
+                                } else {
+                                    ic_cdk::println!("Broadcasted tx: {}", tx_hash);
+                                    logs::update_transaction_log(
+                                        order_id,
+                                        TransactionStatus::Confirmed(TransactionReceipt::default()),
+                                    );
+                                }
+                            }
                             TransactionAction::Release(transaction_variant) => {
                                 vault::spawn_release_listener(
                                     order_id,
