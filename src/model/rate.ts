@@ -5,35 +5,40 @@ import { rampErrorToString } from './error';
 export const fetchOrderPrice = async (
   currency: string,
   crypto: Crypto,
-): Promise<[bigint, bigint]> => {
+): Promise<[bigint, bigint] | null> => {
   try {
     const result = await backend.calculate_order_price(currency, crypto);
     if ('Ok' in result) {
-      console.log('[fetchOrderPrice] price, fee', result.Ok);
+      console.log('[fetchOrderPrice] price, fee = ', result.Ok);
       return result.Ok;
     } else {
-      throw new Error(rampErrorToString(result.Err));
+      console.error(
+        'Error fetching XRC price: ',
+        rampErrorToString(result.Err),
+      );
+      return null;
     }
   } catch (error) {
-    console.error('Error fetching XRC price:', error);
-    throw new Error('Could not fetch XRC price.');
+    console.error('Error fetching XRC price: ', error);
+    return null;
   }
 };
 
 export const getExchangeRate = async (
   currency: string,
   crypto: string,
-): Promise<number> => {
+): Promise<number | null> => {
   try {
     const result = await backend.get_exchange_rate(currency, crypto);
     if ('Ok' in result) {
       console.log('[getExchangeRate] rate = ', result.Ok);
       return result.Ok;
     } else {
-      throw new Error(rampErrorToString(result.Err));
+      console.error('Error fetching XRC rate: ', rampErrorToString(result.Err));
+      return null;
     }
   } catch (error) {
-    console.error('Error fetching XRC price:', error);
-    throw new Error('Could not fetch XRC price');
+    console.error('Error fetching XRC price: ', error);
+    return null;
   }
 };

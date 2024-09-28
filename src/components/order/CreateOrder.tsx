@@ -8,8 +8,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '../../declarations/backend';
-import { PaymentProvider, PaymentProviderType, Blockchain } from '../../declarations/backend/backend.did';
+import { PaymentProvider, PaymentProviderType, Blockchain, EvmOrderInput } from '../../declarations/backend/backend.did';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '../../constants/evm_tokens';
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 import { ICP_TOKENS } from '../../constants/icp_tokens';
 import { NetworkIds, NetworkProps } from '../../constants/networks';
 import { useUser } from '../user/UserContext';
@@ -19,13 +20,10 @@ import { fetchIcpTransactionFee, transferICPTokensToCanister } from '../../model
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '../../model/evm';
 import { BlockchainTypes, TokenOption } from '../../model/types';
 import { isSessionExpired } from '../../model/session';
+import { getExchangeRate } from '../../model/rate';
 import { formatPrice, truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
 import CurrencySelect from '../ui/CurrencySelect';
-import { getExchangeRate } from '../../model/rate';
-import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
-
-// const RATE_CACHE_EXPIRY_MS = 20 * 60 * 1000; // 20 mins
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -136,17 +134,16 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         const fetchPriceRate = async () => {
-            try {
-                setLoadingRate(true);
-                console.log("selectedToken = ", selectedToken);
-                let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol);
+            setLoadingRate(true);
+            console.log("selectedToken = ", selectedToken);
+            let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol);
+            if (priceRate) {
                 setExchangeRate(Number(priceRate))
-                setLoadingRate(false);
-            } catch (error) {
-                setLoadingRate(false);
-                setMessage("Could not estimate current price rates. You can still create the order, the final price is set dynamically when the order is locked.")
-
+            } else {
+                setMessage("Could not estimate current price rates. \
+                    You can still create the order, the final price is set dynamically when the order is locked.")
             }
+            setLoadingRate(false);
         }
 
         if (selectedToken) {
@@ -238,8 +235,7 @@ const CreateOrder: React.FC = () => {
                 return;
             }
 
-            let gasEstimateLock: [bigint] | [] = [];
-            let gasEstimateRelease: [bigint] | [] = [];
+            let evmOrderInput: [EvmOrderInput] | [] = []
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
                 setLoadingMessage("Estimating order gas");
@@ -249,16 +245,13 @@ const CreateOrder: React.FC = () => {
                         { Commit: null },
                         defaultCommitEvmGas,
                     );
-                    console.log("[createOrder] gasCommitEstimate = ", gasForCommit);
-                    gasEstimateLock = [gasForCommit[0]];
-
+                    let tx_variant = selectedToken.isNative ? { Native: null } : { Token: null };
                     const gasForRelease = await estimateGasAndGasPrice(
                         chainId,
-                        selectedToken.isNative ? { ReleaseNative: null } : { ReleaseToken: null },
+                        { 'Release': tx_variant },
                         defaultReleaseEvmGas,
                     );
-                    console.log("[createOrder] gasReleaseEstimate = ", gasForRelease);
-                    gasEstimateRelease = [gasForRelease[0]];
+                    console.log(`[createOrder] gasCommitEstimate: ${gasForCommit}, gasReleaseEstimate: ${gasForRelease}`);
 
                     const cryptoFee = await estimateOrderFees(
                         BigInt(chainId),
@@ -282,6 +275,12 @@ const CreateOrder: React.FC = () => {
                     const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
                     setTxHash(receipt.hash);
                     console.log('Transaction receipt: ', receipt);
+
+                    evmOrderInput = [{
+                        estimated_gas_lock: gasForCommit[0],
+                        estimated_gas_withdraw: gasForRelease[0],
+                        tx_hash: receipt.hash
+                    } as EvmOrderInput]
                 } catch (e: any) {
                     setMessage(`${e.message || e}`);
                     setIsLoading(false);
@@ -289,6 +288,12 @@ const CreateOrder: React.FC = () => {
                 }
             } else if (blockchain === 'ICP') {
                 try {
+                    if (!icpAgent) {
+                        setMessage("ICP Agent not found");
+                        setIsLoading(false);
+                        return;
+                    }
+
                     setLoadingMessage("Transfering funds to vault");
                     const ledgerCanister = Principal.fromText(selectedToken.address);
                     const fees = await fetchIcpTransactionFee(ledgerCanister);
@@ -309,7 +314,6 @@ const CreateOrder: React.FC = () => {
 
             const result = await backend.create_order(
                 sessionToken,
-                // BigInt(Math.ceil(fiatAmount! * 100)),
                 currency,
                 providerTuples,
                 selectedBlockchain,
@@ -317,8 +321,7 @@ const CreateOrder: React.FC = () => {
                 cryptoAmountUnits,
                 selectedAddress,
                 user.id,
-                gasEstimateLock,
-                gasEstimateRelease,
+                evmOrderInput
             );
 
             if ('Ok' in result) {
