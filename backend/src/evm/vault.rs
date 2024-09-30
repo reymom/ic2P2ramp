@@ -1,12 +1,14 @@
 use ethers_core::abi::Token;
 use ethers_core::types::{Address, U256};
 
-use super::fees;
+use super::fees::{self, eth_get_latest_block};
 use super::helper::load_contract_data;
+use super::rpc::BlockTag;
 use super::transaction::create_vault_sign_request;
 
 use crate::errors::{BlockchainError, Result};
 use crate::evm::transaction::broadcast_transaction;
+use crate::model::types::evm::gas::get_average_gas;
 use crate::model::{helpers, memory::heap::logs};
 use crate::types::{
     evm::{
@@ -23,10 +25,15 @@ impl Ic2P2ramp {
     const GAS_MULTIPLIER_NUM: u64 = 12;
     const GAS_MULTIPLIER_DEN: u64 = 10;
 
-    pub const DEFAULT_GAS: u64 = 100_000;
-
     pub fn get_final_gas(estimated_gas: u64) -> u64 {
         estimated_gas * Self::GAS_MULTIPLIER_NUM / Self::GAS_MULTIPLIER_DEN
+    }
+
+    pub async fn get_average_gas_price(chain_id: u64, method: &TransactionAction) -> Result<u64> {
+        let block = eth_get_latest_block(chain_id, BlockTag::Latest).await?;
+        get_average_gas(chain_id, block.number, None, &method)?
+            .map(|(gas, _)| Ok(gas))
+            .unwrap_or_else(|| Ok(method.default_gas(chain_id)))
     }
 
     pub async fn commit_deposit(
@@ -96,11 +103,7 @@ impl Ic2P2ramp {
         Ok(())
     }
 
-    pub async fn release_funds(
-        order: LockedOrder,
-        chain_id: u64,
-        estimated_gas: Option<u64>,
-    ) -> Result<()> {
+    pub async fn release_funds(order: LockedOrder, chain_id: u64) -> Result<()> {
         let crypto = order.base.crypto.clone();
         if crypto.amount < crypto.fee {
             return Err(BlockchainError::FundsBelowFees)?;
@@ -130,10 +133,12 @@ impl Ic2P2ramp {
             inputs.insert(2, Token::Address(helpers::parse_address(token)?));
             transaction_variant = TransactionVariant::Token;
         }
-
         let transaction_type = TransactionAction::Release(transaction_variant);
+        let estimated_gas = Self::get_average_gas_price(chain_id, &transaction_type).await?;
+
         let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, estimated_gas).await?;
+            create_vault_sign_request(chain_id, &transaction_type, &inputs, Some(estimated_gas))
+                .await?;
 
         logs::new_transaction_log(order.base.id, transaction_type.clone());
         broadcast_transaction(
@@ -171,10 +176,12 @@ impl Ic2P2ramp {
             inputs.insert(1, Token::Address(helpers::parse_address(token)?));
             transaction_variant = TransactionVariant::Token;
         }
-
         let transaction_type = TransactionAction::Cancel(transaction_variant);
+        let estimated_gas = Self::get_average_gas_price(chain_id, &transaction_type).await?;
+
         let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, None).await?;
+            create_vault_sign_request(chain_id, &transaction_type, &inputs, Some(estimated_gas))
+                .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
         broadcast_transaction(
@@ -197,14 +204,14 @@ impl Ic2P2ramp {
         token_address: Option<String>,
         estimated_gas: Option<u64>,
     ) -> Result<()> {
-        let gas = U256::from(Ic2P2ramp::get_final_gas(
-            estimated_gas.unwrap_or(Self::DEFAULT_GAS),
-        ));
         let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
 
         let (request, transaction_type) = match token_address {
             Some(token) => {
                 let transaction_type = TransactionAction::Transfer(TransactionVariant::Token);
+                let gas = U256::from(Ic2P2ramp::get_final_gas(
+                    estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
+                ));
                 let inputs: [Token; 2] = [
                     Token::Address(helpers::parse_address(to.to_string())?),
                     Token::Uint(U256::from(value)),
@@ -231,6 +238,10 @@ impl Ic2P2ramp {
                 )
             }
             None => {
+                let transaction_type = TransactionAction::Transfer(TransactionVariant::Native);
+                let gas = U256::from(Ic2P2ramp::get_final_gas(
+                    estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
+                ));
                 let gas_cost = fee_estimates.max_fee_per_gas * gas;
                 let value = U256::from(value);
                 if value < gas_cost {
@@ -248,7 +259,7 @@ impl Ic2P2ramp {
                         value: Some(value - gas_cost),
                         nonce: None,
                     },
-                    TransactionAction::Transfer(TransactionVariant::Native),
+                    transaction_type,
                 )
             }
         };

@@ -100,11 +100,12 @@ pub fn broadcast_transaction(
                                 &tx_hash,
                                 sign_request,
                             ),
-                            TransactionAction::Cancel(..) => {
+                            TransactionAction::Cancel(cancel_variant) => {
                                 if order_id != 0 {
                                     vault::spawn_cancel_listener(
                                         order_id,
                                         chain_id,
+                                        cancel_variant,
                                         &tx_hash,
                                         sign_request,
                                     )
@@ -116,11 +117,11 @@ pub fn broadcast_transaction(
                                     );
                                 }
                             }
-                            TransactionAction::Release(transaction_variant) => {
+                            TransactionAction::Release(release_variant) => {
                                 vault::spawn_release_listener(
                                     order_id,
                                     chain_id,
-                                    transaction_variant,
+                                    release_variant,
                                     &tx_hash,
                                     sign_request,
                                 )
@@ -195,14 +196,14 @@ pub fn broadcast_transaction(
     });
 }
 
-pub async fn create_vault_sign_request(
+pub(super) async fn create_vault_sign_request(
     chain_id: u64,
     transaction_type: &TransactionAction,
     inputs: &[abi::Token],
     estimated_gas: Option<u64>,
 ) -> Result<SignRequest> {
     let gas = U256::from(Ic2P2ramp::get_final_gas(
-        estimated_gas.unwrap_or(Ic2P2ramp::DEFAULT_GAS),
+        estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
     ));
 
     let fee_estimates = fees::get_fee_estimates(9, chain_id).await?;
@@ -284,12 +285,12 @@ async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<SendRawTransa
     }
 }
 
-pub async fn check_transaction_status(tx_hash: String, chain_id: u64) -> TransactionStatus {
+pub async fn check_transaction_status(tx_hash: &String, chain_id: u64) -> TransactionStatus {
     let cycles = 10_000_000_000;
     let rpc_providers = get_rpc_providers(chain_id).unwrap();
     let arg: Option<RpcConfig> = None;
     let res = EVM_RPC
-        .eth_get_transaction_receipt(rpc_providers, arg, tx_hash, cycles)
+        .eth_get_transaction_receipt(rpc_providers, arg, tx_hash.to_string(), cycles)
         .await;
 
     ic_cdk::println!("[check_transaction_receipt] res = {:?}", res);
@@ -344,7 +345,7 @@ pub fn spawn_transaction_checker<F, G>(
         ic_cdk_timers::set_timer(Duration::from_secs(ATTEMPT_INTERVAL_SECONDS), move || {
             ic_cdk::println!("[schedule_check] spawning attempt number: {}", attempt);
             ic_cdk::spawn(async move {
-                match check_transaction_status(tx_hash.clone(), chain_id).await {
+                match check_transaction_status(&tx_hash, chain_id).await {
                     TransactionStatus::Confirmed(receipt) => {
                         ic_cdk::println!("[schedule_check] TransactionStatus::Confirmed");
                         logs::update_transaction_log(
