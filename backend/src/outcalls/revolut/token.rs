@@ -138,7 +138,6 @@ pub async fn wait_for_revolut_access_token(
                     order_id,
                     session_token.to_string(),
                     payment_id.clone(),
-                    None,
                 )
                 .await
                 {

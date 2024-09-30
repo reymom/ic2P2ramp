@@ -123,11 +123,9 @@ pub async fn verify_revolut_payment(
     }
 }
 
-pub async fn handle_payment_completion(order: &LockedOrder, gas: Option<u64>) -> Result<()> {
+pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
     match order.base.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
-            Ic2P2ramp::release_funds(order.clone(), chain_id, gas).await
-        }
+        Blockchain::EVM { chain_id } => Ic2P2ramp::release_funds(order.clone(), chain_id).await,
         Blockchain::ICP { ledger_principal } => {
             handle_icp_payment_completion(order, &ledger_principal).await
         }
