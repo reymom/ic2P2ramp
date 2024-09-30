@@ -34,7 +34,10 @@ impl Crypto {
 
     pub fn get_symbol(&self) -> Result<String> {
         match &self.blockchain {
-            Blockchain::EVM { chain_id } => chains::get_currency_symbol(*chain_id),
+            Blockchain::EVM { chain_id } => match &self.token {
+                Some(token) => Ok(token::get_evm_token(*chain_id, &token)?.rate_symbol),
+                None => Ok(chains::get_native_currency_symbol(*chain_id)?),
+            },
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(&ledger_principal)?.symbol)
             }
