@@ -222,7 +222,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         }
     };
 
-    const pollTransactionLog = async (orderId: bigint, userId: bigint, maxAttempts = 25) => {
+    const pollTransactionLog = async (orderId: bigint, userId: bigint, maxAttempts = 35) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
 
         let attempts = 0;
@@ -236,7 +236,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             console.log(`[pollTransactionLog] Polling attempt: ${attempts}, maxAttempts: ${maxAttempts}`);
             if (attempts >= maxAttempts) {
                 clearPolling();
-                setMessage("Transaction is still pending after multiple attempts. Please check manually.");
+                setMessage("Network seems to be very busy. Please check later or contact with the maintainer.");
                 setIsLoading(false);
                 return;
             }
@@ -244,7 +244,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             attempts += 1;
 
             try {
-                const logResult = await backend.get_transaction_log(orderId, [[userId, sessionToken]]);
+                const logResult = await backend.get_order_tx_log(orderId, [[userId, sessionToken]]);
                 console.log("[pollTransactionLog] logResult = ", logResult);
 
                 if ('Ok' in logResult && logResult.Ok.length > 0 && logResult.Ok[0]) {
@@ -382,18 +382,6 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             }
         }
 
-        let gasEstimation: [] | [bigint] = [];
-        if ('EVM' in orderBlockchain) {
-            setLoadingMessage("Estimating gas and price")
-            const gasForCommit = await estimateGasAndGasPrice(
-                Number(orderBlockchain.EVM.chain_id),
-                { Commit: null },
-                defaultCommitEvmGas,
-            );
-            console.log("[commitToOrder] gasCommitEstimate = ", gasForCommit);
-            gasEstimation = [gasForCommit[0]];
-        }
-
         const onramperAddress = user.addresses.find(addr => Object.keys(orderBlockchain)[0] in addr.address_type);
         if (!onramperAddress) {
             setIsLoading(false);
@@ -403,7 +391,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
         setLoadingMessage("Locking Order")
         try {
-            const result = await backend.lock_order(orderId, sessionToken, user.id, provider, onramperAddress, gasEstimation);
+            const result = await backend.lock_order(orderId, sessionToken, user.id, provider, onramperAddress);
             if ('Ok' in result) {
                 if ('EVM' in orderBlockchain) {
                     pollTransactionLog(orderId, user.id);

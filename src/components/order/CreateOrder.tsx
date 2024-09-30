@@ -134,6 +134,7 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         const fetchPriceRate = async () => {
+            setMessage(null);
             setLoadingRate(true);
             console.log("selectedToken = ", selectedToken);
             let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol);
@@ -264,9 +265,9 @@ const CreateOrder: React.FC = () => {
                         `[estimateOrderFees] Offramper fee = ${offramperFeeCents}, Crypto fee = ${cryptoFee}`,
                     );
 
-                    if (cryptoFee >= cryptoAmountUnits) {
+                    if (cryptoFee * BigInt(3) >= cryptoAmountUnits) {
                         console.error('[validateOrderFees] Total fees exceed crypto amount');
-                        setMessage("Fees for commit and release will probably exceed the crypto amount.");
+                        setMessage("Blockchain network gas prices will probably exceed the crypto amount.");
                         setIsLoading(false);
                         return;
                     }
