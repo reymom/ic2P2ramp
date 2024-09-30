@@ -73,7 +73,12 @@ impl SerializableHeap {
             order_id_counter,
             locked_order_timers: locked_order_timers
                 .into_iter()
-                .map(|(order_id, _)| (order_id, ic_cdk::api::time() + LOCK_DURATION_TIME_SECONDS))
+                .map(|(order_id, _)| {
+                    (
+                        order_id,
+                        ic_cdk::api::time() + LOCK_DURATION_TIME_SECONDS * 1_000_000_000,
+                    )
+                })
                 .collect(),
             exchange_rate_cache,
             state,
@@ -86,7 +91,7 @@ impl SerializableHeap {
                 set_order_timer(order_id);
             } else {
                 ic_cdk::spawn(async move {
-                    if let Err(e) = management::order::unlock_order(order_id, None, None).await {
+                    if let Err(e) = management::order::unlock_order(order_id, None).await {
                         ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
                     } else {
                         let _ = clear_order_timer(order_id);

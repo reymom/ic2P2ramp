@@ -1,6 +1,9 @@
 use candid::{CandidType, Deserialize};
 
-use crate::types::{Blockchain, PaymentProvider, TransactionAddress};
+use crate::{
+    model::memory::heap,
+    types::{Blockchain, PaymentProvider, TransactionAddress},
+};
 
 use super::order::Order;
 
@@ -69,6 +72,10 @@ impl LockedOrder {
         let received_amount_as_float = received_amount.parse::<f64>().unwrap_or(0.0);
 
         (received_amount_as_float - total_expected_amount).abs() < f64::EPSILON
+    }
+
+    pub fn is_inside_lock_time(&self) -> bool {
+        self.locked_at + heap::LOCK_DURATION_TIME_SECONDS * 1_000_000_000 > ic_cdk::api::time()
     }
 }
 

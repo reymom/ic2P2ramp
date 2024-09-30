@@ -91,6 +91,9 @@ pub enum OrderError {
     #[error("Order is Uncommitted in the EVM vault")]
     OrderUncommitted,
 
+    #[error("Order is still in Locked time")]
+    OrderInLockTime,
+
     #[error("Payment is already done")]
     PaymentDone,
 
@@ -150,6 +153,9 @@ pub enum BlockchainError {
 
     #[error("Fees exceed the funds amount")]
     FundsBelowFees,
+
+    #[error("Funds are too low")]
+    FundsTooLow,
 
     #[error("Ledger principal {0} not supported")]
     LedgerPrincipalNotSupported(String),
