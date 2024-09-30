@@ -14,7 +14,6 @@ use crate::evm::{
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
-use crate::model::types::orders::LockInput;
 use crate::model::{
     helpers,
     memory::{self, stable::spent_transactions},
@@ -22,16 +21,32 @@ use crate::model::{
 use crate::outcalls::xrc_rates::{get_cached_exchange_rate, Asset, AssetClass};
 use crate::types::{
     self,
-    evm::{chains, logs::TransactionStatus, token},
+    evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
     icp::{get_icp_token, is_icp_token_supported},
     orders::{
         fees::{get_crypto_fee, get_fiat_fee},
-        EvmOrderInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+        EvmOrderInput, LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
     },
     Blockchain, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 
 use super::payment;
+
+pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
+    let base_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: crypto.get_symbol()?,
+    };
+    let quote_asset = Asset {
+        class: AssetClass::FiatCurrency,
+        symbol: currency.to_string(),
+    };
+    let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
+
+    let fiat_amount = (crypto.to_whole_units()? * exchange_rate * 100.) as u64;
+
+    Ok((fiat_amount, get_fiat_fee(fiat_amount)))
+}
 
 pub async fn calculate_order_evm_fees(
     chain_id: u64,
@@ -124,6 +139,25 @@ async fn order_crypto_fee(
     }
 }
 
+pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<LogEvent> {
+    if spent_transactions::is_tx_hash_processed(tx_hash) {
+        return Err(
+            BlockchainError::EvmLogError("Transaction already processed".to_string()).into(),
+        );
+    };
+
+    match transaction::check_transaction_status(tx_hash, *chain_id).await {
+        TransactionStatus::Confirmed(receipt) => {
+            let log_entry = receipt
+                .logs
+                .get(0)
+                .ok_or_else(|| BlockchainError::EvmLogError("Empty Log Entries".to_string()))?;
+            event::parse_deposit_event(log_entry)
+        }
+        _ => return Err(BlockchainError::EmptyTransactionHash.into()),
+    }
+}
+
 pub async fn validate_deposit_tx(
     blockchain: &Blockchain,
     evm_input: Option<EvmOrderInput>,
@@ -142,27 +176,7 @@ pub async fn validate_deposit_tx(
                 BlockchainError::EvmLogError("EVM input data is required".to_string())
             })?;
 
-            if spent_transactions::is_tx_hash_processed(&evm_input.tx_hash) {
-                return Err(BlockchainError::EvmLogError(
-                    "Transaction already processed".to_string(),
-                )
-                .into());
-            }
-
-            // Validate EVM transaction in the Logs
-            let log_event =
-                match transaction::check_transaction_status(evm_input.tx_hash.clone(), *chain_id)
-                    .await
-                {
-                    TransactionStatus::Confirmed(receipt) => {
-                        let log_entry = receipt.logs.get(0).ok_or_else(|| {
-                            BlockchainError::EvmLogError("Empty Log Entries".to_string())
-                        })?;
-                        event::parse_deposit_event(log_entry)?
-                    }
-                    _ => return Err(BlockchainError::EmptyTransactionHash.into()),
-                };
-
+            let log_event = get_valid_log_event(chain_id, &evm_input.tx_hash).await?;
             ic_cdk::println!("[validate_deposit_tx] log_event = {:?}", log_event);
             match log_event {
                 LogEvent::Deposit(deposit_event) => {
@@ -178,7 +192,9 @@ pub async fn validate_deposit_tx(
                         )
                         .into());
                     }
-                    if deposit_event.token != order_token {
+                    if deposit_event.token.clone().map(|t| t.to_lowercase())
+                        != order_token.map(|t| t.to_lowercase())
+                    {
                         return Err(
                             BlockchainError::EvmLogError("Invalid Crypto".to_string()).into()
                         );
@@ -219,8 +235,8 @@ pub async fn create_order(
     )
     .await?;
 
-    if crypto_fee >= crypto_amount {
-        return Err(BlockchainError::FundsBelowFees)?;
+    if 2 * crypto_fee >= crypto_amount {
+        return Err(BlockchainError::FundsTooLow)?;
     }
 
     let order = Order::new(
@@ -253,8 +269,8 @@ pub async fn topup_order(
     )
     .await?;
 
-    if crypto_fee >= order.crypto.amount + amount {
-        return Err(BlockchainError::FundsBelowFees)?;
+    if 2 * crypto_fee >= order.crypto.amount + amount {
+        return Err(BlockchainError::FundsTooLow)?;
     };
 
     memory::stable::orders::mutate_order(&order.id, |order| {
@@ -342,29 +358,12 @@ pub fn get_orders(
     }
 }
 
-pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
-    let base_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: crypto.get_symbol()?,
-    };
-    let quote_asset = Asset {
-        class: AssetClass::FiatCurrency,
-        symbol: currency.to_string(),
-    };
-    let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
-
-    let fiat_amount = (crypto.to_whole_units()? * exchange_rate * 100.) as u64;
-
-    Ok((fiat_amount, get_fiat_fee(fiat_amount)))
-}
-
 pub async fn lock_order(
     order_id: u64,
     session_token: String,
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
-    estimated_gas: Option<u64>,
 ) -> Result<()> {
     let user = memory::stable::users::get_user(&onramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -389,13 +388,15 @@ pub async fn lock_order(
 
     match order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
+            let estimated_gas =
+                Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Commit).await?;
             Ic2P2ramp::commit_deposit(
                 chain_id,
                 order_id,
                 order.offramper_address.address,
                 order.crypto.token,
                 order.crypto.amount,
-                estimated_gas,
+                Some(estimated_gas),
                 LockInput {
                     price,
                     offramper_fee,
@@ -460,11 +461,7 @@ pub async fn lock_order(
 ///     Err(err) => eprintln!("Failed to unlock order: {:?}", err),
 /// }
 /// ```
-pub async fn unlock_order(
-    order_id: u64,
-    session_token: Option<String>,
-    estimated_gas: Option<u64>,
-) -> Result<()> {
+pub async fn unlock_order(order_id: u64, session_token: Option<String>) -> Result<()> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if order.payment_done {
         return Err(OrderError::PaymentDone)?;
@@ -477,17 +474,23 @@ pub async fn unlock_order(
         let user = memory::stable::users::get_user(&order.onramper.user_id)?;
         user.validate_session(&session_token)?;
         user.validate_onramper()?;
+    } else {
+        if order.is_inside_lock_time() {
+            return Err(OrderError::OrderInLockTime)?;
+        }
     }
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
+            let estimated_gas =
+                Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Uncommit).await?;
             Ic2P2ramp::uncommit_deposit(
                 chain_id,
                 order_id,
                 order.base.offramper_address.address,
                 order.base.crypto.token,
                 order.base.crypto.amount,
-                estimated_gas,
+                Some(estimated_gas),
             )
             .await?;
             Ok(())
@@ -512,7 +515,6 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
     match &order.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
             let fees = order.crypto.fee / 2;
-
             Ic2P2ramp::withdraw_deposit(
                 *chain_id,
                 order_id,
@@ -597,6 +599,9 @@ pub fn set_order_completed(order_id: u64) -> Result<()> {
 
 pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<LockedOrder> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
+    if !order.is_inside_lock_time() {
+        return Err(OrderError::OrderUncommitted)?;
+    }
     if order.payment_done {
         return Err(OrderError::PaymentDone)?;
     };
