@@ -41,6 +41,32 @@ impl TransactionAction {
             _ => "",
         }
     }
+
+    pub fn default_gas(&self, chain_id: u64) -> u64 {
+        if chain_id == 5000 || chain_id == 5003 {
+            return match self {
+                &TransactionAction::Commit => 1_800_000_000,
+                &TransactionAction::Uncommit => 2_000_000_000,
+                &TransactionAction::Cancel(TransactionVariant::Native) => 2_000_000_000,
+                &TransactionAction::Cancel(TransactionVariant::Token) => 2_500_000_000,
+                &TransactionAction::Release(TransactionVariant::Native) => 2_000_000_000,
+                &TransactionAction::Release(TransactionVariant::Token) => 2_500_000_000,
+                &TransactionAction::Transfer(TransactionVariant::Native) => 2_000_000_000,
+                &TransactionAction::Transfer(TransactionVariant::Token) => 2_500_000_000,
+            };
+        }
+
+        match self {
+            &TransactionAction::Commit => 80_000,
+            &TransactionAction::Uncommit => 80_000,
+            &TransactionAction::Cancel(TransactionVariant::Native) => 80_000,
+            &TransactionAction::Cancel(TransactionVariant::Token) => 100_000,
+            &TransactionAction::Release(TransactionVariant::Native) => 80_000,
+            &TransactionAction::Release(TransactionVariant::Token) => 100_000,
+            &TransactionAction::Transfer(TransactionVariant::Native) => 80_000,
+            &TransactionAction::Transfer(TransactionVariant::Token) => 100_000,
+        }
+    }
 }
 
 const COMMIT_ABI: &str = r#"

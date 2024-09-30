@@ -156,7 +156,7 @@ pub fn get_vault_manager_address(chain_id: u64) -> Result<String> {
 
 /// Retrieves the currency symbol of the native currency for a specific chain.
 /// Returns the symbol or an error if the symbol or chain ID is not found.
-pub fn get_currency_symbol(chain_id: u64) -> Result<String> {
+pub fn get_native_currency_symbol(chain_id: u64) -> Result<String> {
     read_state(|state| {
         state
             .chains

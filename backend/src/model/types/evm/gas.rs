@@ -7,11 +7,13 @@ use crate::model::{
 
 use super::transaction::{TransactionAction, TransactionVariant};
 
+const DEFAULT_PAST_DAY_BLOCKS: u64 = (24 * 60 * 60) / 12; // assuming 12 seconds per block
+
 /// Represents a record of gas usage in a particular transaction on a blockchain.
 /// This includes gas consumption, the gas price at the time, and the block number the transaction occurred in.
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasRecord {
-    gas: u128,
+    gas: u64,
     gas_price: u128,
     block_number: u128,
 }
@@ -27,13 +29,14 @@ pub struct GasUsage {
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct ChainGasTracking {
     pub commit_gas: GasUsage,
+    pub uncommit_gas: GasUsage,
     pub release_token_gas: GasUsage,
     pub release_native_gas: GasUsage,
 }
 
 impl GasUsage {
     /// Records the gas usage for a particular transaction, saving the gas, gas price, and block number.
-    pub fn record_gas_usage(&mut self, gas: u128, gas_price: u128, block_number: u128) {
+    pub fn record_gas_usage(&mut self, gas: u64, gas_price: u128, block_number: u128) {
         self.records.push(GasRecord {
             gas,
             gas_price,
@@ -50,11 +53,7 @@ impl GasUsage {
     /// Returns:
     /// - A tuple containing the average gas usage and the average gas price for transactions within the specified block range,
     ///   or `None` if no records are found.
-    pub fn average_gas(
-        &self,
-        current_block: u128,
-        max_blocks_in_past: u64,
-    ) -> Option<(u128, u128)> {
+    pub fn average_gas(&self, current_block: u128, max_blocks_in_past: u64) -> Option<(u64, u128)> {
         let relevant_records: Vec<_> = self
             .records
             .iter()
@@ -73,10 +72,13 @@ impl GasUsage {
             relevant_records
                 .iter()
                 .fold((0u128, 0u128), |(sum_gas, sum_gas_price), record| {
-                    (sum_gas + record.gas, sum_gas_price + record.gas_price)
+                    (
+                        sum_gas + record.gas as u128,
+                        sum_gas_price + record.gas_price,
+                    )
                 });
 
-        Some((total_gas / length, total_gas_price / length))
+        Some(((total_gas / length) as u64, total_gas_price / length))
     }
 }
 
@@ -93,7 +95,7 @@ impl GasUsage {
 /// - `Result<()>`: Returns an error if the chain ID is not found.
 pub fn register_gas_usage(
     chain_id: u64,
-    gas: u128,
+    gas: u64,
     gas_price: u128,
     block_number: u128,
     action_type: &TransactionAction,
@@ -107,6 +109,10 @@ pub fn register_gas_usage(
         match action_type {
             TransactionAction::Commit => {
                 let gas_tracking = &mut chain_state.gas_tracking.commit_gas;
+                gas_tracking.record_gas_usage(gas, gas_price, block_number);
+            }
+            TransactionAction::Uncommit => {
+                let gas_tracking = &mut chain_state.gas_tracking.uncommit_gas;
                 gas_tracking.record_gas_usage(gas, gas_price, block_number);
             }
             TransactionAction::Release(TransactionVariant::Token) => {
@@ -137,9 +143,15 @@ pub fn register_gas_usage(
 pub fn get_average_gas(
     chain_id: u64,
     current_block: u128,
-    max_blocks_in_past: u64,
+    max_blocks_in_past: Option<u64>,
     action_type: &TransactionAction,
-) -> Result<Option<(u128, u128)>> {
+) -> Result<Option<(u64, u128)>> {
+    let max_blocks_in_past = if let Some(blocks) = max_blocks_in_past {
+        blocks
+    } else {
+        DEFAULT_PAST_DAY_BLOCKS
+    };
+
     read_state(|state| {
         let chain_state = state
             .chains
@@ -148,6 +160,7 @@ pub fn get_average_gas(
 
         let gas_tracking = match action_type {
             &TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
+            &TransactionAction::Uncommit => Ok(&chain_state.gas_tracking.uncommit_gas),
             &TransactionAction::Release(TransactionVariant::Token) => {
                 Ok(&chain_state.gas_tracking.release_token_gas)
             }
