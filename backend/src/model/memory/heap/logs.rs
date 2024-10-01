@@ -49,11 +49,11 @@ pub fn get_transaction_log(order_id: u64) -> Option<EvmTransactionLog> {
     EVM_TRANSACTION_LOGS.with_borrow(|logs| logs.get(&order_id).cloned())
 }
 
-pub fn get_unresolved_transactions() -> Vec<EvmTransactionLog> {
+pub fn get_pending_transactions() -> Vec<EvmTransactionLog> {
     EVM_TRANSACTION_LOGS.with_borrow(|logs| {
         logs.iter()
             .filter_map(|(_, log)| match &log.status {
-                TransactionStatus::Unresolved(_, _) => Some(log.clone()),
+                TransactionStatus::Pending => Some(log.clone()),
                 _ => None,
             })
             .collect()
