@@ -151,6 +151,9 @@ pub enum BlockchainError {
     #[error("Insufficient funds")]
     InsufficientFunds,
 
+    #[error("Replacement transaction underpriced")]
+    ReplacementUnderpriced,
+
     #[error("Fees exceed the funds amount")]
     FundsBelowFees,
 

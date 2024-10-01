@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, u64};
 
 use ethers_core::{abi, types::U256};
 
@@ -15,14 +15,18 @@ use crate::{
     errors::{BlockchainError, RampError, Result, SystemError},
     evm::{fees, helper::load_contract_data, vault::Ic2P2ramp},
     management::vault,
-    model::memory::{
-        heap::{logs, read_state},
-        stable::orders::unset_processing_order,
+    model::{
+        memory::{
+            heap::{logs, read_state},
+            stable::orders::unset_processing_order,
+        },
+        types::evm::{chains, nonce::NonceFeeEstimates},
     },
     types::{
         evm::{
-            chains::{self, get_rpc_providers, release_and_increment_nonce, release_nonce},
+            chains::get_rpc_providers,
             logs::TransactionStatus,
+            nonce::{self, release_and_increment_nonce, release_nonce},
             request::SignRequest,
             transaction::TransactionAction,
         },
@@ -30,8 +34,8 @@ use crate::{
     },
 };
 
-pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 4;
-pub(crate) const MAX_ATTEMPTS_PER_RETRY: u16 = 40;
+pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 3;
+pub(crate) const MAX_ATTEMPTS_PER_RETRY: u16 = 20;
 pub(crate) const ATTEMPT_INTERVAL_SECONDS: u64 = 4;
 
 pub fn broadcast_transaction(
@@ -46,11 +50,31 @@ pub fn broadcast_transaction(
     ic_cdk_timers::set_timer(Duration::from_millis(200), move || {
         ic_cdk::spawn(async move {
             ic_cdk::println!("[broadcast_transaction] attempt = {}", attempt);
-            if nonce_retry || !chains::nonce_locked(chain_id) {
+            if nonce_retry || !nonce::is_locked(chain_id) {
                 let mut sign_request = sign_request;
                 if !nonce_retry {
-                    let nonce = chains::get_and_lock_nonce(chain_id).unwrap();
-                    sign_request.add_nonce(nonce);
+                    let mut nonce = nonce::get_and_lock_nonce(chain_id).unwrap();
+                    ic_cdk::println!("[broadcast_transaction] nonce from state: {}", nonce);
+
+                    if nonce::has_unresolved_nonces(chain_id) {
+                        nonce = eth_get_transaction_count(chain_id)
+                            .await
+                            .map(|n| n.into())
+                            .unwrap_or(nonce);
+                        ic_cdk::println!("[broadcast_transaction] nonce from tx_count: {}", nonce);
+
+                        if let Some(fee_estimates) =
+                            nonce::get_unresolved_nonce_fees(chain_id, nonce.as_u128())
+                        {
+                            sign_request.max_fee_per_gas =
+                                Some(bump_fee(Some(fee_estimates.max_fee_per_gas)));
+                            sign_request.max_priority_fee_per_gas =
+                                Some(bump_fee(Some(fee_estimates.max_priority_fee_per_gas)));
+                        }
+                    }
+
+                    //take out the fees from nonce as well
+                    sign_request.add_nonce(nonce.into());
                 }
 
                 match send_signed_transaction(sign_request.clone(), chain_id).await {
@@ -163,6 +187,26 @@ pub fn broadcast_transaction(
                             }
                         }
                     }
+
+                    Err(RampError::BlockchainError(BlockchainError::ReplacementUnderpriced)) => {
+                        let sign_request = SignRequest {
+                            max_fee_per_gas: Some(bump_fee(sign_request.max_fee_per_gas)),
+                            max_priority_fee_per_gas: Some(bump_fee(
+                                sign_request.max_priority_fee_per_gas,
+                            )),
+                            ..sign_request
+                        };
+                        broadcast_transaction(
+                            order_id,
+                            chain_id,
+                            action,
+                            sign_request,
+                            lock_input,
+                            attempt + 1,
+                            true,
+                        );
+                    }
+
                     Err(e) => {
                         release_nonce(chain_id);
                         let _ = unset_processing_order(&order_id);
@@ -239,12 +283,15 @@ async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<
 
     match send_raw_transaction(tx.clone(), chain_id).await? {
         SendRawTransactionStatus::Ok(transaction_hash) => {
-            ic_cdk::println!("[send_signed_transactions] tx_hash = {transaction_hash:?}");
+            ic_cdk::println!("[send_signed_transaction] tx_hash = {:?}", transaction_hash);
             transaction_hash.ok_or_else(|| BlockchainError::EmptyTransactionHash.into())
         }
         SendRawTransactionStatus::NonceTooLow => Err(BlockchainError::NonceTooLow)?,
         SendRawTransactionStatus::NonceTooHigh => Err(BlockchainError::NonceTooHigh)?,
         SendRawTransactionStatus::InsufficientFunds => Err(BlockchainError::InsufficientFunds)?,
+        SendRawTransactionStatus::ReplacementUnderpriced => {
+            Err(BlockchainError::ReplacementUnderpriced)?
+        }
     }
 }
 
@@ -269,6 +316,8 @@ async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<SendRawTransa
                         Ok(SendRawTransactionStatus::NonceTooHigh)
                     } else if e.message.contains("insufficient funds") {
                         Ok(SendRawTransactionStatus::InsufficientFunds)
+                    } else if e.message.contains("replacement transaction underpriced") {
+                        Ok(SendRawTransactionStatus::ReplacementUnderpriced)
                     } else {
                         Err(SystemError::RpcError(format!("Json Rpc Error: {:?}", e)).into())
                     }
@@ -415,15 +464,32 @@ pub fn spawn_transaction_checker<F, G>(
         on_fail();
         ic_cdk::spawn(async move {
             match bump_dummy_transaction(sign_request.clone(), chain_id).await {
-                Ok(tx_hash) => ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash),
+                Ok(tx_hash) => {
+                    ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash);
+                }
                 Err(e) => {
                     ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
-                    logs::update_transaction_log(
-                        order_id,
-                        TransactionStatus::Unresolved(tx_hash, sign_request.into()),
-                    );
                 }
-            };
+            }
+
+            logs::update_transaction_log(
+                order_id,
+                TransactionStatus::Unresolved(tx_hash, sign_request.clone().into()),
+            );
+            nonce::set_unresolved_nonce(
+                chain_id,
+                sign_request.nonce.map(|nonce| nonce.as_u128()),
+                NonceFeeEstimates {
+                    max_fee_per_gas: sign_request
+                        .max_fee_per_gas
+                        .unwrap_or_else(|| 0.into())
+                        .as_u128(),
+                    max_priority_fee_per_gas: sign_request
+                        .max_priority_fee_per_gas
+                        .unwrap_or_else(|| 0.into())
+                        .as_u128(),
+                },
+            );
         })
     }
 }
@@ -474,17 +540,25 @@ pub async fn retry_with_bumped_fees<F, G>(
                 "[retry_with_bumped_fees] Failed to send transaction: {:?}",
                 e
             );
+            logs::update_transaction_log(
+                order_id,
+                TransactionStatus::Unresolved(last_tx_hash, sign_request.clone().into()),
+            );
+            nonce::set_unresolved_nonce(
+                chain_id,
+                sign_request.nonce.map(|nonce| nonce.as_u128()),
+                NonceFeeEstimates {
+                    max_fee_per_gas: sign_request
+                        .max_fee_per_gas
+                        .unwrap_or_else(|| 0.into())
+                        .as_u128(),
+                    max_priority_fee_per_gas: sign_request
+                        .max_priority_fee_per_gas
+                        .unwrap_or_else(|| 0.into())
+                        .as_u128(),
+                },
+            );
             on_fail();
-            match bump_dummy_transaction(sign_request.clone(), chain_id).await {
-                Ok(tx_hash) => ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash),
-                Err(e) => {
-                    ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
-                    logs::update_transaction_log(
-                        order_id,
-                        TransactionStatus::Unresolved(last_tx_hash, sign_request.into()),
-                    );
-                }
-            };
         }
     }
 }
