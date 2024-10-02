@@ -181,6 +181,10 @@ const CreateOrder: React.FC = () => {
             setSelectedProviders([provider]);
             return
         }
+        if ('Revolut' in provider) {
+            setMessage("We are waiting for revolut certificates to operate in production.")
+            return
+        }
         setSelectedProviders((prevSelected) => {
             if (prevSelected.includes(provider)) {
                 return prevSelected.filter((p) => p !== provider);
@@ -220,14 +224,15 @@ const CreateOrder: React.FC = () => {
         if (!selectedToken) throw new Error('No token selected');
         if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
 
+        const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
+            const providerType: PaymentProviderType = providerToProviderType(provider);
+            return [providerType, provider];
+        });
+
         try {
             setIsLoading(true);
             setLoadingMessage("Creating order");
 
-            const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
-                const providerType: PaymentProviderType = providerToProviderType(provider);
-                return [providerType, provider];
-            });
 
             const selectedAddress = user.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
             if (!selectedAddress) {

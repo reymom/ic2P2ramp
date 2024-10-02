@@ -399,16 +399,16 @@ const UserProfile: React.FC = () => {
                                     );
                                 } else if ('Revolut' in provider) {
                                     return (
-                                        <li key={index} className="py-1">
-                                            <span className="flex-1 text-sm text-gray-200">(Revolut)</span>
-                                            <span className="ml-2">{provider.Revolut.id}</span>
-                                            <div className="ml-2">
-                                                <span>{provider.Revolut.scheme}</span>
-                                                {provider.Revolut.name && provider.Revolut.name.length > 0 && (
-                                                    <div>Name: {provider.Revolut.name[0]}</div>
-                                                )}
+                                        <li key={index} className="py-1 relative items-center">
+                                            <div className="flex-1">
+                                                <span className="text-sm text-gray-200">(Revolut)</span>
+                                                <span className="ml-2">{provider.Revolut.id}</span>
                                             </div>
-                                            <span className="absolute right-0 my-1">
+                                            <div>{provider.Revolut.scheme}</div>
+                                            {provider.Revolut.name && provider.Revolut.name.length > 0 && (
+                                                <div>Name: {provider.Revolut.name[0]}</div>
+                                            )}
+                                            <span className="absolute right-0 top-1/2 transform -translate-y-1/2">
                                                 <button
                                                     className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
                                                     title="remove"
