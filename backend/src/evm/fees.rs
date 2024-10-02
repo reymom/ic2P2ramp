@@ -1,7 +1,8 @@
+use std::ops::{Add, Div, Mul};
+
 use candid::Nat;
 use ethers_core::types::U256;
 use serde_bytes::ByteBuf;
-use std::ops::Add;
 
 use super::rpc::{
     Block, BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, GetBlockByNumberResult,
@@ -20,7 +21,7 @@ pub struct FeeEstimates {
 
 const MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS: u32 = 1_500_000_000;
 
-pub async fn fee_history(
+pub(super) async fn fee_history(
     chain_id: u64,
     block_count: Nat,
     newest_block: BlockTag,
@@ -63,8 +64,13 @@ fn median_index(length: usize) -> usize {
 }
 
 pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEstimates> {
-    // let max_fee_per_gas = U256::from(100_000_000_000u64);
-    // let max_priority_fee_per_gas = U256::from(2_000_000_000);
+    // Can be taken dynamically from proxy contract 0x420000000000000000000000000000000000000F
+    if chain_id == 5003 || chain_id == 5000 {
+        return Ok(FeeEstimates {
+            max_fee_per_gas: 20000000.into(),
+            max_priority_fee_per_gas: 0.into(),
+        });
+    }
 
     // we are setting the `max_priority_fee_per_gas` based on this article:
     // https://docs.alchemy.com/docs/maxpriorityfeepergas-vs-maxfeepergas
@@ -104,14 +110,27 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEsti
         .unwrap_or(&Nat::from(0_u8))
         .clone();
 
+    // let max_priority_fee_per_gas = median_reward
+    //     .clone()
+    //     .add(base_fee_per_gas)
+    //     .max(Nat::from(MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS));
+
     let max_priority_fee_per_gas = median_reward
         .clone()
-        .add(base_fee_per_gas)
         .max(Nat::from(MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS));
 
+    let max_fee_per_gas = base_fee_per_gas
+        .clone()
+        .add(max_priority_fee_per_gas.clone())
+        .max(Nat::from(base_fee_per_gas.clone()))
+        .mul(Nat::from(105u8))
+        .div(Nat::from(100u8)); // Adding a cushion buffer
+
     Ok(FeeEstimates {
-        max_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
-        max_priority_fee_per_gas: nat_to_u256(&median_reward),
+        // max_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
+        // max_priority_fee_per_gas: nat_to_u256(&median_reward),
+        max_fee_per_gas: nat_to_u256(&max_fee_per_gas),
+        max_priority_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
     })
 }
 

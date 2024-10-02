@@ -8,10 +8,10 @@ use super::transaction::create_vault_sign_request;
 
 use crate::errors::{BlockchainError, Result};
 use crate::evm::transaction::broadcast_transaction;
-use crate::model::types::evm::gas::get_average_gas;
 use crate::model::{helpers, memory::heap::logs};
 use crate::types::{
     evm::{
+        gas::get_average_gas,
         request::SignRequest,
         transaction::{TransactionAction, TransactionVariant},
     },
@@ -31,9 +31,14 @@ impl Ic2P2ramp {
 
     pub async fn get_average_gas_price(chain_id: u64, method: &TransactionAction) -> Result<u64> {
         let block = eth_get_latest_block(chain_id, BlockTag::Latest).await?;
-        get_average_gas(chain_id, block.number, None, &method)?
+        let average_gas = get_average_gas(chain_id, block.number, None, &method)?
             .map(|(gas, _)| Ok(gas))
-            .unwrap_or_else(|| Ok(method.default_gas(chain_id)))
+            .unwrap_or_else(|| Ok(method.default_gas(chain_id)));
+        if chain_id == 5003 || chain_id == 5000 {
+            return average_gas.map(|gas| gas * 2);
+        }
+
+        average_gas
     }
 
     pub async fn commit_deposit(

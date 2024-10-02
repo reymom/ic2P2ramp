@@ -301,6 +301,7 @@ pub enum SendRawTransactionStatus {
     NonceTooLow,
     NonceTooHigh,
     InsufficientFunds,
+    ReplacementUnderpriced,
 }
 
 #[derive(CandidType, Deserialize)]
