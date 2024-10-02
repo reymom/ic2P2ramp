@@ -10,6 +10,6 @@ pub fn load_contract_data(abi: &str, function: &str, inputs: &[Token]) -> Result
     })?;
 
     function
-        .encode_input(&inputs)
+        .encode_input(inputs)
         .map_err(|e| BlockchainError::EthersAbiError(format!("Encode input error: {:?}", e)).into())
 }

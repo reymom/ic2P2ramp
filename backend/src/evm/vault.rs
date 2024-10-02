@@ -31,7 +31,7 @@ impl Ic2P2ramp {
 
     pub async fn get_average_gas_price(chain_id: u64, method: &TransactionAction) -> Result<u64> {
         let block = eth_get_latest_block(chain_id, BlockTag::Latest).await?;
-        let average_gas = get_average_gas(chain_id, block.number, None, &method)?
+        let average_gas = get_average_gas(chain_id, block.number, None, method)?
             .map(|(gas, _)| Ok(gas))
             .unwrap_or_else(|| Ok(method.default_gas(chain_id)));
         if chain_id == 5003 || chain_id == 5000 {
@@ -123,15 +123,14 @@ impl Ic2P2ramp {
             order.base.crypto.fee,
         );
 
-        let mut inputs: Vec<Token> = Vec::new();
-        inputs.push(Token::Address(helpers::parse_address(
-            order.base.offramper_address.address,
-        )?));
-        inputs.push(Token::Address(helpers::parse_address(
-            order.onramper.address.address,
-        )?));
-        inputs.push(Token::Uint(U256::from(crypto.amount)));
-        inputs.push(Token::Uint(U256::from(crypto.fee)));
+        let mut inputs: Vec<Token> = vec![
+            Token::Address(helpers::parse_address(
+                order.base.offramper_address.address,
+            )?),
+            Token::Address(helpers::parse_address(order.onramper.address.address)?),
+            Token::Uint(U256::from(crypto.amount)),
+            Token::Uint(U256::from(crypto.fee)),
+        ];
 
         let mut transaction_variant = TransactionVariant::Native;
         if let Some(token) = crypto.token {
@@ -171,10 +170,11 @@ impl Ic2P2ramp {
             return Err(BlockchainError::FundsBelowFees)?;
         }
 
-        let mut inputs: Vec<Token> = Vec::new();
-        inputs.push(Token::Address(helpers::parse_address(offramper)?));
-        inputs.push(Token::Uint(U256::from(amount)));
-        inputs.push(Token::Uint(U256::from(fees)));
+        let mut inputs: Vec<Token> = vec![
+            Token::Address(helpers::parse_address(offramper)?),
+            Token::Uint(U256::from(amount)),
+            Token::Uint(U256::from(fees)),
+        ];
 
         let mut transaction_variant = TransactionVariant::Native;
         if let Some(token) = token_address {

@@ -77,7 +77,7 @@ pub async fn wait_for_revolut_access_token(
     let order = stable::orders::get_order(&order_id)?.locked()?;
 
     let user = stable::users::get_user(&order.onramper.user_id)?;
-    user.validate_session(&session_token)?;
+    user.validate_session(session_token)?;
 
     let (
         consent_id,
