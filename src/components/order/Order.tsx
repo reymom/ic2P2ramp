@@ -237,6 +237,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             if (attempts >= maxAttempts) {
                 clearPolling();
                 setMessage("Network seems to be very busy. Please check later or contact with the maintainer.");
+                fetchOrder(orderId);
                 setIsLoading(false);
                 return;
             }
@@ -274,27 +275,31 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         return;
                     } else if ('Failed' in transactionLog.status) {
                         console.log("[pollTransactionLog] Transaction Failed:", transactionLog.status.Failed);
-                        setMessage("Transaction failed.");
+                        setMessage("Transaction failed. Please contact to maintainer.");
                         setIsLoading(false);
+                        fetchOrder(orderId);
                         clearPolling();
                         return;
                     } else if ('BroadcastError' in transactionLog.status) {
                         console.log("[pollTransactionLog] Broadcasting Error: ", transactionLog.status.BroadcastError);
-                        setMessage(`Could not broadcast transaction: ${rampErrorToString(transactionLog.status.BroadcastError)}`);
+                        setMessage(`Could not broadcast transaction. Please contact to maintainer.`);
                         setIsLoading(false);
+                        fetchOrder(orderId);
                         clearPolling();
                         return;
                     } else if ('Unresolved' in transactionLog.status) {
                         console.log("[pollTransactionLog] Unresolved transaction: ", transactionLog.status.Unresolved);
-                        setMessage(`Unresolved transaction: ${transactionLog.status.Unresolved[0]}`);
+                        setMessage(`Unresolved transaction. Please contact to maintainer.`);
                         setIsLoading(false);
+                        fetchOrder(orderId);
                         clearPolling();
                         return;
                     }
                 } else if ('Err' in logResult) {
-                    setMessage(`Transaction failed: ${rampErrorToString(logResult.Err)}`)
+                    setMessage(`Transaction failed. Please contact to maintainer.`)
                     setIsLoading(false);
                     setTxHash(null);
+                    fetchOrder(orderId);
                     clearPolling();
                     return;
                 }
@@ -304,7 +309,8 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             } catch (error) {
                 console.error("Error polling transaction logs: ", error);
-                setMessage("Failed to retrieve transaction status");
+                setMessage("Failed to retrieve transaction status. Please contact to maintainer.");
+                fetchOrder(orderId);
                 setIsLoading(false);
                 clearPolling();
             };
@@ -369,11 +375,13 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         }
 
         const [orderPrice, offramperFee] = priceData;
-        const priceDifference = Math.abs(Number((orderPrice + offramperFee - currentPrice!) / currentPrice!));
+        const currentPriceNumber = Number(currentPrice);
+        const totalOrderPrice = Number(orderPrice) + Number(offramperFee);
+        const priceDifference = Math.abs((totalOrderPrice - currentPriceNumber) / currentPriceNumber);
         if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
             const confirm = window.confirm(
                 `The real price differs significantly from the previously estimated price. 
-                    Real price: $${formatPrice(Number(orderPrice + offramperFee))}, estimated price: $${formatPrice(Number(currentPrice))}. 
+                    Real price: $${formatPrice(totalOrderPrice)}, estimated price: $${formatPrice(currentPriceNumber)}. 
                     Do you want to proceed?`
             );
             if (!confirm) {
@@ -468,23 +476,9 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         setMessage(null);
         setLoadingMessage(`Payment received. Verifying`);
 
-        // estimate release gas
-        let gasEstimation: [] | [bigint] = [];
-        if ('EVM' in orderBlockchain) {
-            let tx_variant = token && token.isNative ? { Native: null } : { Token: null };
-
-            const gasForRelease = await estimateGasAndGasPrice(
-                Number(orderBlockchain.EVM.chain_id),
-                { Release: tx_variant },
-                defaultReleaseEvmGas
-            );
-            console.log("[handlePayPalSuccess] gasReleaseEstimate = ", gasForRelease);
-            gasEstimation = [gasForRelease[0]];
-        }
-
         try {
             // Send transaction ID to backend to verify payment
-            const response = await backend.verify_transaction(orderId, sessionToken, transactionId, gasEstimation);
+            const response = await backend.verify_transaction(orderId, [sessionToken], transactionId);
             if ('Ok' in response) {
                 if ('EVM' in orderBlockchain!) {
                     setTxHash(response.Ok);
@@ -797,7 +791,7 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                             return '';
                                         })()}
                                         onSuccess={(transactionId) => handlePayPalSuccess(transactionId)}
-                                        disabled={!isPayable || isLoading}
+                                        disabled={!isPayable || isLoading || orderState.Locked.payment_done}
                                     />
                                 ) : orderState.Locked.onramper.provider.hasOwnProperty('Revolut') ? (
                                     <div>
