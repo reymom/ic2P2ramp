@@ -105,6 +105,19 @@ pub fn add_payment_provider(
     })?
 }
 
+pub fn remove_payment_provider(
+    user_id: u64,
+    token: &str,
+    payment_provider: &PaymentProvider,
+) -> Result<()> {
+    users::mutate_user(user_id, |user| {
+        user.validate_session(&token)?;
+
+        user.payment_providers.remove(payment_provider);
+        Ok(())
+    })?
+}
+
 pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> {
     users::mutate_user(user_id, |user| {
         user.evm_auth_message = Some(auth_message.to_string());

@@ -14,6 +14,7 @@ use crate::evm::{
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::management::user as user_management;
+use crate::model::guards;
 use crate::model::{
     helpers,
     memory::{self, stable::spent_transactions},
@@ -461,7 +462,7 @@ pub async fn lock_order(
 ///     Err(err) => eprintln!("Failed to unlock order: {:?}", err),
 /// }
 /// ```
-pub async fn unlock_order(order_id: u64, session_token: Option<String>) -> Result<()> {
+pub async fn unlock_order(order_id: u64) -> Result<()> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if order.payment_done {
         return Err(OrderError::PaymentDone)?;
@@ -469,16 +470,12 @@ pub async fn unlock_order(order_id: u64, session_token: Option<String>) -> Resul
     if order.uncommited {
         return Err(OrderError::OrderUncommitted)?;
     }
-
-    if let Some(session_token) = session_token {
-        let user = memory::stable::users::get_user(&order.onramper.user_id)?;
-        user.validate_session(&session_token)?;
-        user.validate_onramper()?;
-    } else {
-        if order.is_inside_lock_time() {
-            return Err(OrderError::OrderInLockTime)?;
-        }
+    if order.is_inside_lock_time() {
+        return Err(OrderError::OrderInLockTime)?;
     }
+
+    let user = memory::stable::users::get_user(&order.onramper.user_id)?;
+    user.validate_onramper()?;
 
     match order.base.crypto.blockchain {
         Blockchain::EVM { chain_id } => {
@@ -597,7 +594,10 @@ pub fn set_order_completed(order_id: u64) -> Result<()> {
     })?
 }
 
-pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<LockedOrder> {
+pub fn verify_order_is_payable(
+    order_id: u64,
+    session_token: Option<String>,
+) -> Result<LockedOrder> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if !order.is_inside_lock_time() {
         return Err(OrderError::OrderUncommitted)?;
@@ -615,8 +615,13 @@ pub fn verify_order_is_payable(order_id: u64, session_token: &str) -> Result<Loc
         .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
 
     let user = memory::stable::users::get_user(&order.onramper.user_id)?;
-    user.validate_session(session_token)?;
-    user.is_banned()?;
+    if let Some(session_token) = session_token {
+        user.validate_session(&session_token)?;
+        user.is_banned()?;
+    } else {
+        guards::only_controller()?;
+    }
+
     user.validate_onramper()?;
 
     Ok(order)

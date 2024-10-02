@@ -56,7 +56,7 @@ pub async fn verify_paypal_payment(
         && offramper_matches
         && onramper_matches
     {
-        ic_cdk::println!("[verify_transaction] verified is true!!");
+        ic_cdk::println!("[verify_transaction] Verification succeded.");
         management::order::set_payment_id(order.base.id, transaction_id.to_string())?;
         management::order::mark_order_as_paid(order.base.id)?;
     } else {
