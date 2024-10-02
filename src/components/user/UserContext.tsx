@@ -30,7 +30,7 @@ export interface Balance {
 }
 
 interface UserContextProps {
-    refetchUser: () => void;
+    refetchUser: () => Promise<void>;
     setUser: (user: User | null) => void;
     setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
     setCurrency: (currency: string) => void;
@@ -205,7 +205,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
-    const refetchUser = async () => {
+    const refetchUser = async (): Promise<void> => {
         if (!user) return;
         if (!sessionToken) return;
 

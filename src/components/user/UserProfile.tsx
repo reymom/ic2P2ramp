@@ -13,7 +13,7 @@ import { rampErrorToString } from '../../model/error';
 import { useUser } from './UserContext';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSync } from '@fortawesome/free-solid-svg-icons';
+import { faRemove, faSpinner, faSync } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
 import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
@@ -29,6 +29,8 @@ const UserProfile: React.FC = () => {
     const [message, setMessage] = useState('');
     const [loadingAddAddress, setLoadingAddAddress] = useState(false);
     const [loadingAddProvider, setLoadingAddProvider] = useState(false);
+    const [isClicked, setIsClicked] = useState(false);
+    const [removing, setRemoving] = useState(false);
 
     const { address, isConnected } = useAccount();
     const {
@@ -71,6 +73,12 @@ const UserProfile: React.FC = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [dropdownRef]);
+
+    const handleRefresh = async () => {
+        setIsClicked(true);
+        await refetchUser();
+        setTimeout(() => setIsClicked(false), 1000);
+    };
 
     const handleAddressSelectOption = (addressType: 'ICP' | 'EVM') => {
         setSelectedAddressType(addressType);
@@ -115,6 +123,24 @@ const UserProfile: React.FC = () => {
             setLoadingAddProvider(false);
         }
     };
+
+    const handleRemoveProvider = async (provider: PaymentProvider) => {
+        if (!sessionToken) throw new Error("Please authenticate to get a token session");
+
+        setRemoving(true);
+        try {
+            const result = await backend.remove_user_payment_provider(user.id, sessionToken, provider);
+            if ('Ok' in result) {
+                refetchUser();
+            } else {
+                setMessage(rampErrorToString(result.Err));
+            }
+        } catch (error) {
+            setMessage(`Failed to update provider: ${error}`);
+        } finally {
+            setRemoving(false);
+        }
+    }
 
     const handleAddAddress = async (addressToAdd: string) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session")
@@ -166,11 +192,13 @@ const UserProfile: React.FC = () => {
     return (
         <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative">
             <button
-                className="absolute top-4 right-4 text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out"
-                onClick={refetchUser}
+                className={`absolute top-4 right-4 text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out ${isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-500'
+                    }`}
+                onClick={handleRefresh}
                 title="Refresh Profile"
+                disabled={isClicked}
             >
-                <FontAwesomeIcon icon={faSync} />
+                <FontAwesomeIcon icon={faSync} spin={isClicked} />
             </button>
 
             <div className="text-center">
@@ -349,31 +377,53 @@ const UserProfile: React.FC = () => {
                         <span className="font-medium">Payment Providers:</span>
                     </div>
                     <ul className="pl-4 mt-2">
-                        {user.payment_providers.map((provider, index) => {
-                            if ('PayPal' in provider) {
-                                return (
-                                    <li key={index} className="py-">
-                                        <span className="flex-1 text-sm text-gray-200">(PayPal)</span>
-                                        <span className="ml-2">{provider.PayPal.id}</span>
-                                    </li>
-                                );
-                            } else if ('Revolut' in provider) {
-                                return (
-                                    <li key={index} className="py-1">
-                                        <span className="flex-1 text-sm text-gray-200">(Revolut)</span>
-                                        <span className="ml-2">{provider.Revolut.id}</span>
-                                        <div className="ml-2">
-                                            <span>{provider.Revolut.scheme}</span>
-                                            {provider.Revolut.name && provider.Revolut.name.length > 0 && (
-                                                <div>Name: {provider.Revolut.name[0]}</div>
-                                            )}
-                                        </div>
-                                    </li>
-                                );
-                            } else {
-                                return null;
-                            }
-                        })}
+                        {user.payment_providers
+                            .sort((a, b) => ('PayPal' in b ? 1 : -1))
+                            .map((provider, index) => {
+                                if ('PayPal' in provider) {
+                                    return (
+                                        <li key={index} className="py-1 relative items-center">
+                                            <span className="flex-1 text-sm text-gray-200">(PayPal)</span>
+                                            <span className="ml-2">{provider.PayPal.id}</span>
+                                            <span className="absolute right-0 my-1">
+                                                <button
+                                                    className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
+                                                    title="remove"
+                                                    onClick={() => handleRemoveProvider(provider)}
+                                                    disabled={removing}
+                                                >
+                                                    {removing ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRemove} />}
+                                                </button>
+                                            </span>
+                                        </li>
+                                    );
+                                } else if ('Revolut' in provider) {
+                                    return (
+                                        <li key={index} className="py-1">
+                                            <span className="flex-1 text-sm text-gray-200">(Revolut)</span>
+                                            <span className="ml-2">{provider.Revolut.id}</span>
+                                            <div className="ml-2">
+                                                <span>{provider.Revolut.scheme}</span>
+                                                {provider.Revolut.name && provider.Revolut.name.length > 0 && (
+                                                    <div>Name: {provider.Revolut.name[0]}</div>
+                                                )}
+                                            </div>
+                                            <span className="absolute right-0 my-1">
+                                                <button
+                                                    className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
+                                                    title="remove"
+                                                    onClick={() => handleRemoveProvider(provider)}
+                                                    disabled={removing}
+                                                >
+                                                    {removing ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRemove} />}
+                                                </button>
+                                            </span>
+                                        </li>
+                                    );
+                                } else {
+                                    return null;
+                                }
+                            })}
                     </ul>
                 </div>
                 <div className="flex gap-2 text-white">
