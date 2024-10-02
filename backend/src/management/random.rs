@@ -44,5 +44,5 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
 
 pub async fn generate_token() -> Result<String> {
     let random_bytes = get_random_bytes().await?;
-    Ok(hex::encode(&random_bytes))
+    Ok(hex::encode(random_bytes))
 }

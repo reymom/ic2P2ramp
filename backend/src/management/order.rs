@@ -136,7 +136,7 @@ async fn order_crypto_fee(
 
             Ok(get_crypto_fee(crypto_amount, icp_fee * 2))
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -151,11 +151,11 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
         TransactionStatus::Confirmed(receipt) => {
             let log_entry = receipt
                 .logs
-                .get(0)
+                .first()
                 .ok_or_else(|| BlockchainError::EvmLogError("Empty Log Entries".to_string()))?;
             event::parse_deposit_event(log_entry)
         }
-        _ => return Err(BlockchainError::EmptyTransactionHash.into()),
+        _ => Err(BlockchainError::EmptyTransactionHash.into()),
     }
 }
 
@@ -209,10 +209,10 @@ pub async fn validate_deposit_tx(
             Ok(Some(evm_input.tx_hash))
         }
         Blockchain::ICP { ledger_principal } => {
-            is_icp_token_supported(&ledger_principal)?;
+            is_icp_token_supported(ledger_principal)?;
             Ok(None)
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -337,12 +337,14 @@ pub fn get_orders(
             page_size,
         ),
         Some(OrderFilter::ByState(state)) => memory::stable::orders::filter_orders(
-            |order_state| match (state.clone(), order_state) {
-                (OrderStateFilter::Created, OrderState::Created(_))
-                | (OrderStateFilter::Locked, OrderState::Locked(_))
-                | (OrderStateFilter::Completed, OrderState::Completed(_))
-                | (OrderStateFilter::Cancelled, OrderState::Cancelled(_)) => true,
-                _ => false,
+            |order_state| {
+                matches!(
+                    (state.clone(), order_state),
+                    (OrderStateFilter::Created, OrderState::Created(_))
+                        | (OrderStateFilter::Locked, OrderState::Locked(_))
+                        | (OrderStateFilter::Completed, OrderState::Completed(_))
+                        | (OrderStateFilter::Cancelled, OrderState::Cancelled(_))
+                )
             },
             page,
             page_size,
@@ -422,7 +424,7 @@ pub async fn lock_order(
             )?;
             Ok(())
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -496,7 +498,7 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
             memory::stable::orders::unlock_order(order.base.id)?;
             Ok(())
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -546,7 +548,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
             memory::stable::orders::cancel_order(order_id)?;
             Ok(())
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -567,7 +569,7 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
                 order.payment_done = true;
                 Ok(())
             }
-            _ => return Err(OrderError::InvalidOrderState(order_state.to_string()))?,
+            _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
         }
     })??;
 
@@ -600,13 +602,13 @@ pub fn verify_order_is_payable(
 ) -> Result<LockedOrder> {
     let order = memory::stable::orders::get_order(&order_id)?.locked()?;
     if !order.is_inside_lock_time() {
-        return Err(OrderError::OrderUncommitted)?;
+        Err(OrderError::OrderUncommitted)?;
     }
     if order.payment_done {
-        return Err(OrderError::PaymentDone)?;
+        Err(OrderError::PaymentDone)?;
     };
     if order.uncommited {
-        return Err(OrderError::OrderUncommitted)?;
+        Err(OrderError::OrderUncommitted)?;
     }
     order
         .base

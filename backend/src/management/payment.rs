@@ -73,7 +73,7 @@ pub async fn verify_revolut_payment(
     order: &LockedOrder,
 ) -> Result<()> {
     let payment_details =
-        revolut::transaction::fetch_revolut_payment_details(&transaction_id).await?;
+        revolut::transaction::fetch_revolut_payment_details(transaction_id).await?;
 
     // Verify the captured payment details (amounts are in cents)
     let amount_matches =
@@ -119,7 +119,7 @@ pub async fn verify_revolut_payment(
         ic_cdk::println!("[verify_transaction] verified is true!!");
         management::order::mark_order_as_paid(order.base.id)
     } else {
-        return Err(OrderError::PaymentVerificationFailed)?;
+        Err(OrderError::PaymentVerificationFailed)?
     }
 }
 
@@ -129,7 +129,7 @@ pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
         Blockchain::ICP { ledger_principal } => {
             handle_icp_payment_completion(order, &ledger_principal).await
         }
-        _ => return Err(BlockchainError::UnsupportedBlockchain)?,
+        _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
 
@@ -173,7 +173,7 @@ pub async fn get_revolut_consent(
         } => {
             let offramper_provider = offramper_providers
                 .get(&PaymentProviderType::Revolut)
-                .ok_or_else(|| UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
+                .ok_or(UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
 
             if let PaymentProvider::Revolut {
                 scheme: offramper_scheme,
@@ -186,20 +186,18 @@ pub async fn get_revolut_consent(
                     currency_symbol,
                     onramper_scheme,
                     onramper_id,
-                    &offramper_scheme,
-                    &offramper_id,
+                    offramper_scheme,
+                    offramper_id,
                     &offramper_name
                         .clone()
-                        .ok_or_else(|| OrderError::InvalidOfframperProvider)?,
+                        .ok_or(OrderError::InvalidOfframperProvider)?,
                 )
                 .await?;
 
                 let auth_url = revolut::authorize::get_authorization_url(&consent_id).await?;
                 Ok(Some(RevolutConsent::new(consent_id, auth_url)))
             } else {
-                return Err(
-                    OrderError::InvalidOrderState("Expected Revolut provider".to_string()).into(),
-                );
+                Err(OrderError::InvalidOrderState("Expected Revolut provider".to_string()).into())
             }
         }
         _ => Ok(None),

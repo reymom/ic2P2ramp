@@ -79,7 +79,7 @@ pub fn add_transaction_address(
     address.validate()?;
 
     users::mutate_user(user_id, |user| {
-        user.validate_session(&token)?;
+        user.validate_session(token)?;
 
         if let Some(existing_address) = user.addresses.take(&address) {
             ic_cdk::println!("updating address {:?} to {:?}", existing_address, address)
@@ -98,7 +98,7 @@ pub fn add_payment_provider(
     payment_provider.validate()?;
 
     users::mutate_user(user_id, |user| {
-        user.validate_session(&token)?;
+        user.validate_session(token)?;
 
         user.payment_providers.insert(payment_provider);
         Ok(())
@@ -111,7 +111,7 @@ pub fn remove_payment_provider(
     payment_provider: &PaymentProvider,
 ) -> Result<()> {
     users::mutate_user(user_id, |user| {
-        user.validate_session(&token)?;
+        user.validate_session(token)?;
 
         user.payment_providers.remove(payment_provider);
         Ok(())
