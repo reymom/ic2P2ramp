@@ -136,7 +136,7 @@ pub async fn wait_for_revolut_access_token(
                 ic_cdk::println!("[wait_for_access_token] Verifying transaction...");
                 match crate::verify_transaction(
                     order_id,
-                    session_token.to_string(),
+                    Some(session_token.to_string()),
                     payment_id.clone(),
                 )
                 .await

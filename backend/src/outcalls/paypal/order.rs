@@ -70,7 +70,7 @@ pub async fn fetch_paypal_order(access_token: &str, order_id: &str) -> Result<Pa
         },
         HttpHeader {
             name: "idempotency-key".to_string(),
-            value: "order-key-0".to_string(),
+            value: format!("order-key-{}-{}", order_id, ic_cdk::api::time()).to_string(),
         },
     ];
 
