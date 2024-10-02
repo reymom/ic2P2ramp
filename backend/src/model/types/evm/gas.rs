@@ -30,6 +30,8 @@ pub struct GasUsage {
 pub struct ChainGasTracking {
     pub commit_gas: GasUsage,
     pub uncommit_gas: GasUsage,
+    pub cancel_token_gas: GasUsage,
+    pub cancel_native_gas: GasUsage,
     pub release_token_gas: GasUsage,
     pub release_native_gas: GasUsage,
 }
@@ -161,6 +163,12 @@ pub fn get_average_gas(
         let gas_tracking = match action_type {
             &TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
             &TransactionAction::Uncommit => Ok(&chain_state.gas_tracking.uncommit_gas),
+            &TransactionAction::Cancel(TransactionVariant::Native) => {
+                Ok(&chain_state.gas_tracking.cancel_native_gas)
+            }
+            &TransactionAction::Cancel(TransactionVariant::Token) => {
+                Ok(&chain_state.gas_tracking.cancel_token_gas)
+            }
             &TransactionAction::Release(TransactionVariant::Token) => {
                 Ok(&chain_state.gas_tracking.release_token_gas)
             }

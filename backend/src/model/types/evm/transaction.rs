@@ -57,14 +57,14 @@ impl TransactionAction {
         }
 
         match self {
-            &TransactionAction::Commit => 80_000,
-            &TransactionAction::Uncommit => 80_000,
-            &TransactionAction::Cancel(TransactionVariant::Native) => 80_000,
-            &TransactionAction::Cancel(TransactionVariant::Token) => 100_000,
-            &TransactionAction::Release(TransactionVariant::Native) => 80_000,
-            &TransactionAction::Release(TransactionVariant::Token) => 100_000,
-            &TransactionAction::Transfer(TransactionVariant::Native) => 80_000,
-            &TransactionAction::Transfer(TransactionVariant::Token) => 100_000,
+            &TransactionAction::Commit => 100_000,
+            &TransactionAction::Uncommit => 100_000,
+            &TransactionAction::Cancel(TransactionVariant::Native) => 100_000,
+            &TransactionAction::Cancel(TransactionVariant::Token) => 120_000,
+            &TransactionAction::Release(TransactionVariant::Native) => 100_000,
+            &TransactionAction::Release(TransactionVariant::Token) => 120_000,
+            &TransactionAction::Transfer(TransactionVariant::Native) => 100_000,
+            &TransactionAction::Transfer(TransactionVariant::Token) => 120_000,
         }
     }
 }
