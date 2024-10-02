@@ -145,7 +145,7 @@ async fn test_get_consent_url() -> Result<String> {
     )
     .await?;
 
-    Ok(revolut::authorize::get_authorization_url(&consent_id).await?)
+    revolut::authorize::get_authorization_url(&consent_id).await
 }
 
 #[ic_cdk::update]
@@ -205,7 +205,7 @@ pub async fn create_evm_order_with_tx(
         &blockchain,
         Some(evm_input),
         offramper.clone(),
-        amount.clone(),
+        amount,
         token.clone(),
     )
     .await?;
@@ -322,7 +322,7 @@ async fn get_evm_tokens(chain_id: u64) -> Result<Vec<Token>> {
         let chain_state = state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
+            .ok_or(BlockchainError::ChainIdNotFound(chain_id))?;
 
         Ok(chain_state
             .approved_tokens
@@ -615,7 +615,7 @@ async fn create_order(
     user.is_offramper()?;
 
     for (provider_type, provider) in &offramper_providers {
-        if !user.payment_providers.contains(&provider) {
+        if !user.payment_providers.contains(provider) {
             return Err(UserError::ProviderNotInUser(provider_type.clone()))?;
         }
     }
@@ -820,7 +820,7 @@ async fn process_transaction(
         PaymentProvider::PayPal { id: onramper_id } => {
             ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
 
-            payment_management::verify_paypal_payment(&onramper_id, &transaction_id, &order).await?
+            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order).await?
         }
 
         PaymentProvider::Revolut {
@@ -831,9 +831,9 @@ async fn process_transaction(
             ic_cdk::println!("[verify_transaction] Handling Revolut payment verification");
 
             payment_management::verify_revolut_payment(
-                &onramper_id,
+                onramper_id,
+                onramper_scheme,
                 &transaction_id,
-                &onramper_scheme,
                 &order,
             )
             .await?

@@ -372,7 +372,6 @@ service : (InstallArg) -> {
   get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_6);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_7) query;
-  get_evm_vault_deposit : (nat64, text, opt text) -> (Result_2);
   get_exchange_rate : (text, text) -> (Result_8);
   get_icp_token_info : (principal) -> (Result_9) query;
   get_offramper_fee : (nat64) -> (nat64) query;

@@ -110,11 +110,6 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEsti
         .unwrap_or(&Nat::from(0_u8))
         .clone();
 
-    // let max_priority_fee_per_gas = median_reward
-    //     .clone()
-    //     .add(base_fee_per_gas)
-    //     .max(Nat::from(MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS));
-
     let max_priority_fee_per_gas = median_reward
         .clone()
         .max(Nat::from(MIN_SUGGEST_MAX_PRIORITY_FEE_PER_GAS));
@@ -122,13 +117,11 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEsti
     let max_fee_per_gas = base_fee_per_gas
         .clone()
         .add(max_priority_fee_per_gas.clone())
-        .max(Nat::from(base_fee_per_gas.clone()))
+        .max(base_fee_per_gas)
         .mul(Nat::from(105u8))
         .div(Nat::from(100u8)); // Adding a cushion buffer
 
     Ok(FeeEstimates {
-        // max_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
-        // max_priority_fee_per_gas: nat_to_u256(&median_reward),
         max_fee_per_gas: nat_to_u256(&max_fee_per_gas),
         max_priority_fee_per_gas: nat_to_u256(&max_priority_fee_per_gas),
     })
@@ -148,8 +141,8 @@ pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<
         .await
     {
         Ok((res,)) => match res {
-            MultiGetBlockByNumberResult::Consistent(block_result) => match block_result {
-                GetBlockByNumberResult::Ok(block) => Ok(block),
+            MultiGetBlockByNumberResult::Consistent(block_result) => match *block_result {
+                GetBlockByNumberResult::Ok(block) => Ok(*block),
                 GetBlockByNumberResult::Err(e) => Err(SystemError::RpcError(format!("{:?}", e)))?,
             },
             MultiGetBlockByNumberResult::Inconsistent(_) => Err(SystemError::InternalError(

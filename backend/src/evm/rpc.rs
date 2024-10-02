@@ -205,13 +205,13 @@ pub struct Block {
 
 #[derive(CandidType, Deserialize)]
 pub enum GetBlockByNumberResult {
-    Ok(Block),
+    Ok(Box<Block>),
     Err(RpcError),
 }
 
 #[derive(CandidType, Deserialize)]
 pub enum MultiGetBlockByNumberResult {
-    Consistent(GetBlockByNumberResult),
+    Consistent(Box<GetBlockByNumberResult>),
     Inconsistent(Vec<(RpcService, GetBlockByNumberResult)>),
 }
 
@@ -285,13 +285,13 @@ pub struct TransactionReceipt {
 
 #[derive(CandidType, Deserialize, Debug)]
 pub enum GetTransactionReceiptResult {
-    Ok(Option<TransactionReceipt>),
+    Ok(Box<Option<TransactionReceipt>>),
     Err(RpcError),
 }
 
 #[derive(CandidType, Deserialize, Debug)]
 pub enum MultiGetTransactionReceiptResult {
-    Consistent(GetTransactionReceiptResult),
+    Consistent(Box<GetTransactionReceiptResult>),
     Inconsistent(Vec<(RpcService, GetTransactionReceiptResult)>),
 }
 

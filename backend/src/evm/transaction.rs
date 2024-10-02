@@ -1,4 +1,4 @@
-use std::{time::Duration, u64};
+use std::{cmp::Ordering, time::Duration};
 
 use ethers_core::{abi, types::U256};
 
@@ -74,7 +74,7 @@ pub fn broadcast_transaction(
                     }
 
                     //take out the fees from nonce as well
-                    sign_request.add_nonce(nonce.into());
+                    sign_request.add_nonce(nonce);
                 }
 
                 match send_signed_transaction(sign_request.clone(), chain_id).await {
@@ -343,26 +343,29 @@ pub async fn check_transaction_status(tx_hash: &String, chain_id: u64) -> Transa
         .await;
 
     ic_cdk::println!("[check_transaction_receipt] res = {:?}", res);
+
+    let failed_status = |e: &dyn std::fmt::Debug| {
+        TransactionStatus::Failed(format!("Error checking transaction: {:?}", e))
+    };
     match res {
-        Ok((MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Ok(
-            Some(receipt),
-        )),)) => {
-            if receipt.status == 1_u32 {
-                TransactionStatus::Confirmed(receipt)
-            } else {
-                TransactionStatus::Failed(format!("Transaction failed: {:?}", receipt))
+        Ok((MultiGetTransactionReceiptResult::Consistent(receipt),)) => match *receipt {
+            GetTransactionReceiptResult::Ok(boxed_receipt) => {
+                if let Some(receipt) = *boxed_receipt {
+                    if receipt.status == 1_u32 {
+                        TransactionStatus::Confirmed(receipt)
+                    } else {
+                        TransactionStatus::Failed(format!("Transaction failed: {:?}", receipt))
+                    }
+                } else {
+                    TransactionStatus::Pending
+                }
             }
-        }
-        Ok((MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Ok(
-            None,
-        )),)) => TransactionStatus::Pending,
-        Ok(
-            (MultiGetTransactionReceiptResult::Consistent(GetTransactionReceiptResult::Err(e)),),
-        ) => TransactionStatus::Failed(format!("Error checking transaction: {:?}", e)),
+            GetTransactionReceiptResult::Err(e) => failed_status(&e),
+        },
         Ok((MultiGetTransactionReceiptResult::Inconsistent(_),)) => {
             TransactionStatus::Failed("Inconsistent status".to_string())
         }
-        Err(e) => TransactionStatus::Failed(format!("Error checking transaction: {:?}", e)),
+        Err(e) => failed_status(&e),
     }
 }
 
@@ -449,48 +452,52 @@ pub fn spawn_transaction_checker<F, G>(
         });
     }
 
-    if retry_attempt < MAX_RETRY_ATTEMPTS {
-        schedule_check(
-            tx_hash,
-            chain_id,
-            0,
-            retry_attempt,
-            order_id,
-            sign_request,
-            on_success,
-            on_fail,
-        );
-    } else if retry_attempt == MAX_RETRY_ATTEMPTS {
-        on_fail();
-        ic_cdk::spawn(async move {
-            match bump_dummy_transaction(sign_request.clone(), chain_id).await {
-                Ok(tx_hash) => {
-                    ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash);
-                }
-                Err(e) => {
-                    ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
-                }
-            }
-
-            logs::update_transaction_log(
-                order_id,
-                TransactionStatus::Unresolved(tx_hash, sign_request.clone().into()),
-            );
-            nonce::set_unresolved_nonce(
+    match retry_attempt.cmp(&MAX_RETRY_ATTEMPTS) {
+        Ordering::Less => {
+            schedule_check(
+                tx_hash,
                 chain_id,
-                sign_request.nonce.map(|nonce| nonce.as_u128()),
-                NonceFeeEstimates {
-                    max_fee_per_gas: sign_request
-                        .max_fee_per_gas
-                        .unwrap_or_else(|| 0.into())
-                        .as_u128(),
-                    max_priority_fee_per_gas: sign_request
-                        .max_priority_fee_per_gas
-                        .unwrap_or_else(|| 0.into())
-                        .as_u128(),
-                },
+                0,
+                retry_attempt,
+                order_id,
+                sign_request,
+                on_success,
+                on_fail,
             );
-        })
+        }
+        Ordering::Equal => {
+            on_fail();
+            ic_cdk::spawn(async move {
+                match bump_dummy_transaction(sign_request.clone(), chain_id).await {
+                    Ok(tx_hash) => {
+                        ic_cdk::println!("[bump_dummy_transaction] tx_hash = {}", tx_hash);
+                    }
+                    Err(e) => {
+                        ic_cdk::println!("[bump_dummy_transaction] failed: {}", e);
+                    }
+                }
+
+                logs::update_transaction_log(
+                    order_id,
+                    TransactionStatus::Unresolved(tx_hash, sign_request.clone().into()),
+                );
+                nonce::set_unresolved_nonce(
+                    chain_id,
+                    sign_request.nonce.map(|nonce| nonce.as_u128()),
+                    NonceFeeEstimates {
+                        max_fee_per_gas: sign_request
+                            .max_fee_per_gas
+                            .unwrap_or_else(|| 0.into())
+                            .as_u128(),
+                        max_priority_fee_per_gas: sign_request
+                            .max_priority_fee_per_gas
+                            .unwrap_or_else(|| 0.into())
+                            .as_u128(),
+                    },
+                );
+            })
+        }
+        Ordering::Greater => (),
     }
 }
 
