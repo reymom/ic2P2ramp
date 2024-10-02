@@ -66,16 +66,17 @@ dfx deploy backend --upgrade-unchanged --argument "(
 # Change paypal config
 dfx deploy backend --upgrade-unchanged --argument "(
   variant {
-  Upgrade = opt record {
-    ecdsa_key_id = null;
-    chains = null;
-    paypal = opt record {
-      client_id = \"new_paypal_client_id\";
-      client_secret = \"new_paypal_client_secret\";
-      api_url = \"new_paypal_api_url\";
-    };
-    revolut = null;
-    proxy_url = null;
+    Upgrade = opt record {
+        ecdsa_key_id = null;
+        chains = null;
+        paypal = opt record {
+        client_id = \"new_paypal_client_id\";
+        client_secret = \"new_paypal_client_secret\";
+        api_url = \"new_paypal_api_url\";
+        };
+        revolut = null;
+        proxy_url = null;
+    }
   }
 )"
 

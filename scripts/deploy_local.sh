@@ -36,7 +36,7 @@ dfx deploy icp_ledger_canister --argument "
       transfer_fee = opt record {
         e8s = 10_000 : nat64;
       };
-      token_symbol = opt \"LICP\";
+      token_symbol = opt \"ICP\";
       token_name = opt \"Local ICP\";
     }
   })
@@ -58,7 +58,7 @@ dfx deploy ckbtc_ledger_canister_testnet --argument "
       transfer_fee = opt record {
         e8s = 10 : nat64;
       };
-      token_symbol = opt \"ckTESTBTC\";
+      token_symbol = opt \"ckBTC\";
       token_name = opt \"Chain key testnet Bitcoin\";
     }
   })
@@ -151,14 +151,14 @@ dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {
     record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" }
 })'
 dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
-    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USD"; opt "Sepolia USDC" }
+    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USDC"; opt "Sepolia USDC" }
 })'
 
 # dfx deploy frontend --mode reinstall
 
 # export ACCOUNT_ID=$(dfx ledger account-id --of-principal x43o3-z4337-mle53-vdvne-poc44-i7e66-rr34k-3sdep-uebye-i4r3t-7qe)
 
-# export TO_PRINCIPAL=2n6h4-allra-4vkzg-2g45r-cnzrr-ivz7f-i6442-toets-lkrsh-4psdz-aqe
+# export TO_PRINCIPAL=gylt3-52e7e-cljak-l4czk-i4jq5-trjec-mlgi5-36vpe-dyvgm-5sbq5-5qe
 # export TO_SUBACCOUNT="null"
 # export AMOUNT="5_250_000_000"
 # export FEE="10_000"
