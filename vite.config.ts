@@ -7,7 +7,7 @@ import path from 'path';
 
 export default defineConfig(({ mode }) => {
   console.log('mode = ', mode);
-  if (mode) {
+  if (mode === 'sandbox' || mode === 'production') {
     dotenv.config({ path: `.env.${mode}` });
   } else {
     dotenv.config();
