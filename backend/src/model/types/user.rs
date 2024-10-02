@@ -85,7 +85,7 @@ impl User {
         match &self.login {
             LoginAddress::Email { .. } => {
                 let password = auth_data
-                    .ok_or_else(|| UserError::PasswordRequired)?
+                    .ok_or(UserError::PasswordRequired)?
                     .password
                     .ok_or(UserError::PasswordRequired)?;
                 let hashed_password =
@@ -109,14 +109,14 @@ impl User {
             LoginAddress::EVM { address } => {
                 let signature = auth_data
                     .clone()
-                    .ok_or_else(|| UserError::SignatureRequired)?
+                    .ok_or(UserError::SignatureRequired)?
                     .signature
                     .ok_or(UserError::SignatureRequired)?;
                 let message = self.evm_auth_message.as_ref().ok_or_else(|| {
                     SystemError::InternalError("evm auth message not in user".to_string())
                 })?;
 
-                signer::verify_signature(&address, &message, &signature)?
+                signer::verify_signature(address, message, &signature)?
             }
             LoginAddress::ICP { principal_id } => {
                 ic_cdk::println!(
@@ -140,7 +140,7 @@ impl User {
     pub fn validate_session(&self, token: &str) -> Result<()> {
         self.session
             .as_ref()
-            .ok_or_else(|| UserError::SessionNotFound)?
+            .ok_or(UserError::SessionNotFound)?
             .validate(token)
     }
 

@@ -9,7 +9,7 @@ use crate::model::types::{
     payment::{paypal::PayPalState, revolut::RevolutState},
 };
 
-use super::heap::STATE;
+use super::storage::STATE;
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct State {

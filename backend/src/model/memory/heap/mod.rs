@@ -1,14 +1,14 @@
-mod heap;
 mod init;
 pub mod logs;
 mod rate;
 mod state;
+mod storage;
 pub mod upgrade;
 
-pub use heap::*;
 pub use init::InitArg;
 pub use rate::*;
 pub use state::*;
+pub use storage::*;
 pub use upgrade::UpdateArg;
 
 #[derive(candid::CandidType, candid::Deserialize, Debug)]

@@ -18,26 +18,26 @@ pub enum TransactionAction {
 impl TransactionAction {
     pub fn abi(&self) -> &'static str {
         match self {
-            &TransactionAction::Commit => COMMIT_ABI,
-            &TransactionAction::Uncommit => UNCOMMIT_ABI,
-            &TransactionAction::Cancel(TransactionVariant::Native) => CANCEL_NATIVE_ABI,
-            &TransactionAction::Cancel(TransactionVariant::Token) => CANCEL_TOKEN_ABI,
-            &TransactionAction::Release(TransactionVariant::Native) => RELEASE_NATIVE_ABI,
-            &TransactionAction::Release(TransactionVariant::Token) => RELEASE_TOKEN_ABI,
-            &TransactionAction::Transfer(TransactionVariant::Token) => TRANSFER_TOKEN_ABI,
+            TransactionAction::Commit => COMMIT_ABI,
+            TransactionAction::Uncommit => UNCOMMIT_ABI,
+            TransactionAction::Cancel(TransactionVariant::Native) => CANCEL_NATIVE_ABI,
+            TransactionAction::Cancel(TransactionVariant::Token) => CANCEL_TOKEN_ABI,
+            TransactionAction::Release(TransactionVariant::Native) => RELEASE_NATIVE_ABI,
+            TransactionAction::Release(TransactionVariant::Token) => RELEASE_TOKEN_ABI,
+            TransactionAction::Transfer(TransactionVariant::Token) => TRANSFER_TOKEN_ABI,
             _ => "",
         }
     }
 
     pub fn function_name(&self) -> &'static str {
         match self {
-            &TransactionAction::Commit => "commitDeposit",
-            &TransactionAction::Uncommit => "uncommitDeposit",
-            &TransactionAction::Cancel(TransactionVariant::Native) => "withdrawBaseCurrency",
-            &TransactionAction::Cancel(TransactionVariant::Token) => "withdrawToken",
-            &TransactionAction::Release(TransactionVariant::Native) => "releaseBaseCurrency",
-            &TransactionAction::Release(TransactionVariant::Token) => "releaseToken",
-            &TransactionAction::Transfer(TransactionVariant::Token) => "transfer",
+            TransactionAction::Commit => "commitDeposit",
+            TransactionAction::Uncommit => "uncommitDeposit",
+            TransactionAction::Cancel(TransactionVariant::Native) => "withdrawBaseCurrency",
+            TransactionAction::Cancel(TransactionVariant::Token) => "withdrawToken",
+            TransactionAction::Release(TransactionVariant::Native) => "releaseBaseCurrency",
+            TransactionAction::Release(TransactionVariant::Token) => "releaseToken",
+            TransactionAction::Transfer(TransactionVariant::Token) => "transfer",
             _ => "",
         }
     }
@@ -45,26 +45,26 @@ impl TransactionAction {
     pub fn default_gas(&self, chain_id: u64) -> u64 {
         if chain_id == 5000 || chain_id == 5003 {
             return match self {
-                &TransactionAction::Commit => 1_800_000_000,
-                &TransactionAction::Uncommit => 2_000_000_000,
-                &TransactionAction::Cancel(TransactionVariant::Native) => 2_000_000_000,
-                &TransactionAction::Cancel(TransactionVariant::Token) => 2_500_000_000,
-                &TransactionAction::Release(TransactionVariant::Native) => 2_000_000_000,
-                &TransactionAction::Release(TransactionVariant::Token) => 2_500_000_000,
-                &TransactionAction::Transfer(TransactionVariant::Native) => 2_000_000_000,
-                &TransactionAction::Transfer(TransactionVariant::Token) => 2_500_000_000,
+                TransactionAction::Commit => 1_800_000_000,
+                TransactionAction::Uncommit => 2_000_000_000,
+                TransactionAction::Cancel(TransactionVariant::Native) => 2_000_000_000,
+                TransactionAction::Cancel(TransactionVariant::Token) => 2_500_000_000,
+                TransactionAction::Release(TransactionVariant::Native) => 2_000_000_000,
+                TransactionAction::Release(TransactionVariant::Token) => 2_500_000_000,
+                TransactionAction::Transfer(TransactionVariant::Native) => 2_000_000_000,
+                TransactionAction::Transfer(TransactionVariant::Token) => 2_500_000_000,
             };
         }
 
         match self {
-            &TransactionAction::Commit => 100_000,
-            &TransactionAction::Uncommit => 100_000,
-            &TransactionAction::Cancel(TransactionVariant::Native) => 100_000,
-            &TransactionAction::Cancel(TransactionVariant::Token) => 120_000,
-            &TransactionAction::Release(TransactionVariant::Native) => 100_000,
-            &TransactionAction::Release(TransactionVariant::Token) => 120_000,
-            &TransactionAction::Transfer(TransactionVariant::Native) => 100_000,
-            &TransactionAction::Transfer(TransactionVariant::Token) => 120_000,
+            TransactionAction::Commit => 100_000,
+            TransactionAction::Uncommit => 100_000,
+            TransactionAction::Cancel(TransactionVariant::Native) => 100_000,
+            TransactionAction::Cancel(TransactionVariant::Token) => 120_000,
+            TransactionAction::Release(TransactionVariant::Native) => 100_000,
+            TransactionAction::Release(TransactionVariant::Token) => 120_000,
+            TransactionAction::Transfer(TransactionVariant::Native) => 100_000,
+            TransactionAction::Transfer(TransactionVariant::Token) => 120_000,
         }
     }
 }

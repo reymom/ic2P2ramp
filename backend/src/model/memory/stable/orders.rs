@@ -8,7 +8,7 @@ use crate::types::{
 use super::storage::ORDERS;
 
 pub fn insert_order(order: &Order) -> Option<OrderState> {
-    ORDERS.with_borrow_mut(|p| p.insert(order.id.clone(), OrderState::Created(order.clone())))
+    ORDERS.with_borrow_mut(|p| p.insert(order.id, OrderState::Created(order.clone())))
 }
 
 pub fn get_order(order_id: &u64) -> Result<OrderState> {
@@ -48,7 +48,7 @@ where
     F: FnOnce(&mut OrderState) -> R,
 {
     ORDERS.with_borrow_mut(|orders| {
-        if let Some(mut order_state) = orders.get(&order_id) {
+        if let Some(mut order_state) = orders.get(order_id) {
             let result = f(&mut order_state);
             orders.insert(*order_id, order_state);
             Ok(result)
@@ -80,7 +80,7 @@ pub fn lock_order(
                 )?);
                 Ok(())
             }
-            _ => return Err(OrderError::InvalidOrderState(order_state.to_string()))?,
+            _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
         }
     })??;
 
@@ -151,6 +151,6 @@ pub fn unset_processing_order(order_id: &u64) -> Result<()> {
             order.base.unset_processing();
             Ok(())
         }
-        _ => return Err(OrderError::InvalidOrderState(order_state.to_string()))?,
+        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
     })?
 }

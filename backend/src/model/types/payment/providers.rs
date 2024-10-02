@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 use candid::{CandidType, Deserialize};
 
@@ -10,7 +13,7 @@ pub enum PaymentProviderType {
     Revolut,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, Eq, Hash)]
+#[derive(CandidType, Deserialize, Clone, Debug, Eq)]
 pub enum PaymentProvider {
     PayPal {
         id: String,
@@ -25,6 +28,12 @@ pub enum PaymentProvider {
 impl PartialEq for PaymentProvider {
     fn eq(&self, other: &Self) -> bool {
         self.provider_type() == other.provider_type()
+    }
+}
+
+impl Hash for PaymentProvider {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.provider_type().hash(state);
     }
 }
 

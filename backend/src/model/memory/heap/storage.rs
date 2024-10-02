@@ -13,8 +13,8 @@ pub(crate) const LOCK_DURATION_TIME_SECONDS: u64 = 1800; // 30 min
 thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
 
-    static USER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
-    static ORDER_ID_COUNTER: RefCell<u64> = RefCell::new(0);
+    static USER_ID_COUNTER: RefCell<u64> = const { RefCell::new(0) };
+    static ORDER_ID_COUNTER: RefCell<u64> = const { RefCell::new(0) };
     static LOCKED_ORDER_TIMERS: RefCell<HashMap<u64, TimerId>> = RefCell::default();
 
     pub(super) static EVM_TRANSACTION_LOGS: RefCell<HashMap<u64, EvmTransactionLog>> = RefCell::new(HashMap::new());

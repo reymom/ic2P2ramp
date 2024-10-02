@@ -130,8 +130,7 @@ pub fn release_and_increment_nonce(chain_id: u64, used_nonce: Option<u128>) {
         if let Some(chain_state) = state.chains.get_mut(&chain_id) {
             chain_state.nonce_manager.unlock_nonce();
 
-            let new_nonce =
-                used_nonce.unwrap_or_else(|| chain_state.nonce_manager.current_nonce) + 1;
+            let new_nonce = used_nonce.unwrap_or(chain_state.nonce_manager.current_nonce) + 1;
 
             ic_cdk::println!(
                 "[release_and_increment_nonce] prev nonce: {}, new nonce: {}",
@@ -159,8 +158,7 @@ pub fn set_unresolved_nonce(chain_id: u64, used_nonce: Option<u128>, fees: Nonce
                 used_nonce
             );
 
-            let unresolved_nonce =
-                used_nonce.unwrap_or_else(|| chain_state.nonce_manager.current_nonce);
+            let unresolved_nonce = used_nonce.unwrap_or(chain_state.nonce_manager.current_nonce);
 
             chain_state
                 .nonce_manager

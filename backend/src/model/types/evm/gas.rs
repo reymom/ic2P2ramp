@@ -106,7 +106,7 @@ pub fn register_gas_usage(
         let chain_state = state
             .chains
             .get_mut(&chain_id)
-            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
+            .ok_or(BlockchainError::ChainIdNotFound(chain_id))?;
 
         match action_type {
             TransactionAction::Commit => {
@@ -158,21 +158,21 @@ pub fn get_average_gas(
         let chain_state = state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?;
+            .ok_or(BlockchainError::ChainIdNotFound(chain_id))?;
 
         let gas_tracking = match action_type {
-            &TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
-            &TransactionAction::Uncommit => Ok(&chain_state.gas_tracking.uncommit_gas),
-            &TransactionAction::Cancel(TransactionVariant::Native) => {
+            TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
+            TransactionAction::Uncommit => Ok(&chain_state.gas_tracking.uncommit_gas),
+            TransactionAction::Cancel(TransactionVariant::Native) => {
                 Ok(&chain_state.gas_tracking.cancel_native_gas)
             }
-            &TransactionAction::Cancel(TransactionVariant::Token) => {
+            TransactionAction::Cancel(TransactionVariant::Token) => {
                 Ok(&chain_state.gas_tracking.cancel_token_gas)
             }
-            &TransactionAction::Release(TransactionVariant::Token) => {
+            TransactionAction::Release(TransactionVariant::Token) => {
                 Ok(&chain_state.gas_tracking.release_token_gas)
             }
-            &TransactionAction::Release(TransactionVariant::Native) => {
+            TransactionAction::Release(TransactionVariant::Native) => {
                 Ok(&chain_state.gas_tracking.release_native_gas)
             }
             _ => Err(BlockchainError::GasLogError(
@@ -196,7 +196,7 @@ pub fn get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
         Ok(state
             .chains
             .get(&chain_id)
-            .ok_or_else(|| BlockchainError::ChainIdNotFound(chain_id))?
+            .ok_or(BlockchainError::ChainIdNotFound(chain_id))?
             .gas_tracking
             .clone())
     })

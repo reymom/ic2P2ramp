@@ -58,7 +58,7 @@ impl Order {
 
         let order_id = heap::generate_order_id();
         let order = Order {
-            id: order_id.clone(),
+            id: order_id,
             currency,
             created_at: ic_cdk::api::time(),
             offramper_user_id,

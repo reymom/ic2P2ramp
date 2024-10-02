@@ -1,6 +1,6 @@
 use crate::{model::types::exchange_rate::ExchangeRateCache, outcalls::xrc_rates::Asset};
 
-use super::heap::EXCHANGE_RATE_CACHE;
+use super::storage::EXCHANGE_RATE_CACHE;
 
 pub fn cache_exchange_rate(base_asset: Asset, quote_asset: Asset, rate: f64) {
     EXCHANGE_RATE_CACHE.with_borrow_mut(|rates| {

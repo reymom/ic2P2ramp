@@ -24,13 +24,13 @@ pub fn insert_user(user: &User) -> Option<User> {
 
 pub fn remove_user(user_id: &u64) -> Result<User> {
     USERS
-        .with_borrow_mut(|p| p.remove(&user_id))
+        .with_borrow_mut(|p| p.remove(user_id))
         .ok_or_else(|| UserError::UserNotFound.into())
 }
 
 pub fn get_user(user_id: &u64) -> Result<User> {
     USERS
-        .with_borrow(|users| users.get(&user_id))
+        .with_borrow(|users| users.get(user_id))
         .ok_or_else(|| UserError::UserNotFound.into())
 }
 
@@ -61,9 +61,9 @@ pub fn reset_password_user(login_address: &LoginAddress, password: String) -> Re
         if let Some(user) = user_to_update {
             let id = user.id;
             users.insert(id, user);
-            return Ok(id);
+            Ok(id)
         } else {
-            return Err(UserError::UserNotFound.into());
+            Err(UserError::UserNotFound.into())
         }
     })
 }

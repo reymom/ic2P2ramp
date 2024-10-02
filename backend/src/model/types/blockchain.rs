@@ -35,13 +35,15 @@ impl Crypto {
     pub fn get_symbol(&self) -> Result<String> {
         match &self.blockchain {
             Blockchain::EVM { chain_id } => match &self.token {
-                Some(token) => Ok(token::get_evm_token(*chain_id, &token)?.rate_symbol),
+                Some(token_address) => {
+                    Ok(token::get_evm_token(*chain_id, token_address)?.rate_symbol)
+                }
                 None => Ok(chains::get_native_currency_symbol(*chain_id)?),
             },
             Blockchain::ICP { ledger_principal } => {
-                Ok(icp::get_icp_token(&ledger_principal)?.symbol)
+                Ok(icp::get_icp_token(ledger_principal)?.symbol)
             }
-            _ => return Err(BlockchainError::UnsupportedBlockchain.into()),
+            _ => Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 
@@ -57,7 +59,7 @@ impl Crypto {
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(ledger_principal)?.decimals)
             }
-            _ => return Err(BlockchainError::UnsupportedBlockchain.into()),
+            _ => Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 

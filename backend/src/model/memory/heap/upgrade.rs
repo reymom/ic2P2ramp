@@ -72,8 +72,8 @@ impl SerializableHeap {
             user_id_counter,
             order_id_counter,
             locked_order_timers: locked_order_timers
-                .into_iter()
-                .map(|(order_id, _)| {
+                .into_keys()
+                .map(|order_id| {
                     (
                         order_id,
                         ic_cdk::api::time() + LOCK_DURATION_TIME_SECONDS * 1_000_000_000,
@@ -108,7 +108,7 @@ pub fn pre_upgrade() {
         get_order_id_counter(),
         get_locked_order_timers(),
         get_exchange_rate_cache(),
-        get_state().into(),
+        get_state(),
     );
 
     HEAP_STATE.with(|heap| {
@@ -124,7 +124,7 @@ pub fn post_upgrade(update_arg: Option<UpdateArg>) {
             serializable_heap.clone().set_locked_order_timers();
             set_exchange_rate_cache(serializable_heap.exchange_rate_cache);
 
-            let mut state: State = serializable_heap.state.clone().into();
+            let mut state: State = serializable_heap.state.clone();
             if let Some(update_arg) = update_arg {
                 update_state(update_arg, &mut state);
             }
@@ -144,7 +144,9 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
                 .chains
                 .entry(config.chain_id)
                 .and_modify(|chain_state| {
-                    chain_state.vault_manager_address = config.vault_manager_address.clone();
+                    chain_state
+                        .vault_manager_address
+                        .clone_from(&config.vault_manager_address);
                     chain_state.rpc_services = config.services.clone();
                 })
                 .or_insert(ChainState::new(
