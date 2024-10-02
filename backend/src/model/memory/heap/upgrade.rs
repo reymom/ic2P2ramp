@@ -91,7 +91,7 @@ impl SerializableHeap {
                 set_order_timer(order_id);
             } else {
                 ic_cdk::spawn(async move {
-                    if let Err(e) = management::order::unlock_order(order_id, None).await {
+                    if let Err(e) = management::order::unlock_order(order_id).await {
                         ic_cdk::println!("Failed to auto-unlock order {}: {:?}", order_id, e);
                     } else {
                         let _ = clear_order_timer(order_id);
