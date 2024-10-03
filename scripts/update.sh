@@ -18,24 +18,50 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )"
 
 # Modify a chain
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy backend_prod --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
       ecdsa_key_id = null;
       chains = opt vec {
         record {
-          chain_id = 11155111 : nat64;
-          vault_manager_address = \"${CONTRACT_BASE_SEPOLIA}\";
-          services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+          chain_id = 1 : nat64;
+          vault_manager_address = \"${CONTRACT_MAINNET}\";
+          services = variant { EthMainnet = opt vec { variant { Alchemy } } };
           currency_symbol = \"ETH\";
-        }
+        };
+        record {
+          chain_id = 8453 : nat64;
+          vault_manager_address = \"${CONTRACT_BASE}\";
+          services = variant {
+            Custom = record {
+              chainId = 8453 : nat64;
+              services = vec {
+                record { url = \"https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
+        record {
+          chain_id = 10 : nat64;
+          vault_manager_address = \"${CONTRACT_OP}\";
+          services = variant {
+            Custom = record {
+              chainId = 10 : nat64;
+              services = vec {
+                record { url = \"https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
       };
       paypal = null;
       revolut = null;
       proxy_url = null;
     }
   }
-)"
+)" --ic
 
 # Deploy a new chain
 dfx deploy backend --upgrade-unchanged --argument "(

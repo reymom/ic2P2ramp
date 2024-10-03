@@ -2,13 +2,11 @@
 
 DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
 
-shellcheck source=../.env.test
-source "$DIR/../.env.test" || {
+shellcheck source=../.env.sandbox
+source "$DIR/../.env.sandbox" || {
   echo "error while sourcing env file"
   exit
 }
-
-vite build --mode test
 
 # Might be necessary
 # dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic)
@@ -22,7 +20,7 @@ dfx deploy backend --argument "(
   variant { 
     Reinstall = record {
       ecdsa_key_id = record {
-        name = \"dfx_test_key\";
+        name = \"test_key_1\";
         curve = variant { secp256k1 };
       };
       chains = vec {
@@ -75,7 +73,7 @@ dfx deploy backend --argument "(
       paypal = record {
         client_id = \"${PAYPAL_CLIENT_ID}\";
         client_secret = \"${PAYPAL_CLIENT_SECRET}\";
-        api_url = \"api-m.sandbox.paypal.com\";
+        api_url = \"api-m.paypal.com\";
       };
       revolut = record {
         client_id = \"${REVOLUT_CLIENT_ID}\";
@@ -91,11 +89,18 @@ dfx deploy backend --argument "(
 )" --ic
 
 # configurations
-dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })' --ic
-dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {
-    record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" }
-})' --ic
-dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
-    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USD"; opt "Sepolia USDC" }
+dfx canister call backend register_icp_tokens '(vec { 
+    "ryjl3-tyaaa-aaaaa-aaaba-cai"; 
+    "lkwrt-vyaaa-aaaaq-aadhq-cai";
+    "2ouva-viaaa-aaaaq-aaamq-cai";
+    "mxzaz-hqaaa-aaaar-qaada-cai";
 })' --ic
 
+dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {
+    record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USDT"; opt "Custom USDT deployed by me" }
+})' --ic
+dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
+    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USDC"; opt "Sepolia USDC" }
+})' --ic
+
+dfx deploy frontend --mode reinstall -ic

@@ -148,19 +148,25 @@ dfx deploy backend --argument "(
 
 dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
 dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {
-    record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" }
+    record { "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"; 6 : nat8; "USDC"; opt "Sepolia Official USDC" };
+    record { "0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4"; 6 : nat8; "EURC"; opt "Sepolia Official EURC" };
+    record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" };
 })'
 dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
-    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USDC"; opt "Sepolia USDC" }
+    record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USDC"; opt "Base Sepolia Official USDC" };
+    record { "0x808456652fdb597867f38412077A9182bf77359F"; 6 : nat8; "EURC"; opt "Sepolia Official EURC" };
+})'
+dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
+    record { "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"; 6 : nat8; "USDC"; opt "Optimism Sepolia Official USDC" };
 })'
 
 # dfx deploy frontend --mode reinstall
 
 # export ACCOUNT_ID=$(dfx ledger account-id --of-principal x43o3-z4337-mle53-vdvne-poc44-i7e66-rr34k-3sdep-uebye-i4r3t-7qe)
 
-# export TO_PRINCIPAL=gylt3-52e7e-cljak-l4czk-i4jq5-trjec-mlgi5-36vpe-dyvgm-5sbq5-5qe
+# export TO_PRINCIPAL="pnb22-pzwfq-ruu2u-wwalv-vcfcd-flcwi-bc3rv-ylnnz-wv323-z2sfa-gqe"
 # export TO_SUBACCOUNT="null"
-# export AMOUNT="5_250_000_000"
+# export AMOUNT="3_000_000_000"
 # export FEE="10_000"
 
 # dfx canister call ryjl3-tyaaa-aaaaa-aaaba-cai icrc1_transfer \

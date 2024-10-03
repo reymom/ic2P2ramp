@@ -4,7 +4,7 @@ dfx canister call backend withdraw_evm_fees '(11155111 : nat64, 7160497397524000
 
 dfx canister call backend withdraw_evm_fees '(84532 : nat64, 669659 : nat, opt "0x036CbD53842c5426634e7929541eC2318f3dCF7e")'
 dfx canister call backend withdraw_evm_fees '(84532 : nat64, 349000000000000 : nat, null)'
-dfx canister call backend withdraw_evm_fees '(11155420 : nat64, 367000000000000 : nat, null, opt 20000)'
+dfx canister call backend withdraw_evm_fees '(11155420 : nat64, 590200058320000 : nat, null, opt 20000)'
 
 # for chain_id; for token[chain_id];
 dfx canister call backend transfer_evm_funds '(11155111 : nat64, "0xReceiverAddress", 109985601535148549124 : nat, opt "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF", opt 100000)'
