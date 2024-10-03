@@ -11,13 +11,13 @@ import { truncate } from '../../model/helper';
 import { isSessionExpired } from '../../model/session';
 import { rampErrorToString } from '../../model/error';
 import { useUser } from './UserContext';
+import CurrencySelect from '../ui/CurrencySelect';
+import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRemove, faSpinner, faSync } from '@fortawesome/free-solid-svg-icons';
+import { faRemove, faSpinner, faSync, faCopy, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
-import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
-import CurrencySelect from '../ui/CurrencySelect';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -31,6 +31,7 @@ const UserProfile: React.FC = () => {
     const [loadingAddProvider, setLoadingAddProvider] = useState(false);
     const [isClicked, setIsClicked] = useState(false);
     const [removing, setRemoving] = useState(false);
+    const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
     const { address, isConnected } = useAccount();
     const {
@@ -73,6 +74,16 @@ const UserProfile: React.FC = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [dropdownRef]);
+
+    const copyToClipboard = (text: string, index: number) => {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopiedIndex(index);
+            setTimeout(() => setCopiedIndex(null), 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
+    };
+
 
     const handleRefresh = async () => {
         setIsClicked(true);
@@ -190,7 +201,7 @@ const UserProfile: React.FC = () => {
         )
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative">
+        <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative text-white">
             <button
                 className={`absolute top-4 right-4 text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out ${isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-500'
                     }`}
@@ -202,11 +213,11 @@ const UserProfile: React.FC = () => {
             </button>
 
             <div className="text-center">
-                <h2 className="text-white text-2xl font-semibold">Profile</h2>
+                <h2 className="text-2xl font-semibold">Profile</h2>
             </div>
 
             <div className="space-y-4">
-                <div className="text-white space-y-2">
+                <div className="space-y-2">
                     <div className="flex justify-between items-center">
                         <span className="font-medium text-gray-200">User Type:</span>
                         <span className="font-semibold">{userTypeToString(user.user_type)}</span>
@@ -222,7 +233,7 @@ const UserProfile: React.FC = () => {
                         <CurrencySelect
                             selected={currency}
                             onChange={setCurrency}
-                            className="w-auto text-white text-sm border-gray-600"
+                            className="w-auto text-sm border-gray-600"
                             buttonClassName="rounded-md bg-gray-800 hover:bg-gray-900 border-gray-600"
                             dropdownClassName="bg-gray-800 hover:bg-gray-900"
                         />
@@ -248,16 +259,34 @@ const UserProfile: React.FC = () => {
 
                 <hr className="border-t border-gray-500 w-full" />
 
-                <div className="text-white">
+                <div>
                     <div className="flex justify-between items-center">
                         <span className="font-medium">Addresses:</span>
                     </div>
                     <ul className="pl-4 mt-2">
                         {user.addresses.map((addr, index) => {
+                            const isEmail = 'Email' in addr.address_type;
+                            const truncatedAddress = addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address;
                             return (
                                 <li key={index} className={`py-1 ${isSameAddress(addr) ? "text-blue-400" : "text-gray-200"}`}>
                                     <span className="flex-1 text-sm text-gray-200">({Object.keys(addr.address_type)[0]})</span>
-                                    <span className="ml-2">{addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address}</span>
+                                    <span className="ml-2">{truncatedAddress}</span>
+                                    <span className="relative">
+                                        {!isEmail && (
+                                            <button
+                                                className="ml-2 text-gray-400 hover:text-gray-200 "
+                                                title="Copy address"
+                                                onClick={() => copyToClipboard(addr.address, index)}
+                                            >
+                                                <FontAwesomeIcon icon={copiedIndex === index ? faCheckCircle : faCopy} />
+                                            </button>
+                                        )}
+                                        {copiedIndex === index && (
+                                            <span className="absolute left-8 -top-1.5 text-sm text-green-200 bg-gray-700 border border-gray-500 rounded-md px-2 py-1 shadow-md">
+                                                Copied!
+                                            </span>
+                                        )}
+                                    </span>
                                 </li>
                             );
                         })}
@@ -267,7 +296,7 @@ const UserProfile: React.FC = () => {
                 <div className="flex gap-2 items-center justify-between w-full">
                     <div className="relative w-1/6" ref={dropdownRef}>
                         <button
-                            className="w-full pl-3 pr-0.5 py-2 border border-gray-500 bg-gray-600 text-white rounded-md focus:outline-none flex items-center justify-between"
+                            className="w-full pl-3 pr-0.5 py-2 border border-gray-500 bg-gray-600 rounded-md focus:outline-none flex items-center justify-between"
                             onClick={() => setAddressDropdownOpen(!addressDropdownOpen)}
                         >
                             {selectedAddressType === 'EVM' ? (
@@ -309,14 +338,14 @@ const UserProfile: React.FC = () => {
                                     type="text"
                                     value={address}
                                     readOnly
-                                    className="px-3 py-2 border border-gray-500 rounded-md bg-gray-600 w-full text-white"
+                                    className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
                                 />
                                 <button
                                     disabled={!address || isAddressInUserAddresses(address)}
                                     onClick={() => handleAddAddress(address!)}
                                     className={
-                                        `ml-2 px-4 py-2 text-white font-semibold rounded-md w-1/4 flex justify-center items-center 
-                                    ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`
+                                        `ml-2 px-4 py-2 font-semibold rounded-md w-1/4 flex justify-center items-center 
+                                        ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`
                                     }
                                 >
                                     {addButtonContent(loadingAddAddress)}
@@ -327,7 +356,7 @@ const UserProfile: React.FC = () => {
                                 <ConnectButton.Custom>
                                     {({ openConnectModal }) => (
                                         <button
-                                            className="text-white w-full text-lg bg-amber-800 hover:bg-amber-900 cursor-pointer px-3 py-2 rounded-md"
+                                            className="w-full text-lg bg-amber-800 hover:bg-amber-900 cursor-pointer px-3 py-2 rounded-md"
                                             onClick={openConnectModal}
                                         >
                                             Connect wallet
@@ -344,14 +373,15 @@ const UserProfile: React.FC = () => {
                                     type="text"
                                     value={principal.toString()}
                                     readOnly
-                                    className="px-3 py-2 h-full border text-white border-gray-500 w-full rounded-md bg-gray-600"
+                                    className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
                                 />
                                 <button
                                     disabled={isAddressInUserAddresses(principal.toString()) || (isAddressInUserAddresses(principal.toString()) || loadingAddAddress)}
                                     onClick={() => handleAddAddress(principal.toString())}
-                                    className={`ml-2 px-4 py-2 text-white w-1/4 font-semibold rounded-md flex justify-center items-center ${!principal || isAddressInUserAddresses(principal.toString())
-                                        ? 'bg-gray-500 cursor-not-allowed'
-                                        : 'bg-indigo-700 hover:bg-indigo-800'} 
+                                    className={`ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center 
+                                        ${!principal || isAddressInUserAddresses(principal.toString())
+                                            ? 'bg-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-700 hover:bg-indigo-800'} 
                                         ${loadingAddAddress ? 'cursor-not-allowed' : ''}`
                                     }>
                                     {addButtonContent(loadingAddAddress)}
@@ -361,7 +391,7 @@ const UserProfile: React.FC = () => {
                             <div className="flex-grow">
                                 <button
                                     onClick={handleInternetIdentityLogin}
-                                    className="px-4 py-2 bg-amber-800 text-white text-lg font-bold rounded-md cursor-pointer w-full"
+                                    className="px-4 py-2 bg-amber-800 text-lg font-bold rounded-md cursor-pointer w-full"
                                 >
                                     Connect ICP
                                 </button>
@@ -372,7 +402,7 @@ const UserProfile: React.FC = () => {
 
                 <hr className="border-t border-gray-500 w-full" />
 
-                <div className="text-white">
+                <div>
                     <div className="flex justify-between items-center">
                         <span className="font-medium">Payment Providers:</span>
                     </div>
