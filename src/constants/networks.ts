@@ -1,6 +1,5 @@
 import ethereumLogo from '../assets/blockchains/ethereum-logo.png';
 import coinBaseLogo from '../assets/blockchains/coinbase-logo.svg';
-import polygonMaticLogo from '../assets/blockchains/polygon-matic.svg';
 import mantleLogo from '../assets/blockchains/mantle.png';
 import optimismLogo from '../assets/blockchains/optimism-logo.svg';
 

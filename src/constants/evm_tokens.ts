@@ -21,6 +21,8 @@ interface AddressMapping {
   tokens: TokenOption[];
 }
 
+console.log('FRONTEND_EVM_ENV = ', process.env.FRONTEND_EVM_ENV);
+
 if (process.env.FRONTEND_EVM_ENV === 'production') {
   if (
     !process.env.CONTRACT_MAINNET ||
@@ -122,6 +124,8 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
     tokens: [
       ethereumToken,
       newUsdtToken('0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF', 18),
+      newUsdcToken('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 6),
+      newEurcToken('0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4'),
     ],
   },
   // Base Sepolia
@@ -132,6 +136,7 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
     tokens: [
       ethereumToken,
       newUsdcToken('0x036CbD53842c5426634e7929541eC2318f3dCF7e', 6),
+      newEurcToken('0x808456652fdb597867f38412077A9182bf77359F'),
     ],
   },
   // OP Sepolia
@@ -139,7 +144,10 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
     vault: process.env.CONTRACT_OP_SEPOLIA
       ? process.env.CONTRACT_OP_SEPOLIA
       : '',
-    tokens: [ethereumToken],
+    tokens: [
+      ethereumToken,
+      newUsdcToken('0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 6),
+    ],
   },
   // Mantle Sepolia
   5003: {
