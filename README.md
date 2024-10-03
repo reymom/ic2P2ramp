@@ -8,11 +8,9 @@
   <a href="https://x.com/ic_rampXYZ?t=kjzM0v-CJiSfGR_RC8qSCg&s=09" target="_blank">
     <img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Logo_of_Twitter.svg" width="30px" alt="Twitter" />
   </a>
-  &nbsp;&nbsp;
   <a href="https://t.me/+1qd_xreS_hpkMTBk" target="_blank">
     <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" width="30px" alt="Telegram" />
   </a>
-  &nbsp;&nbsp;
   <a href="https://mesquite-structure-f75.notion.site/Onboarding-114aa21f9dd480ffb6a0ed741dddc80c" target="_blank">
     <img src="https://upload.wikimedia.org/wikipedia/commons/e/e9/Notion-logo.svg" width="30px" alt="Notion" />
   </a>
