@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     dotenv.config();
   }
 
-  const domain = mode === 'test' ? 'sandbox.icramp.xyz' : 'app.icramp.xyz';
+  const domain = mode === 'sandbox' ? 'sandbox.icramp.xyz' : 'app.icramp.xyz';
 
   return {
     root: 'src',
