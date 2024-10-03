@@ -122,7 +122,7 @@ const Menu: React.FC = () => {
     }, [user]);
 
     return (
-        <nav className="p-6 flex justify-between items-center rounded-lg bg-transparent">
+        <nav className="py-6 px-10 flex justify-between items-center rounded-lg bg-transparent relative">
             {isMobile &&
                 <>
                     <div className="flex items-center justify-between w-full">
@@ -177,7 +177,7 @@ const Menu: React.FC = () => {
                             icRamp
                         </h1>
                     </Link>
-                    <div className="flex-grow flex justify-center text-gray-800">
+                    <div className="absolute inset-0 flex justify-center items-center text-gray-800">
                         <div className="flex items-center space-x-6">
                             {renderLinks()}
                         </div>

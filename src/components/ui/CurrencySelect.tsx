@@ -55,7 +55,7 @@ const CurrencySelect: React.FC<CurrencySelectProps> = ({ selected, onChange, cla
 
             {/* Dropdown options */}
             {dropdownOpen && (
-                <div className={`absolute border border-inherit rounded-md mt-2 shadow-lg z-10 left-1/2 transform -translate-x-1/2 min-w-max`}>
+                <div className="absolute border border-inherit rounded-md mt-2 shadow-lg z-10 left-1/2 transform -translate-x-1/2 min-w-max">
                     {Object.keys(CURRENCY_ICON_MAP).map((currency, index) => (
                         <div
                             key={currency}
