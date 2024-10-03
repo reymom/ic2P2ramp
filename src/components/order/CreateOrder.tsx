@@ -24,6 +24,8 @@ import { getExchangeRate } from '../../model/rate';
 import { formatPrice, truncate } from '../../model/helper';
 import DynamicDots from '../ui/DynamicDots';
 import CurrencySelect from '../ui/CurrencySelect';
+import TokenSelect from '../ui/TokenSelect';
+import BlockchainSelect from '../ui/BlockchainSelect';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -94,32 +96,32 @@ const CreateOrder: React.FC = () => {
         }
     }, [blockchainType, chainId]);
 
-    const handleBlockchainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleBlockchainChange = (blockchainName: string) => {
         if (loadingRate) return;
 
         setSelectedToken(null);
-        const value = e.target.value;
-        setBlockchainType(value as BlockchainTypes);
-        if (value === "EVM") {
+        setTokenOptions([]);
+        setBlockchainType(blockchainName as BlockchainTypes);
+        if (blockchainName === "EVM") {
             if (!chainId) return;
             setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
-        } else if (value === "ICP") {
+        } else if (blockchainName === "ICP") {
             setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(ICP_TOKENS[0].address) } });
-        } else if (value === "Solana") {
+        } else if (blockchainName === "Solana") {
             setSelectedBlockchain({ Solana: null });
         }
 
         setSelectedToken(null);
     };
 
-    const handleTokenChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleTokenChange = (tokenAddress: string) => {
         if (loadingRate) return;
 
-        const selected = tokenOptions.find(token => token.address === e.target.value);
+        const selected = tokenOptions.find(token => token.address === tokenAddress);
         setSelectedToken(selected || null);
 
         if (selected && selectedBlockchain && blockchainToBlockchainType(selectedBlockchain) === 'ICP') {
-            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address!) } })
+            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address!) } });
         }
     };
 
@@ -499,35 +501,24 @@ const CreateOrder: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-white w-24">Blockchain:</label>
-                    <select
-                        value={blockchainType}
+                    <label className="text-white w-24 flex-none">Blockchain:</label>
+                    <BlockchainSelect
+                        selectedBlockchain={blockchainType}
                         onChange={handleBlockchainChange}
-                        className={`flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white ${loadingRate ? 'cursor-not-allowed' : ''}`}
-                        required
-                        disabled={loadingRate}
-                    >
-                        <option selected>Select Blockchain</option>
-                        {user?.addresses.some(addr => 'EVM' in addr.address_type) && <option value="EVM">EVM</option>}
-                        {user?.addresses.some(addr => 'ICP' in addr.address_type) && <option value="ICP">ICP</option>}
-                        {user?.addresses.some(addr => 'Solana' in addr.address_type) && <option value="Solana">Solana</option>}
-                    </select>
+                        className="flex-grow flex items-center w-full"
+                        buttonClassName="bg-gray-600 border-gray-500 rounded-md"
+                    />
                 </div>
 
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-white w-24">Token:</label>
-                    <select
-                        value={selectedToken?.address || undefined}
+                    <label className="text-white w-24 flex-none">Token:</label>
+                    <TokenSelect
+                        tokenOptions={tokenOptions}
+                        selectedToken={selectedToken?.address || null}
                         onChange={handleTokenChange}
-                        className={`flex-grow py-2 px-3 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white ${loadingRate ? 'cursor-not-allowed' : ''}`}
-                        required
-                        disabled={loadingRate}
-                    >
-                        <option value="">Select a token</option>
-                        {tokenOptions.map((token) => (
-                            <option key={token.address} value={token.address}>{token.name}</option>
-                        ))}
-                    </select>
+                        className="flex-grow flex items-center w-full"
+                        buttonClassName="bg-gray-600 border-gray-500 rounded-md"
+                    />
                 </div>
 
                 {loadingRate && (
