@@ -4,12 +4,16 @@ import {
   baseSepolia,
   optimismSepolia,
   mantleSepoliaTestnet,
+  //   lineaSepolia,
+  //   arbitrumSepolia,
+  //   polygonZkEvmCardona,
   mainnet,
   base,
   optimism,
-  mantle,
-  arbitrum,
-  polygon,
+  //   mantle,
+  //   linea,
+  //   arbitrum,
+  //   polygonZkEvm,
 } from 'wagmi/chains';
 
 // const isTelegramWebView = () => typeof window.Telegram !== 'undefined';
@@ -21,8 +25,19 @@ const testChains = [
   baseSepolia,
   optimismSepolia,
   mantleSepoliaTestnet,
+  //   lineaSepolia,
+  //   arbitrumSepolia,
+  //   polygonZkEvmCardona,
 ];
-const prodChains = [mainnet, base, optimism, mantle, arbitrum, polygon];
+const prodChains = [
+  mainnet,
+  base,
+  optimism,
+  //   mantle,
+  //   linea,
+  //   arbitrum,
+  //   polygonZkEvm,
+];
 
 const getChains = () => {
   if (process.env.FRONTEND_EVM_ENV === 'production') {

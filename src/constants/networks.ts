@@ -20,11 +20,11 @@ export const NetworkIds: { [chainId: string]: NetworkProps } =
           explorer: 'https://etherscan.io',
           logo: ethereumLogo,
         },
-        POLYGON: {
-          id: 137,
-          name: 'Polygon',
-          explorer: 'https://polygonscan.com',
-          logo: polygonMaticLogo,
+        BASE: {
+          id: 8453,
+          name: 'Base',
+          explorer: 'https://basescan.org/',
+          logo: coinBaseLogo,
         },
         OPTIMISM: {
           id: 10,
