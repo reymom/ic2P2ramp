@@ -2,11 +2,9 @@
 <img src="src/assets/icR-logo.png" width="250">
 </p>
 
-<div align="center">
-<span style="font-size:40px; font-weight:bold">icRamp</span>
-</div>
+# icRamp
 
-<div align="center" id="badges">
+<div id="badges">
   <a href="https://x.com/ic_rampXYZ?t=kjzM0v-CJiSfGR_RC8qSCg&s=09" target="_blank">
     <img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Logo_of_Twitter.svg" width="30px" alt="Twitter" />
   </a>
