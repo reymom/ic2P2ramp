@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import icpLogo from "../../assets/blockchains/icp-logo.svg";
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { OrderState, PaymentProvider, PaymentProviderType } from '../../declarations/backend/backend.did';
 import { useUser } from '../user/UserContext';
 import { NetworkIds, NetworkProps } from '../../constants/networks';

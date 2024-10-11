@@ -1,4 +1,4 @@
-import { backend } from '../declarations/backend';
+import { backend } from '../model/backendProxy';
 import { Crypto } from '../declarations/backend/backend.did';
 import { rampErrorToString } from './error';
 

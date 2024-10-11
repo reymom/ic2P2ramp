@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { rampErrorToString } from '../../model/error';
 import { validatePassword } from '../../model/helper';
 import { clearTempResetPasswordData, getTempResetPasswordData } from '../../model/emailConfirmation';

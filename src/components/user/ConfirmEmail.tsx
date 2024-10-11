@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { getTempUserData, clearTempUserData } from '../../model/emailConfirmation';
 import { rampErrorToString } from '../../model/error';
 import { stringToUserType } from '../../model/utils';

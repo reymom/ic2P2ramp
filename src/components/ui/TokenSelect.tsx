@@ -7,7 +7,7 @@ import { TokenOption } from '../../model/types';
 
 interface TokenSelectProps {
     tokenOptions: TokenOption[];
-    selectedToken: string | null;
+    selectedToken: TokenOption | null;
     onChange: (token: string) => void;
     className?: string;
     buttonClassName?: string;
@@ -47,8 +47,8 @@ const TokenSelect: React.FC<TokenSelectProps> = ({ tokenOptions, selectedToken, 
                 {/* Display selected token with logo */}
                 {selectedToken ? (
                     <div>
-                        <img src={tokenOptions.find(t => t.address === selectedToken)?.logo} alt="" className="h-6 w-6 inline-block mr-2" />
-                        <span>{tokenOptions.find(t => t.address === selectedToken)?.name}</span>
+                        <img src={selectedToken.logo} alt="" className="h-6 w-6 inline-block mr-2" />
+                        <span>{selectedToken.name}</span>
                     </div>
                 ) : (
                     <span>Select Token</span>

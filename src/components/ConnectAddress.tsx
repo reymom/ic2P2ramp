@@ -4,7 +4,7 @@ import { ethers } from 'ethers';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 
-import { backend, createActor } from '../declarations/backend';
+import { backend, createActor } from '../model/backendProxy';
 import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
 import { validatePassword } from '../model/helper';
 import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '../model/error';

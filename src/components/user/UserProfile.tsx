@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { PaymentProvider, TransactionAddress } from '../../declarations/backend/backend.did';
 import { userTypeToString } from '../../model/utils';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';

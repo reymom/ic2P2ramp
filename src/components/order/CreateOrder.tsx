@@ -166,9 +166,7 @@ const CreateOrder: React.FC = () => {
         if (selectedBlockchain && selectedToken && cryptoAmount > 0) {
             const roundedCryptoAmount = cryptoAmount.toFixed(selectedToken.decimals);
             if ('EVM' in selectedBlockchain) {
-
                 setCryptoAmountUnits(
-
                     selectedToken.isNative ? ethers.parseEther(roundedCryptoAmount)
                         : ethers.parseUnits(roundedCryptoAmount, selectedToken.decimals)
                 );
@@ -221,7 +219,6 @@ const CreateOrder: React.FC = () => {
             return;
         }
 
-        if (!chainId) throw new Error('Chain id is not available')
         if (!selectedBlockchain) throw new Error('No blockchain selected');
         if (!selectedToken) throw new Error('No token selected');
         if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
@@ -246,6 +243,7 @@ const CreateOrder: React.FC = () => {
             let evmOrderInput: [EvmOrderInput] | [] = []
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
+                if (!chainId) throw new Error('Chain id is not available');
                 setLoadingMessage("Estimating order gas");
                 try {
                     const gasForCommit = await estimateGasAndGasPrice(
@@ -514,7 +512,7 @@ const CreateOrder: React.FC = () => {
                     <label className="text-white w-24 flex-none">Token:</label>
                     <TokenSelect
                         tokenOptions={tokenOptions}
-                        selectedToken={selectedToken?.address || null}
+                        selectedToken={selectedToken}
                         onChange={handleTokenChange}
                         className="flex-grow flex items-center w-full"
                         buttonClassName="bg-gray-600 border-gray-500 rounded-md"

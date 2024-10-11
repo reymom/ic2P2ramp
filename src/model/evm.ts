@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { backend } from '../declarations/backend';
+import { backend } from '../model/backendProxy';
 import { TransactionAction } from '../declarations/backend/backend.did';
 import { icP2PrampABI } from '../constants/ic2P2ramp';
 import { getVaultAddress } from '../constants/evm_tokens';
@@ -122,7 +122,9 @@ export const estimateOrderFees = async (
     if ('Ok' in estimateOrderFees) {
       return estimateOrderFees.Ok;
     } else {
-      console.error('[estimateOrderFees] Failed to calculate fees');
+      console.error(
+        `[estimateOrderFees] Failed to calculate fees. Error: ${estimateOrderFees.Err}`,
+      );
       throw new Error('Failed to calculate order fees');
     }
   } catch (error) {

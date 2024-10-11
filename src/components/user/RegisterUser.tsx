@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { PaymentProvider } from '../../declarations/backend/backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
 import { stringToUserType } from '../../model/utils';

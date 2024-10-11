@@ -2,11 +2,11 @@ import { createContext, useState, useContext, ReactNode, useEffect } from 'react
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
-import { IcrcLedgerCanister, BalanceParams, IcrcTokens } from '@dfinity/ledger-icrc';
+import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
-import { backend, createActor } from '../../declarations/backend';
+import { backend, createActor } from '../../model/backendProxy';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
 import { getEvmTokens } from '../../constants/evm_tokens';
 import { ICP_TOKENS } from '../../constants/icp_tokens';
@@ -23,11 +23,15 @@ import {
 import { UserTypes } from '../../model/types';
 import { icpHost, iiUrl } from '../../model/icp';
 import { formatCryptoUnits } from '../../model/helper';
+import { getChains } from '../../wagmi';
 
 export interface Balance {
     raw: bigint;
     formatted: string;
 }
+
+console.log("Frontend Canister:", process.env.FRONTEND_CANISTER_ID);
+console.log("Backend Canister:", process.env.BACKEND_CANISTER_ID);
 
 interface UserContextProps {
     refetchUser: () => Promise<void>;
@@ -282,6 +286,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     const fetchEvmBalances = async () => {
         if (!window.ethereum || !chainId || !address || !isConnected) return;
+
+        if (!getChains().some((chain) => chain.id === chainId)) return;
 
         try {
             const provider = new ethers.BrowserProvider(window.ethereum);

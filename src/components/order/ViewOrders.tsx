@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 
-import { backend } from '../../declarations/backend';
+import { backend } from '../../model/backendProxy';
 import { OrderFilter, OrderState } from '../../declarations/backend/backend.did';
 import OrderFilters from './OrderFilters';
 import Order from './Order';

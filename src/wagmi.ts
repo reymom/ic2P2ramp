@@ -39,7 +39,7 @@ const prodChains = [
   //   polygonZkEvm,
 ];
 
-const getChains = () => {
+export const getChains = () => {
   if (process.env.FRONTEND_EVM_ENV === 'production') {
     return prodChains;
   }
