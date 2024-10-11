@@ -1,4 +1,5 @@
 use candid::{CandidType, Deserialize};
+use num_traits::ToPrimitive;
 
 use crate::model::{
     errors::{BlockchainError, Result},
@@ -55,7 +56,16 @@ impl GasUsage {
     /// Returns:
     /// - A tuple containing the average gas usage and the average gas price for transactions within the specified block range,
     ///   or `None` if no records are found.
-    pub fn average_gas(&self, current_block: u128, max_blocks_in_past: u64) -> Option<(u64, u128)> {
+    pub fn average_gas(
+        &self,
+        current_block: Option<u128>,
+        max_blocks_in_past: u64,
+    ) -> Option<(u64, u128)> {
+        let current_block = match current_block {
+            None => return None,
+            Some(block) => block,
+        };
+
         let relevant_records: Vec<_> = self
             .records
             .iter()
@@ -144,7 +154,7 @@ pub fn register_gas_usage(
 /// - `Result<Option<(u128, u128)>>`: A tuple with average gas and gas price, or `None` if no data is found.
 pub fn get_average_gas(
     chain_id: u64,
-    current_block: u128,
+    current_block: candid::Nat,
     max_blocks_in_past: Option<u64>,
     action_type: &TransactionAction,
 ) -> Result<Option<(u64, u128)>> {
@@ -180,7 +190,7 @@ pub fn get_average_gas(
             )),
         }?;
 
-        Ok(gas_tracking.average_gas(current_block, max_blocks_in_past))
+        Ok(gas_tracking.average_gas(current_block.0.to_u128(), max_blocks_in_past))
     })
 }
 

@@ -171,6 +171,15 @@ pub enum BlockchainError {
 
     #[error("Gas Log error: {0}")]
     GasLogError(String),
+
+    #[error("Gas estimation failed")]
+    GasEstimationFailed,
+
+    #[error("RPC Provider not found")]
+    RpcProviderNotFound,
+
+    #[error("Evm Execution Reverted. Code: {0}, Message: {1}")]
+    EvmExecutionReverted(i64, String),
 }
 
 #[derive(Error, Debug, CandidType, Clone)]

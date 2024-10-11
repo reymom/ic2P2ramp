@@ -2,15 +2,13 @@ use std::collections::HashMap;
 use std::{fmt, str::FromStr};
 
 use candid::{CandidType, Deserialize};
+use evm_rpc_canister_types::RpcServices;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
-use crate::{
-    evm::rpc::RpcServices,
-    model::types::{
-        evm::chains::ChainState,
-        payment::{paypal::PayPalState, revolut::RevolutState},
-    },
+use crate::model::types::{
+    evm::chains::ChainState,
+    payment::{paypal::PayPalState, revolut::RevolutState},
 };
 
 #[derive(CandidType, Deserialize, Debug, Clone)]

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use candid::{CandidType, Deserialize};
+use evm_rpc_canister_types::RpcServices;
 
 use crate::{
     errors::{BlockchainError, Result, SystemError},
-    evm::rpc::RpcServices,
     model::memory::heap::read_state,
 };
 

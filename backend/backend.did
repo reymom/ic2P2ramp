@@ -11,20 +11,24 @@ type BlockchainError = variant {
   ReplacementUnderpriced;
   UnsupportedBlockchain;
   LedgerPrincipalNotSupported : text;
+  EvmExecutionReverted : record { int64; text };
   EvmLogError : text;
   EthersAbiError : text;
   ChainIdNotFound : nat64;
   FundsTooLow;
   GasLogError : text;
+  UnsupportedRpcService;
   NonceTooLow;
   NonceLockTimeout : nat64;
   FundsBelowFees;
   UnregisteredEvmToken;
   EmptyTransactionHash;
   NonceTooHigh;
+  GasEstimationFailed;
   VaultManagerAddressNotFound : nat64;
   InsufficientFunds;
   InconsistentStatus;
+  RpcProviderNotFound;
 };
 type ChainConfig = record {
   currency_symbol : text;
@@ -63,7 +67,6 @@ type EthMainnetService = variant {
   PublicNode;
   Ankr;
 };
-type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
 type EvmOrderInput = record {
   estimated_gas_withdraw : nat64;
   estimated_gas_lock : nat64;
@@ -111,6 +114,7 @@ type InitArg = record {
   paypal : PaypalConfig;
 };
 type InstallArg = variant { Upgrade : opt UpdateArg; Reinstall : InitArg };
+type L2MainnetService = variant { Alchemy; BlockPi; PublicNode; Ankr };
 type LockedOrder = record {
   locked_at : nat64;
   payment_done : bool;
@@ -213,8 +217,9 @@ type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : User; Err : RampError };
 type Result_10 = variant { Ok : OrderState; Err : RampError };
 type Result_11 = variant { Ok : opt EvmTransactionLog; Err : RampError };
-type Result_12 = variant { Ok : ChainGasTracking; Err : RampError };
-type Result_13 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_12 = variant { Ok : record { nat; nat }; Err : RampError };
+type Result_13 = variant { Ok : ChainGasTracking; Err : RampError };
+type Result_14 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : nat; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
 type Result_4 = variant { Ok : nat64; Err : RampError };
@@ -234,8 +239,11 @@ type RevolutConfig = record {
 type RevolutConsent = record { id : text; url : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader_1 };
 type RpcServices = variant {
-  EthSepolia : opt vec EthSepoliaService;
+  EthSepolia : opt vec L2MainnetService;
+  BaseMainnet : opt vec L2MainnetService;
   Custom : record { chainId : nat64; services : vec RpcApi };
+  OptimismMainnet : opt vec L2MainnetService;
+  ArbitrumOne : opt vec L2MainnetService;
   EthMainnet : opt vec EthMainnetService;
 };
 type Session = record { token : text; expires_at : nat64 };
@@ -397,8 +405,12 @@ service : (InstallArg) -> {
   resolve_tx_status : (nat64, text, nat64) -> ();
   retry_order_completion : (nat64) -> (Result);
   retry_order_unlock : (nat64) -> (Result);
+  test_estimate_gas_commit : (nat64, text, opt text, nat) -> (Result_4);
   test_get_consent_url : () -> (Result_5);
-  test_get_gas_tracking : (nat64) -> (Result_12) query;
+  test_get_fee_estimates : (nat64) -> (Result_12);
+  test_get_gas_tracking : (nat64) -> (Result_13) query;
+  test_get_latest_block : (nat64) -> (Result_2);
+  test_get_latest_nonce : (nat64) -> (Result_2);
   test_get_rates : () -> (
       vec record { record { text; text }; ExchangeRateCache },
     ) query;
@@ -422,6 +434,6 @@ service : (InstallArg) -> {
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, opt text, text) -> (Result);
-  view_canister_balances : () -> (Result_13) query;
+  view_canister_balances : () -> (Result_14) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }

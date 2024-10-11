@@ -2,12 +2,13 @@ use std::ops::{Add, Div, Mul};
 
 use candid::Nat;
 use ethers_core::types::U256;
+use evm_rpc_canister_types::{
+    Block, BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, GetBlockByNumberResult,
+    MultiFeeHistoryResult, MultiGetBlockByNumberResult,
+};
 use serde_bytes::ByteBuf;
 
-use super::rpc::{
-    Block, BlockTag, FeeHistory, FeeHistoryArgs, FeeHistoryResult, GetBlockByNumberResult,
-    MultiFeeHistoryResult, MultiGetBlockByNumberResult, EVM_RPC,
-};
+use super::{helper::nat_to_u256, rpc::EVM_RPC};
 use crate::{
     errors::{Result, SystemError},
     types::evm::chains,
@@ -127,11 +128,6 @@ pub async fn get_fee_estimates(block_count: u8, chain_id: u64) -> Result<FeeEsti
     })
 }
 
-pub fn nat_to_u256(n: &Nat) -> U256 {
-    let be_bytes = n.0.to_bytes_be();
-    U256::from_big_endian(&be_bytes)
-}
-
 pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<Block> {
     let rpc_providers = chains::get_rpc_providers(chain_id)?;
 
@@ -141,8 +137,8 @@ pub async fn eth_get_latest_block(chain_id: u64, block_tag: BlockTag) -> Result<
         .await
     {
         Ok((res,)) => match res {
-            MultiGetBlockByNumberResult::Consistent(block_result) => match *block_result {
-                GetBlockByNumberResult::Ok(block) => Ok(*block),
+            MultiGetBlockByNumberResult::Consistent(block_result) => match block_result {
+                GetBlockByNumberResult::Ok(block) => Ok(block),
                 GetBlockByNumberResult::Err(e) => Err(SystemError::RpcError(format!("{:?}", e)))?,
             },
             MultiGetBlockByNumberResult::Inconsistent(_) => Err(SystemError::InternalError(

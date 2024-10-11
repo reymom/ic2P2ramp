@@ -1,19 +1,24 @@
 use std::{cmp::Ordering, time::Duration};
 
 use ethers_core::{abi, types::U256};
+use evm_rpc_canister_types::{
+    BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
+    MultiGetTransactionCountResult, MultiGetTransactionReceiptResult,
+    MultiSendRawTransactionResult, RpcConfig, RpcError, SendRawTransactionResult,
+    TransactionReceipt,
+};
 
 use super::{
-    rpc::{
-        BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
-        MultiGetTransactionCountResult, MultiGetTransactionReceiptResult,
-        MultiSendRawTransactionResult, RpcConfig, RpcError, SendRawTransactionResult,
-        SendRawTransactionStatus, TransactionReceipt, EVM_RPC,
-    },
+    rpc::{CustomTransactionStatus, EVM_RPC},
     signer,
 };
 use crate::{
     errors::{BlockchainError, RampError, Result, SystemError},
-    evm::{fees, helper::load_contract_data, vault::Ic2P2ramp},
+    evm::{
+        fees,
+        helper::{empty_transaction_receipt, load_contract_data, nat_to_u256},
+        vault::Ic2P2ramp,
+    },
     management::vault,
     model::{
         memory::{
@@ -59,7 +64,7 @@ pub fn broadcast_transaction(
                     if nonce::has_unresolved_nonces(chain_id) {
                         nonce = eth_get_transaction_count(chain_id)
                             .await
-                            .map(|n| n.into())
+                            .map(|n| nat_to_u256(&n))
                             .unwrap_or(nonce);
                         ic_cdk::println!("[broadcast_transaction] nonce from tx_count: {}", nonce);
 
@@ -137,7 +142,7 @@ pub fn broadcast_transaction(
                                     ic_cdk::println!("Broadcasted tx: {}", tx_hash);
                                     logs::update_transaction_log(
                                         order_id,
-                                        TransactionStatus::Confirmed(TransactionReceipt::default()),
+                                        TransactionStatus::Confirmed(empty_transaction_receipt()),
                                     );
                                 }
                             }
@@ -154,7 +159,7 @@ pub fn broadcast_transaction(
                                 ic_cdk::println!("Broadcasted tx: {}", tx_hash);
                                 logs::update_transaction_log(
                                     order_id,
-                                    TransactionStatus::Confirmed(TransactionReceipt::default()),
+                                    TransactionStatus::Confirmed(empty_transaction_receipt()),
                                 );
                             }
                         }
@@ -164,7 +169,7 @@ pub fn broadcast_transaction(
                         match eth_get_transaction_count(chain_id).await {
                             Ok(tx_count) => {
                                 let sign_request = SignRequest {
-                                    nonce: Some(tx_count.into()),
+                                    nonce: Some(nat_to_u256(&tx_count)),
                                     ..sign_request
                                 };
                                 broadcast_transaction(
@@ -282,20 +287,20 @@ async fn send_signed_transaction(request: SignRequest, chain_id: u64) -> Result<
     let tx = signer::sign_transaction(request).await;
 
     match send_raw_transaction(tx.clone(), chain_id).await? {
-        SendRawTransactionStatus::Ok(transaction_hash) => {
+        CustomTransactionStatus::Ok(transaction_hash) => {
             ic_cdk::println!("[send_signed_transaction] tx_hash = {:?}", transaction_hash);
             transaction_hash.ok_or_else(|| BlockchainError::EmptyTransactionHash.into())
         }
-        SendRawTransactionStatus::NonceTooLow => Err(BlockchainError::NonceTooLow)?,
-        SendRawTransactionStatus::NonceTooHigh => Err(BlockchainError::NonceTooHigh)?,
-        SendRawTransactionStatus::InsufficientFunds => Err(BlockchainError::InsufficientFunds)?,
-        SendRawTransactionStatus::ReplacementUnderpriced => {
+        CustomTransactionStatus::NonceTooLow => Err(BlockchainError::NonceTooLow)?,
+        CustomTransactionStatus::NonceTooHigh => Err(BlockchainError::NonceTooHigh)?,
+        CustomTransactionStatus::InsufficientFunds => Err(BlockchainError::InsufficientFunds)?,
+        CustomTransactionStatus::ReplacementUnderpriced => {
             Err(BlockchainError::ReplacementUnderpriced)?
         }
     }
 }
 
-async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<SendRawTransactionStatus> {
+async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<CustomTransactionStatus> {
     let rpc_providers = get_rpc_providers(chain_id).unwrap();
     let cycles = 10_000_000_000;
 
@@ -303,21 +308,21 @@ async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<SendRawTransa
         responseSizeEstimate: Some(1024),
     });
     match EVM_RPC
-        .send_raw_transaction(rpc_providers, arg, tx, cycles)
+        .eth_send_raw_transaction(rpc_providers, arg, tx, cycles)
         .await
     {
         Ok((res,)) => match res {
             MultiSendRawTransactionResult::Consistent(status) => match status {
-                SendRawTransactionResult::Ok(status) => Ok(status),
+                SendRawTransactionResult::Ok(status) => Ok(status.into()),
                 SendRawTransactionResult::Err(RpcError::JsonRpcError(e)) => {
                     if e.message.contains("nonce too low") {
-                        Ok(SendRawTransactionStatus::NonceTooLow)
+                        Ok(CustomTransactionStatus::NonceTooLow)
                     } else if e.message.contains("nonce too high") {
-                        Ok(SendRawTransactionStatus::NonceTooHigh)
+                        Ok(CustomTransactionStatus::NonceTooHigh)
                     } else if e.message.contains("insufficient funds") {
-                        Ok(SendRawTransactionStatus::InsufficientFunds)
+                        Ok(CustomTransactionStatus::InsufficientFunds)
                     } else if e.message.contains("replacement transaction underpriced") {
-                        Ok(SendRawTransactionStatus::ReplacementUnderpriced)
+                        Ok(CustomTransactionStatus::ReplacementUnderpriced)
                     } else {
                         Err(SystemError::RpcError(format!("Json Rpc Error: {:?}", e)).into())
                     }
@@ -348,9 +353,9 @@ pub async fn check_transaction_status(tx_hash: &String, chain_id: u64) -> Transa
         TransactionStatus::Failed(format!("Error checking transaction: {:?}", e))
     };
     match res {
-        Ok((MultiGetTransactionReceiptResult::Consistent(receipt),)) => match *receipt {
-            GetTransactionReceiptResult::Ok(boxed_receipt) => {
-                if let Some(receipt) = *boxed_receipt {
+        Ok((MultiGetTransactionReceiptResult::Consistent(receipt),)) => match receipt {
+            GetTransactionReceiptResult::Ok(receipt) => {
+                if let Some(receipt) = receipt {
                     if receipt.status == 1_u32 {
                         TransactionStatus::Confirmed(receipt)
                     } else {
@@ -587,7 +592,7 @@ pub async fn bump_dummy_transaction(sign_request: SignRequest, chain_id: u64) ->
     send_signed_transaction(sign_request.clone(), chain_id).await
 }
 
-pub async fn eth_get_transaction_count(chain_id: u64) -> Result<u128> {
+pub async fn eth_get_transaction_count(chain_id: u64) -> Result<candid::Nat> {
     let rpc_providers = chains::get_rpc_providers(chain_id)?;
     let address = read_state(|s| s.evm_address.clone()).expect("evm address should be initialized");
 

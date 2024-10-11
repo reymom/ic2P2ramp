@@ -1,8 +1,8 @@
 use candid::CandidType;
 use ethers_core::abi::Address;
+use evm_rpc_canister_types::LogEntry;
 use num_traits::ToPrimitive;
 
-use super::rpc::LogEntry;
 use crate::errors::{BlockchainError, Result, SystemError};
 
 const TXS_THRESHOLD_DISCARD_BLOCKS: u128 = 30 * 7 * 24 * 60 * 5; // Assuming 5 blocks per minute
@@ -28,7 +28,7 @@ impl DepositEvent {
         }
     }
 
-    pub fn expired(&self, current_block: u128) -> Result<()> {
+    pub fn expired(&self, current_block: candid::Nat) -> Result<()> {
         if let Some(event_block) = self.block {
             if current_block - event_block > TXS_THRESHOLD_DISCARD_BLOCKS {
                 return Err(BlockchainError::EvmLogError("Log event expired".to_string()).into());

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use candid::Principal;
+use evm_rpc_canister_types::BlockTag;
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
@@ -8,7 +9,6 @@ use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError}
 use crate::evm::{
     event::{self, LogEvent},
     fees::{eth_get_latest_block, get_fee_estimates},
-    rpc::BlockTag,
     transaction,
     vault::Ic2P2ramp,
 };
@@ -201,8 +201,10 @@ pub async fn validate_deposit_tx(
                         );
                     }
 
-                    let last_block = eth_get_latest_block(*chain_id, BlockTag::Latest).await?;
-                    deposit_event.expired(last_block.number)?;
+                    let last_block = eth_get_latest_block(*chain_id, BlockTag::Latest)
+                        .await
+                        .map(|block| block.number)?;
+                    deposit_event.expired(last_block)?;
                 }
             };
 

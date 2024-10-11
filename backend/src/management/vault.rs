@@ -1,7 +1,8 @@
+use evm_rpc_canister_types::TransactionReceipt;
 use num_traits::ToPrimitive;
 
 use crate::{
-    evm::{rpc::TransactionReceipt, transaction},
+    evm::transaction,
     model::memory,
     types::{
         evm::{

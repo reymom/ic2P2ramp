@@ -1,8 +1,8 @@
 use candid::CandidType;
-
-use crate::{evm::rpc::TransactionReceipt, model::errors::RampError};
+use evm_rpc_canister_types::TransactionReceipt;
 
 use super::{request::SignRequestCandid, transaction::TransactionAction};
+use crate::model::errors::RampError;
 
 #[derive(CandidType, Debug, Clone)]
 pub struct EvmTransactionLog {
