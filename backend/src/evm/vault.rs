@@ -1,14 +1,17 @@
 use ethers_core::abi::Token;
 use ethers_core::types::{Address, U256};
+use evm_rpc_canister_types::BlockTag;
 
 use super::fees::{self, eth_get_latest_block};
-use super::helper::load_contract_data;
-use super::rpc::BlockTag;
-use super::transaction::create_vault_sign_request;
+use super::helper::{self, load_contract_data};
+use super::transaction::{broadcast_transaction, create_vault_sign_request};
+use super::{estimate_gas, EstimateGasParams};
 
 use crate::errors::{BlockchainError, Result};
-use crate::evm::transaction::broadcast_transaction;
-use crate::model::{helpers, memory::heap::logs};
+use crate::model::{
+    helpers,
+    memory::heap::{logs, read_state},
+};
 use crate::types::{
     evm::{
         gas::get_average_gas,
@@ -30,8 +33,10 @@ impl Ic2P2ramp {
     }
 
     pub async fn get_average_gas_price(chain_id: u64, method: &TransactionAction) -> Result<u64> {
-        let block = eth_get_latest_block(chain_id, BlockTag::Latest).await?;
-        let average_gas = get_average_gas(chain_id, block.number, None, method)?
+        let block = eth_get_latest_block(chain_id, BlockTag::Latest)
+            .await
+            .map(|block| block.number)?;
+        let average_gas = get_average_gas(chain_id, block, None, method)?
             .map(|(gas, _)| Ok(gas))
             .unwrap_or_else(|| Ok(method.default_gas(chain_id)));
         if chain_id == 5003 || chain_id == 5000 {
@@ -39,6 +44,34 @@ impl Ic2P2ramp {
         }
 
         average_gas
+    }
+
+    pub async fn estimate_gas(
+        chain_id: u64,
+        vault_address: String,
+        data: Vec<u8>,
+    ) -> Result<Option<u64>> {
+        let params = EstimateGasParams::new(
+            read_state(|s| s.evm_address.clone()),
+            vault_address,
+            None,
+            data,
+        );
+
+        estimate_gas(chain_id, params).await
+    }
+
+    pub fn commit_inputs(
+        offramper: String,
+        token_address: Option<String>,
+        amount: u128,
+    ) -> Result<[Token; 3]> {
+        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
+        Ok([
+            Token::Address(helpers::parse_address(offramper)?),
+            Token::Address(helpers::parse_address(token_address)?),
+            Token::Uint(U256::from(amount)),
+        ])
     }
 
     pub async fn commit_deposit(
@@ -50,16 +83,20 @@ impl Ic2P2ramp {
         estimated_gas: Option<u64>,
         lock_input: LockInput,
     ) -> Result<()> {
-        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
-        let inputs: [Token; 3] = [
-            Token::Address(helpers::parse_address(offramper)?),
-            Token::Address(helpers::parse_address(token_address)?),
-            Token::Uint(U256::from(amount)),
-        ];
+        let commit_inputs = Self::commit_inputs(offramper, token_address, amount)?;
 
         let transaction_type = TransactionAction::Commit;
-        let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, estimated_gas).await?;
+        let (smart_contract, data) =
+            helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
+
+        let sign_request = create_vault_sign_request(
+            chain_id,
+            &transaction_type,
+            smart_contract,
+            data,
+            estimated_gas,
+        )
+        .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
         broadcast_transaction(
@@ -78,21 +115,25 @@ impl Ic2P2ramp {
     pub async fn uncommit_deposit(
         chain_id: u64,
         order_id: u64,
-        offramper_address: String,
+        offramper: String,
         token_address: Option<String>,
         amount: u128,
         estimated_gas: Option<u64>,
     ) -> Result<()> {
-        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
-        let inputs: [Token; 3] = [
-            Token::Address(helpers::parse_address(offramper_address)?),
-            Token::Address(helpers::parse_address(token_address)?),
-            Token::Uint(U256::from(amount)),
-        ];
+        let uncommit_inputs = Self::commit_inputs(offramper, token_address, amount)?;
 
         let transaction_type = TransactionAction::Uncommit;
-        let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, estimated_gas).await?;
+        let (smart_contract, data) =
+            helper::get_vault_and_data(chain_id, &transaction_type, &uncommit_inputs)?;
+
+        let sign_request = create_vault_sign_request(
+            chain_id,
+            &transaction_type,
+            smart_contract,
+            data,
+            estimated_gas,
+        )
+        .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
         broadcast_transaction(
@@ -106,6 +147,29 @@ impl Ic2P2ramp {
         );
 
         Ok(())
+    }
+
+    pub fn release_inputs(
+        offramper: String,
+        onramper: String,
+        token: Option<String>,
+        amount: u128,
+        fee: u128,
+    ) -> Result<(Vec<Token>, TransactionAction)> {
+        let mut inputs: Vec<Token> = vec![
+            Token::Address(helpers::parse_address(offramper)?),
+            Token::Address(helpers::parse_address(onramper)?),
+            Token::Uint(U256::from(amount)),
+            Token::Uint(U256::from(fee)),
+        ];
+
+        let mut transaction_variant = TransactionVariant::Native;
+        if let Some(token) = token {
+            inputs.insert(2, Token::Address(helpers::parse_address(token)?));
+            transaction_variant = TransactionVariant::Token;
+        }
+
+        Ok((inputs, TransactionAction::Release(transaction_variant)))
     }
 
     pub async fn release_funds(order: LockedOrder, chain_id: u64) -> Result<()> {
@@ -123,26 +187,25 @@ impl Ic2P2ramp {
             order.base.crypto.fee,
         );
 
-        let mut inputs: Vec<Token> = vec![
-            Token::Address(helpers::parse_address(
-                order.base.offramper_address.address,
-            )?),
-            Token::Address(helpers::parse_address(order.onramper.address.address)?),
-            Token::Uint(U256::from(crypto.amount)),
-            Token::Uint(U256::from(crypto.fee)),
-        ];
+        let (release_inputs, transaction_type) = Self::release_inputs(
+            order.base.offramper_address.address,
+            order.onramper.address.address,
+            crypto.token,
+            crypto.amount,
+            crypto.fee,
+        )?;
+        let (smart_contract, data) =
+            helper::get_vault_and_data(chain_id, &transaction_type, &release_inputs)?;
 
-        let mut transaction_variant = TransactionVariant::Native;
-        if let Some(token) = crypto.token {
-            inputs.insert(2, Token::Address(helpers::parse_address(token)?));
-            transaction_variant = TransactionVariant::Token;
-        }
-        let transaction_type = TransactionAction::Release(transaction_variant);
         let estimated_gas = Self::get_average_gas_price(chain_id, &transaction_type).await?;
-
-        let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, Some(estimated_gas))
-                .await?;
+        let sign_request = create_vault_sign_request(
+            chain_id,
+            &transaction_type,
+            smart_contract,
+            data,
+            Some(estimated_gas),
+        )
+        .await?;
 
         logs::new_transaction_log(order.base.id, transaction_type.clone());
         broadcast_transaction(
@@ -158,6 +221,27 @@ impl Ic2P2ramp {
         Ok(())
     }
 
+    pub fn withdraw_inputs(
+        offramper: String,
+        amount: u128,
+        fees: u128,
+        token: Option<String>,
+    ) -> Result<(Vec<Token>, TransactionAction)> {
+        let mut inputs: Vec<Token> = vec![
+            Token::Address(helpers::parse_address(offramper)?),
+            Token::Uint(U256::from(amount)),
+            Token::Uint(U256::from(fees)),
+        ];
+
+        let mut transaction_variant = TransactionVariant::Native;
+        if let Some(token) = token {
+            inputs.insert(1, Token::Address(helpers::parse_address(token)?));
+            transaction_variant = TransactionVariant::Token;
+        }
+
+        Ok((inputs, TransactionAction::Cancel(transaction_variant)))
+    }
+
     pub async fn withdraw_deposit(
         chain_id: u64,
         order_id: u64,
@@ -170,23 +254,21 @@ impl Ic2P2ramp {
             return Err(BlockchainError::FundsBelowFees)?;
         }
 
-        let mut inputs: Vec<Token> = vec![
-            Token::Address(helpers::parse_address(offramper)?),
-            Token::Uint(U256::from(amount)),
-            Token::Uint(U256::from(fees)),
-        ];
+        let (withdraw_inputs, transaction_type) =
+            Self::withdraw_inputs(offramper, amount, fees, token_address)?;
+        let (smart_contract, data) =
+            helper::get_vault_and_data(chain_id, &transaction_type, &withdraw_inputs)?;
 
-        let mut transaction_variant = TransactionVariant::Native;
-        if let Some(token) = token_address {
-            inputs.insert(1, Token::Address(helpers::parse_address(token)?));
-            transaction_variant = TransactionVariant::Token;
-        }
-        let transaction_type = TransactionAction::Cancel(transaction_variant);
         let estimated_gas = Self::get_average_gas_price(chain_id, &transaction_type).await?;
 
-        let sign_request =
-            create_vault_sign_request(chain_id, &transaction_type, &inputs, Some(estimated_gas))
-                .await?;
+        let sign_request = create_vault_sign_request(
+            chain_id,
+            &transaction_type,
+            smart_contract,
+            data,
+            Some(estimated_gas),
+        )
+        .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
         broadcast_transaction(

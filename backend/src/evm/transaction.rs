@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, time::Duration};
 
-use ethers_core::{abi, types::U256};
+use ethers_core::types::U256;
 use evm_rpc_canister_types::{
     BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
     MultiGetTransactionCountResult, MultiGetTransactionReceiptResult,
@@ -16,7 +16,7 @@ use crate::{
     errors::{BlockchainError, RampError, Result, SystemError},
     evm::{
         fees,
-        helper::{empty_transaction_receipt, load_contract_data, nat_to_u256},
+        helper::{empty_transaction_receipt, nat_to_u256},
         vault::Ic2P2ramp,
     },
     management::vault,
@@ -248,7 +248,8 @@ pub fn broadcast_transaction(
 pub(super) async fn create_vault_sign_request(
     chain_id: u64,
     transaction_type: &TransactionAction,
-    inputs: &[abi::Token],
+    vault_manager_address: String,
+    data: Vec<u8>,
     estimated_gas: Option<u64>,
 ) -> Result<SignRequest> {
     let gas = U256::from(Ic2P2ramp::get_final_gas(
@@ -263,13 +264,6 @@ pub(super) async fn create_vault_sign_request(
         fee_estimates.max_priority_fee_per_gas
     );
 
-    let data = load_contract_data(
-        transaction_type.abi(),
-        transaction_type.function_name(),
-        inputs,
-    )?;
-
-    let vault_manager_address = chains::get_vault_manager_address(chain_id)?;
     Ok(SignRequest {
         chain_id: Some(chain_id.into()),
         to: Some(vault_manager_address),

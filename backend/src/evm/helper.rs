@@ -4,7 +4,25 @@ use ethers_core::{
 };
 use evm_rpc_canister_types::TransactionReceipt;
 
-use crate::model::errors::{BlockchainError, Result};
+use crate::{
+    errors::{BlockchainError, Result},
+    types::evm::{chains::get_vault_manager_address, transaction::TransactionAction},
+};
+
+pub fn get_vault_and_data(
+    chain_id: u64,
+    transaction_type: &TransactionAction,
+    inputs: &[Token],
+) -> Result<(String, Vec<u8>)> {
+    Ok((
+        get_vault_manager_address(chain_id)?,
+        load_contract_data(
+            transaction_type.abi(),
+            transaction_type.function_name(),
+            &inputs,
+        )?,
+    ))
+}
 
 pub fn load_contract_data(abi: &str, function: &str, inputs: &[Token]) -> Result<Vec<u8>> {
     let contract = Contract::load(abi.as_bytes())

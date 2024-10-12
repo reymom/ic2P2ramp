@@ -7,10 +7,11 @@ mod outcalls;
 use std::collections::{HashMap, HashSet};
 
 use candid::Principal;
+use evm_rpc_canister_types::BlockTag;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
-use evm::{fees, rpc::BlockTag, transaction, vault::Ic2P2ramp};
+use evm::{fees, transaction, vault::Ic2P2ramp};
 use icp::vault::Ic2P2ramp as ICPRamp;
 use management::{
     order as order_management, payment as payment_management, random, user as user_management,
@@ -116,6 +117,45 @@ fn get_evm_address() -> String {
 // -----
 // Tests
 // -----
+
+#[ic_cdk::update]
+async fn test_estimate_gas_commit(
+    chain_id: u64,
+    offramper: String,
+    token_address: Option<String>,
+    amount: u128,
+) -> Result<Option<u64>> {
+    let commit_inputs = Ic2P2ramp::commit_inputs(offramper, token_address, amount)?;
+    let transaction_type = TransactionAction::Commit;
+    let (vault, data) =
+        evm::helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
+
+    Ic2P2ramp::estimate_gas(chain_id, vault, data).await
+}
+
+#[ic_cdk::update]
+async fn test_get_fee_estimates(chain_id: u64) -> Result<(u128, u128)> {
+    fees::get_fee_estimates(9, chain_id).await.map(|fees| {
+        (
+            fees.max_fee_per_gas.as_u128(),
+            fees.max_priority_fee_per_gas.as_u128(),
+        )
+    })
+}
+
+#[ic_cdk::update]
+async fn test_get_latest_block(chain_id: u64) -> Result<candid::Nat> {
+    fees::eth_get_latest_block(chain_id, BlockTag::Latest)
+        .await
+        .map(|block| block.number)
+}
+
+#[ic_cdk::update]
+async fn test_get_latest_nonce(chain_id: u64) -> Result<candid::Nat> {
+    fees::eth_get_latest_block(chain_id, BlockTag::Latest)
+        .await
+        .map(|block| block.nonce)
+}
 
 #[ic_cdk::update]
 async fn test_paypal() -> Result<String> {
@@ -546,8 +586,11 @@ async fn get_average_gas_prices(
     max_blocks_in_past: u64,
     method: TransactionAction,
 ) -> Result<Option<(u64, u128)>> {
-    let block = fees::eth_get_latest_block(chain_id, BlockTag::Latest).await?;
-    gas::get_average_gas(chain_id, block.number, Some(max_blocks_in_past), &method)
+    let block = fees::eth_get_latest_block(chain_id, BlockTag::Latest)
+        .await
+        .map(|block| block.number)?;
+
+    gas::get_average_gas(chain_id, block, Some(max_blocks_in_past), &method)
 }
 
 // <(offramper_fee, crypto_fee)>
