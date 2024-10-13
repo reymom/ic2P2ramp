@@ -8,7 +8,7 @@ use crate::{
 
 const XRC_CANISTER_ID: &str = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
 pub enum AssetClass {
     Cryptocurrency,
     FiatCurrency,
@@ -101,14 +101,42 @@ async fn get_xrc_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<
     }
 }
 
-pub async fn get_cached_exchange_rate(base_asset: Asset, quote_asset: Asset) -> Result<f64> {
-    match heap::get_cached_rate(base_asset.clone(), quote_asset.clone()) {
-        Some(cache) => Ok(cache),
-        None => {
-            ic_cdk::println!("[get_cached_exchange_rate] Recalculating cache...");
-            let rate = get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?;
-            heap::cache_exchange_rate(base_asset, quote_asset, rate);
-            Ok(rate)
+pub async fn get_cached_exchange_rate(
+    mut base_asset: Asset,
+    mut quote_asset: Asset,
+) -> Result<f64> {
+    if base_asset.class == AssetClass::Cryptocurrency
+        && (base_asset.symbol == "USD" || base_asset.symbol == "EUR")
+    {
+        base_asset.class = AssetClass::FiatCurrency;
+    }
+    if quote_asset.class == AssetClass::Cryptocurrency
+        && (quote_asset.symbol == "USD" || quote_asset.symbol == "EUR")
+    {
+        quote_asset.class = AssetClass::FiatCurrency;
+    }
+
+    if let Some(predefined_rate) =
+        get_predefined_rate_if_stablecoin(&base_asset.symbol, &quote_asset.symbol)
+    {
+        Ok(predefined_rate)
+    } else {
+        match heap::get_cached_rate(base_asset.clone(), quote_asset.clone()) {
+            Some(cache) => Ok(cache),
+            None => {
+                ic_cdk::println!("[get_cached_exchange_rate] Recalculating cache.");
+                let rate = get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?;
+                heap::cache_exchange_rate(base_asset, quote_asset, rate);
+                Ok(rate)
+            }
         }
+    }
+}
+
+fn get_predefined_rate_if_stablecoin(base_symbol: &str, quote_symbol: &str) -> Option<f64> {
+    match (base_symbol, quote_symbol) {
+        ("USD", "USD") => Some(1.0),
+        ("EUR", "EUR") => Some(1.0),
+        _ => None,
     }
 }

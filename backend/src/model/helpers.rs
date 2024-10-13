@@ -76,13 +76,8 @@ pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
         class: AssetClass::Cryptocurrency,
         symbol: "ETH".to_string(),
     };
-
-    let mut class = AssetClass::Cryptocurrency;
-    if token_symbol == "USD" {
-        class = AssetClass::FiatCurrency;
-    }
     let quote_asset = Asset {
-        class,
+        class: AssetClass::Cryptocurrency,
         symbol: token_symbol.to_string(),
     };
 
