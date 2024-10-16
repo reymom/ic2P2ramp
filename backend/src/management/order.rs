@@ -435,10 +435,6 @@ pub async fn lock_order(
 /// # Parameters
 ///
 /// - `order_id`: The unique identifier of the order to be unlocked.
-/// - `session_token`: An optional session token used to validate the request.
-///    If the function is called internally, this can be set to `None`.
-/// - `estimated_gas`: An optional estimated gas limit for EVM transactions.
-///    This is only applicable for EVM orders.
 ///
 /// # Behavior
 ///
@@ -460,7 +456,7 @@ pub async fn lock_order(
 ///
 /// # Example
 /// ```
-/// let result = unlock_order(12345, Some("session_token"), Some(21000)).await;
+/// let result = unlock_order(12345).await;
 /// match result {
 ///     Ok(tx_hash) => println!("Transaction succeeded with hash: {}", tx_hash),
 ///     Err(err) => eprintln!("Failed to unlock order: {:?}", err),

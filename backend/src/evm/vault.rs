@@ -48,13 +48,14 @@ impl Ic2P2ramp {
 
     pub async fn estimate_gas(
         chain_id: u64,
-        vault_address: String,
+        to_address: String,
         data: Vec<u8>,
+        value: Option<String>,
     ) -> Result<Option<u64>> {
         let params = EstimateGasParams::new(
             read_state(|s| s.evm_address.clone()),
-            vault_address,
-            None,
+            to_address,
+            value,
             data,
         );
 
@@ -296,9 +297,7 @@ impl Ic2P2ramp {
         let (request, transaction_type) = match token_address {
             Some(token) => {
                 let transaction_type = TransactionAction::Transfer(TransactionVariant::Token);
-                let gas = U256::from(Ic2P2ramp::get_final_gas(
-                    estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
-                ));
+
                 let inputs: [Token; 2] = [
                     Token::Address(helpers::parse_address(to.to_string())?),
                     Token::Uint(U256::from(value)),
@@ -308,6 +307,18 @@ impl Ic2P2ramp {
                     transaction_type.function_name(),
                     &inputs,
                 )?;
+                let rpc_gas =
+                    match Self::estimate_gas(chain_id, to.to_string(), data.clone(), None).await {
+                        Ok(Some(gas)) => {
+                            ic_cdk::println!("[transfer] estimate_gas = {}", gas);
+                            U256::from(gas * 120 / 100)
+                        }
+                        _ => U256::zero(),
+                    };
+                let backend_gas = U256::from(Ic2P2ramp::get_final_gas(
+                    estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
+                ));
+                let gas = std::cmp::max(rpc_gas, backend_gas);
 
                 (
                     SignRequest {
@@ -326,11 +337,28 @@ impl Ic2P2ramp {
             }
             None => {
                 let transaction_type = TransactionAction::Transfer(TransactionVariant::Native);
-                let gas = U256::from(Ic2P2ramp::get_final_gas(
+
+                let value = U256::from(value);
+                let rpc_gas = match Self::estimate_gas(
+                    chain_id,
+                    to.to_string(),
+                    Vec::new(),
+                    Some(value.to_string()),
+                )
+                .await
+                {
+                    Ok(Some(gas)) => {
+                        ic_cdk::println!("[transfer] estimate_gas = {}", gas);
+                        U256::from(gas * 120 / 100)
+                    }
+                    _ => U256::zero(),
+                };
+                let backend_gas = U256::from(Ic2P2ramp::get_final_gas(
                     estimated_gas.unwrap_or(transaction_type.default_gas(chain_id)),
                 ));
+                let gas = std::cmp::max(rpc_gas, backend_gas);
+
                 let gas_cost = fee_estimates.max_fee_per_gas * gas;
-                let value = U256::from(value);
                 if value < gas_cost {
                     return Err(BlockchainError::FundsBelowFees)?;
                 }

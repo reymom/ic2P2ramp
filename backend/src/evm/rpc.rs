@@ -9,7 +9,7 @@ pub const CANISTER_ID: Principal =
 
 pub const EVM_RPC: EvmRpcCanister = EvmRpcCanister(CANISTER_ID);
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Debug)]
 pub enum CustomTransactionStatus {
     Ok(Option<String>),
     NonceTooLow,
@@ -20,6 +20,13 @@ pub enum CustomTransactionStatus {
 
 impl From<SendRawTransactionStatus> for CustomTransactionStatus {
     fn from(status: SendRawTransactionStatus) -> CustomTransactionStatus {
-        status.into()
+        match status {
+            SendRawTransactionStatus::Ok(value) => CustomTransactionStatus::Ok(value),
+            SendRawTransactionStatus::NonceTooLow => CustomTransactionStatus::NonceTooLow,
+            SendRawTransactionStatus::NonceTooHigh => CustomTransactionStatus::NonceTooHigh,
+            SendRawTransactionStatus::InsufficientFunds => {
+                CustomTransactionStatus::InsufficientFunds
+            }
+        }
     }
 }

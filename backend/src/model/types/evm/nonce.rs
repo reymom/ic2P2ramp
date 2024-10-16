@@ -88,10 +88,6 @@ impl NonceManagement {
 pub fn is_locked(chain_id: u64) -> bool {
     read_state(|state| {
         if let Some(chain_state) = state.chains.get(&chain_id) {
-            ic_cdk::println!(
-                "[nonce_locked] chain_state.nonce_locked = {}",
-                chain_state.nonce_manager.is_locked
-            );
             chain_state.nonce_manager.is_locked
         } else {
             false

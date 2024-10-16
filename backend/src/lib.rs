@@ -130,7 +130,7 @@ async fn test_estimate_gas_commit(
     let (vault, data) =
         evm::helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
 
-    Ic2P2ramp::estimate_gas(chain_id, vault, data).await
+    Ic2P2ramp::estimate_gas(chain_id, vault, data, None).await
 }
 
 #[ic_cdk::update]
