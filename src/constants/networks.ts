@@ -2,6 +2,7 @@ import ethereumLogo from '../assets/blockchains/ethereum-logo.png';
 import coinBaseLogo from '../assets/blockchains/coinbase-logo.svg';
 import mantleLogo from '../assets/blockchains/mantle.png';
 import optimismLogo from '../assets/blockchains/optimism-logo.svg';
+import arbitrumLogo from '../assets/blockchains/arbitrum-logo.svg';
 
 export interface NetworkProps {
   id: number;
@@ -22,7 +23,7 @@ export const NetworkIds: { [chainId: string]: NetworkProps } =
         BASE: {
           id: 8453,
           name: 'Base',
-          explorer: 'https://basescan.org/',
+          explorer: 'https://basescan.org',
           logo: coinBaseLogo,
         },
         OPTIMISM: {
@@ -30,6 +31,12 @@ export const NetworkIds: { [chainId: string]: NetworkProps } =
           name: 'Optimism',
           explorer: 'https://optimistic.etherscan.io',
           logo: optimismLogo,
+        },
+        ARBITRUM: {
+          id: 42161,
+          name: 'Arbitrum',
+          explorer: 'https://arbiscan.io',
+          logo: arbitrumLogo,
         },
       }
     : {
@@ -56,5 +63,11 @@ export const NetworkIds: { [chainId: string]: NetworkProps } =
           name: 'Mantle Sepolia',
           explorer: 'https://explorer.sepolia.mantle.xyz',
           logo: mantleLogo,
+        },
+        ARBITRUM_SEPOLIA: {
+          id: 421614,
+          name: 'Arbitrum',
+          explorer: 'https://sepolia.arbiscan.io',
+          logo: arbitrumLogo,
         },
       };

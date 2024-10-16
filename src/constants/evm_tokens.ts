@@ -57,7 +57,7 @@ const newUsdtToken = (address: string, decimals: number): TokenOption => {
     address: address,
     decimals: decimals,
     isNative: false,
-    rateSymbol: 'USDT',
+    rateSymbol: 'USD',
     logo: usdtLogo,
   };
 };
@@ -68,7 +68,7 @@ const newUsdcToken = (address: string, decimals: number): TokenOption => {
     address: address,
     decimals: decimals,
     isNative: false,
-    rateSymbol: 'USDC',
+    rateSymbol: 'USD',
     logo: usdcLogo,
   };
 };
@@ -79,7 +79,7 @@ const newEurcToken = (address: string): TokenOption => {
     address: address,
     decimals: 6,
     isNative: false,
-    rateSymbol: 'EURC',
+    rateSymbol: 'EUR',
     logo: eurcLogo,
   };
 };
@@ -90,7 +90,7 @@ const newDaiToken = (address: string): TokenOption => {
     address: address,
     decimals: 18,
     isNative: false,
-    rateSymbol: 'DAI',
+    rateSymbol: 'USD',
     logo: daiLogo,
   };
 };
@@ -130,9 +130,7 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
   },
   // Base Sepolia
   84532: {
-    vault: process.env.CONTRACT_BASE_SEPOLIA
-      ? process.env.CONTRACT_BASE_SEPOLIA
-      : '',
+    vault: process.env.CONTRACT_BASE_SEPOLIA ?? '',
     tokens: [
       ethereumToken,
       newUsdcToken('0x036CbD53842c5426634e7929541eC2318f3dCF7e', 6),
@@ -141,19 +139,23 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
   },
   // OP Sepolia
   11155420: {
-    vault: process.env.CONTRACT_OP_SEPOLIA
-      ? process.env.CONTRACT_OP_SEPOLIA
-      : '',
+    vault: process.env.CONTRACT_OP_SEPOLIA ?? '',
     tokens: [
       ethereumToken,
       newUsdcToken('0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 6),
     ],
   },
+  // Arbitrum Sepolia
+  421614: {
+    vault: process.env.CONTRACT_ARBITRUM_SEPOLIA ?? '',
+    tokens: [
+      ethereumToken,
+      newUsdcToken('0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 6),
+    ],
+  },
   // Mantle Sepolia
   5003: {
-    vault: process.env.CONTRACT_MANTLE_SEPOLIA
-      ? process.env.CONTRACT_MANTLE_SEPOLIA
-      : '',
+    vault: process.env.CONTRACT_MANTLE_SEPOLIA ?? '',
     tokens: [
       {
         name: 'MNT',
@@ -168,6 +170,7 @@ const testAddresses: { [chainId: number]: AddressMapping } = {
 };
 
 const prodAddresses: { [chainId: number]: AddressMapping } = {
+  // Mainnet
   1: {
     vault: process.env.CONTRACT_MAINNET ?? '',
     tokens: [
@@ -179,6 +182,7 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
       newShibaToken('0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE'),
     ],
   },
+  // Base
   8453: {
     vault: process.env.CONTRACT_BASE ?? '',
     tokens: [
@@ -189,6 +193,7 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
       newDaiToken('0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'),
     ],
   },
+  // Optimism
   10: {
     vault: process.env.CONTRACT_OP ?? '',
     tokens: [
@@ -197,6 +202,16 @@ const prodAddresses: { [chainId: number]: AddressMapping } = {
       newUsdcToken('0x0b2c639c533813f4aa9d7837caf62653d097ff85', 6),
       newDaiToken('0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1'),
       newOpToken('0x4200000000000000000000000000000000000042'),
+    ],
+  },
+  // Arbitrum
+  42161: {
+    vault: process.env.CONTRACT_ARBITRUM ?? '',
+    tokens: [
+      ethereumToken,
+      newUsdtToken('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', 6),
+      newUsdcToken('0xaf88d065e77c8cC2239327C5EDb3A432268e5831', 6),
+      newDaiToken('0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1'),
     ],
   },
 };

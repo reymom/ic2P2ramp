@@ -4,15 +4,15 @@ import {
   baseSepolia,
   optimismSepolia,
   mantleSepoliaTestnet,
+  arbitrumSepolia,
   //   lineaSepolia,
-  //   arbitrumSepolia,
   //   polygonZkEvmCardona,
   mainnet,
   base,
   optimism,
+  arbitrum,
   //   mantle,
   //   linea,
-  //   arbitrum,
   //   polygonZkEvm,
 } from 'wagmi/chains';
 
@@ -25,17 +25,17 @@ const testChains = [
   baseSepolia,
   optimismSepolia,
   mantleSepoliaTestnet,
+  arbitrumSepolia,
   //   lineaSepolia,
-  //   arbitrumSepolia,
   //   polygonZkEvmCardona,
 ];
 const prodChains = [
   mainnet,
   base,
   optimism,
+  arbitrum,
   //   mantle,
   //   linea,
-  //   arbitrum,
   //   polygonZkEvm,
 ];
 

@@ -232,7 +232,6 @@ const CreateOrder: React.FC = () => {
             setIsLoading(true);
             setLoadingMessage("Creating order");
 
-
             const selectedAddress = user.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
             if (!selectedAddress) {
                 setMessage('No address available for the selected blockchain.');
