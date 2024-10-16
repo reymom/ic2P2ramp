@@ -9,13 +9,13 @@
       "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
     },
     "backend": {
-      "dependencies": ["evm_rpc", "xrc", "icp_ledger_canister"],
+      "dependencies": ["evm_rpc", "xrc"],
       "candid": "backend/backend.did",
       "package": "backend",
       "type": "rust"
     },
     "frontend": {
-      "dependencies": ["backend", "internet_identity"],
+      "dependencies": ["backend"],
       "type": "assets",
       "source": ["dist/"]
     },
@@ -74,6 +74,6 @@
       "packtool": "npm run --silent sources"
     }
   },
-  "output_env_file": ".env.production",
+  "output_env_file": ".env.sandbox",
   "version": 1
 }
