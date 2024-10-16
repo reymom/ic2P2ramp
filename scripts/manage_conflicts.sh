@@ -13,3 +13,10 @@ dfx canister call backend create_evm_order_with_tx '(
     10000000 : nat,
     opt "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 )'
+
+dfx canister call backend test_estimate_gas_commit '(
+    84532, 
+    "0x632b39E5Fe4EAAFDF21601b2Bc206ca0f602C85A",
+    null,
+    10000000000000000
+)'

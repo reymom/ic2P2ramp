@@ -1,5 +1,5 @@
 # Update with no changes
-dfx deploy backend --argument "( variant { Upgrade = null } )"
+dfx deploy backend --argument "( variant { Upgrade = null } )" --upgrade-unchanged
 
 # Update with new ecdsa key
 dfx deploy backend --upgrade-unchanged --argument "(
@@ -63,6 +63,83 @@ dfx deploy backend_prod --upgrade-unchanged --argument "(
   }
 )" --ic
 
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant {
+    Upgrade = opt record {
+      ecdsa_key_id = null;
+      chains = opt vec {
+        record {
+          chain_id = 84532 : nat64;
+          vault_manager_address = \"${CONTRACT_BASE_SEPOLIA}\";
+          services = variant {
+            Custom = record {
+              chainId = 84532 : nat64;
+              services = vec {
+                record { url = \"https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = opt vec {
+                  record { name = \"Cache-Control\"; value = \"max-age=60\" };
+                } };
+                record { url = \"https://base-sepolia.infura.io/v3/${INFURA_API_KEY}\"; headers = opt vec {
+                  record { name = \"Cache-Control\"; value = \"max-age=60\" };
+                } };
+                record { url = \"https://rpc.ankr.com/base_sepolia/${ANKR_PROJECT}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
+        record {
+          chain_id = 11155420 : nat64;
+          vault_manager_address = \"${CONTRACT_OP_SEPOLIA}\";
+          services = variant {
+            Custom = record {
+              chainId = 11155420 : nat64;
+              services = vec {
+                record { url = \"https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = opt vec {
+                  record { name = \"Cache-Control\"; value = \"max-age=60\" };
+                } };
+                record { url = \"https://optimism-sepolia.infura.io/v3/${INFURA_API_KEY}\"; headers = opt vec {
+                  record { name = \"Cache-Control\"; value = \"max-age=60\" };
+                } };
+                record { url = \"https://rpc.ankr.com/optimism_sepolia/${ANKR_PROJECT}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
+      };
+      paypal = null;
+      revolut = null;
+      proxy_url = null;
+    }
+  }
+)" --ic
+
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant {
+    Upgrade = opt record {
+      ecdsa_key_id = null;
+      chains = opt vec {
+        record {
+          chain_id = 84532 : nat64;
+          vault_manager_address = \"${CONTRACT_BASE_SEPOLIA}\";
+          services = variant {
+            Custom = record {
+              chainId = 84532 : nat64;
+              services = vec {
+                record { url = \"https://rpc.ankr.com/base_sepolia/${ANKR_PROJECT}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
+      };
+      paypal = null;
+      revolut = null;
+      proxy_url = null;
+    }
+  }
+)" --ic
+
 # Deploy a new chain
 dfx deploy backend --upgrade-unchanged --argument "(
   variant {
@@ -96,15 +173,15 @@ dfx deploy backend --upgrade-unchanged --argument "(
         ecdsa_key_id = null;
         chains = null;
         paypal = opt record {
-        client_id = \"new_paypal_client_id\";
-        client_secret = \"new_paypal_client_secret\";
-        api_url = \"new_paypal_api_url\";
+          client_id = \"${PAYPAL_CLIENT_ID}\";
+          client_secret = \"${PAYPAL_CLIENT_SECRET}\";
+          api_url = \"api-m.paypal.com\";
         };
         revolut = null;
         proxy_url = null;
     }
   }
-)"
+)" --ic
 
 # Change revolut config
 dfx deploy backend --upgrade-unchanged --argument "(

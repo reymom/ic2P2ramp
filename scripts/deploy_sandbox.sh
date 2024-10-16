@@ -27,7 +27,7 @@ dfx deploy backend --argument "(
         record {
           chain_id = 11155111 : nat64;
           vault_manager_address = \"${CONTRACT_SEPOLIA}\";
-          services = variant { EthSepolia = opt vec { variant { Alchemy } } };
+          services = variant { EthSepolia = opt vec { variant { BlockPi } } };
           currency_symbol = \"ETH\";
         };
         record {
@@ -37,7 +37,7 @@ dfx deploy backend --argument "(
             Custom = record {
               chainId = 84532 : nat64;
               services = vec {
-                record { url = \"https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+                record { url = \"https://base-sepolia.infura.io/v3/${INFURA_API_KEY}\"; headers = null };
               };
             }
           };
@@ -51,6 +51,19 @@ dfx deploy backend --argument "(
               chainId = 11155420 : nat64;
               services = vec {
                 record { url = \"https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
+              };
+            }
+          };
+          currency_symbol = \"ETH\";
+        };
+        record {
+          chain_id = 421614 : nat64;
+          vault_manager_address = \"${CONTRACT_ARBITRUM_SEPOLIA}\";
+          services = variant {
+            Custom = record {
+              chainId = 421614 : nat64;
+              services = vec {
+                record { url = \"https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}\"; headers = null };
               };
             }
           };
@@ -108,5 +121,8 @@ dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
 dfx canister call backend register_evm_tokens '(11155420 : nat64, vec {
     record { "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"; 6 : nat8; "USD"; opt "Optimism Sepolia Official USDC" };
 })' --ic
+dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
+    record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
+})' --ic
 
-dfx deploy frontend --mode reinstall -ic
+dfx deploy frontend --mode reinstall --ic
