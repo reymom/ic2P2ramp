@@ -45,9 +45,11 @@ use model::{
         stable::{self, orders, spent_transactions},
     },
 };
+use outcalls::truelayer::payments::PaymentResponse;
 use outcalls::{
     paypal,
     revolut::{self, token as revolut_token},
+    truelayer,
     xrc_rates::{self, Asset, AssetClass},
 };
 
@@ -160,6 +162,25 @@ async fn test_get_latest_nonce(chain_id: u64) -> Result<candid::Nat> {
 #[ic_cdk::update]
 async fn test_paypal() -> Result<String> {
     paypal::auth::get_paypal_access_token().await
+}
+
+#[ic_cdk::update]
+async fn test_truelayer() -> Result<String> {
+    truelayer::auth::get_access_token().await
+}
+
+#[ic_cdk::update]
+async fn test_truelayer_payment() -> Result<PaymentResponse> {
+    truelayer::payments::create_payment(
+        1000,
+        "GBP",
+        "John Doe",
+        "123456",
+        "12345678",
+        "John Doe",
+        "johndoe@example.com",
+    )
+    .await
 }
 
 #[ic_cdk::query]
