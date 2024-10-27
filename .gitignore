@@ -41,4 +41,6 @@ dist-ssr
 # rust
 target
 
+# certificates
+certs/
 revolut_certs/

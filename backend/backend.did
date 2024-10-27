@@ -110,6 +110,7 @@ type InitArg = record {
   revolut : RevolutConfig;
   proxy_url : text;
   chains : vec ChainConfig;
+  truelayer : TrueLayerConfig;
   paypal : PaypalConfig;
 };
 type InstallArg = variant { Upgrade : opt UpdateArg; Reinstall : InitArg };
@@ -192,6 +193,12 @@ type PaymentProvider = variant {
   Revolut : record { id : text; scheme : text; name : opt text };
 };
 type PaymentProviderType = variant { PayPal; Revolut };
+type PaymentResponse = record {
+  id : text;
+  status : text;
+  resource_token : text;
+  user : UserId;
+};
 type PaypalConfig = record {
   api_url : text;
   client_id : text;
@@ -219,7 +226,8 @@ type Result_11 = variant { Ok : opt EvmTransactionLog; Err : RampError };
 type Result_12 = variant { Ok : opt nat64; Err : RampError };
 type Result_13 = variant { Ok : record { nat; nat }; Err : RampError };
 type Result_14 = variant { Ok : ChainGasTracking; Err : RampError };
-type Result_15 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_15 = variant { Ok : PaymentResponse; Err : RampError };
+type Result_16 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : nat; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
 type Result_4 = variant { Ok : nat64; Err : RampError };
@@ -308,6 +316,14 @@ type TransactionStatus = variant {
 };
 type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
+type TrueLayerConfig = record {
+  kid : text;
+  host_url : text;
+  private_key : blob;
+  proxy_url : text;
+  client_id : text;
+  client_secret : text;
+};
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
   revolut : opt RevolutConfig;
@@ -344,6 +360,7 @@ type UserError = variant {
   UnauthorizedPrincipal;
   InvalidPassword;
 };
+type UserId = record { id : text };
 type UserType = variant { Offramper; Onramper };
 service : (InstallArg) -> {
   add_user_payment_provider : (nat64, text, PaymentProvider) -> (Result);
@@ -417,6 +434,8 @@ service : (InstallArg) -> {
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_5);
   test_paypal : () -> (Result_5);
+  test_truelayer : () -> (Result_5);
+  test_truelayer_payment : () -> (Result_15);
   top_up_order : (
       nat64,
       nat64,
@@ -434,6 +453,6 @@ service : (InstallArg) -> {
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, opt text, text) -> (Result);
-  view_canister_balances : () -> (Result_15) query;
+  view_canister_balances : () -> (Result_16) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }
