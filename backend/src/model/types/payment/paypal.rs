@@ -11,6 +11,18 @@ pub struct PayPalState {
     pub api_url: String,
 }
 
+impl PayPalState {
+    pub fn new(client_id: String, client_secret: String, api_url: String) -> Self {
+        PayPalState {
+            access_token: None,
+            token_expiration: None,
+            client_id,
+            client_secret,
+            api_url,
+        }
+    }
+}
+
 pub fn get_paypal_token() -> Option<(String, u64)> {
     read_state(|s| {
         if let (Some(token), Some(expiration)) =

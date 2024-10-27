@@ -16,9 +16,31 @@ pub struct RevolutState {
     pub tan: String,
 }
 
+impl RevolutState {
+    pub fn new(
+        client_id: String,
+        api_url: String,
+        proxy_url: String,
+        private_key: Vec<u8>,
+        kid: String,
+        tan: String,
+    ) -> Self {
+        RevolutState {
+            access_token: None,
+            token_expiration: None,
+            client_id,
+            api_url,
+            proxy_url,
+            private_key_der: private_key,
+            kid,
+            tan,
+        }
+    }
+}
+
 impl fmt::Debug for RevolutState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RevolutConfig")
+        f.debug_struct("RevolutState")
             .field("client_id", &self.client_id)
             .field("api_url", &self.api_url)
             .field("proxy_url", &self.proxy_url)

@@ -8,7 +8,7 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use super::state::{InvalidStateError, State};
 use crate::model::types::{
     evm::chains::ChainState,
-    payment::{paypal::PayPalState, revolut::RevolutState},
+    payment::{paypal::PayPalState, revolut::RevolutState, truelayer::TrueLayerState},
 };
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
@@ -36,17 +36,14 @@ pub struct RevolutConfig {
     pub tan: String,
 }
 
-impl fmt::Debug for RevolutConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RevolutConfig")
-            .field("client_id", &self.client_id)
-            .field("api_url", &self.api_url)
-            .field("proxy_url", &self.proxy_url)
-            .field("private_key_der", &"[REDACTED]")
-            .field("kid", &self.kid)
-            .field("tan", &self.tan)
-            .finish()
-    }
+#[derive(CandidType, Deserialize, Clone)]
+pub struct TrueLayerConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub private_key: Vec<u8>,
+    pub kid: String,
+    pub host_url: String,
+    pub proxy_url: String,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -55,6 +52,7 @@ pub struct InitArg {
     pub ecdsa_key_id: EcdsaKeyId,
     pub paypal: PaypalConfig,
     pub revolut: RevolutConfig,
+    pub truelayer: TrueLayerConfig,
     pub proxy_url: String,
 }
 
@@ -67,6 +65,7 @@ impl TryFrom<InitArg> for State {
             ecdsa_key_id,
             paypal,
             revolut,
+            truelayer,
             proxy_url,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
@@ -91,26 +90,51 @@ impl TryFrom<InitArg> for State {
             ecdsa_pub_key: None,
             ecdsa_key_id,
             evm_address: None,
-            paypal: PayPalState {
-                access_token: None,
-                token_expiration: None,
-                client_id: paypal.client_id,
-                client_secret: paypal.client_secret,
-                api_url: paypal.api_url,
-            },
-            revolut: RevolutState {
-                access_token: None,
-                token_expiration: None,
-                client_id: revolut.client_id,
-                api_url: revolut.api_url,
-                proxy_url: revolut.proxy_url,
-                private_key_der: revolut.private_key_der,
-                kid: revolut.kid,
-                tan: revolut.tan,
-            },
+            paypal: PayPalState::new(paypal.client_id, paypal.client_secret, paypal.api_url),
+            revolut: RevolutState::new(
+                revolut.client_id,
+                revolut.api_url,
+                revolut.proxy_url,
+                revolut.private_key_der,
+                revolut.kid,
+                revolut.tan,
+            ),
+            truelayer: TrueLayerState::new(
+                truelayer.client_id,
+                truelayer.client_secret,
+                truelayer.kid,
+                truelayer.private_key,
+                truelayer.host_url,
+                truelayer.proxy_url,
+            ),
             proxy_url,
             icp_tokens: HashMap::new(),
         };
         Ok(state)
+    }
+}
+
+impl fmt::Debug for TrueLayerConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TrueLayerConfig")
+            .field("client_id", &self.client_id)
+            .field("private_key_der", &"[SECRET]")
+            .field("kid", &self.kid)
+            .field("host_url", &self.host_url)
+            .field("proxy_url", &self.proxy_url)
+            .finish()
+    }
+}
+
+impl fmt::Debug for RevolutConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RevolutConfig")
+            .field("client_id", &self.client_id)
+            .field("api_url", &self.api_url)
+            .field("proxy_url", &self.proxy_url)
+            .field("private_key_der", &"[SECRET]")
+            .field("kid", &self.kid)
+            .field("tan", &self.tan)
+            .finish()
     }
 }
