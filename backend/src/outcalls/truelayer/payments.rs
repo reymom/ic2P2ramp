@@ -23,16 +23,11 @@ pub struct UserId {
     pub id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, candid::CandidType)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
 pub fn parse_payment_response(response_body: Vec<u8>) -> Result<PaymentResponse> {
     let str_body = String::from_utf8(response_body).map_err(|_| SystemError::Utf8Error)?;
     ic_cdk::println!("[parse_payment_response] str_body = {}", str_body);
 
-    if let Ok(error_response) = serde_json::from_str::<ErrorResponse>(&str_body) {
+    if let Ok(error_response) = serde_json::from_str::<super::ErrorResponse>(&str_body) {
         return Err(SystemError::ParseError(error_response.error))?;
     }
 
@@ -130,7 +125,7 @@ pub async fn create_payment(
         payment_method: PaymentMethod {
             r#type: "bank_transfer".to_string(),
             provider_selection: ProviderSelection {
-                r#type: "user_selected".to_string(),
+                r#type: "user_selected".to_string(), // change to preselected and add providerId
                 scheme_selection: SchemeSelection {
                     r#type: "instant_only".to_string(),
                     allow_remitter_fee: false,

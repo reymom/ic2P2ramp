@@ -10,6 +10,7 @@ use crate::errors::{Result, SystemError};
 #[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PaymentProviderType {
     PayPal,
+    TrueLayer,
     Revolut,
 }
 
@@ -17,6 +18,9 @@ pub enum PaymentProviderType {
 pub enum PaymentProvider {
     PayPal {
         id: String,
+    },
+    TrueLayer {
+        country_code: String,
     },
     Revolut {
         scheme: String,
@@ -42,6 +46,7 @@ impl PaymentProvider {
         match self {
             PaymentProvider::PayPal { .. } => PaymentProviderType::PayPal,
             PaymentProvider::Revolut { .. } => PaymentProviderType::Revolut,
+            PaymentProvider::TrueLayer { .. } => PaymentProviderType::TrueLayer,
         }
     }
 
@@ -59,6 +64,7 @@ impl PaymentProvider {
                     );
                 }
             }
+            PaymentProvider::TrueLayer { .. } => {}
         }
         Ok(())
     }

@@ -902,6 +902,8 @@ async fn process_transaction(
             )
             .await?
         }
+
+        PaymentProvider::TrueLayer { country_code } => {}
     }
 
     payment_management::handle_payment_completion(&order).await
