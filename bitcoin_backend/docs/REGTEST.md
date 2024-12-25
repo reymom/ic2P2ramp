@@ -1,6 +1,8 @@
-# Runes Documentation
+# Regtest Documentation
 
-This guide explains how to etch and mint runes in regtest mode to test local vault operations with runes.
+This guide explains how fund the canister in regtest for local testing.
+
+We will send bitcoin and etch and mint runes in regtest mode to test local vault operations with runes.
 
 ## Requirements
 
@@ -14,6 +16,24 @@ sudo apt install jq
 
 ```bash
 ./scripts/regtest/init.sh
+```
+
+## Minting and sending Bitcoin
+
+1. Get the address:
+```bash
+ADDRESS=$(dfx canister call bitcoin_backend get_p2tr_script_spend_address | grep -oP '(?<=Ok = ").*?(?=")')
+```
+
+2. Send to the address:
+```bash
+docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet sendtoaddress "$ADDRESS" 0.01
+```
+
+3. Mine blocks to confirm the transaction:
+
+```bash
+docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet generatetoaddress 10 $(docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet getnewaddress)
 ```
 
 ## Mintint Runes
@@ -90,9 +110,22 @@ After etching, you may mint additional runes using the mint command.
 ./scripts/regtest/ord_wallet.sh addresses
 ```
 
+### Step 4: Send the Runes to the bitcoin backend canister
+
+```bash
+./scripts/regtest/ord_wallet.sh send \
+  "$ADDRESS" \
+  "40:ZZZ•DOG•TO•THE•MOON" \
+  --fee-rate 1
+```
+
+Remember to mine blocks to confirm the transaction:
+
+```bash
+docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet generatetoaddress 10 $(docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet getnewaddress)
+```
+
 ## Notes
 
 - **YAML Configuration**: Ensure your `rune.yml` file is correctly structured, specifying minting parameters such as divisibility, premine, cap, and supply.
 - **Mining Blocks**: For immediate minting, adjust the starting block (`height.start`) in the YAML file to match or precede the current block height.
-
-## Transferring Runes to the Canister Address
