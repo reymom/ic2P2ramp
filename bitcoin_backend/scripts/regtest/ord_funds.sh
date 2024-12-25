@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # explicitly create the ord wallet, will fail if it already exists but it's okay
-./scripts/ord_wallet.sh create
+./scripts/regtest/ord_wallet.sh create
 
 # extract ord wallet address
-ORD_ADDRESS=$(./scripts/ord_wallet.sh receive | jq -r '.addresses[0]')
+ORD_ADDRESS=$(./scripts/regtest/ord_wallet.sh receive | jq -r '.addresses[0]')
 
 echo $ORD_ADDRESS
 
