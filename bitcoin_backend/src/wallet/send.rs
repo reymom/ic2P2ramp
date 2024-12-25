@@ -1,10 +1,7 @@
 use bitcoin::{script::PushBytesBuf, Txid};
 use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Satoshi};
 
-use crate::model::types::{
-    errors::{BitcoinError, Result},
-    Runes,
-};
+use crate::{memory::heap::config, model::types::{errors::{BitcoinError, Result}, runes::RuneID}};
 
 pub async fn send_btc_or_rune(
     network: BitcoinNetwork,
@@ -12,13 +9,15 @@ pub async fn send_btc_or_rune(
     key_name: String,
     dst_address: String,
     amount: Satoshi,
-    rune: Option<Runes>,
+    rune: Option<RuneID>,
     use_taproot: bool,
 ) -> Result<Txid> {
-    if let Some(rune_data) = rune {
+    if let Some(rune) = rune {
+        let rune_symbol = config::get_rune_metadata(&rune)?.symbol;
+
         let mut symbol_bytes = PushBytesBuf::new();
         symbol_bytes
-            .extend_from_slice(rune_data.symbol.as_bytes())
+            .extend_from_slice(rune_symbol.as_bytes())
             .map_err(|_| BitcoinError::InternalError("Invalid Rune symbol".to_string()))?;
 
         let rune_script = bitcoin::blockdata::script::Builder::new()

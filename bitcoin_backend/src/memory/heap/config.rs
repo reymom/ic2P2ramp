@@ -7,7 +7,7 @@ use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
 
 use crate::model::types::{
     errors::{BitcoinError, Result},
-    runes::RuneMetadata,
+    runes::{RuneID, RuneMetadata},
 };
 
 thread_local! {
@@ -24,33 +24,39 @@ thread_local! {
     // The ECDSA key name.
     pub static KEY_NAME: RefCell<String> = RefCell::new(String::from(""));
 
-    // Registered Runes
-    pub static RUNES: RefCell<HashMap<String, RuneMetadata>> = RefCell::new(HashMap::new());
+    // Registered Runes: rune ID is BLOCK:TX
+    static RUNES: RefCell<HashMap<RuneID, RuneMetadata>> = RefCell::new(HashMap::new());
 }
 
-pub async fn register_runes(rune_list: Vec<RuneMetadata>) -> Result<()> {
+pub fn get_registered_runes() -> Result<Vec<RuneMetadata>> {
+    Ok(RUNES.with(|runes| runes.borrow().clone()).into_values().collect())
+}
+
+pub fn register_runes(rune_list: Vec<RuneMetadata>) -> Result<()> {
     RUNES.with_borrow_mut(|runes| {
         for rune in rune_list {
-            runes.insert(rune.symbol.clone(), rune);
+            rune.id.validate()?;
+            runes.insert(rune.id.clone(), rune);
         }
-    });
-
-    Ok(())
+        Ok(())
+    })
 }
 
-pub fn is_rune_supported(symbol: &str) -> Result<()> {
+pub fn is_rune_supported(rune_id: &RuneID) -> Result<()> {
+    rune_id.validate()?;
     RUNES.with_borrow(|runes| {
-        if !runes.contains_key(symbol) {
-            Err(BitcoinError::UnsupportedRune(symbol.to_string()))
+        if !runes.contains_key(rune_id) {
+            Err(BitcoinError::UnsupportedRune(rune_id.to_string()))
         } else {
             Ok(())
         }
     })
 }
 
-pub fn get_rune_metadata(symbol: &str) -> Result<RuneMetadata> {
+pub fn get_rune_metadata(rune_id: &RuneID) -> Result<RuneMetadata> {
+    rune_id.validate()?;
     let runes = RUNES.with(|runes| runes.borrow().clone());
-    runes.get(symbol).cloned().ok_or_else(|| {
-        BitcoinError::InvalidInput(format!("Rune symbol {} is not supported", symbol))
+    runes.get(rune_id).cloned().ok_or_else(|| {
+        BitcoinError::UnsupportedRune(rune_id.to_string())
     })
 }
