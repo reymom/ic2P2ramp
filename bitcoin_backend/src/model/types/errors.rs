@@ -42,6 +42,9 @@ pub enum BitcoinError {
 
     #[error("Unsupported Rune: {0}")]
     UnsupportedRune(String),
+
+    #[error("Invalid Rune ID: {0}")]
+    InvalidRuneID(String),
 }
 
 #[derive(Error, Debug, Clone, CandidType)]
