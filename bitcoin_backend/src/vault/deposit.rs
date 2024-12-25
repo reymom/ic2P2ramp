@@ -1,39 +1,52 @@
 use crate::{
-    memory::stable::vault::{OFFRAMPER_VAULTS, RUNES_VAULTS},
+    memory::stable::vault::OFFRAMPER_VAULTS,
     model::types::{
-        errors::{Result, VaultError},
-        Address, Runes,
+        errors::{Result, VaultError}, runes::RuneID, vault::VaultEntry, Address
     },
 };
 
-pub fn deposit_to_vault(address: Address, amount: u64, rune: Option<Runes>) -> Result<()> {
-    if let Some(rune_data) = rune {
-        RUNES_VAULTS.with_borrow_mut(|vaults| {
-            let rune_balance = vaults
-                .get(&(address.clone(), rune_data.symbol.clone()))
-                .unwrap_or(0);
-            let updated_balance = rune_balance + amount;
-            vaults.insert((address, rune_data.symbol), updated_balance);
-        });
-    } else {
-        OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
-            let updated_balance = vaults.get(&address).unwrap_or(0) + amount;
-            vaults.insert(address, updated_balance);
-        });
-    }
+pub fn deposit_to_vault(offramper_address: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
+    OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
+        let mut entry = vaults.get(&offramper_address).unwrap_or_else(VaultEntry::new);
 
-    Ok(())
+        if let Some(rune_id) = rune {
+            let rune_balance = entry.runes.entry(rune_id).or_insert(0);
+            *rune_balance += amount;
+        } else {
+            entry.bitcoin_balance += amount;
+        }
+
+        vaults.insert(offramper_address, entry);
+        Ok(())
+    })
 }
 
-pub fn cancel_deposit(address: Address, amount: u64) -> Result<()> {
+pub fn cancel_deposit(offramper_address: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
     OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let balance = vaults.get(&address).unwrap_or(0);
-        if balance < amount {
-            Err(VaultError::InsufficientBalance.into())
+        let mut entry = vaults
+            .get(&offramper_address)
+            .ok_or(VaultError::AddressVaultNotFound)?;
+
+        if let Some(rune_id) = rune {
+            let rune_balance = entry.runes.get_mut(&rune_id).ok_or_else(|| {
+                VaultError::InsufficientBalance
+            })?;
+            if *rune_balance < amount {
+                return Err(VaultError::InsufficientBalance.into());
+            }
+            *rune_balance -= amount;
+
+            if *rune_balance == 0 {
+                entry.runes.remove(&rune_id);
+            }
         } else {
-            let updated_balance = balance - amount;
-            vaults.insert(address, updated_balance);
-            Ok(())
+            if entry.bitcoin_balance < amount {
+                return Err(VaultError::InsufficientBalance.into());
+            }
+            entry.bitcoin_balance -= amount;
         }
+
+        vaults.insert(offramper_address, entry);
+        Ok(())
     })
 }

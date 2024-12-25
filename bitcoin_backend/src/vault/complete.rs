@@ -1,34 +1,34 @@
 use crate::{
-    memory::stable::vault::{ONRAMPER_VAULTS, RUNES_VAULTS},
+    memory::stable::vault::ONRAMPER_VAULTS,
     model::types::{
-        errors::{Result, VaultError},
-        Address, Runes,
+        errors::{Result, VaultError}, runes::RuneID, Address
     },
 };
 
-pub fn complete_order(onramper: Address, amount: u64, rune: Option<Runes>) -> Result<()> {
-    if let Some(rune_data) = rune {
-        RUNES_VAULTS.with_borrow_mut(|vaults| {
-            let balance = vaults
-                .get(&(onramper.clone(), rune_data.symbol.clone()))
-                .unwrap_or(0);
-            if balance < amount {
-                return Err(VaultError::InsufficientLockedBalance.into());
+pub fn complete_order(onramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
+    ONRAMPER_VAULTS.with_borrow_mut(|vaults| {
+        let mut entry = vaults
+            .get(&onramper)
+            .ok_or(VaultError::AddressVaultNotFound)?;
+
+        if let Some(rune_id) = rune {
+            let rune_balance = entry.runes.get_mut(&rune_id).ok_or(VaultError::InsufficientBalance)?;
+            if *rune_balance < amount {
+                return Err(VaultError::InsufficientBalance.into());
             }
-            let updated_balance = balance - amount;
-            vaults.insert((onramper, rune_data.symbol), updated_balance);
-            Ok(())
-        })
-    } else {
-        ONRAMPER_VAULTS.with_borrow_mut(|vaults| {
-            let balance = vaults.get(&onramper).unwrap_or(0);
-            if balance < amount {
-                Err(VaultError::InsufficientLockedBalance.into())
-            } else {
-                let updated_balance = balance - amount;
-                vaults.insert(onramper, updated_balance);
-                Ok(())
+            *rune_balance -= amount;
+            if *rune_balance == 0 {
+                entry.runes.remove(&rune_id);
             }
-        })
-    }
+        } else {
+            if entry.bitcoin_balance < amount {
+                return Err(VaultError::InsufficientBalance.into());
+            }
+            entry.bitcoin_balance -= amount;
+        }
+
+        vaults.insert(onramper, entry);
+
+        Ok(())
+    })
 }
