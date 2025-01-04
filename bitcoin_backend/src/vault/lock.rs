@@ -3,13 +3,16 @@ use crate::{
     model::types::{errors::Result, runes::RuneID, vault::VaultEntry, Address},
 };
 
-pub fn lock_funds(offramper_address: Address, onramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
+pub fn lock_funds(
+    offramper_address: Address,
+    onramper: Address,
+    amount: u64,
+    rune: Option<RuneID>,
+) -> Result<()> {
     super::deposit::cancel_deposit(offramper_address, amount, rune.clone())?;
 
     ONRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let mut entry = vaults
-            .get(&onramper)
-            .unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults.get(&onramper).unwrap_or_else(VaultEntry::new);
 
         if let Some(rune_id) = rune {
             let rune_balance = entry.runes.entry(rune_id).or_insert(0);

@@ -1,7 +1,9 @@
 use crate::{
     memory::stable::vault::ONRAMPER_VAULTS,
     model::types::{
-        errors::{Result, VaultError}, runes::RuneID, Address
+        errors::{Result, VaultError},
+        runes::RuneID,
+        Address,
     },
 };
 
@@ -12,7 +14,10 @@ pub fn complete_order(onramper: Address, amount: u64, rune: Option<RuneID>) -> R
             .ok_or(VaultError::AddressVaultNotFound)?;
 
         if let Some(rune_id) = rune {
-            let rune_balance = entry.runes.get_mut(&rune_id).ok_or(VaultError::InsufficientBalance)?;
+            let rune_balance = entry
+                .runes
+                .get_mut(&rune_id)
+                .ok_or(VaultError::InsufficientBalance)?;
             if *rune_balance < amount {
                 return Err(VaultError::InsufficientBalance.into());
             }

@@ -1,13 +1,23 @@
 use crate::{
     memory::stable::vault::OFFRAMPER_VAULTS,
     model::types::{
-        errors::{Result, VaultError}, runes::RuneID, vault::VaultEntry, Address
+        errors::{Result, VaultError},
+        runes::RuneID,
+        vault::VaultEntry,
+        Address,
     },
 };
 
-pub fn deposit_to_vault(offramper_address: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
+pub fn deposit_to_vault(
+    offramper_address: Address,
+    amount: u64,
+    rune: Option<RuneID>,
+) -> Result<()> {
+    ic_cdk::println!("we are here");
     OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let mut entry = vaults.get(&offramper_address).unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults
+            .get(&offramper_address)
+            .unwrap_or_else(VaultEntry::new);
 
         if let Some(rune_id) = rune {
             let rune_balance = entry.runes.entry(rune_id).or_insert(0);
@@ -28,9 +38,10 @@ pub fn cancel_deposit(offramper_address: Address, amount: u64, rune: Option<Rune
             .ok_or(VaultError::AddressVaultNotFound)?;
 
         if let Some(rune_id) = rune {
-            let rune_balance = entry.runes.get_mut(&rune_id).ok_or_else(|| {
-                VaultError::InsufficientBalance
-            })?;
+            let rune_balance = entry
+                .runes
+                .get_mut(&rune_id)
+                .ok_or(VaultError::InsufficientBalance)?;
             if *rune_balance < amount {
                 return Err(VaultError::InsufficientBalance.into());
             }
