@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 bitcoin = "0.32.4"
-candid = "0.10.10"
+candid = { workspace = true }
+serde = { workspace = true }
 hex = "0.4.3"
-ic-cdk = "0.16.0"
+ic-cdk = { workspace = true }
 ic-stable-structures = "0.6.5"
-serde = "1.0.214"
 thiserror = "1.0.65"
