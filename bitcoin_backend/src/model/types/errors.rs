@@ -1,11 +1,11 @@
 use bitcoin::{address::ParseError, amount::ParseAmountError};
-use candid::CandidType;
+use candid::{CandidType, Deserialize};
 use ic_cdk::api::call::RejectionCode;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, BitcoinError>;
 
-#[derive(Error, Debug, Clone, CandidType)]
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum BitcoinError {
     #[error(transparent)]
     VaultError(#[from] VaultError),
@@ -47,7 +47,7 @@ pub enum BitcoinError {
     InvalidRuneID(String),
 }
 
-#[derive(Error, Debug, Clone, CandidType)]
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum VaultError {
     #[error("Address Vault not found")]
     AddressVaultNotFound,
@@ -104,7 +104,13 @@ impl From<bitcoin::taproot::TaprootBuilder> for BitcoinError {
     }
 }
 
-#[derive(Debug, Error, Clone, CandidType)]
+impl From<bitcoin::consensus::encode::Error> for BitcoinError {
+    fn from(error: bitcoin::consensus::encode::Error) -> Self {
+        BitcoinError::InternalError(error.to_string())
+    }
+}
+
+#[derive(Debug, Error, Clone, CandidType, Deserialize)]
 #[error("Insufficient balance: {current_balance} satoshi, trying to transfer {transfer_amount} satoshi with fee {fee}")]
 pub struct InsufficientBalanceError {
     pub current_balance: u64,
