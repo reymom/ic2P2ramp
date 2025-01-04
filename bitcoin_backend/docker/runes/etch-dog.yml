@@ -9,7 +9,7 @@ etching:
     cap: 90
     amount: 100
     height:
-      start: 99
+      start: 500
       end: 999999
   turbo: false
 inscriptions:

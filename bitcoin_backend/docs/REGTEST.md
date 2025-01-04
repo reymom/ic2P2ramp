@@ -21,11 +21,13 @@ sudo apt install jq
 ## Minting and sending Bitcoin
 
 1. Get the address:
+
 ```bash
 ADDRESS=$(dfx canister call bitcoin_backend get_p2tr_script_spend_address | grep -oP '(?<=Ok = ").*?(?=")')
 ```
 
 2. Send to the address:
+
 ```bash
 docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet sendtoaddress "$ADDRESS" 0.01
 ```
@@ -71,13 +73,13 @@ Etching creates a new rune by inscribing its details onto a Bitcoin ordinal.
 
 ```bash
 docker cp ./docker/runes/dog-rune-logo.png ord:/dog-rune-logo.png
-docker cp ./docker/runes/rune.yml ord:/rune.yml
+docker cp ./docker/runes/etch-dog.yml ord:/etch-dog.yml
 ```
 
 2. Inscribe the rune details:
 
 ```bash
-./scripts/regtest/ord_wallet.sh inscribe --file ./dog-rune-logo.png --fee-rate 1
+./scripts/regtest/ord_wallet.sh batch --batch ./etch-dog.yml --fee-rate 1
 ```
 
 3. Mine blocks to confirm the transaction:
