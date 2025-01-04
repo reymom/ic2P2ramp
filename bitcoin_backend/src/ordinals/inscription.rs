@@ -1,10 +1,12 @@
-use bitcoin::script::PushBytesBuf;
 use serde::Serialize;
 
 use bitcoin::Txid;
-use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Satoshi};
+use ic_cdk::api::management_canister::bitcoin::Satoshi;
 
-use crate::model::types::errors::{BitcoinError, Result};
+use crate::model::types::{
+    errors::Result,
+    wallet::{TaprootUseCase, WalletConfig},
+};
 
 #[derive(Serialize)]
 pub struct Inscription {
@@ -89,35 +91,14 @@ pub struct Inscription {
 // }
 
 pub async fn send_inscription(
-    network: BitcoinNetwork,
-    key_name: String,
-    derivation_path: Vec<Vec<u8>>,
+    config: WalletConfig,
     inscription: Vec<u8>,
     dst_address: String,
     amount: Satoshi,
 ) -> Result<Txid> {
-    let inscription_script = bitcoin::blockdata::script::Builder::new();
-    let mut inscription_bytes = PushBytesBuf::new();
-
-    inscription_bytes
-        .extend_from_slice(&inscription)
-        .map_err(|_| BitcoinError::InternalError("Invalid inscription data".to_string()))?;
-
-    inscription_script
-        .clone()
-        .push_opcode(bitcoin::blockdata::opcodes::all::OP_RETURN);
-    inscription_script.push_slice(inscription_bytes.as_push_bytes());
-
-    let script = bitcoin::blockdata::script::Builder::new()
-        .push_opcode(bitcoin::blockdata::opcodes::all::OP_RETURN)
-        .push_slice(inscription_bytes)
-        .into_script();
-
     crate::wallet::p2tr_script_spend::send_script_spend(
-        network,
-        key_name,
-        derivation_path,
-        script,
+        config,
+        TaprootUseCase::Inscription(inscription),
         dst_address,
         amount,
     )
