@@ -11,8 +11,9 @@ use crate::helpers;
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
 pub enum LoginAddress {
     Email { email: String },
-    EVM { address: String },
     ICP { principal_id: String },
+    EVM { address: String },
+    Bitcoin { address: String },
     Solana { address: String },
 }
 
@@ -25,6 +26,14 @@ impl LoginAddress {
                 }
                 helpers::validate_email(email)?
             }
+            LoginAddress::ICP { principal_id } => {
+                if principal_id.is_empty() {
+                    return Err(
+                        SystemError::InvalidInput("ICP principal ID is empty".to_string()).into(),
+                    );
+                }
+                helpers::validate_icp_address(principal_id)?;
+            }
             LoginAddress::EVM { address } => {
                 if address.is_empty() {
                     return Err(
@@ -33,13 +42,13 @@ impl LoginAddress {
                 }
                 helpers::validate_evm_address(address)?;
             }
-            LoginAddress::ICP { principal_id } => {
-                if principal_id.is_empty() {
+            LoginAddress::Bitcoin { address } => {
+                if address.is_empty() {
                     return Err(
-                        SystemError::InvalidInput("ICP principal ID is empty".to_string()).into(),
+                        SystemError::InvalidInput("Bitcoin address is empty".to_string()).into(),
                     );
                 }
-                helpers::validate_icp_address(principal_id)?;
+                helpers::validate_bitcoin_address(address)?;
             }
             LoginAddress::Solana { address } => {
                 if address.is_empty() {
@@ -59,13 +68,17 @@ impl LoginAddress {
                 "Cannot convert Email to TransactionAddress".to_string(),
             )
             .into()),
+            LoginAddress::ICP { principal_id } => Ok(TransactionAddress {
+                address_type: AddressType::ICP,
+                address: principal_id.clone(),
+            }),
             LoginAddress::EVM { address } => Ok(TransactionAddress {
                 address_type: AddressType::EVM,
                 address: address.clone(),
             }),
-            LoginAddress::ICP { principal_id } => Ok(TransactionAddress {
-                address_type: AddressType::ICP,
-                address: principal_id.clone(),
+            LoginAddress::Bitcoin { address } => Ok(TransactionAddress {
+                address_type: AddressType::Bitcoin,
+                address: address.clone(),
             }),
             LoginAddress::Solana { address } => Ok(TransactionAddress {
                 address_type: AddressType::Solana,
