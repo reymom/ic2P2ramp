@@ -494,14 +494,15 @@ async fn update_password(login_address: LoginAddress, new_password: Option<Strin
 }
 
 #[ic_cdk::update]
-async fn generate_evm_auth_message(login_address: LoginAddress) -> Result<String> {
+async fn generate_auth_message(login_address: LoginAddress) -> Result<String> {
     login_address.validate()?;
-    let address = if let LoginAddress::EVM { address } = login_address.clone() {
-        Ok(address)
-    } else {
-        Err(SystemError::InvalidInput(
-            "Login address is not of type EVM".to_string(),
-        ))
+
+    let address = match login_address.clone() {
+        LoginAddress::EVM { address } => Ok(address),
+        LoginAddress::Bitcoin { address } => Ok(address),
+        _ => Err(SystemError::InvalidInput(
+            "Login address is not of type EVM or Bitcoin".to_string(),
+        )),
     }?;
 
     let user_id = stable::users::find_user_by_login_address(&login_address)?;
