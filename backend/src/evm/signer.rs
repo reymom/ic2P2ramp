@@ -1,17 +1,21 @@
 use std::str::FromStr;
 
-use ethers_core::abi::ethereum_types::{Address, U256};
-use ethers_core::k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey};
-use ethers_core::types::transaction::eip1559::Eip1559TransactionRequest;
-use ethers_core::types::{Bytes, Signature};
-use ethers_core::utils::keccak256;
+use ethers_core::{
+    abi::ethereum_types::{Address, U256},
+    k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey},
+    types::{transaction::eip1559::Eip1559TransactionRequest, Bytes, Signature},
+    utils::keccak256,
+};
 use ic_cdk::api::management_canister::ecdsa::{
     ecdsa_public_key, sign_with_ecdsa, EcdsaPublicKeyArgument, SignWithEcdsaArgument,
 };
 
-use crate::errors::{BlockchainError, Result, UserError};
 use crate::model::memory::heap::read_state;
 use crate::types::evm::request::SignRequest;
+use crate::{
+    errors::{BlockchainError, Result, UserError},
+    model::types::AddressType,
+};
 
 pub async fn sign_transaction(req: SignRequest) -> String {
     const EIP1559_TX_ID: u8 = 2;
@@ -125,7 +129,8 @@ pub fn verify_signature(evm_address: &str, message: &str, signature: &str) -> Re
         .map_err(|_| UserError::InvalidSignature)?;
 
     if recovered_address
-        == Address::from_str(evm_address).map_err(|_| BlockchainError::InvalidAddress)?
+        == Address::from_str(evm_address)
+            .map_err(|_| BlockchainError::InvalidAddress(AddressType::EVM))?
     {
         Ok(())
     } else {

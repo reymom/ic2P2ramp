@@ -1,5 +1,6 @@
+use std::{fmt, hash::Hash};
+
 use candid::{CandidType, Deserialize};
-use std::hash::Hash;
 
 use crate::errors::{Result, SystemError};
 use crate::helpers;
@@ -96,6 +97,12 @@ pub enum AddressType {
     Solana,
 }
 
+impl fmt::Display for AddressType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(CandidType, Deserialize, Clone, Debug, Eq)]
 pub struct TransactionAddress {
     pub address_type: AddressType,
@@ -134,5 +141,6 @@ impl TransactionAddress {
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct AuthenticationData {
     pub password: Option<String>,  // For Email
-    pub signature: Option<String>, // For EVM
+    pub signature: Option<String>, // For EVM and Bitcoin
+    pub pubkey: Option<String>,    // For Bitcoin
 }

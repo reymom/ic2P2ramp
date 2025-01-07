@@ -13,8 +13,8 @@ use super::{
 use crate::{
     errors::{BlockchainError, Result, SystemError, UserError},
     evm::signer,
-    management::random,
-    model::memory,
+    management::{bitcoin, random},
+    model::{memory, types::AddressType},
 };
 
 const MAX_USER_SIZE: u32 = 1000;
@@ -34,8 +34,8 @@ pub struct User {
     pub fiat_amounts: HashMap<String, u64>, // offramped or onramped funds
     pub score: i32,
     pub login: LoginAddress,
-    pub hashed_password: Option<String>,  // for email login
-    pub evm_auth_message: Option<String>, // for EVM login, unique per session
+    pub hashed_password: Option<String>, // for email login
+    pub auth_message: Option<String>,    // for EVM & Bitcoin login, unique per session
     pub session: Option<Session>,
 }
 
@@ -61,7 +61,7 @@ impl User {
             score: 1,
             login: login_address,
             hashed_password,
-            evm_auth_message: None,
+            auth_message: None,
             addresses,
             session: None,
         })
@@ -106,18 +106,6 @@ impl User {
                     }
                 }
             }
-            LoginAddress::EVM { address } => {
-                let signature = auth_data
-                    .clone()
-                    .ok_or(UserError::SignatureRequired)?
-                    .signature
-                    .ok_or(UserError::SignatureRequired)?;
-                let message = self.evm_auth_message.as_ref().ok_or_else(|| {
-                    SystemError::InternalError("evm auth message not in user".to_string())
-                })?;
-
-                signer::verify_signature(address, message, &signature)?
-            }
             LoginAddress::ICP { principal_id } => {
                 ic_cdk::println!(
                     "[verify_user_auth] caller = {:?}",
@@ -126,10 +114,38 @@ impl User {
                 ic_cdk::println!("[verify_user_auth] principal_id = {:?}", principal_id);
                 if ic_cdk::caller()
                     != Principal::from_text(principal_id)
-                        .map_err(|_| BlockchainError::InvalidAddress)?
+                        .map_err(|_| BlockchainError::InvalidAddress(AddressType::ICP))?
                 {
                     return Err(UserError::UnauthorizedPrincipal.into());
                 }
+            }
+            LoginAddress::EVM { address } => {
+                let signature = auth_data
+                    .clone()
+                    .ok_or(UserError::SignatureRequired)?
+                    .signature
+                    .ok_or(UserError::SignatureRequired)?;
+                let message = self.auth_message.as_ref().ok_or_else(|| {
+                    SystemError::InternalError("evm auth message not in user".to_string())
+                })?;
+
+                signer::verify_signature(address, message, &signature)?
+            }
+            LoginAddress::Bitcoin { address } => {
+                let signature = auth_data
+                    .clone()
+                    .ok_or(UserError::SignatureRequired)?
+                    .signature
+                    .ok_or(UserError::SignatureRequired)?;
+                let pubkey = auth_data
+                    .ok_or(UserError::PublicKeyRequired)?
+                    .pubkey
+                    .ok_or(UserError::PublicKeyRequired)?;
+                let message = self.auth_message.as_ref().ok_or_else(|| {
+                    SystemError::InternalError("bitcoin auth message not in user".to_string())
+                })?;
+
+                bitcoin::verify_signature(address, message, &signature, &pubkey)?
             }
             _ => return Err(UserError::UnauthorizedPrincipal.into()),
         }

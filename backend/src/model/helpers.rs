@@ -1,6 +1,6 @@
-use std::str::FromStr;
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
+use bitcoin::address::Address as BitcoinAddress;
 use candid::Principal;
 use email_address::EmailAddress;
 use ethers_core::types::{Address, H160};
@@ -9,6 +9,8 @@ use crate::{
     errors::{BlockchainError, Result},
     outcalls::xrc_rates::{self, Asset, AssetClass},
 };
+
+use super::{errors::UserError, types::AddressType};
 
 /// Introduces an asynchronous delay for the specified duration.
 ///
@@ -49,16 +51,20 @@ pub fn parse_address(address: String) -> Result<H160> {
 }
 
 pub fn validate_evm_address(evm_address: &str) -> Result<()> {
-    Address::from_str(evm_address).map_err(|_| BlockchainError::InvalidAddress)?;
+    Address::from_str(evm_address)
+        .map_err(|_| BlockchainError::InvalidAddress(AddressType::EVM))?;
     Ok(())
 }
 
 pub fn validate_icp_address(icp_address: &str) -> Result<()> {
-    Principal::from_text(icp_address).map_err(|_| BlockchainError::InvalidAddress)?;
+    Principal::from_text(icp_address)
+        .map_err(|_| BlockchainError::InvalidAddress(AddressType::ICP))?;
     Ok(())
 }
 
-pub fn validate_bitcoin_address(_bitcoin_address: &str) -> Result<()> {
+pub fn validate_bitcoin_address(bitcoin_address: &str) -> Result<()> {
+    BitcoinAddress::from_str(bitcoin_address)
+        .map_err(|_| BlockchainError::InvalidAddress(AddressType::Bitcoin))?;
     Ok(())
 }
 
@@ -66,7 +72,7 @@ pub fn validate_email(address: &str) -> Result<()> {
     if EmailAddress::is_valid(address) {
         Ok(())
     } else {
-        Err(BlockchainError::InvalidAddress.into())
+        Err(UserError::InvalidEmail.into())
     }
 }
 

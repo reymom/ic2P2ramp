@@ -6,6 +6,8 @@ use thiserror::Error;
 
 use crate::{outcalls::xrc_rates::ExchangeRateError, types::PaymentProviderType};
 
+use super::types::AddressType;
+
 pub type Result<T> = std::result::Result<T, RampError>;
 
 #[derive(Error, Debug, Clone, CandidType)]
@@ -28,6 +30,9 @@ pub enum UserError {
     #[error("Only controller is allowed")]
     OnlyController,
 
+    #[error("Email is Invalid")]
+    InvalidEmail,
+
     #[error("Password is Invalid")]
     InvalidPassword,
 
@@ -39,6 +44,9 @@ pub enum UserError {
 
     #[error("User is not authorized")]
     Unauthorized,
+
+    #[error("Public Key is required")]
+    PublicKeyRequired,
 
     #[error("Signature is required")]
     SignatureRequired,
@@ -115,8 +123,11 @@ pub enum OrderError {
 
 #[derive(Error, Debug, CandidType, Clone)]
 pub enum BlockchainError {
-    #[error("Invalid Ethereum address")]
-    InvalidAddress,
+    #[error("Invalid Address of type {0}")]
+    InvalidAddress(AddressType),
+
+    #[error("Invalid Public Key")]
+    InvalidPubKey,
 
     #[error("Chain ID not found: {0}")]
     ChainIdNotFound(u64),
