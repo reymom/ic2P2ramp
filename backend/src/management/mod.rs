@@ -1,3 +1,4 @@
+pub mod bitcoin;
 pub mod order;
 pub mod payment;
 pub mod random;

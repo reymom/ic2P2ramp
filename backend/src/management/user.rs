@@ -120,7 +120,7 @@ pub fn remove_payment_provider(
 
 pub fn update_user_auth_message(user_id: u64, auth_message: &str) -> Result<()> {
     users::mutate_user(user_id, |user| {
-        user.evm_auth_message = Some(auth_message.to_string());
+        user.auth_message = Some(auth_message.to_string());
     })
 }
 
