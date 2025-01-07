@@ -3,7 +3,7 @@ use crate::Result;
 use candid::Principal;
 use ic_cdk::api::call::call;
 
-const BITCOIN_BACKEND_CANISTER_ID: &str = "be2us-64aaa-aaaaa-qaabq-cai";
+const BITCOIN_BACKEND_CANISTER_ID: &str = "zhuzm-wqaaa-aaaap-qpk2q-cai";
 
 /// Calls the `lock_funds` function on the `bitcoin_backend` canister.
 pub async fn bitcoin_backend_lock_funds(
