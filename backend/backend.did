@@ -1,5 +1,9 @@
 type AddressType = variant { EVM; ICP; Solana; Bitcoin };
-type AuthenticationData = record { signature : opt text; password : opt text };
+type AuthenticationData = record {
+  signature : opt text;
+  password : opt text;
+  pubkey : opt text;
+};
 type Blockchain = variant {
   EVM : record { chain_id : nat64 };
   ICP : record { ledger_principal : principal };
@@ -7,7 +11,7 @@ type Blockchain = variant {
   Bitcoin;
 };
 type BlockchainError = variant {
-  InvalidAddress;
+  InvalidAddress : AddressType;
   TransactionTimeout;
   ReplacementUnderpriced;
   UnsupportedBlockchain;
@@ -21,6 +25,7 @@ type BlockchainError = variant {
   NonceTooLow;
   NonceLockTimeout : nat64;
   FundsBelowFees;
+  InvalidPubKey;
   UnregisteredEvmToken;
   EmptyTransactionHash;
   NonceTooHigh;
@@ -142,6 +147,7 @@ type LoginAddress = variant {
   ICP : record { principal_id : text };
   Email : record { email : text };
   Solana : record { address : text };
+  Bitcoin : record { address : text };
 };
 type Onramper = record {
   provider : PaymentProvider;
@@ -321,14 +327,15 @@ type User = record {
   user_type : UserType;
   fiat_amounts : vec record { text; nat64 };
   payment_providers : vec PaymentProvider;
+  auth_message : opt text;
   score : int32;
   login : LoginAddress;
-  evm_auth_message : opt text;
   addresses : vec TransactionAddress;
   session : opt Session;
   hashed_password : opt text;
 };
 type UserError = variant {
+  PublicKeyRequired;
   UserNotOfframper;
   UserNotOnramper;
   UserBanned;
@@ -341,6 +348,7 @@ type UserError = variant {
   Unauthorized;
   TokenInvalid;
   OnlyController;
+  InvalidEmail;
   UserNotFound;
   UnauthorizedPrincipal;
   InvalidPassword;
@@ -377,7 +385,7 @@ service : (InstallArg) -> {
     ) -> (Result_4);
   execute_revolut_payment : (nat64, text) -> (Result_5) query;
   freeze_order : (nat64, nat64, text) -> (Result);
-  generate_evm_auth_message : (LoginAddress) -> (Result_5);
+  generate_auth_message : (LoginAddress) -> (Result_5);
   get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_6);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_7) query;
