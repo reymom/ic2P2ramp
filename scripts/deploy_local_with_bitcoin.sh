@@ -26,6 +26,8 @@ dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument
 # Backend Deployment
 cargo build --release --target wasm32-unknown-unknown --package backend
 
+candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+
 dfx canister create --with-cycles 1_000_000_000_000 backend
 
 dfx deploy backend --argument "(
