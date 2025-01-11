@@ -7,18 +7,16 @@ import path from 'path';
 
 export default defineConfig(({ mode }) => {
   console.log('mode = ', mode);
-  if (mode === 'sandbox' || mode === 'production') {
-    dotenv.config({ path: `.env.${mode}` });
-  } else {
-    dotenv.config();
-  }
+
+  const envFile = mode === 'sandbox' || mode === 'production' ? `.env.${mode}` : `.env`;
+  dotenv.config({ path: path.resolve(__dirname, '..', envFile) });
 
   const domain = mode === 'sandbox' ? 'sandbox.icramp.xyz' : 'app.icramp.xyz';
 
   return {
-    root: 'src',
+    root: path.resolve(__dirname, 'src'),
     build: {
-      outDir: '../dist',
+      outDir: path.resolve(__dirname, 'dist'),
       emptyOutDir: true,
     },
     optimizeDeps: {
@@ -60,8 +58,8 @@ export default defineConfig(({ mode }) => {
     ],
     test: {
       environment: 'jsdom',
-      setupFiles: 'setupTests.ts',
-      cache: { dir: '../node_modules/.vitest' },
+      setupFiles: path.resolve(__dirname, 'setupTests.ts'),
+      cache: { dir: path.resolve(__dirname, 'node_modules/.vitest') },
     },
     css: {
       preprocessorOptions: {

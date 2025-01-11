@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 
 # Canisters
-/src/declarations
+**/src/declarations/
 /deps
 .dfx
 .vessel
