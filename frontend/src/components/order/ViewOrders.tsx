@@ -8,6 +8,9 @@ import { backend } from '../../model/backendProxy';
 import { OrderFilter, OrderState } from '../../declarations/backend/backend.did';
 import OrderFilters from './OrderFilters';
 import Order from './Order';
+import mockOrdersData from '../../assets/mocks/orders.json';
+import { parseBigIntFields } from '../../model/mock';
+
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [loading, setLoading] = useState(false);
@@ -46,6 +49,13 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     }, [filter, page]);
 
     const fetchOrders = async () => {
+        if (import.meta.env.VITE_USE_MOCKS) {
+            console.warn("Using mock orders");
+            const mockOrders: OrderState[] = mockOrdersData.map(parseBigIntFields);
+            setOrders(mockOrders as OrderState[]);
+            return;
+        }
+
         try {
             setLoading(true);
             const orders = await backend.get_orders(filter ? [filter] : [], [page], [pageSize]);
