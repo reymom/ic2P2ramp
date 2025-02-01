@@ -158,6 +158,8 @@ const RegisterUser: React.FC = () => {
                         {(() => {
                             if ('EVM' in loginMethod) {
                                 return truncate(loginMethod.EVM.address, 12, 10);
+                            } else if ('Bitcoin' in loginMethod) {
+                                return truncate(loginMethod.Bitcoin.address, 12, 10);
                             } else if ('ICP' in loginMethod) {
                                 return truncate(loginMethod.ICP.principal_id, 12, 10);
                             } else if ('Email' in loginMethod) {

@@ -20,7 +20,7 @@ const ForgotPassword: React.FC = () => {
         const confirmationToken = generateConfirmationToken();
         const loginMethod: LoginAddress = { 'Email': { email } };
         try {
-            const result = await authenticateUser(loginMethod, { signature: [], password: ["notapassword"] });
+            const result = await authenticateUser(loginMethod, { signature: [], pubkey: [], password: ["notapassword"] });
             if ('Err' in result && !(isInvalidPasswordError(result.Err))) {
                 console.log("result.Err = ", result.Err);
                 setMessage('Email is not registered');

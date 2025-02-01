@@ -19,6 +19,7 @@ import PageTitleUpdater from './components/PageTitleUpdater';
 declare global {
     interface Window {
         Telegram?: any;
+        unisat?: any;
     }
 }
 

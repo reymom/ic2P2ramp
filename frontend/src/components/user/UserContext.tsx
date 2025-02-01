@@ -1,11 +1,13 @@
 import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
+import { disconnect } from '@wagmi/core';
 import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
+import { config } from '../../wagmi';
 import { backend, createActor } from '../../model/backendProxy';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
 import { getEvmTokens } from '../../constants/evm_tokens';
@@ -40,9 +42,6 @@ export interface BitcoinBalance {
     runes: { [runeId: string]: { raw: bigint; formatted: string; symbol: string, logo: string, name: string } };
 }
 
-console.log("Frontend Canister:", process.env.FRONTEND_CANISTER_ID);
-console.log("Backend Canister:", process.env.BACKEND_CANISTER_ID);
-
 interface UserContextProps {
     refetchUser: () => Promise<void>;
     setUser: (user: User | null) => void;
@@ -55,7 +54,7 @@ interface UserContextProps {
     sessionToken: string | null;
     password: string | null;
     bitcoinAddress: string | null;
-    connectUnisat: () => Promise<void>;
+    connectUnisat: () => Promise<string | null>;
     loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
     authenticateUser: (
         login: LoginAddress | null,
@@ -136,13 +135,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     }, []);
 
-    const connectUnisat = async () => {
+    const connectUnisat = async (): Promise<string | null> => {
         if (unisatInstalled) {
             try {
                 if ((window as any).unisat) {
                     const accounts = await (window as any).unisat.requestAccounts();
                     if (accounts && accounts.length > 0) {
-                        setBitcoinAddress(accounts[0]);
+                        const account = accounts[0];
+                        setBitcoinAddress(account);
+                        return account;
                     }
                 } else {
                     alert("Unisat wallet is not installed. Please install it to connect.");
@@ -151,6 +152,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 console.error("Failed to connect to Unisat", error);
             }
         }
+        return null;
     };
 
     const checkInternetIdentity = async () => {
@@ -162,7 +164,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 setPrincipal(principal);
                 console.log("[checkII] ICP Principal = ", principal.toString());
 
-                const agent = new HttpAgent({ identity, host: icpHost });
+                const agent = await HttpAgent.create({ identity, host: icpHost });
                 if (process.env.FRONTEND_ICP_ENV === 'test') {
                     agent.fetchRootKey();
                 }
@@ -190,7 +192,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                             setPrincipal(principal);
                             console.log("[loginII] ICP Principal = ", principal.toString());
 
-                            const agent = new HttpAgent({ identity, host: icpHost });
+                            const agent = await HttpAgent.create({ identity, host: icpHost });
                             if (process.env.FRONTEND_ICP_ENV === 'test') {
                                 agent.fetchRootKey();
                             }
@@ -226,6 +228,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!login) throw new Error("Login method is not defined");
         if ('Email' in login && (!authData || !authData.password)) throw new Error("Password is required");
         if ('EVM' in login && (!authData || !authData.signature)) throw new Error("EVM Signature is required");
+        if ('Bitcoin' in login && (!authData || !authData.signature || !authData.pubkey)) throw new Error("Bitcoin Signature and Public Key are required");
 
         try {
             let tmpActor = backend;
@@ -285,14 +288,27 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     returnTo: process.env.FRONTEND_BASE_URL || window.location.origin,
                 });
             }
+
+            if (unisatInstalled) {
+                await (window as any).unisat.disconnect();
+            }
+
+            if (address && chainId) {
+                await disconnect(config);
+            }
         } catch (error) {
             console.error("Error logging out from Internet Identity:", error);
         } finally {
             setUser(null);
             setLoginMethod(null);
+            setSessionToken(null);
             clearUserSession();
             setIcpAgent(null);
             setPrincipal(null);
+            setBitcoinAddress(null);
+            setIcpBalances(null);
+            setEvmBalances(null);
+            setBitcoinBalance(null);
         }
     };
 
@@ -331,7 +347,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const fetchBitcoinBalance = async () => {
-        if (!unisatInstalled) return;
+        if (!unisatInstalled || !bitcoinAddress) return;
 
         try {
             let res = await (window as any).unisat.getBalance();

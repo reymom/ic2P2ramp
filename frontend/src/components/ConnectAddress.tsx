@@ -15,6 +15,7 @@ import DynamicDots from './ui/DynamicDots';
 // Icons
 import icpLogo from "../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
+import bitcoinLogo from "../assets/blockchains/bitcoin-logo.svg";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
@@ -27,19 +28,23 @@ const ConnectAddress: React.FC = () => {
     const [loadingEmail, setLoadingEmail] = useState(false);
     const [loadingEvm, setLoadingEvm] = useState(false);
     const [loadingIcp, setLoadingIcp] = useState(false);
+    const [loadingBitcoin, setLoadingBitcoin] = useState(false);
     const [emailMessage, setEmailMessage] = useState<string | null>(null);
     const [evmMessage, setEvmMessage] = useState<string | null>(null);
     const [iIMessage, setIIMessage] = useState<string | null>(null);
+    const [bitcoinMessage, setBitcoinMessage] = useState<string | null>(null);
 
     const [searchParams] = useSearchParams();
     const { isConnected, address } = useAccount();
     const {
         userType,
         loginMethod,
+        bitcoinAddress,
         icpAgent,
         principal,
         setLoginMethod,
         setUser,
+        connectUnisat,
         loginInternetIdentity,
         authenticateUser
     } = useUser();
@@ -63,6 +68,8 @@ const ConnectAddress: React.FC = () => {
             try {
                 if (loginMethod && 'EVM' in loginMethod) {
                     await handleEvmLogin();
+                } else if (loginMethod && 'Bitcoin' in loginMethod) {
+                    await handleBitcoinLogin();
                 } else if (loginMethod && 'ICP' in loginMethod) {
                     await handleInternetIdentityLogin(true);
                 } else if (pwd && email) {
@@ -115,7 +122,7 @@ const ConnectAddress: React.FC = () => {
 
         setLoadingEvm(true);
         try {
-            const result = await backend.generate_evm_auth_message({ EVM: { address } });
+            const result = await backend.generate_auth_message(loginAddress);
 
             if ('Ok' in result) { // user exists, we need to verify the signature
                 const provider = new ethers.BrowserProvider(window.ethereum);
@@ -124,7 +131,7 @@ const ConnectAddress: React.FC = () => {
                 signer.signMessage(result.Ok)
                     .then(async (signature) => {
                         try {
-                            const result = await authenticateUser(loginAddress, { signature: [signature], password: [] });
+                            const result = await authenticateUser(loginAddress, { signature: [signature], pubkey: [], password: [] });
                             if ('Ok' in result) {
                                 navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
                             } else {
@@ -157,6 +164,65 @@ const ConnectAddress: React.FC = () => {
         }
     }
 
+    const handleBitcoinLogin = async () => {
+        console.log("handleBitcoinLogin")
+        cleanMessages();
+
+        if (!window.unisat) throw new Error('Unisat not found.');
+
+        let btcAddress = bitcoinAddress;
+        if (!bitcoinAddress) {
+            btcAddress = await connectUnisat();
+        }
+
+        if (!btcAddress) {
+            setBitcoinMessage("Could not connect bitcoin address.");
+            return;
+        }
+
+        console.log("address = ", btcAddress)
+        const loginAddress: LoginAddress = { Bitcoin: { address: btcAddress } };
+        setLoginMethod(loginAddress)
+
+        setLoadingBitcoin(true);
+        try {
+            const result = await backend.generate_auth_message(loginAddress);
+            console.log("result = ", result);
+
+            if ('Ok' in result) {
+                const signature = await window.unisat.signMessage(result.Ok);
+                const pubkey = await window.unisat.getPublicKey();
+
+                console.log("signature  =", signature);
+                console.log("pubkey  =", pubkey);
+                try {
+                    const result = await authenticateUser(loginAddress, { signature: [signature], pubkey: [pubkey], password: [] });
+                    if ('Ok' in result) {
+                        navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
+                    } else {
+                        setBitcoinMessage(`Failed to authenticate user: ${rampErrorToString(result.Err)}`);
+                        setLoginMethod(null);
+                        setLoadingBitcoin(false);
+                    }
+                } catch (authError: any) {
+                    setBitcoinMessage(authError.message || 'Unknown authentication error occurred');
+                    setLoginMethod(null);
+                    setLoadingBitcoin(false);
+                }
+            } else if (isUserNotFoundError(result.Err)) {
+                navigate("/register");
+            } else {
+                setBitcoinMessage(`Internal error when generating bitcoin auth session message: ${rampErrorToString(result.Err)}`)
+                setLoginMethod(null);
+                setLoadingBitcoin(false);
+            }
+        } catch (error: any) {
+            setBitcoinMessage(`An unexpected error occurred: ${error.message || 'Unknown error'}`);
+            setLoginMethod(null);
+            setLoadingBitcoin(false);
+        }
+    };
+
     const handleEmailLogin = async (loginEmail: string, loginPassword: string) => {
         cleanMessages();
 
@@ -175,6 +241,7 @@ const ConnectAddress: React.FC = () => {
 
             const authData: AuthenticationData = {
                 signature: [],
+                pubkey: [],
                 password: [loginPassword]
             }
             try {
@@ -278,7 +345,7 @@ const ConnectAddress: React.FC = () => {
             </div>
             {iIMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{iIMessage}</p>}
 
-            {/* Wallet Login */}
+            {/* Ethereum Login */}
             <ConnectButton.Custom>
                 {({ openConnectModal }) => (
                     <div
@@ -313,6 +380,26 @@ const ConnectAddress: React.FC = () => {
             </ConnectButton.Custom>
             {evmMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{evmMessage}</p>}
             {/* </div > */}
+
+            {/* Bitcoin Login */}
+            <div
+                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-600 rounded-md
+                        ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-500'}`}
+                onClick={() => !(loadingEmail || loadingEvm || loadingIcp || loadingBitcoin) ? handleBitcoinLogin() : undefined}
+            >
+                <div className="flex items-center space-x-3">
+                    <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6 mr-2" />
+
+                    <span className="text-white text-lg">
+                        {loadingBitcoin ?
+                            <span>Checking Unisat Address<DynamicDots isLoading={loadingBitcoin} /></span>
+                            : <span>Sign in with Bitcoin</span>
+                        }
+                    </span>
+                </div>
+                {loadingBitcoin && <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin ml-3"></div>}
+            </div>
+            {bitcoinMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{bitcoinMessage}</p>}
 
             <hr className="border-t border-gray-500 w-full my-6" />
 
