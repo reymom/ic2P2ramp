@@ -16,3 +16,14 @@ input[type='number']::-moz-spin-box {
   appearance: none; /* Firefox */
   -moz-appearance: textfield;
 }
+
+.app-title {
+    -webkit-text-stroke: 1px #280d57;
+    -webkit-text-fill-color: #280d57;
+    letter-spacing: 0.08em;
+}
+
+.dark .app-title {
+    -webkit-text-stroke: 1px #94a3b8;
+    -webkit-text-fill-color: #e2e8f0;
+}

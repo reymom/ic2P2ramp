@@ -2,9 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
+import clsx from 'clsx';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUserCircle, faSignOutAlt, faFileAlt, faPlusCircle, faRightToBracket, faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
+import {
+    faUserCircle,
+    faSignOutAlt,
+    faFileAlt,
+    faPlusCircle,
+    faRightToBracket,
+    faBars,
+    faTimes,
+    faSun,
+    faMoon,
+    faCog
+} from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "../assets/blockchains/icp-logo.svg";
 import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
 import logo from '../assets/icR-logo.png';
@@ -72,10 +84,18 @@ const Menu: React.FC = () => {
         setIsMenuOpen(false);
     };
 
+    const linkClasses = clsx(
+        "flex items-center space-x-2 py-2 px-3 border rounded-md",
+        "bg-gray-100 hover:bg-gray-200",
+        "dark:bg-gray-800 dark:hover:bg-gray-700",
+        "text-gray-700 dark:text-gray-200",
+        "transition-colors duration-200"
+    );
+
     const renderLinks = () => {
         const viewLink =
-            <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
-                <FontAwesomeIcon icon={faFileAlt} className="text-teal-900 w-6" />
+            <Link to="/view" onClick={closeMenu} className={linkClasses}>
+                <FontAwesomeIcon icon={faFileAlt} className="text-teal-900 dark:text-teal-500 w-6" />
                 <span>Orders</span>
             </Link>
 
@@ -85,12 +105,12 @@ const Menu: React.FC = () => {
             case "Offramper":
                 return (
                     <>
-                        <Link to="/view" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
-                            <FontAwesomeIcon icon={faFileAlt} className="text-yellow-900 w-6" />
+                        <Link to="/view" onClick={closeMenu} className={linkClasses}>
+                            <FontAwesomeIcon icon={faFileAlt} className="text-yellow-900 dark:text-yellow-500 w-6" />
                             <span>My Orders</span>
                         </Link>
-                        <Link to="/create" onClick={closeMenu} className="flex items-center space-x-2 text-gray-800 hover:text-gray-900 transition-colors duration-200 bg-gray-200 hover:bg-gray-300 py-2 px-3 border rounded-md">
-                            <FontAwesomeIcon icon={faPlusCircle} className="text-blue-900 w-6" />
+                        <Link to="/create" onClick={closeMenu} className={linkClasses}>
+                            <FontAwesomeIcon icon={faPlusCircle} className="text-blue-900 dark:text-blue-500 w-6" />
                             <span>Create Order</span>
                         </Link>
                     </>
@@ -168,12 +188,7 @@ const Menu: React.FC = () => {
                 <div className="flex justify-between w-full">
                     <Link to="/" className="flex items-center w-72 text-center align-middle">
                         <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
-                        <h1 className="text-4xl text-sky-700 tracking-wider -mt-2" style={{
-                            // color: '#ffffff',
-                            WebkitTextStroke: '1px #280d57',
-                            WebkitTextFillColor: '#280d57',
-                            letterSpacing: '0.08em',
-                        }}>
+                        <h1 className="text-4xl tracking-wider -mt-2 transition-colors duration-300 app-title">
                             icRamp
                         </h1>
                     </Link>
@@ -185,16 +200,46 @@ const Menu: React.FC = () => {
                 </div>
             }
 
-            <div className="w-72 flex justify-end items-center relative">
+            <div className="w-72 flex justify-end items-center relative space-x-2">
+                <div className="relative space-x-2">
+                    {/* Theme Toggle */}
+                    <button
+                        onClick={() => document.documentElement.classList.toggle('dark')}
+                        className="px-3 py-2 rounded-lg transition-colors duration-200
+                            bg-gray-100 hover:bg-gray-200 
+                            dark:bg-gray-800 dark:hover:bg-gray-700 
+                            text-gray-600 dark:text-gray-200"
+                    >
+                        <FontAwesomeIcon
+                            icon={document.documentElement.classList.contains('dark') ? faSun : faMoon}
+                            size="lg"
+                        />
+                    </button>
+                    {/* Settings */}
+                    <button
+                        className="px-3 py-2 rounded-lg transition-colors duration-200
+                                bg-gray-100 hover:bg-gray-200 
+                                dark:bg-gray-800 dark:hover:bg-gray-700 
+                                text-gray-600 dark:text-gray-200"
+                    >
+                        <FontAwesomeIcon icon={faCog} size="lg" />
+                    </button>
+                </div>
                 {!user ? (
                     <div className="relative">
                         <button
                             onClick={() => navigate('/')}
-                            className="flex items-center justify-center bg-indigo-800 hover:bg-indigo-900 text-lg font-bold text-white px-3 py-2 rounded-lg transition-all"
+                            className={clsx(
+                                "px-6 py-2 rounded-lg font-medium text-white text-xl",
+                                "bg-gradient-to-r from-indigo-700 to-blue-600",
+                                "hover:from-blue-700 hover:to-indigo-600",
+                                "transition-all, duration-200 shadow-lg hover:shadow-xl"
+                            )}
                         >
                             <FontAwesomeIcon icon={faRightToBracket} size="lg" className="mr-2" />
                             <span>Login</span>
                         </button>
+
                     </div>
                 ) : (
                     <div className="relative" ref={profileDropdownRef}>
