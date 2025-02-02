@@ -594,11 +594,11 @@ const Order: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const cryptoAmount = formatCryptoAmount();
 
     let backgroundColor =
-        'Created' in orderState ? "bg-blue-900 bg-opacity-30"
-            : 'Locked' in orderState ? "bg-yellow-800 bg-opacity-30"
-                : 'Completed' in orderState ? "bg-green-800 bg-opacity-30"
-                    : 'Cancelled' in orderState ? "bg-red-800 bg-opacity-30"
-                        : "bg-gray-800 bg-opacity-20";
+        'Created' in orderState ? "bg-blue-800 bg-opacity-50"
+            : 'Locked' in orderState ? "bg-yellow-800 bg-opacity-50"
+                : 'Completed' in orderState ? "bg-green-800 bg-opacity-50"
+                    : 'Cancelled' in orderState ? "bg-red-800 bg-opacity-50"
+                        : "bg-gray-800 bg-opacity-50";
 
     let borderColor =
         'Created' in orderState ? "border-blue-600"

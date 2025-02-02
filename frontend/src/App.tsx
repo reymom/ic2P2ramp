@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
@@ -20,6 +20,10 @@ import Footer from "./components/ui/Footer";
 
 function App() {
     const { user } = useUser();
+    const location = useLocation();
+
+    const authRoutes = ["/", "/register", "/confirm-email", "/forgot-password", "/reset-password"];
+    const isAuthPage = authRoutes.includes(location.pathname);
 
     useEffect(() => {
         if (user) {
@@ -50,24 +54,33 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col">
+        <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
             <Menu />
             <div className="flex-grow py-8">
-                <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto">
-                    <Routes>
-                        <Route path="/" element={<ConnectAddress />} />
-                        <Route path="/register" element={<RegisterUser />} />
-                        <Route path="/confirm-email" element={<ConfirmEmail />} />
-                        <Route path="/forgot-password" element={<ForgotPassword />} />
-                        <Route path="/reset-password" element={<ResetPassword />} />
-                        <Route
-                            path="/create"
-                            element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
-                        />
-                        <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
-                        <Route path="/profile" element={<UserProfile />} />
-                    </Routes>
-                </div>
+                {isAuthPage ? (
+                    // Centered box for login pages
+                    <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto">
+                        <Routes>
+                            <Route path="/" element={<ConnectAddress />} />
+                            <Route path="/register" element={<RegisterUser />} />
+                            <Route path="/confirm-email" element={<ConfirmEmail />} />
+                            <Route path="/forgot-password" element={<ForgotPassword />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
+                        </Routes>
+                    </div>
+                ) : (
+                    // Full-width for DEX-style pages
+                    <div className="container mx-auto max-w-7xl px-6">
+                        <Routes>
+                            <Route
+                                path="/create"
+                                element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
+                            />
+                            <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
+                            <Route path="/profile" element={<UserProfile />} />
+                        </Routes>
+                    </div>
+                )}
             </div>
             <Footer />
         </div>
