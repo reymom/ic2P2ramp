@@ -17,20 +17,24 @@ import {
     faMoon,
     faCog
 } from '@fortawesome/free-solid-svg-icons';
-import icpLogo from "../assets/blockchains/icp-logo.svg";
-import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
-import logo from '../assets/icR-logo.png';
+import icpLogo from "@/assets/blockchains/icp-logo.svg";
+import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
+import logo from '@/assets/icR-logo.png';
 
 import { useUser } from './user/UserContext';
-import { userTypeToString } from '../model/utils';
-import { truncate, formatTimeLeft } from '../model/helper';
-import { sessionMarginMilisec } from '../model/session';
+import { userTypeToString } from '@/model/utils';
+import { truncate, formatTimeLeft } from '@/utils/helper';
+import { sessionMarginMilisec } from '@/model/session';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [isDarkMode, setIsDarkMode] = useState(
+        document.documentElement.classList.contains("dark")
+    );
+
 
     const { isConnected } = useAccount();
     const { user, icpBalances, loginInternetIdentity, logout } = useUser();
@@ -50,6 +54,11 @@ const Menu: React.FC = () => {
 
     const toggleMenu = () => {
         setIsMenuOpen(!isMenuOpen);
+    };
+
+    const toggleDarkMode = () => {
+        document.documentElement.classList.toggle("dark");
+        setIsDarkMode((prev) => !prev);
     };
 
     const toggleProfileDropdown = () => {
@@ -185,14 +194,14 @@ const Menu: React.FC = () => {
             }
 
             {!isMobile &&
-                <div className="flex justify-between w-full">
+                <div className="flex items-center justify-between w-full">
                     <Link to="/" className="flex items-center w-72 text-center align-middle">
                         <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
                         <h1 className="text-4xl tracking-wider -mt-2 transition-colors duration-300 app-title">
                             icRamp
                         </h1>
                     </Link>
-                    <div className="absolute inset-0 flex justify-center items-center text-gray-800">
+                    <div className="flex-grow flex justify-center items-center">
                         <div className="flex items-center space-x-6">
                             {renderLinks()}
                         </div>
@@ -201,19 +210,16 @@ const Menu: React.FC = () => {
             }
 
             <div className="w-72 flex justify-end items-center relative space-x-2">
-                <div className="relative space-x-2">
+                <div className="flex space-x-2">
                     {/* Theme Toggle */}
                     <button
-                        onClick={() => document.documentElement.classList.toggle('dark')}
+                        onClick={toggleDarkMode}
                         className="px-3 py-2 rounded-lg transition-colors duration-200
                             bg-gray-100 hover:bg-gray-200 
                             dark:bg-gray-800 dark:hover:bg-gray-700 
                             text-gray-600 dark:text-gray-200"
                     >
-                        <FontAwesomeIcon
-                            icon={document.documentElement.classList.contains('dark') ? faSun : faMoon}
-                            size="lg"
-                        />
+                        <FontAwesomeIcon icon={isDarkMode ? faSun : faMoon} size="lg" />
                     </button>
                     {/* Settings */}
                     <button
@@ -230,7 +236,7 @@ const Menu: React.FC = () => {
                         <button
                             onClick={() => navigate('/')}
                             className={clsx(
-                                "px-6 py-2 rounded-lg font-medium text-white text-xl",
+                                "flex items-center gap-2 px-6 py-2 rounded-lg font-medium text-white text-xl",
                                 "bg-gradient-to-r from-indigo-700 to-blue-600",
                                 "hover:from-blue-700 hover:to-indigo-600",
                                 "transition-all, duration-200 shadow-lg hover:shadow-xl"
@@ -239,7 +245,6 @@ const Menu: React.FC = () => {
                             <FontAwesomeIcon icon={faRightToBracket} size="lg" className="mr-2" />
                             <span>Login</span>
                         </button>
-
                     </div>
                 ) : (
                     <div className="relative" ref={profileDropdownRef}>
