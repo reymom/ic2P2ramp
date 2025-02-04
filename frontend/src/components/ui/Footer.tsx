@@ -2,11 +2,9 @@ import clsx from 'clsx';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTelegram, faTwitter, faGithub, } from "@fortawesome/free-brands-svg-icons";
 import { faEnvelope } from "@fortawesome/free-solid-svg-icons";
-import notionIcon from "../../assets/notion-icon.png";
-// import poweredByICP from "../../assets/powered-by-icp.svg";
-// import poweredByICPDark from "../../assets/powered-by-icp-dark-mode.svg";
-import PoweredByICP from '../ui/PoweredByICP';
-import icpLogo from "../../assets/blockchains/icp-logo.svg";
+import notionIcon from "@/assets/notion-icon.png";
+import PoweredByICP from '@/components/ui/PoweredByICP';
+import icpLogo from "@/assets/blockchains/icp-logo.svg";
 
 const Footer = () => {
     return (
