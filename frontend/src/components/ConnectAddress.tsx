@@ -4,18 +4,18 @@ import { ethers } from 'ethers';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 
-import { backend, createActor } from '../model/backendProxy';
-import { AuthenticationData, LoginAddress } from '../declarations/backend/backend.did';
-import { validatePassword } from '../model/helper';
-import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '../model/error';
-import { handleWeb3Error } from '../model/evm';
+import { backend, createActor } from '@/model/backendProxy';
+import { AuthenticationData, LoginAddress } from '@/declarations/backend/backend.did';
+import { validatePassword } from '@/utils/helper';
+import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/error';
+import { handleWeb3Error } from '@/model/evm';
 import { useUser } from './user/UserContext';
 import DynamicDots from './ui/DynamicDots';
 
 // Icons
-import icpLogo from "../assets/blockchains/icp-logo.svg";
-import ethereumLogo from "../assets/blockchains/ethereum-logo.png";
-import bitcoinLogo from "../assets/blockchains/bitcoin-logo.svg";
+import icpLogo from "@/assets/blockchains/icp-logo.svg";
+import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
+import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 

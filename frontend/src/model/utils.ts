@@ -3,7 +3,7 @@ import {
   PaymentProvider,
   PaymentProviderType,
   UserType,
-} from '../declarations/backend/backend.did';
+} from '@/declarations/backend/backend.did';
 import { UserTypes, PaymentProviderTypes, BlockchainTypes } from './types';
 
 // Blockchain

@@ -1,9 +1,9 @@
-import { TokenOption } from '../model/types';
+import { TokenOption } from '@/model/types';
 
-import icpLogo from '../assets/blockchains/icp-logo.svg';
-import openChatLogo from '../assets/blockchains/openchat-logo.svg';
-import ckBTCLogo from '../assets/blockchains/ckBTC-logo.svg';
-import origynLogo from '../assets/blockchains/origyn-logo.png';
+import icpLogo from '@/assets/blockchains/icp-logo.svg';
+import openChatLogo from '@/assets/blockchains/openchat-logo.svg';
+import ckBTCLogo from '@/assets/blockchains/ckBTC-logo.svg';
+import origynLogo from '@/assets/blockchains/origyn-logo.png';
 
 if (!process.env.CANISTER_ID_BACKEND_FUSION) {
   console.error('Backend canister id not defined');

@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
-import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
+import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 
 interface CurrencySelectProps {
     selected: string;

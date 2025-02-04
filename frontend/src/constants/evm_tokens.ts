@@ -1,13 +1,13 @@
-import { TokenOption } from '../model/types';
+import { TokenOption } from '@/model/types';
 
-import ethereumLogo from '../assets/blockchains/ethereum-logo.png';
-import mantleLogo from '../assets/blockchains/mantle.png';
-import usdcLogo from '../assets/blockchains/usdc-logo.png';
-import usdtLogo from '../assets/blockchains/tether-usdt-seeklogo.svg';
-import eurcLogo from '../assets/blockchains/eurc-logo.png';
-import shibaLogo from '../assets/blockchains/shiba-token.png';
-import opLogo from '../assets/blockchains/optimism-logo.svg';
-import daiLogo from '../assets/blockchains/dai-logo.png';
+import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
+import mantleLogo from '@/assets/blockchains/mantle.png';
+import usdcLogo from '@/assets/blockchains/usdc-logo.png';
+import usdtLogo from '@/assets/blockchains/tether-usdt-seeklogo.svg';
+import eurcLogo from '@/assets/blockchains/eurc-logo.png';
+import shibaLogo from '@/assets/blockchains/shiba-token.png';
+import opLogo from '@/assets/blockchains/optimism-logo.svg';
+import daiLogo from '@/assets/blockchains/dai-logo.png';
 
 export const defaultCommitEvmGas = BigInt(80000);
 export const defaultReleaseEvmGas = BigInt(100000);

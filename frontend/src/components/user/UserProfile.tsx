@@ -3,22 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
-import { backend } from '../../model/backendProxy';
-import { PaymentProvider, TransactionAddress } from '../../declarations/backend/backend.did';
-import { userTypeToString } from '../../model/utils';
-import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '../../model/types';
-import { truncate } from '../../model/helper';
-import { isSessionExpired } from '../../model/session';
-import { rampErrorToString } from '../../model/error';
+import { backend } from '@/model/backendProxy';
+import { PaymentProvider, TransactionAddress } from '@/declarations/backend/backend.did';
+import { userTypeToString } from '@/model/utils';
+import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '@/model/types';
+import { truncate } from '@/utils/helper';
+import { isSessionExpired } from '@/model/session';
+import { rampErrorToString } from '@/model/error';
 import { useUser } from './UserContext';
-import CurrencySelect from '../ui/CurrencySelect';
-import { CURRENCY_ICON_MAP } from '../../constants/currencyIconsMap';
+import CurrencySelect from '@/components/ui/CurrencySelect';
+import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRemove, faSpinner, faSync, faCopy, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
-import icpLogo from "../../assets/blockchains/icp-logo.svg";
-import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
-import bitcoinLogo from "../../assets/blockchains/bitcoin-logo.svg";
+import icpLogo from "@/assets/blockchains/icp-logo.svg";
+import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
+import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
 import BalancesDashboard from './BalanceDashboard';
 
 const UserProfile: React.FC = () => {

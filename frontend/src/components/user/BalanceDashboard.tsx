@@ -1,7 +1,7 @@
 import { Balance, useUser } from "./UserContext";
-import icpLogo from "../../assets/blockchains/icp-logo.svg";
-import ethereumLogo from "../../assets/blockchains/ethereum-logo.png";
-import bitcoinLogo from '../../assets/blockchains/bitcoin-logo.svg';
+import icpLogo from "@/assets/blockchains/icp-logo.svg";
+import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 const BalancesDashboard: React.FC = () => {
     const { user, bitcoinAddress, icpBalances, evmBalances, bitcoinBalance, refetchUser } = useUser();

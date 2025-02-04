@@ -1,5 +1,5 @@
-import { bitcoin_backend } from '../declarations/bitcoin_backend';
-import { RuneMetadata } from '../declarations/bitcoin_backend/bitcoin_backend.did';
+import { bitcoin_backend } from '@/declarations/bitcoin_backend';
+import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
 
 const isTaprootAddress = (address: string): boolean => {
   return address.startsWith('bc1p');

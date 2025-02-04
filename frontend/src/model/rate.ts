@@ -1,5 +1,5 @@
-import { backend } from '../model/backendProxy';
-import { Crypto } from '../declarations/backend/backend.did';
+import { backend } from '@/model/backendProxy';
+import { Crypto } from '@/declarations/backend/backend.did';
 import { rampErrorToString } from './error';
 
 export const fetchOrderPrice = async (

@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { backend } from '../../model/backendProxy';
-import { PaymentProvider } from '../../declarations/backend/backend.did';
-import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '../../model/types';
-import { stringToUserType } from '../../model/utils';
-import { rampErrorToString } from '../../model/error';
-import { truncate } from '../../model/helper';
-import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '../../model/emailConfirmation';
+import { backend } from '@/model/backendProxy';
+import { PaymentProvider } from '@/declarations/backend/backend.did';
+import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
+import { stringToUserType } from '@/model/utils';
+import { rampErrorToString } from '@/model/error';
+import { truncate } from '@/utils/helper';
+import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '@/model/emailConfirmation';
 import { useUser } from './UserContext';
-import DynamicDots from '../ui/DynamicDots';
+import DynamicDots from '@/components/ui/DynamicDots';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");

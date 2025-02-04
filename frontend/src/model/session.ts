@@ -1,4 +1,4 @@
-import { User } from '../declarations/backend/backend.did';
+import { User } from '@/declarations/backend/backend.did';
 import { UserTypes } from './types';
 import { userTypeToString } from './utils';
 

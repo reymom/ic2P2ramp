@@ -1,4 +1,4 @@
-import { RampError } from '../declarations/backend/backend.did';
+import { RampError } from '@/declarations/backend/backend.did';
 
 export const rampErrorToString = (error: RampError): string => {
   let errorMessage = 'An unknown error occurred';

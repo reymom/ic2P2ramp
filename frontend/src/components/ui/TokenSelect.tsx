@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
-import { TokenOption } from '../../model/types';
+import { TokenOption } from '@/model/types';
 
 interface TokenSelectProps {
     tokenOptions: TokenOption[];

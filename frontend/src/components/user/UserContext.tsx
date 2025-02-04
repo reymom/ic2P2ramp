@@ -7,11 +7,11 @@ import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
-import { config } from '../../wagmi';
-import { backend, createActor } from '../../model/backendProxy';
-import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '../../declarations/backend/backend.did';
-import { getEvmTokens } from '../../constants/evm_tokens';
-import { ICP_TOKENS } from '../../constants/icp_tokens';
+import { config } from '@/wagmi';
+import { backend, createActor } from '@/model/backendProxy';
+import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/backend/backend.did';
+import { getEvmTokens } from '@/constants/evm_tokens';
+import { ICP_TOKENS } from '@/constants/icp_tokens';
 import {
     saveUserSession,
     getUserSession,
@@ -21,13 +21,13 @@ import {
     getUserType,
     getPreferredCurrency,
     savePreferredCurrency
-} from '../../model/session';
-import { UserTypes } from '../../model/types';
-import { icpHost, iiUrl } from '../../model/icp';
-import { formatCryptoUnits } from '../../model/helper';
-import { getChains } from '../../wagmi';
-import { supportedRuneSymbols } from '../../constants/runes';
-import bitcoinLogo from '../../assets/blockchains/bitcoin-logo.svg';
+} from '@/model/session';
+import { UserTypes } from '@/model/types';
+import { icpHost, iiUrl } from '@/model/icp';
+import { formatCryptoUnits } from '@/utils/helper';
+import { getChains } from '@/wagmi';
+import { supportedRuneSymbols } from '@/constants/runes';
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 export interface Balance {
     raw: bigint;

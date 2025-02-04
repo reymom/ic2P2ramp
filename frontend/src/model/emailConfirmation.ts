@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   LoginAddress,
   PaymentProvider,
-} from '../declarations/backend/backend.did';
+} from '@/declarations/backend/backend.did';
 import { UserTypes } from './types';
 
 type TempUserData = {

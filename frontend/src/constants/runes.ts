@@ -1,7 +1,7 @@
-import dogRuneLogo from '../assets/runes/dog-rune-logo.webp';
-import puppetRuneLogo from '../assets/runes/puppet-rune-logo.png';
-import frogRuneLogo from '../assets/runes/frog-rune-logo.webp';
-import magicalBitcoinLogo from '../assets/runes/magical-bitcoin-logo.png';
+import dogRuneLogo from '@/assets/runes/dog-rune-logo.webp';
+import puppetRuneLogo from '@/assets/runes/puppet-rune-logo.png';
+import frogRuneLogo from '@/assets/runes/frog-rune-logo.webp';
+import magicalBitcoinLogo from '@/assets/runes/magical-bitcoin-logo.png';
 
 export const supportedRuneSymbols = [
   {

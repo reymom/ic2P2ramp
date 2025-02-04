@@ -1,8 +1,8 @@
-import ethereumLogo from '../assets/blockchains/ethereum-logo.png';
-import coinBaseLogo from '../assets/blockchains/coinbase-logo.svg';
-import mantleLogo from '../assets/blockchains/mantle.png';
-import optimismLogo from '../assets/blockchains/optimism-logo.svg';
-import arbitrumLogo from '../assets/blockchains/arbitrum-logo.svg';
+import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
+import coinBaseLogo from '@/assets/blockchains/coinbase-logo.svg';
+import mantleLogo from '@/assets/blockchains/mantle.png';
+import optimismLogo from '@/assets/blockchains/optimism-logo.svg';
+import arbitrumLogo from '@/assets/blockchains/arbitrum-logo.svg';
 
 export interface NetworkProps {
   id: number;

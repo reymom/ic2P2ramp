@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-import icpLogo from '../../assets/blockchains/icp-logo.svg';
-import ethereumLogo from '../../assets/blockchains/ethereum-logo.png';
-import bitcoinLogo from '../../assets/blockchains/bitcoin-logo.svg';
+import icpLogo from '@/assets/blockchains/icp-logo.svg';
+import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 

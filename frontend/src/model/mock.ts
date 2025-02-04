@@ -1,4 +1,4 @@
-import { OrderState } from '../declarations/backend/backend.did';
+import { OrderState } from '@/declarations/backend/backend.did';
 
 // Function to convert string numbers in JSON to bigint where needed
 export const parseBigIntFields = (order: any): OrderState => {
