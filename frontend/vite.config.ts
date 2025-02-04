@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
       outDir: path.resolve(__dirname, 'dist'),
       emptyOutDir: true,
     },
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "src"),
+      },
+    },
     optimizeDeps: {
       esbuildOptions: {
         define: {
