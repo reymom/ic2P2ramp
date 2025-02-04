@@ -3,7 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
-import { OrderFilter } from './declarations/backend/backend.did';
+import { OrderFilter } from '@/declarations/backend/backend.did';
 import { userTypeToString } from './model/utils';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useUser } from './components/user/UserContext';
@@ -31,14 +31,14 @@ function App() {
         }
     }, [user]);
 
-    useEffect(() => {
-        if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
+    // useEffect(() => {
+    //     if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
+    //         const tg = window.Telegram.WebApp;
 
-            tg.ready();
-            tg.expand();
-        }
-    }, []);
+    //         tg.ready();
+    //         tg.expand();
+    //     }
+    // }, []);
 
     const getInitialOrderFilter = (): OrderFilter | null => {
         if (!user) return { ByState: { Created: null } };
@@ -58,7 +58,7 @@ function App() {
             <Menu />
             <div className="flex-grow py-8">
                 {isAuthPage ? (
-                    // Centered box for login pages
+                    // Centered box
                     <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto">
                         <Routes>
                             <Route path="/" element={<ConnectAddress />} />
@@ -66,18 +66,18 @@ function App() {
                             <Route path="/confirm-email" element={<ConfirmEmail />} />
                             <Route path="/forgot-password" element={<ForgotPassword />} />
                             <Route path="/reset-password" element={<ResetPassword />} />
-                        </Routes>
-                    </div>
-                ) : (
-                    // Full-width for DEX-style pages
-                    <div className="container mx-auto max-w-7xl px-6">
-                        <Routes>
+                            <Route path="/profile" element={<UserProfile />} />
                             <Route
                                 path="/create"
                                 element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
                             />
+                        </Routes>
+                    </div>
+                ) : (
+                    // Full-width for DEX-style pages
+                    <div className="w-full px-12">
+                        <Routes>
                             <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
-                            <Route path="/profile" element={<UserProfile />} />
                         </Routes>
                     </div>
                 )}
