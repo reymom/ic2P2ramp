@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Principal } from '@dfinity/principal';
 
-import { TransactionAddress, OrderFilter, Blockchain, OrderStateFilter } from '../../declarations/backend/backend.did';
-import { NetworkIds } from '../../constants/networks';
-import { ICP_TOKENS } from '../../constants/icp_tokens';
-import { BlockchainTypes, OrderFilterTypes } from '../../model/types';
-import { useUser } from '../user/UserContext';
-import { truncate } from '../../model/helper';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FilterX } from "lucide-react";
+
+import { TransactionAddress, OrderFilter, Blockchain, OrderStateFilter } from '@/declarations/backend/backend.did';
+import { BlockchainTypes, OrderFilterTypes } from '@/model/types';
+import { useUser } from '@/components/user/UserContext';
+import { truncate } from '@/utils/helper';
+import icpLogo from '@/assets/blockchains/icp-logo.svg';
+import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import { FilterType } from 'viem';
 
 interface OrderFiltersProps {
     setFilter: (filter: OrderFilter | null) => void;
@@ -15,7 +19,6 @@ interface OrderFiltersProps {
 
 const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter }) => {
     const [filterType, setFilterType] = useState<OrderFilterTypes | null>(null);
-
     const [selectedState, setSelectedState] = useState<OrderStateFilter | null>(null);
     const [selectedAddress, setSelectedAddress] = useState<TransactionAddress | null>(null);
     const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain | null>(null);
@@ -87,17 +90,15 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
         }
     }
 
-    const handleFilterTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value as OrderFilterTypes | "all";
-
-        if (value !== "ByBlockchain") {
+    const handleFilterTypeChange = (value: string) => {
+        if (!value.startsWith("ByBlockchain:")) {
             setBlockchainType(null);
             setSelectedBlockchain(null);
-        }
+        };
+        if (!value.startsWith('ByState')) setSelectedState(null);
         if (!(value in Array(["ByOfframperAddress", "LockedByOnramper"]))) {
             setSelectedAddress(null);
         }
-        if (!value.startsWith('ByState')) setSelectedState(null);
 
         if (value === "all") {
             setFilterType(null);
@@ -106,122 +107,145 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
             const stateValue = value.split(':')[1];
             setFilterType('ByState');
             setSelectedState({ [stateValue]: null } as OrderStateFilter);
+        } else if (value.startsWith("ByBlockchain:")) {
+            const chain = value.split(":")[1] as BlockchainTypes;
+            setFilterType("ByBlockchain");
+            setBlockchainType(chain);
+            setSelectedBlockchain({ [chain]: null } as Blockchain);
+            return;
         } else {
-            setFilterType(value);
+            setFilterType(value as OrderFilterTypes);
+
+            if (value === "ByOfframperAddress" || value === "LockedByOnramper") {
+                setSelectedAddress(user?.addresses.length ? user.addresses[0] : null);
+            }
         }
     };
 
-    const handleAddressChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const address = user?.addresses.find(addr => addr.address === e.target.value);
-        setSelectedAddress(address || null);
+    const isSameState = (state1: OrderStateFilter | null, state2: OrderStateFilter | null) => {
+        if (!state1 || !state2) return false;
+        return JSON.stringify(state1) === JSON.stringify(state2);
     };
-
-    const handleChainIdChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        if (e.target.value == "") {
-            setSelectedBlockchain(null);
-            return;
-        };
-        const chainId = parseInt(e.target.value, 10);
-        setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
-    }
-
-    const handleCanisterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        if (e.target.value == "") {
-            setSelectedBlockchain(null);
-            return;
-        }
-        const ledgerCanister = Principal.fromText(e.target.value);
-        setSelectedBlockchain({ ICP: { ledger_principal: ledgerCanister } })
-    }
 
     return (
-        <div className="flex gap-4 items-center flex-grow">
-            <select
-                value={filterType ? `${filterType}${selectedState ? `:${Object.keys(selectedState)[0]}` : ''}` : 'all'}
-                onChange={handleFilterTypeChange}
-                className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
-            >
-                <option value='all'>All</option>
-                <option value='ByState:Created'>Created</option>
-                <option value='ByState:Locked'>Locked</option>
-                <option value='ByState:Cancelled'>Cancelled</option>
-                <option value='ByState:Completed'>Completed</option>
-
-                {userType == "Offramper" ? (
-                    <option value="ByOfframperId">By Offramper (me)</option>
-                ) : userType == "Onramper" ? (
-                    <option value="ByOnramperId">By Onramper (me)</option>
-                ) : null}
-
-                <option value="ByBlockchain">By Blockchain</option>
-                {userType == "Offramper" ? (
-                    <option value="ByOfframperAddress">By Offramper Address</option>
-                ) : userType == "Onramper" ? (
-                    <option value="LockedByOnramper">Locked by Onramper</option>
-                ) : null}
-
-            </select>
-
-            {(filterType === 'ByOfframperAddress' || filterType === 'LockedByOnramper') && (
-                <select
-                    value={selectedAddress?.address || ''}
-                    onChange={handleAddressChange}
-                    className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
+        <div className="flex items-center justify-between w-full">
+            {/* Blockchain Filters */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => handleFilterTypeChange("ByBlockchain:EVM")}
+                    className={`w-12 h-10 rounded-md flex items-center justify-center
+                        ${blockchainType === "EVM" ? "bg-blue-700" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-600"}`}
                 >
-                    <option value=''>Select Address</option>
-                    {user?.addresses.map((addr, index) => (
-                        <option key={index} value={addr.address}>
-                            {truncate(addr.address, 10, 10)} ({Object.keys(addr.address_type)[0]})
-                        </option>
-                    ))}
-                </select>
-            )}
+                    <img src={ethereumLogo} alt="Ethereum" className="w-8 h-8" />
+                </button>
+                <button
+                    onClick={() => handleFilterTypeChange("ByBlockchain:ICP")}
+                    className={`w-12 h-10 rounded-md border flex items-center justify-center
+                        ${blockchainType === "ICP" ? "bg-blue-700" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                >
+                    <img src={icpLogo} alt="ICP" className="w-8 h-8" />
+                </button>
+                <button
+                    onClick={() => handleFilterTypeChange("ByBlockchain:Bitcoin")}
+                    className={`w-12 h-10 rounded-md border flex items-center justify-center
+                        ${blockchainType === "Bitcoin" ? "bg-blue-700" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                >
+                    <img src={bitcoinLogo} alt="Bitcoin" className="w-8 h-8" />
+                </button>
+            </div>
 
-            {filterType === 'ByBlockchain' && (
-                <select
-                    value={blockchainType || ""}
-                    onChange={(e) => setBlockchainType(e.target.value !== "" ? e.target.value as BlockchainTypes : null)}
-                    className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
+            {/* Middle Filters */}
+            <div className="flex gap-2 justify-center flex-grow">
+                <button
+                    onClick={() => handleFilterTypeChange("ByState:Created")}
+                    className={`w-[120px] h-10 text-center rounded-md text-sm 
+                        ${filterType === "ByState" && isSameState(selectedState, { "Created": null }) ?
+                            "bg-blue-500 dark:bg-blue-600 text-black dark:text-white" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
                 >
-                    <option value="">Select Blockchain</option>
-                    <option value="EVM">EVM</option>
-                    <option value="ICP">ICP</option>
-                    <option value="Solana">Solana</option>
-                </select>
-            )}
+                    Created
+                </button>
+                <button
+                    onClick={() => handleFilterTypeChange("ByState:Locked")}
+                    className={`w-[120px] h-10 text-center rounded-md text-sm 
+                        ${filterType === "ByState" && isSameState(selectedState, { "Locked": null }) ?
+                            "bg-blue-500 dark:bg-blue-600 text-black dark:text-white" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                >
+                    Locked
+                </button>
+                {/* Offramper/Onramper Filters */}
+                <button
+                    onClick={() => handleFilterTypeChange(userType === "Offramper" ? "ByOfframperId" : "ByOnramperId")}
+                    className={`w-[120px] h-10 text-center rounded-md text-sm 
+                        ${filterType === (userType === "Offramper" ? "ByOfframperId" : "ByOnramperId") ?
+                            "bg-blue-500 dark:bg-blue-600 text-black dark:text-white" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                >
+                    My Orders
+                </button>
 
-            {blockchainType === 'EVM' && (
-                <select
-                    value={(selectedBlockchain && 'EVM' in selectedBlockchain) ? Number(selectedBlockchain.EVM.chain_id) : ''}
-                    onChange={handleChainIdChange}
-                    className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
-                >
-                    <option value="">Select Chain</option>
-                    {Object.keys(NetworkIds).map(networkId => {
-                        const network = NetworkIds[networkId as keyof typeof NetworkIds];
-                        return (
-                            <option key={networkId} value={network!.id}>
-                                {network!.name}
-                            </option>
-                        )
-                    })}
-                </select>
-            )}
-            {blockchainType === 'ICP' && (
-                <select
-                    value={(selectedBlockchain && 'ICP' in selectedBlockchain) ? selectedBlockchain.ICP.ledger_principal.toString() : ''}
-                    onChange={handleCanisterChange}
-                    className="w-full px-3 py-2 border-gray-500 bg-gray-600 border rounded focus:outline-none focus:ring-2 focus:ring-blue-900"
-                >
-                    <option value="">Select ICP Token</option>
-                    {ICP_TOKENS.map(token => (
-                        <option key={token.address} value={token.address}>
-                            {token.name}
-                        </option>
-                    ))}
-                </select>
-            )}
-        </div>
+                <Select
+                    value={
+                        filterType === "ByState" && selectedState &&
+                            (isSameState(selectedState, { Completed: null }) || isSameState(selectedState, { Cancelled: null }))
+                            ? `ByState:${Object.keys(selectedState)[0]}`
+                            : ""
+                    }
+                    onValueChange={handleFilterTypeChange}>
+                    <SelectTrigger className={`w-[120px] h-10 rounded-md transition  
+                        ${filterType === "ByState" && selectedState &&
+                            (isSameState(selectedState, { Completed: null }) || isSameState(selectedState, { Cancelled: null }))
+                            ? "bg-blue-500 dark:bg-blue-600 text-black dark:text-white"
+                            : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark-hover-bg-gray-600"}
+                    `}>
+                        <SelectValue placeholder="More Filters" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {user && <SelectItem value="ByOfframperAddress" className="cursor-pointer">By Offramper Address</SelectItem>}
+                        {user && <SelectItem value="LockedByOnramper" className="cursor-pointer">Locked by Onramper</SelectItem>}
+                        <SelectItem value="ByState:Completed" className="cursor-pointer">Completed</SelectItem>
+                        <SelectItem value="ByState:Cancelled" className="cursor-pointer">Cancelled</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {user && (filterType === 'ByOfframperAddress' || filterType === 'LockedByOnramper') && (
+                    <Select
+                        value={selectedAddress?.address || ''}
+                        onValueChange={(value) => {
+                            const address = user?.addresses.find(addr => addr.address === value);
+                            setSelectedAddress(address || null);
+                        }}
+                    >
+                        <SelectTrigger className="w-full md:w-[180px]">
+                            <SelectValue placeholder="Select address" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Select Address</SelectItem>
+                            {user?.addresses.map((addr, index) => (
+                                <SelectItem key={index} value={addr.address}>
+                                    {truncate(addr.address, 10, 10)} ({Object.keys(addr.address_type)[0]})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+
+                {(filterType || selectedBlockchain) && (
+                    <button
+                        onClick={() => {
+                            setFilterType(null);
+                            setSelectedBlockchain(null);
+                            setBlockchainType(null);
+                            setSelectedState(null);
+                            setSelectedAddress(null);
+                            setFilter(null);
+                        }}
+                        className="inline-flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                        <FilterX className="h-4 w-4" />
+                        Clear
+                    </button>
+                )}
+            </div>
+        </div >
     );
 }
 
