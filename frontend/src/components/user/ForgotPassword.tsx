@@ -50,7 +50,7 @@ const ForgotPassword: React.FC = () => {
     };
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto space-y-4 text-white">
+        <div className="bg-gray-200 dark:bg-gray-700 rounded-xl p-8 max-w-lg mx-auto space-y-4 text-black dark:text-white">
             <div className="text-center mb-8">
                 <h2 className="text-2xl font-semibold">Forgot Password</h2>
             </div>
@@ -63,7 +63,7 @@ const ForgotPassword: React.FC = () => {
                     className="px-4 py-2 bg-gray-600 border rounded w-full"
                     required
                 />
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded w-full" disabled={isLoading}>
+                <button type="submit" className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-800 rounded w-full" disabled={isLoading}>
                     {isLoading ? 'Sending...' : 'Send Password Reset Link'}
                 </button>
             </form>

@@ -516,7 +516,7 @@ const CreateOrder: React.FC = () => {
     }
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative text-white">
+        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative text-black dark:text-white">
             {isLoading && (
                 <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
                     <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
@@ -575,7 +575,7 @@ const CreateOrder: React.FC = () => {
                         <CurrencySelect
                             selected={currency}
                             onChange={setCurrency}
-                            className="text-white border-gray-500"
+                            className="text-black dark:text-white border-gray-500"
                             buttonClassName="bg-gray-600 border-gray-500 rounded-r-lg"
                             dropdownClassName="bg-gray-600 border-gray-500 hover:bg-gray-700"
                         />
@@ -584,7 +584,7 @@ const CreateOrder: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center mb-4 relative">
-                    <label className="text-white w-24">Crypto:</label>
+                    <label className="text-black dark:text-white w-24">Crypto:</label>
                     <input
                         type="number"
                         value={cryptoAmount}
@@ -592,7 +592,7 @@ const CreateOrder: React.FC = () => {
                         className={
                             `flex-grow py-2 px-3 border ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-500"
                             } bg-gray-600 outline-none rounded-md focus:ring ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900"
-                            } text-white`
+                            } text-black dark:text-white`
                         }
                         required
                         style={{
@@ -607,7 +607,7 @@ const CreateOrder: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-white w-24 flex-none">Blockchain:</label>
+                    <label className="text-black dark:text-white w-24 flex-none">Blockchain:</label>
                     <BlockchainSelect
                         selectedBlockchain={blockchainType}
                         onChange={handleBlockchainChange}
@@ -618,7 +618,7 @@ const CreateOrder: React.FC = () => {
 
                 {blockchainType &&
                     <div className="flex justify-between items-center mb-4">
-                        <label className="text-white w-24 flex-none">Token:</label>
+                        <label className="text-black dark:text-white w-24 flex-none">Token:</label>
                         <TokenSelect
                             tokenOptions={tokenOptions}
                             selectedToken={selectedToken}
@@ -632,7 +632,7 @@ const CreateOrder: React.FC = () => {
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-white">Estimating Prices...</div>
+                        <div className="text-sm font-medium text-black dark:text-white">Estimating Prices...</div>
                     </div>
                 )}
 
@@ -647,7 +647,7 @@ const CreateOrder: React.FC = () => {
                 <hr className="border-t border-gray-500 w-full my-4" />
 
                 <div className="my-4 mx-auto">
-                    <label className="block text-white mb-2">Payment Providers:</label>
+                    <label className="block text-black dark:text-white mb-2">Payment Providers:</label>
                     {user?.payment_providers.map((provider, index) => {
                         return (
                             <div key={index} className="block mb-2">
@@ -658,7 +658,7 @@ const CreateOrder: React.FC = () => {
                                     checked={selectedProviders!.includes(provider)}
                                     onChange={() => handleProviderSelection(provider)}
                                 />
-                                <label htmlFor={`provider-${index}`} className="text-white">
+                                <label htmlFor={`provider-${index}`} className="text-black dark:text-white">
                                     {'PayPal' in provider &&
                                         <>
                                             <span className='font-semibold'>Paypal</span>
@@ -683,8 +683,8 @@ const CreateOrder: React.FC = () => {
                     <button
                         type="submit"
                         className={`px-4 py-2 rounded-md flex items-center justify-center space-x-2 ${validInputs ?
-                            'bg-green-800 text-white hover:bg-green-900 focus:outline-none'
-                            : 'bg-gray-500 text-white cursor-not-allowed'}`
+                            'bg-green-800 text-black dark:text-white hover:bg-green-900 focus:outline-none'
+                            : 'bg-gray-500 text-black dark:text-white cursor-not-allowed'}`
                         }
                         disabled={!validInputs}
                     >

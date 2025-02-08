@@ -132,18 +132,18 @@ const RegisterUser: React.FC = () => {
     };
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg space-y-4">
+        <div className="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl p-8 max-w-md mx-auto shadow-lg space-y-4">
             <div className="text-center mb-8">
-                <h2 className="text-white text-2xl font-semibold">Register</h2>
+                <h2 className="text-2xl font-semibold">Register</h2>
             </div>
 
             {/* User Type Selection */}
             <div className="flex items-center">
-                <label className="block text-white w-32">User Type:</label>
+                <label className="block w-32">User Type:</label>
                 <select
                     value={userType}
                     onChange={(e) => setUserType(e.target.value as 'Offramper' | 'Onramper')}
-                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                    className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                 >
                     <option value="Offramper">Offramper</option>
                     <option value="Onramper">Onramper</option>
@@ -153,8 +153,8 @@ const RegisterUser: React.FC = () => {
             {/* Login Address Display */}
             {loginMethod && (
                 <div className="flex items-center">
-                    <label className="block text-white w-32">Address:</label>
-                    <span className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 rounded-md truncate text-left text-white">
+                    <label className="block w-32">Address:</label>
+                    <span className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 rounded-md truncate text-left">
                         {(() => {
                             if ('EVM' in loginMethod) {
                                 return truncate(loginMethod.EVM.address, 12, 10);
@@ -176,11 +176,11 @@ const RegisterUser: React.FC = () => {
             <hr className="border-t border-gray-500 w-full" />
 
             <div className="flex items-center">
-                <label className="block text-white w-32">Provider:</label>
+                <label className="block w-32">Provider:</label>
                 <select
                     value={providerType}
                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
-                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                    className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                 >
                     {providerTypes.map(type => (
                         <option value={type}>{type}</option>
@@ -188,23 +188,23 @@ const RegisterUser: React.FC = () => {
                 </select>
             </div>
             <div className="flex items-center">
-                <label className="block text-white w-32">ID:</label>
+                <label className="block w-32">ID:</label>
                 <input
                     type="text"
                     value={providerId}
                     onChange={(e) => setProviderId(e.target.value)}
-                    className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                    className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                 />
             </div>
 
             {providerType === 'Revolut' && (
                 <>
                     <div className="flex items-center">
-                        <label className="block text-white w-32">Scheme:</label>
+                        <label className="block w-32">Scheme:</label>
                         <select
                             value={revolutScheme}
                             onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
-                            className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                            className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                         >
                             <option value="" selected>Select Scheme</option>
                             {revolutSchemes.map(type => (
@@ -214,12 +214,12 @@ const RegisterUser: React.FC = () => {
                     </div>
                     {userType === 'Offramper' && (
                         <div className="flex items-center">
-                            <label className="block text-white w-32">Name:</label>
+                            <label className="block w-32">Name:</label>
                             <input
                                 type="text"
                                 value={revolutName}
                                 onChange={(e) => setRevolutName(e.target.value)}
-                                className="flex-grow w-full px-4 py-2 border border-gray-500 bg-gray-600 outline-none rounded-md focus:ring focus:border-blue-900 text-white"
+                                className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                             />
                         </div>
                     )}
@@ -227,26 +227,26 @@ const RegisterUser: React.FC = () => {
             )}
             <button
                 onClick={handleAddProvider}
-                className="w-full px-4 py-2 bg-indigo-700 text-white font-semibold rounded-md hover:bg-indigo-800 focus:outline-none focus:ring focus:ring-indigo-500"
+                className="w-full px-4 py-2 bg-indigo-600 dark:bg-indigo-800 font-semibold rounded-md hover:bg-indigo-500 dark:hover:bg-indigo-900 focus:outline-none focus:ring focus:ring-indigo-500"
             >
                 Add Provider
             </button>
 
             {providers.length > 0 && (
                 <div className="mt-4">
-                    <ul className="list-none bg-gray-600 p-4 rounded-md text-white">
+                    <ul className="list-none p-4 rounded-md">
                         {providers.map((provider, index) => {
                             if ('PayPal' in provider) {
                                 return (
                                     <li key={index} className="py-1">
-                                        <span className="text-gray-300">(PayPal)</span>
+                                        <span className="text-gray-800 dark:text-white">(PayPal)</span>
                                         <div>{provider.PayPal.id}</div>
                                     </li>
                                 );
                             } else if ('Revolut' in provider) {
                                 return (
                                     <li key={index} className="py-1">
-                                        <span className="text-gray-300">(Revolut)</span>
+                                        <span className="text-gray-800 dark:text-white">(Revolut)</span>
                                         <div>{provider.Revolut.id}</div>
                                         <div>Scheme: {provider.Revolut.scheme}</div>
                                         {provider.Revolut.name && provider.Revolut.name.length > 0 && (
@@ -262,12 +262,12 @@ const RegisterUser: React.FC = () => {
                 </div>
             )}
 
-            <hr className="border-t border-gray-500 my-6" />
+            <hr className="border-t border-gray-400 dark:border-gray-500 my-6" />
 
             <div className="flex justify-between items-center">
                 <button
                     onClick={() => navigate("/view")}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring focus:ring-gray-300"
+                    className="px-4 py-2 bg-gray-400 rounded-md hover:bg-gray-500 focus:outline-none focus:ring focus:ring-gray-300"
                 >
                     Skip
                 </button>
@@ -279,7 +279,7 @@ const RegisterUser: React.FC = () => {
                     </div>
                 ) : null}
 
-                <button onClick={handleSubmit} className="px-4 py-2 bg-green-800 text-white rounded-md hover:bg-green-900 focus:outline-none focus:ring focus:ring-green-600">
+                <button onClick={handleSubmit} className="px-4 py-2 bg-green-500 dark:bg-green-700 hover:bg-green-400 dark:hover:bg-green-800 rounded-md focus:outline-none focus:ring focus:ring-green-600">
                     Register
                 </button>
             </div>

@@ -680,7 +680,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
                     <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
                     {loadingMessage && (
-                        <div className="text-white text-2xl font-bold mt-2">
+                        <div className="text-black dark:text-white text-2xl font-bold mt-2">
                             {loadingMessage}<DynamicDots isLoading />
                         </div>
                     )}
@@ -837,7 +837,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     )}
 
                     {remainingTime !== null && (
-                        <div className="text-sm text-gray-200 mt-2">
+                        <div className="text-smtext-gray-600 dark:text-gray-200 mt-2">
                             (Locked for {formatTimeLeft(remainingTime)})
                         </div>
                     )}
@@ -863,7 +863,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                     href={`${getNetworkExplorer()}/address/${orderState.Completed.onramper.address}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-white hover:text-gray-400 transition-colors duration-200"
+                                    className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
                                     title="View on Block Explorer"
                                 >
                                     {truncate(orderState.Completed.onramper.address, 8, 8)}
@@ -881,7 +881,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                     href={`${getNetworkExplorer()}/address/${orderState.Completed.offramper.address}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-white hover:text-gray-400 transition-colors duration-200"
+                                    className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
                                     title="View on Block Explorer"
                                 >
                                     {truncate(orderState.Completed.offramper.address, 8, 8)}

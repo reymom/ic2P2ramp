@@ -236,7 +236,7 @@ const Menu: React.FC = () => {
                         <button
                             onClick={() => navigate('/')}
                             className={clsx(
-                                "flex items-center gap-2 px-6 py-2 rounded-lg font-medium text-white text-xl",
+                                "flex items-center gap-2 px-6 py-2 rounded-lg font-medium text-gray-200 dark:text-white text-xl",
                                 "bg-gradient-to-r from-indigo-700 to-blue-600",
                                 "hover:from-blue-700 hover:to-indigo-600",
                                 "transition-all, duration-200 shadow-lg hover:shadow-xl"
@@ -289,7 +289,7 @@ const Menu: React.FC = () => {
                                                 onClick={handleInternetIdentityLogin}
                                             >
                                                 <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
-                                                <span className="text-white text-lg">Connect ICP</span>
+                                                <span className="text-black dark:text-white text-lg">Connect ICP</span>
                                             </div>
                                         )}
                                     </div>
@@ -302,7 +302,7 @@ const Menu: React.FC = () => {
                                                 <ConnectButton.Custom>
                                                     {({ openConnectModal }) => (
                                                         <button
-                                                            className="text-white w-full text-lg"
+                                                            className="text-black dark:text-white w-full text-lg"
                                                             onClick={openConnectModal}
                                                         >
                                                             Connect wallet

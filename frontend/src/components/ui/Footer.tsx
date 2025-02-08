@@ -18,7 +18,7 @@ const Footer = () => {
                 <span className="text-sm">
                     &copy; 2025 - icRamp
                 </span>
-                <div className="absolute inset-0 flex justify-center items-center text-blue-700 dark:text-blue-300">
+                <div className="flex justify-center items-center text-blue-700 dark:text-blue-300">
                     <PoweredByICP className="hidden sm:block h-4 text-gray-700 dark:text-gray-300" />
                     {/* Small screen: ICP logo */}
                     <img src={icpLogo} alt="ICP Logo" className="block sm:hidden h-4" />

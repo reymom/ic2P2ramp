@@ -214,7 +214,7 @@ const UserProfile: React.FC = () => {
 
     return (
         <>
-            <div className="flex justify-between mb-4 text-white px-8">
+            <div className="flex justify-between mb-4 text-black dark:text-white px-8">
                 <button
                     className={`px-4 py-2 rounded-md ${activeTab === 'profile' ? 'bg-gray-900' : 'bg-gray-600'}`}
                     onClick={() => setActiveTab('profile')}
@@ -228,9 +228,9 @@ const UserProfile: React.FC = () => {
                     Balances
                 </button>
             </div>
-            <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative text-white">
+            <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative text-black dark:text-white">
                 <button
-                    className={`absolute top-4 right-4 text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out ${isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-500'
+                    className={`absolute top-4 right-4text-gray-600 dark:text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out ${isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-500'
                         }`}
                     onClick={handleRefresh}
                     title="Refresh Profile"
@@ -249,30 +249,30 @@ const UserProfile: React.FC = () => {
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="font-medium text-gray-200">User Type:</span>
+                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">User Type:</span>
                                     <span className="font-semibold">{userTypeToString(user.user_type)}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span className="font-medium text-gray-200">Score:</span>
+                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">Score:</span>
                                     <span className={`font-semibold ${user.score > 0 ? "text-green-400" : "text-red-400"}`}>{user.score}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span className="font-medium text-gray-200">Preferred currency:</span>
+                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">Preferred currency:</span>
                                     <CurrencySelect
                                         selected={currency}
                                         onChange={setCurrency}
                                         className="w-auto text-sm border-gray-600"
-                                        buttonClassName="rounded-md bg-gray-800 hover:bg-gray-900 border-gray-600"
-                                        dropdownClassName="bg-gray-800 hover:bg-gray-900"
+                                        buttonClassName="rounded-md bg-gray-200 dark:bg-gray-800 hover:bg-gray-900 border-gray-600"
+                                        dropdownClassName="bg-gray-200 dark:bg-gray-800 hover:bg-gray-900"
                                     />
                                 </div>
 
                                 {/* Ramped Amounts */}
                                 {user.fiat_amounts.length > 0 && (
                                     <div className="flex justify-between items-start">
-                                        <span className="font-medium text-gray-200">Ramped Amount:</span>
+                                        <span className="font-mediumtext-gray-600 dark:text-gray-200">Ramped Amount:</span>
                                         <div className="space-y-2 flex flex-col items-end">
                                             {user.fiat_amounts.map(([currency, amount]) => (
                                                 <div key={currency} className="flex items-center space-x-2">
@@ -299,7 +299,7 @@ const UserProfile: React.FC = () => {
                                         const truncatedAddress = addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address;
                                         return (
                                             <li key={index} className={`py-1 ${isSameAddress(addr) ? "text-blue-400" : "text-gray-200"}`}>
-                                                <span className="flex-1 text-sm text-gray-200">({Object.keys(addr.address_type)[0]})</span>
+                                                <span className="flex-1 text-smtext-gray-600 dark:text-gray-200">({Object.keys(addr.address_type)[0]})</span>
                                                 <span className="ml-2">{truncatedAddress}</span>
                                                 <span className="relative">
                                                     {!isEmail && (
@@ -312,7 +312,7 @@ const UserProfile: React.FC = () => {
                                                         </button>
                                                     )}
                                                     {copiedIndex === index && (
-                                                        <span className="absolute left-8 -top-1.5 text-sm text-green-200 bg-gray-700 border border-gray-500 rounded-md px-2 py-1 shadow-md">
+                                                        <span className="absolute left-8 -top-1.5 text-sm text-green-200 bg-gray-200 dark:bg-gray-700 border border-gray-500 rounded-md px-2 py-1 shadow-md">
                                                             Copied!
                                                         </span>
                                                     )}
@@ -484,7 +484,7 @@ const UserProfile: React.FC = () => {
                                             if ('PayPal' in provider) {
                                                 return (
                                                     <li key={index} className="py-1 relative items-center">
-                                                        <span className="flex-1 text-sm text-gray-200">(PayPal)</span>
+                                                        <span className="flex-1 text-smtext-gray-600 dark:text-gray-200">(PayPal)</span>
                                                         <span className="ml-2">{provider.PayPal.id}</span>
                                                         <span className="absolute right-0 my-1">
                                                             <button
@@ -502,7 +502,7 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <li key={index} className="py-1 relative items-center">
                                                         <div className="flex-1">
-                                                            <span className="text-sm text-gray-200">(Revolut)</span>
+                                                            <span className="text-smtext-gray-600 dark:text-gray-200">(Revolut)</span>
                                                             <span className="ml-2">{provider.Revolut.id}</span>
                                                         </div>
                                                         <div>{provider.Revolut.scheme}</div>
@@ -527,7 +527,7 @@ const UserProfile: React.FC = () => {
                                         })}
                                 </ul>
                             </div>
-                            <div className="flex gap-2 text-white">
+                            <div className="flex gap-2 text-black dark:text-white">
                                 <select
                                     value={providerType}
                                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
@@ -573,7 +573,7 @@ const UserProfile: React.FC = () => {
                                 <button
                                     disabled={loadingAddProvider}
                                     onClick={handleAddProvider}
-                                    className={`px-4 py-2 bg-indigo-700 text-white font-medium rounded-md hover:bg-indigo-800 ${loadingAddProvider
+                                    className={`px-4 py-2 bg-indigo-700 text-black dark:text-white font-medium rounded-md hover:bg-indigo-800 ${loadingAddProvider
                                         ? 'cursor-not-allowed' : ''}`
                                     }>
                                     {addButtonContent(loadingAddProvider)}

@@ -319,22 +319,22 @@ const ConnectAddress: React.FC = () => {
     };
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto">
+        <div className="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl p-8 max-w-md mx-auto">
             <div className="text-center mb-6">
-                <h2 className="text-white text-2xl font-semibold">Sign in to icRamp</h2>
+                <h2 className="text-2xl font-semibold">Sign in to icRamp</h2>
             </div>
 
             {/* <div className="space-y-4"> */}
             {/* Internet Identity Login */}
             <div
-                className={`flex items-center justify-between px-3 py-3 bg-gray-600 rounded-md
-                        ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-500'}`}
+                className={`flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md 
+                        ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
                 onClick={() => !(loadingEmail || loadingEvm || loadingIcp) ? handleInternetIdentityLogin(false) : undefined}
             >
                 <div className="flex items-center space-x-3">
                     <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
 
-                    <span className="text-white text-lg">
+                    <span className="text-lg">
                         {loadingIcp ?
                             <span>Checking Internet Identity<DynamicDots isLoading={loadingIcp} /></span>
                             : <span>Sign in with Internet Identity</span>
@@ -349,8 +349,8 @@ const ConnectAddress: React.FC = () => {
             <ConnectButton.Custom>
                 {({ openConnectModal }) => (
                     <div
-                        className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-600 rounded-md 
-                                ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-500'}
+                        className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md 
+                                ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}
                             `}
                         onClick={() => {
                             if (!(loadingEmail || loadingEvm || loadingIcp)) {
@@ -366,7 +366,7 @@ const ConnectAddress: React.FC = () => {
                             className="flex items-center space-x-3"
                         >
                             <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 mr-2" />
-                            <span className="text-white text-lg w-full text-left">
+                            <span className="text-lg w-full text-left">
                                 {loadingEvm ?
                                     <span>Checking address<DynamicDots isLoading={loadingEvm} /></span>
                                     : <span>Login with Ethereum</span>
@@ -383,14 +383,14 @@ const ConnectAddress: React.FC = () => {
 
             {/* Bitcoin Login */}
             <div
-                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-600 rounded-md
-                        ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-500'}`}
+                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md
+                        ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
                 onClick={() => !(loadingEmail || loadingEvm || loadingIcp || loadingBitcoin) ? handleBitcoinLogin() : undefined}
             >
                 <div className="flex items-center space-x-3">
                     <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6 mr-2" />
 
-                    <span className="text-white text-lg">
+                    <span className="text-lg">
                         {loadingBitcoin ?
                             <span>Checking Unisat Address<DynamicDots isLoading={loadingBitcoin} /></span>
                             : <span>Sign in with Bitcoin</span>
@@ -401,7 +401,7 @@ const ConnectAddress: React.FC = () => {
             </div>
             {bitcoinMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{bitcoinMessage}</p>}
 
-            <hr className="border-t border-gray-500 w-full my-6" />
+            <hr className="border-t border-gray-400 dark:border-gray-500 w-full my-6" />
 
             {/* Email Login */}
             <form
@@ -411,25 +411,25 @@ const ConnectAddress: React.FC = () => {
                 }}
             >
                 <div className="space-y-4">
-                    <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
-                        <FontAwesomeIcon icon={faEnvelope} className="text-white h-5 w-5" />
+                    <div className="flex items-center space-x-3 px-3 py-2 bg-gray-300 dark:bg-gray-600 rounded-md">
+                        <FontAwesomeIcon icon={faEnvelope} className="h-5 w-5" />
                         <input
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="Enter your email"
-                            className="px-3 py-1 bg-transparent text-white border-none outline-none w-full"
+                            className="px-3 py-1 bg-transparent border-none outline-none w-full"
                             required
                         />
                     </div>
-                    <div className="flex items-center space-x-3 px-3 py-2 bg-gray-600 rounded-md">
-                        <FontAwesomeIcon icon={faKey} className="text-white h-5 w-5" />
+                    <div className="flex items-center space-x-3 px-3 py-2 bg-gray-300 dark:bg-gray-600 rounded-md">
+                        <FontAwesomeIcon icon={faKey} className="h-5 w-5" />
                         <input
                             type={isPasswordVisible ? 'text' : 'password'}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Enter your password"
-                            className="px-3 py-1 bg-transparent text-white border-none outline-none w-full"
+                            className="px-3 py-1 bg-transparent border-none outline-none w-full"
                             required
                         />
                         <button
@@ -437,12 +437,12 @@ const ConnectAddress: React.FC = () => {
                             className="px-2 py-1"
                             onClick={() => setIsPasswordVisible(!isPasswordVisible)}
                         >
-                            <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300 h-5 w-5" />
+                            <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-400 dark:text-gray-300 h-5 w-5" />
                         </button>
                         <style>
                             {`
                             input:-webkit-autofill {
-                                background-color: #4b5563 !important; /* bg-gray-600 */
+                                background-color: #4b5563 !important; /* bg-gray-200 dark:bg-gray-600 */
                                 -webkit-text-fill-color: white !important;
                                 transition: background-color 5000s ease-in-out 0s;
                             }
@@ -456,7 +456,7 @@ const ConnectAddress: React.FC = () => {
                     <button
                         type="submit"
                         disabled={loadingEmail || loadingEvm || loadingIcp}
-                        className={`w-full py-3 bg-amber-800 text-white rounded-md hover:bg-amber-900 focus:outline-none focus:ring focus:ring-amber-400 
+                        className={`w-full py-3 bg-blue-600 dark:bg-blue-700 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 focus:outline-none focus:ring focus:ring-amber-400 
                         ${loadingEmail || loadingEvm || loadingIcp
                                 ? 'cursor-not-allowed' : ''
                             }`}>
@@ -466,7 +466,7 @@ const ConnectAddress: React.FC = () => {
                                 <div className="absolute right-3 w-4 h-4 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
                             </div>
                         ) : (
-                            <div className="text-base">Login with Email</div>
+                            <div className="text-gray-200 dark:text-white">Login with Email</div>
                         )}
                     </button>
                 </div>

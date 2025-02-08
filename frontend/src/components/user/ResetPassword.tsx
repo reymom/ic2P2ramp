@@ -75,7 +75,7 @@ const ResetPassword: React.FC = () => {
     };
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto text-white">
+        <div className="bg-gray-200 dark:bg-gray-700 rounded-xl p-8 max-w-md mx-auto text-black dark:text-white">
             <div className="text-center mb-8">
                 <h2 className="text-2xl font-semibold">Reset Password</h2>
             </div>
@@ -94,7 +94,7 @@ const ResetPassword: React.FC = () => {
                         className="absolute inset-y-0 right-0 px-3 py-2"
                         onClick={() => setIsPasswordVisible(!isPasswordVisible)}
                     >
-                        <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-300" />
+                        <FontAwesomeIcon icon={isPasswordVisible ? faEyeSlash : faEye} className="text-gray-400 dark:text-gray-300" />
                     </button>
                 </div>
                 <div className="relative">
@@ -111,7 +111,7 @@ const ResetPassword: React.FC = () => {
                         className="absolute inset-y-0 right-0 px-3 py-2"
                         onClick={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
                     >
-                        <FontAwesomeIcon icon={isConfirmPasswordVisible ? faEyeSlash : faEye} className="text-gray-300" />
+                        <FontAwesomeIcon icon={isConfirmPasswordVisible ? faEyeSlash : faEye} className="text-gray-400 dark:text-gray-300" />
                     </button>
                 </div>
                 <button type="submit" className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 rounded w-full" disabled={isLoading}>

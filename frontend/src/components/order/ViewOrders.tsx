@@ -88,7 +88,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     return (
-        <div className="w-full px-6" ref={ordersRef}>
+        <div className="relative w-full px-6" ref={ordersRef}>
             <div className="flex justify-between items-center gap-4 mb-6">
                 {/* Filters */}
                 <div className="flex flex-grow justify-between items-center">
@@ -118,14 +118,15 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}
-                    style={{
-                        height: `${ordersHeight}px`, // Match orders height
-                        top: `calc(${ordersHeight / 2}px)`, // Center it dynamically
-                    }}
-                    className={`absolute left-0 w-[50px] flex items-center justify-center
-                        bg-gray-700 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-r-lg
-                        ${page === 1 ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-600'}
+                    className={`absolute left-0 w-[60px] h-[66%] flex items-center justify-center
+                        bg-gray-200 dark:bg-gray-800 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-r-lg
+                        ${page === 1 ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-600 dark:hover:bg-gray-500'}
                     `}
+                    style={{
+                        position: "fixed",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                    }}
                 >
                     <FontAwesomeIcon icon={faArrowLeft} size="lg" />
                 </button>
@@ -136,14 +137,15 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handleNextPage}
                     disabled={orders.length === 0}
-                    style={{
-                        height: `${ordersHeight}px`, // Match orders height
-                        top: `calc(${ordersHeight / 2}px)`, // Center it dynamically
-                    }}
-                    className={`absolute right-0 w-[50px] flex items-center justify-center
-                        bg-gray-700 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-l-lg
+                    className={`absolute right-0 w-[60px] h-[66%] flex items-center justify-center
+                        bg-gray-200 dark:bg-gray-700 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-l-lg
                         ${orders.length < pageSize ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-600'}
                     `}
+                    style={{
+                        position: "fixed",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                    }}
                 >
                     <FontAwesomeIcon icon={faArrowRight} size="lg" />
                 </button>
