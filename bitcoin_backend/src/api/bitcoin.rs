@@ -1,7 +1,8 @@
 use ic_cdk::api::management_canister::bitcoin::{
     bitcoin_get_balance, bitcoin_get_current_fee_percentiles, bitcoin_get_utxos,
-    bitcoin_send_transaction, BitcoinNetwork, GetBalanceRequest, GetCurrentFeePercentilesRequest,
-    GetUtxosRequest, MillisatoshiPerByte, SendTransactionRequest, Utxo, UtxoFilter,
+    bitcoin_send_transaction, BitcoinAddress, BitcoinNetwork, GetBalanceRequest,
+    GetCurrentFeePercentilesRequest, GetUtxosRequest, MillisatoshiPerByte, SendTransactionRequest,
+    Utxo, UtxoFilter,
 };
 
 use crate::model::types::errors::{BitcoinError, Result};
@@ -28,7 +29,7 @@ pub async fn get_balance(network: BitcoinNetwork, address: String) -> Result<u64
 ///
 /// NOTE: Relies on the `bitcoin_get_utxos` endpoint.
 /// See https://internetcomputer.org/docs/current/references/ic-interface-spec/#ic-bitcoin_get_utxos
-pub async fn get_utxos(network: BitcoinNetwork, address: String) -> Result<Vec<Utxo>> {
+pub async fn get_utxos(network: BitcoinNetwork, address: BitcoinAddress) -> Result<Vec<Utxo>> {
     const MAX_PAGES: usize = 20;
     let mut all_utxos = Vec::new();
     let mut next_page = None;
