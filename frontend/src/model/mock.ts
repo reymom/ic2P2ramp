@@ -14,7 +14,12 @@ export const parseBigIntFields = (order: any): OrderState => {
                     fee: BigInt(order.Created.crypto.fee),
                     amount: BigInt(order.Created.crypto.amount),
                     blockchain: {
-                        EVM: { chain_id: BigInt(order.Created.crypto.blockchain.EVM.chain_id) }
+                        ...(order.Created.crypto.blockchain.EVM
+                            ? { EVM: { chain_id: BigInt(order.Created.crypto.blockchain.EVM.chain_id) } }
+                            : {}),
+                        ...(order.Created.crypto.blockchain.ICP
+                            ? { ICP: { ledger_principal: order.Created.crypto.blockchain.ICP.ledger_principal } }
+                            : {})
                     }
                 }
             }
@@ -37,7 +42,12 @@ export const parseBigIntFields = (order: any): OrderState => {
                         fee: BigInt(order.Locked.base.crypto.fee),
                         amount: BigInt(order.Locked.base.crypto.amount),
                         blockchain: {
-                            EVM: { chain_id: BigInt(order.Locked.base.crypto.blockchain.EVM.chain_id) }
+                            ...(order.Locked.base.crypto.blockchain.EVM
+                                ? { EVM: { chain_id: BigInt(order.Locked.base.crypto.blockchain.EVM.chain_id) } }
+                                : {}),
+                            ...(order.Locked.base.crypto.blockchain.ICP
+                                ? { ICP: { ledger_principal: order.Locked.base.crypto.blockchain.ICP.ledger_principal } }
+                                : {})
                         }
                     }
                 },
