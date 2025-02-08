@@ -7,6 +7,8 @@ use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
 use crate::{
     api,
     model::types::errors::{BitcoinError, InsufficientBalanceError, Result},
+    ordinals::runes::build_rune_script,
+    TransactionType,
 };
 
 pub fn transform_network(network: BitcoinNetwork) -> Network {
@@ -23,6 +25,7 @@ pub fn build_transaction_with_fee(
     dst_address: &Address,
     amount: u64,
     fee: u64,
+    tx_type: TransactionType,
 ) -> Result<(Transaction, Vec<TxOut>)> {
     // Assume that any amount below this threshold is dust.
     const DUST_THRESHOLD: u64 = 1_000;
@@ -77,10 +80,16 @@ pub fn build_transaction_with_fee(
         })
         .collect();
 
-    let mut outputs = vec![TxOut {
-        value: Amount::from_sat(amount),
-        script_pubkey: dst_address.script_pubkey(),
-    }];
+    let mut outputs = match tx_type {
+        TransactionType::RuneTransfer(rune_id) => vec![TxOut {
+            value: Amount::from_sat(0), // Runes do not require additional satoshis
+            script_pubkey: build_rune_script(rune_id.parts().0, rune_id.parts().1.into()),
+        }],
+        _ => vec![TxOut {
+            value: Amount::from_sat(amount),
+            script_pubkey: dst_address.script_pubkey(),
+        }],
+    };
 
     let remaining_amount = total_spent - amount - fee;
     if remaining_amount >= DUST_THRESHOLD {

@@ -13,7 +13,11 @@ use std::str::FromStr;
 
 use crate::{
     api,
-    model::types::errors::{BitcoinError, Result},
+    model::types::{
+        errors::{BitcoinError, Result},
+        wallet::WalletConfig,
+    },
+    TransactionType,
 };
 
 use super::helpers::transform_network;
@@ -21,52 +25,50 @@ use super::helpers::transform_network;
 const ECDSA_SIG_HASH_TYPE: EcdsaSighashType = EcdsaSighashType::All;
 
 /// Returns the P2PKH address of this canister at the given derivation path.
-pub async fn get_address(
-    network: BitcoinNetwork,
-    key_name: String,
-    derivation_path: Vec<Vec<u8>>,
-) -> Result<String> {
-    let public_key = api::ecdsa::get_ecdsa_public_key(key_name, derivation_path).await;
-    public_key_to_p2pkh_address(network, &public_key)
+pub async fn get_address(config: WalletConfig) -> Result<Address> {
+    ic_cdk::println!(
+        "[p2pkh::get_address] key_name = {}, derivation_path = {:?}, network = {:?}",
+        config.key_name,
+        config.derivation_path,
+        config.network
+    );
+    let public_key =
+        api::ecdsa::get_ecdsa_public_key(config.key_name, config.derivation_path).await;
+    public_key_to_p2pkh_address(config.network, &public_key)
 }
 
 // Converts a public key to a P2PKH address.
-fn public_key_to_p2pkh_address(network: BitcoinNetwork, public_key: &[u8]) -> Result<String> {
+fn public_key_to_p2pkh_address(network: BitcoinNetwork, public_key: &[u8]) -> Result<Address> {
     Ok(Address::p2pkh(
         &PublicKey::from_slice(public_key).map_err(BitcoinError::from)?,
         transform_network(network),
-    )
-    .to_string())
+    ))
 }
 
 /// Sends a transaction to the network that transfers the given amount to the
 /// given destination, where the source of the funds is the canister itself
 /// at the given derivation path.
-pub async fn send(
-    network: BitcoinNetwork,
-    derivation_path: Vec<Vec<u8>>,
-    key_name: String,
-    dst_address: String,
-    amount: Satoshi,
-) -> Result<Txid> {
-    let fee_per_byte = super::helpers::get_fee_per_byte(network).await?;
+pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) -> Result<Txid> {
+    let fee_per_byte = super::helpers::get_fee_per_byte(config.network).await?;
 
     // Fetch our public key, P2PKH address, and UTXOs.
     let own_public_key =
-        api::ecdsa::get_ecdsa_public_key(key_name.clone(), derivation_path.clone()).await;
-    let own_address = public_key_to_p2pkh_address(network, &own_public_key)?;
+        api::ecdsa::get_ecdsa_public_key(config.key_name.clone(), config.derivation_path.clone())
+            .await;
+    let own_address = public_key_to_p2pkh_address(config.network, &own_public_key)?;
+    ic_cdk::println!("[p2pkh::send] own_address = {:?}", own_address);
 
-    ic_cdk::println!("Fetching UTXOs...");
     // Get utxos up to necessary amount HERE?
-    let own_utxos = api::bitcoin::get_utxos(network, own_address.clone()).await?;
+    let own_utxos = api::bitcoin::get_utxos(config.network, own_address.to_string()).await?;
+    ic_cdk::println!("[p2pkh::send] utxos = {:?}", own_utxos);
 
-    let own_address = Address::from_str(&own_address)
+    let own_address = Address::from_str(&own_address.to_string())
         .map_err(BitcoinError::from)?
-        .require_network(super::helpers::transform_network(network))
+        .require_network(super::helpers::transform_network(config.network))
         .map_err(BitcoinError::from)?;
     let dst_address = Address::from_str(&dst_address)
         .map_err(BitcoinError::from)?
-        .require_network(super::helpers::transform_network(network))
+        .require_network(super::helpers::transform_network(config.network))
         .map_err(BitcoinError::from)?;
 
     // Build the transaction that sends `amount` to the destination address.
@@ -81,7 +83,10 @@ pub async fn send(
     .await?;
 
     let tx_bytes = serialize(&transaction);
-    ic_cdk::println!("Transaction to sign: {}", hex::encode(tx_bytes));
+    ic_cdk::println!(
+        "[p2pkh::send] Transaction to sign: {}",
+        hex::encode(tx_bytes)
+    );
 
     // Sign the transaction.
     let signed_transaction = ecdsa_sign_transaction(
@@ -89,22 +94,19 @@ pub async fn send(
         &own_address,
         transaction,
         &own_utxos,
-        key_name,
-        derivation_path,
+        config.key_name,
+        config.derivation_path,
         api::ecdsa::get_ecdsa_signature,
     )
     .await?;
 
     let signed_transaction_bytes = serialize(&signed_transaction);
     ic_cdk::println!(
-        "Signed transaction: {}",
+        "[p2pkh::send] Signed transaction: {}",
         hex::encode(&signed_transaction_bytes)
     );
 
-    ic_cdk::println!("Sending transaction...");
-    api::bitcoin::send_transaction(network, signed_transaction_bytes).await?;
-    ic_cdk::println!("Done");
-
+    api::bitcoin::send_transaction(config.network, signed_transaction_bytes).await?;
     Ok(signed_transaction.compute_txid())
 }
 
@@ -135,6 +137,7 @@ async fn build_p2pkh_spend_tx(
             dst_address,
             amount,
             total_fee,
+            TransactionType::LegacyBitcoin,
         )?;
 
         // Sign the transaction. In this case, we only care about the size
