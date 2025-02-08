@@ -1,0 +1,19 @@
+[package]
+name = "bitcoin_backend_tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "tests"
+path = "lib.rs"
+
+[dev-dependencies]
+bitcoin_backend = { path = "../bitcoin_backend" }
+candid = { workspace = true }
+serde = { workspace = true }
+ic-cdk = { workspace = true }
+ic-btc-interface = "0.2"
+pocket-ic = "6.0"
+serde_json = "1.0"
+bitcoincore-rpc = "0.19"
+lazy_static = "1.5"
