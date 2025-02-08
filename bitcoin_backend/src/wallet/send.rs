@@ -1,49 +1,53 @@
-use bitcoin::{script::PushBytesBuf, Txid};
-use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Satoshi};
+use bitcoin::Txid;
+use ic_cdk::api::management_canister::bitcoin::Satoshi;
 
-use crate::{memory::heap::config, model::types::{errors::{BitcoinError, Result}, runes::RuneID}};
+use crate::{
+    memory::heap::config,
+    model::types::{
+        errors::Result,
+        transfer::TransactionType,
+        wallet::{TaprootUseCase, WalletConfig},
+    },
+};
 
 pub async fn send_btc_or_rune(
-    network: BitcoinNetwork,
-    derivation_path: Vec<Vec<u8>>,
-    key_name: String,
     dst_address: String,
     amount: Satoshi,
-    rune: Option<RuneID>,
-    use_taproot: bool,
+    tx_type: TransactionType,
 ) -> Result<Txid> {
-    if let Some(rune) = rune {
-        let rune_symbol = config::get_rune_metadata(&rune)?.symbol;
-
-        let mut symbol_bytes = PushBytesBuf::new();
-        symbol_bytes
-            .extend_from_slice(rune_symbol.as_bytes())
-            .map_err(|_| BitcoinError::InternalError("Invalid Rune symbol".to_string()))?;
-
-        let rune_script = bitcoin::blockdata::script::Builder::new()
-            .push_opcode(bitcoin::blockdata::opcodes::all::OP_RETURN)
-            .push_slice(symbol_bytes.as_push_bytes())
-            .into_script();
-
-        crate::wallet::p2tr_script_spend::send_script_spend(
-            network,
-            key_name,
-            derivation_path,
-            rune_script,
-            dst_address,
-            amount,
-        )
-        .await
-    } else if use_taproot {
-        crate::wallet::p2tr_raw_key_spend::send_key_spend(
-            network,
-            derivation_path,
-            key_name,
-            dst_address,
-            amount,
-        )
-        .await
-    } else {
-        crate::wallet::p2pkh::send(network, derivation_path, key_name, dst_address, amount).await
+    match tx_type {
+        TransactionType::LegacyBitcoin => {
+            crate::wallet::p2pkh::send(WalletConfig::for_p2pkh(), dst_address, amount).await
+        }
+        TransactionType::SimpleTaprootBitcoin => {
+            crate::wallet::p2tr_raw_key_spend::send_key_spend(
+                WalletConfig::for_p2tr_raw_key(),
+                dst_address,
+                amount,
+            )
+            .await
+        }
+        TransactionType::ScriptedTaprootBitcoin => {
+            crate::wallet::p2tr_script_spend::send_script_spend(
+                WalletConfig::for_p2tr_script(),
+                TaprootUseCase::Standard,
+                dst_address,
+                amount,
+                tx_type,
+            )
+            .await
+        }
+        TransactionType::RuneTransfer(ref rune) => {
+            let rune_symbol = config::get_rune_metadata(&rune)?.symbol;
+            ic_cdk::println!("[send] rune_symbol: {}", rune_symbol);
+            crate::wallet::p2tr_script_spend::send_script_spend(
+                WalletConfig::for_p2tr_script(),
+                TaprootUseCase::RuneTransfer(rune_symbol),
+                dst_address,
+                amount,
+                tx_type,
+            )
+            .await
+        }
     }
 }
