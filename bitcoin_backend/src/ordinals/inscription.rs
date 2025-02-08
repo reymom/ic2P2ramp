@@ -101,6 +101,8 @@ pub async fn send_inscription(
         TaprootUseCase::Inscription(inscription),
         dst_address,
         amount,
+        //should define new type for inscriptions
+        crate::TransactionType::ScriptedTaprootBitcoin,
     )
     .await
 }
