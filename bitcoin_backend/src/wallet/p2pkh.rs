@@ -3,8 +3,7 @@ use bitcoin::{
     hashes::Hash,
     script::{Builder, PushBytesBuf},
     sighash::SighashCache,
-    Address, AddressType, Amount, EcdsaSighashType, PublicKey, Script, SegwitV0Sighash,
-    Transaction, Txid,
+    Address, EcdsaSighashType, PublicKey, Transaction, Txid,
 };
 use ic_cdk::api::management_canister::bitcoin::{
     BitcoinNetwork, MillisatoshiPerByte, Satoshi, Utxo,
@@ -58,7 +57,7 @@ pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) ->
     let own_address = public_key_to_p2pkh_address(config.network, &own_public_key)?;
     ic_cdk::println!("[p2pkh::send] own_address = {:?}", own_address);
 
-    // Get utxos up to necessary amount HERE?
+    // Get utxos up to necessary amount
     let own_utxos = api::bitcoin::get_utxos(config.network, own_address.to_string()).await?;
     ic_cdk::println!("[p2pkh::send] utxos = {:?}", own_utxos);
 
@@ -93,7 +92,6 @@ pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) ->
         &own_public_key,
         &own_address,
         transaction,
-        &own_utxos,
         config.key_name,
         config.derivation_path,
         api::ecdsa::get_ecdsa_signature,
@@ -146,10 +144,9 @@ async fn build_p2pkh_spend_tx(
             own_public_key,
             own_address,
             transaction.clone(),
-            own_utxos,
             String::from(""), // mock key name
             vec![],           // mock derivation path
-            super::helpers::mock_signer,
+            super::helpers::mock_signer_p2pkh,
         )
         .await?;
 
@@ -173,81 +170,41 @@ async fn ecdsa_sign_transaction<SignFun, Fut>(
     own_public_key: &[u8],
     own_address: &Address,
     mut transaction: Transaction,
-    own_utxos: &[Utxo],
     key_name: String,
     derivation_path: Vec<Vec<u8>>,
     signer: SignFun,
 ) -> Result<Transaction>
 where
     SignFun: Fn(String, Vec<Vec<u8>>, Vec<u8>) -> Fut,
-    Fut: std::future::Future<Output = Vec<u8>>,
+    Fut: std::future::Future<Output = Result<Vec<u8>>>,
 {
     let txclone = transaction.clone();
     for (index, input) in transaction.input.iter_mut().enumerate() {
-        let sighash_bytes = match own_address.address_type() {
-            Some(AddressType::P2pkh) => Ok(SighashCache::new(&txclone)
-                .legacy_signature_hash(
-                    index,
-                    &own_address.script_pubkey(),
-                    ECDSA_SIG_HASH_TYPE.to_u32(),
-                )
-                .map_err(|e| BitcoinError::InternalError(format!("Legacy sighash error: {:?}", e)))?
-                .as_byte_array()
-                .to_vec()),
-            Some(AddressType::P2wpkh) => {
-                let amount_sat = own_utxos.get(index).map(|utxo| utxo.value).ok_or_else(|| {
-                    BitcoinError::InternalError(format!("Missing UTXO for input index {}", index))
-                })?;
-                let amount = Amount::from_sat(amount_sat);
+        let sighash_bytes = SighashCache::new(&txclone)
+            .legacy_signature_hash(
+                index,
+                &own_address.script_pubkey(),
+                ECDSA_SIG_HASH_TYPE.to_u32(),
+            )
+            .map_err(|e| BitcoinError::InternalError(format!("Legacy sighash error: {:?}", e)))?
+            .as_byte_array()
+            .to_vec();
 
-                let mut enc = SegwitV0Sighash::engine();
-                SighashCache::new(&txclone)
-                    .segwit_v0_encode_signing_data_to(
-                        &mut enc,
-                        index,
-                        &own_address.script_pubkey(),
-                        amount,
-                        ECDSA_SIG_HASH_TYPE,
-                    )
-                    .map_err(|e| {
-                        BitcoinError::InternalError(format!("Segwit sighash error: {:?}", e))
-                    })?;
-
-                Ok(SegwitV0Sighash::from_engine(enc).as_byte_array().to_vec())
-            }
-            Some(addr) => Err(BitcoinError::UnsupportedAddressType(addr.to_string())),
-            None => Err(BitcoinError::InternalError(
-                "Address Type is None".to_string(),
-            )),
-        }?;
-
-        let signature = signer(key_name.clone(), derivation_path.clone(), sighash_bytes).await;
+        let signature = signer(key_name.clone(), derivation_path.clone(), sighash_bytes).await?;
 
         // Convert signature to DER.
         let der_signature = sec1_to_der(signature);
         let mut sig_with_hashtype: Vec<u8> = der_signature;
         sig_with_hashtype.push(ECDSA_SIG_HASH_TYPE.to_u32() as u8);
 
-        // Apply signature to the correct field based on address type
-        match own_address.address_type() {
-            Some(AddressType::P2pkh) => {
-                let sig_with_hashtype_push_bytes =
-                    PushBytesBuf::try_from(sig_with_hashtype).unwrap();
-                let own_public_key_push_bytes =
-                    PushBytesBuf::try_from(own_public_key.to_vec()).unwrap();
-                input.script_sig = Builder::new()
-                    .push_slice(&sig_with_hashtype_push_bytes)
-                    .push_slice(own_public_key_push_bytes)
-                    .into_script();
-                input.witness.clear();
-            }
-            Some(AddressType::P2wpkh) => {
-                input.witness.push(sig_with_hashtype);
-                input.witness.push(own_public_key.to_vec());
-                input.script_sig = Script::new().into();
-            }
-            _ => {}
-        }
+        // Apply signature to the correct field
+        let sig_with_hashtype_push_bytes = PushBytesBuf::try_from(sig_with_hashtype).unwrap();
+        let own_public_key_push_bytes = PushBytesBuf::try_from(own_public_key.to_vec()).unwrap();
+        input.script_sig = Builder::new()
+            .push_slice(&sig_with_hashtype_push_bytes)
+            .push_slice(own_public_key_push_bytes)
+            .into_script();
+        input.witness.clear();
     }
 
     Ok(transaction)
