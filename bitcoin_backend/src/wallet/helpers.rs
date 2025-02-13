@@ -126,10 +126,18 @@ pub async fn get_fee_per_byte(network: BitcoinNetwork) -> Result<u64> {
 }
 
 // A mock for rubber-stamping signatures.
-pub async fn mock_signer(
+pub async fn mock_signer_p2tr(
     _key_name: String,
     _derivation_path: Vec<Vec<u8>>,
     _message_hash: Vec<u8>,
-) -> Vec<u8> {
-    vec![255; 64]
+) -> Result<Vec<u8>> {
+    Ok(vec![255; 64])
+}
+
+pub async fn mock_signer_p2pkh(
+    _key_name: String,
+    _derivation_path: Vec<Vec<u8>>,
+    _message_hash: Vec<u8>,
+) -> Result<Vec<u8>> {
+    Ok(vec![255; 72])
 }

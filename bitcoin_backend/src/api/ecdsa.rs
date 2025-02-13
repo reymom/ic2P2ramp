@@ -5,6 +5,8 @@ use ic_cdk::api::management_canister::ecdsa::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::model::{types::errors::Result, utils};
+
 // stores the ecdsa to maintain state across different calls to the canister (not across updates)
 thread_local! {
     /* flexible */ static ECDSA: RefCell<Option<HashMap<Vec<Vec<u8>> /*derivation path*/, Vec<u8> /*public key*/>>> = RefCell::default();
@@ -56,7 +58,7 @@ pub async fn get_ecdsa_signature(
     key_name: String,
     derivation_path: Vec<Vec<u8>>,
     message_hash: Vec<u8>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>> {
     let key_id = EcdsaKeyId {
         curve: EcdsaCurve::Secp256k1,
         name: key_name,
@@ -69,5 +71,6 @@ pub async fn get_ecdsa_signature(
     })
     .await;
 
-    res.unwrap().0.signature
+    let reply = utils::handle_ic_call(res).await?;
+    Ok(reply.signature)
 }
