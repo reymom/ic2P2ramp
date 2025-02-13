@@ -22,7 +22,6 @@ pub use model::types::{
     Address,
 };
 use ordinals::inscription;
-use wallet::p2tr_script_spend::get_address_with_info;
 
 #[ic_cdk::init]
 pub fn init(network: BitcoinNetwork) {
@@ -94,22 +93,9 @@ pub async fn get_p2tr_raw_key_spend_address() -> Result<String> {
 /// Necessary for sending and receiving runes.
 #[ic_cdk::update]
 pub async fn get_p2tr_script_spend_address() -> Result<String> {
-    wallet::p2tr_script_spend::get_address_with_info(
-        WalletConfig::for_p2tr_script(),
-        TaprootUseCase::Standard,
-    )
-    .await
-    .map(|addr| addr.0.to_string())
-}
-
-#[ic_cdk::update]
-pub async fn derive_rune_address(rune_symbol: String) -> Result<String> {
-    let (address, _, _) = get_address_with_info(
-        WalletConfig::for_p2tr_script(),
-        TaprootUseCase::RuneTransfer(rune_symbol),
-    )
-    .await?;
-    Ok(address.to_string())
+    wallet::p2tr_script_spend::get_address(WalletConfig::for_p2tr_script())
+        .await
+        .map(|addr| addr.to_string())
 }
 
 // -------
@@ -165,7 +151,6 @@ pub fn deposit_to_address_vault(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    ic_cdk::println!("Depositing Here Baby");
     vault::deposit::deposit_to_vault(offramper, amount, rune)
 }
 

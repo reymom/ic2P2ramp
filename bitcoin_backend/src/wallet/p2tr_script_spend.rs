@@ -5,7 +5,7 @@ use bitcoin::{
     script::PushBytesBuf,
     secp256k1::{schnorr::Signature, PublicKey},
     sighash::SighashCache,
-    taproot::{ControlBlock, LeafVersion, TaprootBuilder, TaprootSpendInfo},
+    taproot::{ControlBlock, LeafVersion, TaprootBuilder},
     Address, AddressType, ScriptBuf, Sequence, TapLeafHash, TapSighashType, Transaction, TxOut,
     Txid, Witness, XOnlyPublicKey,
 };
@@ -53,22 +53,16 @@ fn build_script_for_use_case(
     }
 }
 
-/// Returns the P2TR script spend address for this canister at the given derivation path.
-pub async fn get_address_with_info(
-    config: WalletConfig,
-    use_case: TaprootUseCase,
-) -> Result<(Address, TaprootSpendInfo, ScriptBuf)> {
+/// Returns the P2TR script spend address for all runes.
+pub async fn get_address(config: WalletConfig) -> Result<Address> {
     let public_key = schnorr_public_key(config.key_name, config.derivation_path).await?;
 
     let x_only_pubkey = bitcoin::key::XOnlyPublicKey::from(
         PublicKey::from_slice(&public_key).map_err(BitcoinError::from)?,
     );
 
-    let script = build_script_for_use_case(&x_only_pubkey, use_case)?;
     let secp_engine = Secp256k1::new();
     let taproot_spend_info = TaprootBuilder::new()
-        .add_leaf(0, script.clone())
-        .map_err(BitcoinError::from)?
         .finalize(&secp_engine, x_only_pubkey)
         .map_err(BitcoinError::from)?;
 
@@ -76,8 +70,35 @@ pub async fn get_address_with_info(
         taproot_spend_info.output_key(),
         crate::wallet::transform_network(config.network),
     );
-    Ok((address, taproot_spend_info, script))
+
+    Ok(address)
 }
+
+/// Returns the P2TR script spend address for this canister at the given derivation path.
+// pub async fn get_address_with_info(
+//     config: WalletConfig,
+//     use_case: TaprootUseCase,
+// ) -> Result<(Address, TaprootSpendInfo, ScriptBuf)> {
+//     let public_key = schnorr_public_key(config.key_name, config.derivation_path).await?;
+
+//     let x_only_pubkey = bitcoin::key::XOnlyPublicKey::from(
+//         PublicKey::from_slice(&public_key).map_err(BitcoinError::from)?,
+//     );
+
+//     let script = build_script_for_use_case(&x_only_pubkey, use_case)?;
+//     let secp_engine = Secp256k1::new();
+//     let taproot_spend_info = TaprootBuilder::new()
+//         .add_leaf(0, script.clone())
+//         .map_err(BitcoinError::from)?
+//         .finalize(&secp_engine, x_only_pubkey)
+//         .map_err(BitcoinError::from)?;
+
+//     let address = Address::p2tr_tweaked(
+//         taproot_spend_info.output_key(),
+//         crate::wallet::transform_network(config.network),
+//     );
+//     Ok((address, taproot_spend_info, script))
+// }
 
 /// Sends BTC or Runes using a Taproot script-spend address.
 pub async fn send_script_spend(
@@ -87,12 +108,32 @@ pub async fn send_script_spend(
     amount: Satoshi,
     tx_type: TransactionType,
 ) -> Result<Txid> {
-    // Step 1: Generate Taproot address.
-    let (address, taproot_spend_info, script) =
-        get_address_with_info(config.clone(), taproot_use_case).await?;
+    let fee_per_byte = crate::wallet::get_fee_per_byte(config.network).await?;
+
+    let address = get_address(config.clone()).await?;
     ic_cdk::println!("[send_script_spend] address = {:?}", address);
 
-    // Get the control block from the spend info
+    // Step 1: Generate Taproot address.
+    // let (address, taproot_spend_info, script) =
+    //     get_address_with_info(config.clone(), taproot_use_case).await?;
+    // ic_cdk::println!("[send_script_spend] address = {:?}", address);
+
+    // ✅ Step 1: Get the script that matches the transaction type
+    let public_key =
+        schnorr_public_key(config.key_name.clone(), config.derivation_path.clone()).await?;
+    let x_only_pubkey = bitcoin::key::XOnlyPublicKey::from(
+        PublicKey::from_slice(&public_key).map_err(BitcoinError::from)?,
+    );
+    let script = build_script_for_use_case(&x_only_pubkey, taproot_use_case)?;
+
+    // ✅ Step 3: Generate spend info based on the selected script
+    let secp_engine = Secp256k1::new();
+    let taproot_spend_info = TaprootBuilder::new()
+        .add_leaf(0, script.clone())
+        .map_err(BitcoinError::from)?
+        .finalize(&secp_engine, x_only_pubkey)
+        .map_err(BitcoinError::from)?;
+
     let script_map = taproot_spend_info.script_map();
     let (leaf_script, leaf_version) = script_map
         .keys()
@@ -102,20 +143,20 @@ pub async fn send_script_spend(
         .control_block(&(leaf_script.clone(), *leaf_version))
         .ok_or_else(|| BitcoinError::InternalError("Missing ControlBlock".to_string()))?;
 
-    // Step 2: Fetch UTXOs for the Taproot address.
+    // Step 4: Fetch UTXOs for the Taproot address.
     let own_utxos = crate::api::bitcoin::get_utxos(config.network, address.to_string()).await?;
     ic_cdk::println!("[send_script_spend] utxos = {:?}", own_utxos);
 
-    // Step 3: Construct the transaction.
+    // ✅ Step 5: Build & Sign the Transaction
     let dst_address = Address::from_str(&dst_address)
         .map_err(BitcoinError::from)?
         .require_network(crate::wallet::transform_network(config.network))
         .map_err(|e| BitcoinError::UnsupportedAddressType(e.to_string()))?;
-    let fee_per_byte = crate::wallet::get_fee_per_byte(config.network).await?;
+
     let (transaction, prevouts) = build_p2tr_transaction(
         &address,
         &control_block,
-        &script,
+        &leaf_script,
         &own_utxos,
         &dst_address,
         amount,
@@ -124,20 +165,18 @@ pub async fn send_script_spend(
     )
     .await?;
 
-    // Step 4: Sign the transaction.
     let signed_transaction = schnorr_sign_transaction(
         transaction,
         &prevouts,
         &address,
         &control_block,
-        &script,
+        &leaf_script,
         config.key_name,
         config.derivation_path,
         crate::api::schnorr::sign_with_schnorr,
     )
     .await?;
 
-    // Step 5: Broadcast the transaction.
     let signed_transaction_bytes = serialize(&signed_transaction);
     ic_cdk::println!(
         "Broadcasting transaction: {}",
@@ -160,8 +199,8 @@ pub async fn build_p2tr_transaction(
     fee_per_byte: MillisatoshiPerByte,
     tx_type: TransactionType,
 ) -> Result<(Transaction, Vec<TxOut>)> {
+    ic_cdk::println!("Building transaction...");
     let mut total_fee = 0;
-
     loop {
         let (transaction, prevouts) = super::helpers::build_transaction_with_fee(
             utxos,
@@ -178,9 +217,9 @@ pub async fn build_p2tr_transaction(
             own_address,
             control_block,
             script,
-            String::from("mock_key"),
+            String::from(""),
             vec![], // mock derivation path
-            |_, _, _| async { Ok(vec![0; 64]) },
+            super::helpers::mock_signer_p2tr,
         )
         .await?;
 
@@ -188,6 +227,7 @@ pub async fn build_p2tr_transaction(
         let estimated_fee = (tx_vsize * fee_per_byte) / 1000;
 
         if estimated_fee == total_fee {
+            ic_cdk::println!("Transaction built with fee {}.", total_fee);
             return Ok((transaction, prevouts));
         } else {
             total_fee = estimated_fee;
