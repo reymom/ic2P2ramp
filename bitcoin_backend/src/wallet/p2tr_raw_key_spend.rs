@@ -9,7 +9,7 @@ use bitcoin::{
 use ic_cdk::api::management_canister::bitcoin::{MillisatoshiPerByte, Satoshi, Utxo};
 use std::str::FromStr;
 
-use crate::api::{self, schnorr};
+use crate::api;
 use crate::model::types::{
     errors::{BitcoinError, Result},
     wallet::WalletConfig,
@@ -20,7 +20,8 @@ use super::transform_network;
 
 /// Returns the P2TR raw key spend address of this canister at the given derivation path.
 pub async fn get_address(config: WalletConfig) -> Result<Address> {
-    let public_key = schnorr::schnorr_public_key(config.key_name, config.derivation_path).await?;
+    let public_key =
+        api::schnorr::schnorr_public_key(config.key_name, config.derivation_path).await?;
     let x_only_pubkey = bitcoin::key::XOnlyPublicKey::from(
         PublicKey::from_slice(&public_key).map_err(BitcoinError::from)?,
     );
@@ -72,9 +73,9 @@ pub async fn send_key_spend(
         prevouts.as_slice(),
         config.key_name,
         config.derivation_path,
-        schnorr::sign_with_schnorr,
+        api::schnorr::sign_with_schnorr,
     )
-    .await;
+    .await?;
 
     let signed_transaction_bytes = serialize(&signed_transaction);
     ic_cdk::println!(
@@ -123,9 +124,9 @@ async fn build_p2tr_key_path_spend_tx(
             &prevouts,
             String::from(""), // mock key name
             vec![],           // mock derivation path
-            |_, _, _| async { Ok(vec![255; 64]) },
+            super::helpers::mock_signer_p2tr,
         )
-        .await;
+        .await?;
 
         let tx_vsize = signed_transaction.vsize() as u64;
 
@@ -152,7 +153,7 @@ async fn schnorr_sign_key_spend_transaction<SignFun, Fut>(
     key_name: String,
     derivation_path: Vec<Vec<u8>>,
     signer: SignFun,
-) -> Transaction
+) -> Result<Transaction>
 where
     SignFun: Fn(String, Vec<Vec<u8>>, Vec<u8>) -> Fut,
     Fut: std::future::Future<Output = Result<Vec<u8>>>,
@@ -176,7 +177,9 @@ where
                 &bitcoin::sighash::Prevouts::All(prevouts),
                 TapSighashType::Default,
             )
-            .expect("Failed to encode signing data")
+            .map_err(|e| {
+                BitcoinError::InternalError(format!("P2tr raw key spend sighash error: {:?}", e))
+            })?
             .as_byte_array()
             .to_vec();
 
@@ -185,8 +188,7 @@ where
             derivation_path.clone(),
             signing_data.clone(),
         )
-        .await
-        .unwrap();
+        .await?;
 
         // Update the witness stack.
         let witness = sighasher.witness_mut(i).unwrap();
@@ -197,5 +199,5 @@ where
         witness.push(signature.to_vec());
     }
 
-    transaction
+    Ok(transaction)
 }
