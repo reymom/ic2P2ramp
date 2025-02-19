@@ -2,12 +2,6 @@ use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
 
 use crate::memory::heap::config::{DERIVATION_PATH, KEY_NAME, NETWORK};
 
-pub enum TaprootUseCase {
-    Standard,
-    RuneTransfer(String),
-    Inscription(Vec<u8>),
-}
-
 #[derive(Clone)]
 pub struct WalletConfig {
     pub key_name: String,

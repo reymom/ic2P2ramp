@@ -1,20 +1,31 @@
+use std::borrow::Cow;
 use std::str::FromStr;
 
 use candid::{CandidType, Deserialize};
+use ic_stable_structures::{storable::Bound, Storable};
 
 use crate::model::types::errors::{BitcoinError, Result};
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuneMetadata {
-    pub id: RuneID,          // Unique ID (BLOCK:TX)
-    pub name: String,        // Rune name (e.g., DOG•TO•THE•MOON)
-    pub symbol: String,      // Currency symbol (e.g., 🐕)
-    pub divisibility: u8,    // Number of decimals
-    pub cap: u128,           // Maximum supply
-    pub premine: u128,       // Pre-minted amount
+    pub id: RuneID,       // Unique ID (BLOCK:TX)
+    pub name: String,     // Rune name (e.g., DOG•TO•THE•MOON)
+    pub symbol: String,   // Currency symbol (e.g., 🐕)
+    pub divisibility: u8, // Number of decimals
+    pub cap: u128,        // Maximum supply
+    pub premine: u128,    // Pre-minted amount
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Etching {
+    pub metadata: RuneMetadata,
+    pub spacers: Option<u32>,
+    pub amount: Option<u128>,
+    pub height: Option<(u64, u64)>,
+    pub offset: Option<(u64, u64)>,
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct RuneID(String);
 
 impl RuneID {
@@ -64,6 +75,18 @@ impl RuneID {
     }
 }
 
+impl Storable for RuneID {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(self.0.as_bytes().to_vec())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        Self(String::from_utf8(bytes.to_vec()).unwrap())
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
 impl FromStr for RuneID {
     type Err = BitcoinError;
 
@@ -79,7 +102,6 @@ impl std::fmt::Display for RuneID {
         write!(f, "{}", self.0)
     }
 }
-
 
 impl std::fmt::Display for RuneMetadata {
     /// Serialize `RuneMetadata` to a string.
