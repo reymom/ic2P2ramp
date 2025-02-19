@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bitcoin::{
     absolute::LockTime, hashes::Hash, transaction::Version, Address, Amount, Network, OutPoint,
     ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
@@ -6,10 +8,18 @@ use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
 
 use crate::{
     api,
-    model::types::errors::{BitcoinError, InsufficientBalanceError, Result},
-    ordinals::runes::build_rune_script,
-    TransactionType,
+    model::types::{
+        errors::{BitcoinError, InsufficientBalanceError, Result},
+        transfer::TaprootUseCase,
+    },
+    ordinals::{
+        inscription::build_ordinal_inscription,
+        runes::{build_runestone_edict, build_runestone_etching},
+    },
+    RuneID, RuneUTXOEntry, TransactionType,
 };
+
+const DUST_THRESHOLD: u64 = 1000;
 
 pub fn transform_network(network: BitcoinNetwork) -> Network {
     match network {
@@ -20,16 +30,184 @@ pub fn transform_network(network: BitcoinNetwork) -> Network {
 }
 
 pub fn build_transaction_with_fee(
-    own_utxos: &[Utxo],
+    tx_type: TransactionType,
     own_address: &Address,
     dst_address: &Address,
     amount: u64,
     fee: u64,
-    tx_type: TransactionType,
+    btc_utxos: &[Utxo],
+    rune_utxos: Option<HashMap<Utxo, RuneUTXOEntry>>,
 ) -> Result<(Transaction, Vec<TxOut>)> {
-    // Assume that any amount below this threshold is dust.
-    const DUST_THRESHOLD: u64 = 1_000;
+    let mut inputs = Vec::new();
+    let mut prevouts = Vec::new();
+    let mut outputs = Vec::new();
 
+    match tx_type {
+        TransactionType::RuneTransfer(rune_id) => {
+            // 1. Handle rune UTXOs
+            let (r_inputs, r_prevouts, r_outputs) = if let Some(rune_utxos) = rune_utxos {
+                build_rune_inputs_and_outputs(
+                    rune_utxos,
+                    own_address,
+                    dst_address,
+                    amount,
+                    rune_id,
+                )?
+            } else {
+                return Err(BitcoinError::InternalError(
+                    "Missing rune UTXOs".to_string(),
+                ));
+            };
+
+            // 2. Handle BTC UTXOs for fee
+            let (btc_inputs, btc_prevouts, btc_outputs) =
+                build_btc_inputs_and_outputs(btc_utxos, own_address, None, 0, fee)?;
+
+            // 3. Add all inputs, prevouts and outputs
+            inputs.extend(r_inputs);
+            inputs.extend(btc_inputs);
+
+            prevouts.extend(r_prevouts);
+            prevouts.extend(btc_prevouts);
+
+            outputs.extend(r_outputs);
+            outputs.extend(btc_outputs);
+        }
+        TransactionType::RuneEtching(_) | TransactionType::OrdinalInscription(_) => {
+            // ✅ Handle BTC UTXOs for fee
+            let (btc_inputs, btc_prevouts, btc_outputs) =
+                build_btc_inputs_and_outputs(btc_utxos, own_address, None, 0, fee)?;
+
+            // ✅ Construct OP_RETURN output for Runestone or Inscription
+            let script_pubkey =
+                if let Some(TaprootUseCase::RuneEtching(etching)) = tx_type.to_taproot_use_case() {
+                    build_runestone_etching(etching)?
+                } else if let Some(TaprootUseCase::Inscription(inscription)) =
+                    tx_type.to_taproot_use_case()
+                {
+                    build_ordinal_inscription(&inscription)?
+                } else {
+                    return Err(BitcoinError::InternalError(
+                        "Invalid taproot use case".to_string(),
+                    ));
+                };
+
+            outputs.push(TxOut {
+                value: Amount::from_sat(0),
+                script_pubkey,
+            });
+
+            // ✅ Add destination output
+            outputs.push(TxOut {
+                value: Amount::from_sat(amount),
+                script_pubkey: dst_address.script_pubkey(),
+            });
+
+            inputs.extend(btc_inputs);
+            prevouts.extend(btc_prevouts);
+            outputs.extend(btc_outputs);
+        }
+        _ => {
+            return build_btc_transaction_with_fee(btc_utxos, own_address, dst_address, amount, fee)
+        }
+    }
+
+    Ok((
+        Transaction {
+            input: inputs,
+            output: outputs,
+            lock_time: LockTime::ZERO,
+            version: Version(2),
+        },
+        prevouts,
+    ))
+}
+
+fn build_rune_inputs_and_outputs(
+    rune_utxos: HashMap<Utxo, RuneUTXOEntry>,
+    own_address: &Address,
+    dst_address: &Address,
+    amount: u64,
+    rune_id: RuneID,
+) -> Result<(Vec<TxIn>, Vec<TxOut>, Vec<TxOut>)> {
+    let mut total_runes = 0;
+    let mut r_inputs = Vec::new();
+    let mut r_prevouts = Vec::new();
+    let mut r_outputs = Vec::new();
+
+    // 1: Construct Inputs
+    for (utxo, rune_entry) in rune_utxos {
+        total_runes += rune_entry.rune_amount;
+
+        r_inputs.push(TxIn {
+            previous_output: OutPoint {
+                txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid).unwrap()),
+                vout: utxo.outpoint.vout,
+            },
+            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+            witness: Witness::new(),
+            script_sig: ScriptBuf::new(),
+        });
+
+        let script_pubkey = ScriptBuf::from_hex(&rune_entry.script_pubkey)
+            .map_err(|_| BitcoinError::InternalError("Invalid script_pubkey".to_string()))?;
+        r_prevouts.push(TxOut {
+            value: Amount::from_sat(utxo.value),
+            script_pubkey,
+        });
+
+        if total_runes >= amount {
+            break;
+        }
+    }
+
+    if total_runes < amount {
+        return Err(BitcoinError::InsufficientBalance(
+            InsufficientBalanceError {
+                current_balance: total_runes,
+                transfer_amount: amount,
+                fee: 0,
+            },
+        ));
+    }
+
+    // 2: OP_RETURN (Runestone) Output
+    let runestone = build_runestone_edict(&rune_id, amount, 1)?;
+    if runestone.len() > 82 {
+        return Err(BitcoinError::InvalidRunestone(
+            "Exceeds OP_RETURN size of 82".to_string(),
+        ));
+    }
+    r_outputs.push(TxOut {
+        value: Amount::from_sat(0),
+        script_pubkey: runestone,
+    });
+
+    // 3: Receiver's Output (vout[1])
+    r_outputs.push(TxOut {
+        value: Amount::from_sat(DUST_THRESHOLD),
+        script_pubkey: dst_address.script_pubkey(),
+    });
+
+    // 4: Sender's Change Output
+    let rune_change = total_runes - amount;
+    if rune_change > 0 {
+        r_outputs.push(TxOut {
+            value: Amount::from_sat(DUST_THRESHOLD),
+            script_pubkey: own_address.script_pubkey(),
+        });
+    }
+
+    Ok((r_inputs, r_prevouts, r_outputs))
+}
+
+fn build_btc_inputs_and_outputs(
+    btc_utxos: &[Utxo],
+    own_address: &Address,
+    dst_address: Option<&Address>,
+    amount: u64,
+    fee: u64,
+) -> Result<(Vec<TxIn>, Vec<TxOut>, Vec<TxOut>)> {
     // Select which UTXOs to spend. We naively spend the oldest available UTXOs,
     // even if they were previously spent in a transaction. This isn't a
     // problem as long as at most one transaction is created per block and
@@ -38,30 +216,14 @@ pub fn build_transaction_with_fee(
     // 1. Min number of utxos that sum amount (minimize current gas fees)
     // 2. Check historical fee and aggregate (consolidate) utxos when it is cheap
 
-    let mut utxos_to_spend = vec![];
-    let mut total_spent = 0;
-    for utxo in own_utxos.iter().rev() {
-        total_spent += utxo.value;
-        utxos_to_spend.push(utxo);
-        if total_spent >= amount + fee {
-            // We have enough inputs to cover the amount we want to spend.
-            break;
-        }
-    }
+    let mut inputs = Vec::new();
+    let mut prevouts = Vec::new();
+    let mut outputs = Vec::new();
 
-    if total_spent < amount + fee {
-        return Err(BitcoinError::InsufficientBalance(
-            InsufficientBalanceError {
-                current_balance: total_spent,
-                transfer_amount: amount,
-                fee,
-            },
-        ));
-    }
-
-    let inputs: Vec<TxIn> = utxos_to_spend
-        .iter()
-        .map(|utxo| TxIn {
+    let mut total_btc = 0;
+    for utxo in btc_utxos.iter() {
+        total_btc += utxo.value;
+        inputs.push(TxIn {
             previous_output: OutPoint {
                 txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid).unwrap()),
                 vout: utxo.outpoint.vout,
@@ -69,35 +231,59 @@ pub fn build_transaction_with_fee(
             sequence: Sequence::MAX,
             witness: Witness::new(),
             script_sig: ScriptBuf::new(),
-        })
-        .collect();
-
-    let prevouts = utxos_to_spend
-        .into_iter()
-        .map(|utxo| TxOut {
+        });
+        prevouts.push(TxOut {
             value: Amount::from_sat(utxo.value),
             script_pubkey: own_address.script_pubkey(),
-        })
-        .collect();
+        });
 
-    let mut outputs = match tx_type {
-        TransactionType::RuneTransfer(rune_id) => vec![TxOut {
-            value: Amount::from_sat(0), // Runes do not require additional satoshis
-            script_pubkey: build_rune_script(rune_id.parts().0, rune_id.parts().1.into()),
-        }],
-        _ => vec![TxOut {
-            value: Amount::from_sat(amount),
-            script_pubkey: dst_address.script_pubkey(),
-        }],
-    };
+        if total_btc >= amount + fee {
+            break;
+        }
+    }
 
-    let remaining_amount = total_spent - amount - fee;
-    if remaining_amount >= DUST_THRESHOLD {
+    if total_btc < amount + fee {
+        return Err(BitcoinError::InsufficientBalance(
+            InsufficientBalanceError {
+                current_balance: total_btc,
+                transfer_amount: amount,
+                fee,
+            },
+        ));
+    }
+
+    if let Some(dst) = dst_address {
+        if amount == 0 {
+            return Err(BitcoinError::InvalidInput(
+                "Amount cannot be zero".to_string(),
+            ));
+        }
         outputs.push(TxOut {
-            script_pubkey: own_address.script_pubkey(),
-            value: Amount::from_sat(remaining_amount),
+            value: Amount::from_sat(amount),
+            script_pubkey: dst.script_pubkey(),
         });
     }
+
+    let btc_change = total_btc - amount - fee;
+    if btc_change >= DUST_THRESHOLD {
+        outputs.push(TxOut {
+            value: Amount::from_sat(btc_change),
+            script_pubkey: own_address.script_pubkey(),
+        });
+    }
+
+    Ok((inputs, prevouts, outputs))
+}
+
+fn build_btc_transaction_with_fee(
+    own_utxos: &[Utxo],
+    own_address: &Address,
+    dst_address: &Address,
+    amount: u64,
+    fee: u64,
+) -> Result<(Transaction, Vec<TxOut>)> {
+    let (inputs, prevouts, outputs) =
+        build_btc_inputs_and_outputs(own_utxos, own_address, Some(dst_address), amount, fee)?;
 
     Ok((
         Transaction {
