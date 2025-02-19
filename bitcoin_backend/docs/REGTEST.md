@@ -23,7 +23,7 @@ sudo apt install jq
 1. Get the address:
 
 ```bash
-ADDRESS=$(dfx canister call bitcoin_backend get_p2tr_script_spend_address | grep -oP '(?<=Ok = ").*?(?=")')
+ADDRESS=$(dfx canister call bitcoin_backend get_p2tr_raw_key_spend_address | grep -oP '(?<=Ok = ").*?(?=")')
 ```
 
 2. Send to the address:
@@ -115,10 +115,9 @@ After etching, you may mint additional runes using the mint command.
 ### Step 4: Send the Runes to the bitcoin backend canister
 
 ```bash
-./scripts/regtest/ord_wallet.sh send \
-  "$ADDRESS" \
-  "40:ZZZ•DOG•TO•THE•MOON" \
-  --fee-rate 1
+TXID=$(./scripts/regtest/ord_wallet.sh send "$ADDRESS" "40:ZZZ•DOG•TO•THE•MOON" --fee-rate 1 | jq -r '.txid')
+VOUT_INDEX=$(docker-compose exec bitcoind bitcoin-cli getrawtransaction "$TXID" 1 | jq -r ".vout | map(select(.scriptPubKey.address == \"$ADDRESS\")) | .[0].n")
+SCRIPT_PUBKEY=$(docker-compose exec bitcoind bitcoin-cli getrawtransaction "$TXID" 1 | jq -r ".vout[$VOUT_INDEX].scriptPubKey.hex")
 ```
 
 Remember to mine blocks to confirm the transaction:
@@ -127,7 +126,53 @@ Remember to mine blocks to confirm the transaction:
 docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet generatetoaddress 10 $(docker compose exec bitcoind bitcoin-cli -regtest -rpcwallet=testwallet getnewaddress)
 ```
 
+### Step 5: Register the Runes and Runes UXOS in the offramper vault
+
+```bash
+dfx canister call bitcoin_backend register_runes '(
+  vec {
+    record {
+      id = "113:1";
+      name = "DOG TO THE MOON";
+      symbol = "ZZZ•DOG•TO•THE•MOON";
+      divisibility = 0;
+      cap = 90;
+      premine = 1000;
+    }
+  }
+)'
+```
+
+### Step 6: Register the Runes UTXOS
+
+````
+
+// bcrt1pnp9hlnptqct9rrftq9zapywvl0g0d54tak54v5z6mytewnj8a7cq8uj40d
+// bcrt1pw6rnz3td87h9naef2fd3yal7yjlcw6v2lcmdgu9tzqwsslzltvnqa9yzc2
+
+```bash
+dfx canister call bitcoin_backend deposit_to_address_vault "(
+  \"$DST_ADDRESS\",
+  40,
+  opt \"113:1\",
+  vec {
+    record {
+      txid = \"$TXID\";
+      vout = $VOUT_INDEX;
+      rune_amount = 40;
+      script_pubkey = \"$SCRIPT_PUBKEY\";
+    };
+  }
+)"
+````
+
 ## Notes
 
 - **YAML Configuration**: Ensure your `rune.yml` file is correctly structured, specifying minting parameters such as divisibility, premine, cap, and supply.
 - **Mining Blocks**: For immediate minting, adjust the starting block (`height.start`) in the YAML file to match or precede the current block height.
+
+- To debug the transaction, we can check in dfx canister logs bitcoin_backend the raw tx and use it in:
+
+```bash
+docker-compose exec bitcoind bitcoin-cli testmempoolaccept '[""]'
+```
