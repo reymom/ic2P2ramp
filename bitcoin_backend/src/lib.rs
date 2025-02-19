@@ -5,23 +5,28 @@ mod ordinals;
 mod vault;
 mod wallet;
 
-use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
+use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
+use std::collections::HashMap;
 
-use api::bitcoin;
 use errors::{Result, VaultError};
 use memory::{
     heap::config::{KEY_NAME, NETWORK},
-    stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
+    stable::{
+        utxos::add_rune_utxo_entries,
+        vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
+    },
 };
-pub use model::types::errors;
 pub use model::types::{
+    errors,
     runes::{RuneID, RuneMetadata},
     transfer::TransactionType,
+    utxo::RuneUTXOEntry,
     vault::VaultEntry,
-    wallet::{TaprootUseCase, WalletConfig},
+    wallet::WalletConfig,
     Address,
 };
-use ordinals::inscription;
+use ordinals::inscription::{self, Inscription};
+use wallet::utxos::get_tx_utxos;
 
 #[ic_cdk::init]
 pub fn init(network: BitcoinNetwork) {
@@ -43,7 +48,7 @@ pub fn init(network: BitcoinNetwork) {
 #[ic_cdk::update]
 pub async fn get_btc_balance(address: String) -> Result<u64> {
     let network = NETWORK.with(|n| n.get());
-    bitcoin::get_balance(network, address).await
+    api::bitcoin::get_balance(network, address).await
 }
 
 #[ic_cdk::update]
@@ -52,18 +57,32 @@ pub async fn test_transfer(
     amount: u64,
     tx_type: TransactionType,
 ) -> Result<String> {
-    let tx_id = wallet::send::send_btc_or_rune(dst_address, amount, tx_type).await?;
+    let tx_id = wallet::send::send_btc_or_ordinal(dst_address, amount, tx_type).await?;
     Ok(tx_id.to_string())
 }
 
-// #[ic_cdk::update]
-// pub async fn debug_runes_from_utxos(address: String) -> Result<Vec<(String, u64)>> {
-//     let config = WalletConfig::for_p2tr_script();
-//     let utxos = bitcoin::get_utxos(config.network, address).await?;
+#[ic_cdk::update]
+pub async fn get_utxos(
+    address: String,
+    tx_type: TransactionType,
+) -> Result<(Vec<Utxo>, HashMap<Utxo, RuneUTXOEntry>)> {
+    let (btc_utxos, rune_utxos) = get_tx_utxos(
+        tx_type.clone().get_wallet_config(),
+        address.to_string(),
+        tx_type,
+    )
+    .await?;
 
-//     // Fetch runes from UTXOs.
-//     runes::fetch_runes_from_utxos(config.network, utxos).await
-// }
+    ic_cdk::println!("[send_script_spend] Rune UTXOs = {:?}", rune_utxos);
+    ic_cdk::println!("[send_script_spend] BTC UTXOs = {:?}", btc_utxos);
+
+    return Ok((btc_utxos, rune_utxos));
+}
+
+#[ic_cdk::query]
+pub async fn get_rune_utxos(rune_id: RuneID) -> Vec<RuneUTXOEntry> {
+    memory::stable::utxos::get_rune_utxos(&rune_id)
+}
 
 // --------
 // END TEST
@@ -92,10 +111,10 @@ pub async fn get_p2tr_raw_key_spend_address() -> Result<String> {
 /// Returns the P2TR address of this canister at a specific derivation path.
 /// Necessary for sending and receiving runes.
 #[ic_cdk::update]
-pub async fn get_p2tr_script_spend_address() -> Result<String> {
-    wallet::p2tr_script_spend::get_address(WalletConfig::for_p2tr_script())
+pub async fn get_p2tr_script_spend_address(tx_type: TransactionType) -> Result<String> {
+    wallet::p2tr_script_spend::get_address(WalletConfig::for_p2tr_script(), tx_type)
         .await
-        .map(|addr| addr.to_string())
+        .map(|addr| addr.0.to_string())
 }
 
 // -------
@@ -132,7 +151,6 @@ pub fn validate_rune(rune_id: RuneID) -> Result<()> {
 
 #[ic_cdk::query]
 pub fn get_offramper_deposits(offramper: Address) -> Result<VaultEntry> {
-    ic_cdk::println!("[get_offramper_deposits]");
     OFFRAMPER_VAULTS
         .with_borrow(|vaults| vaults.get(&offramper))
         .ok_or_else(|| VaultError::AddressVaultNotFound.into())
@@ -150,14 +168,23 @@ pub fn deposit_to_address_vault(
     offramper: Address,
     amount: u64,
     rune: Option<RuneID>,
+    utxos: Vec<RuneUTXOEntry>,
 ) -> Result<()> {
-    vault::deposit::deposit_to_vault(offramper, amount, rune)
+    vault::deposit::deposit_to_vault(offramper, amount, rune.clone())?;
+
+    if let Some(rune_id) = rune {
+        add_rune_utxo_entries(rune_id, utxos);
+    }
+
+    Ok(())
 }
 
 // TODO: do the transfer to the offramper here
 #[ic_cdk::update]
 pub fn cancel_deposit(offramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
     vault::deposit::cancel_deposit(offramper, amount, rune)
+
+    // TODO: transfer to offramper
 }
 
 #[ic_cdk::update]
@@ -187,7 +214,8 @@ pub async fn complete_order_and_send(
     tx_type: TransactionType,
 ) -> Result<String> {
     // Send Bitcoin or Runes
-    let tx_id = wallet::send::send_btc_or_rune(onramper_address.clone(), amount, tx_type).await?;
+    let tx_id =
+        wallet::send::send_btc_or_ordinal(onramper_address.clone(), amount, tx_type).await?;
 
     // Clear the locked funds in the vault
     // vault::complete::complete_order(onramper_address, amount, rune)?;
@@ -199,29 +227,31 @@ pub async fn complete_order_and_send(
 // INSCRIPTION
 // -----------
 #[ic_cdk::update]
-pub async fn send_ordinals_inscription(
+pub async fn inscribe_ordinals_inscription(
     content: String,
     content_type: String,
     metadata: Option<String>,
     dst_address: String,
     amount: u64,
 ) -> Result<String> {
-    let inscription = format!(
-        "{}\n\n{}\n{}",
+    let inscription = Inscription {
         content,
         content_type,
-        metadata.unwrap_or_default()
-    )
-    .into_bytes();
-    let tx_id = inscription::send_inscription(
+        metadata,
+    };
+    let tx_id = inscription::inscribe_ordinal(
         WalletConfig::for_p2tr_script(),
-        inscription,
         dst_address,
         amount,
+        inscription,
     )
     .await?;
 
     Ok(tx_id.to_string())
+}
+
+pub async fn send_ordinals_inscription(dst_address: String, amount: u64) -> Result<bitcoin::Txid> {
+    wallet::send::send_btc_or_ordinal(dst_address, amount, TransactionType::OrdinalTransfer).await
 }
 
 ic_cdk::export_candid!();
