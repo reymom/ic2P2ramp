@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 ic-cdk = "0.14"
 ic-stable-structures = "0.6"
-ic-cdk-timers = "0.7"
+ic-cdk-timers = { workspace = true }
 icrc-ledger-types = "0.1.6"
 candid = { workspace = true }
 serde = { workspace = true }
