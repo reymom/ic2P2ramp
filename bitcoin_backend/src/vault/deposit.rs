@@ -13,7 +13,6 @@ pub fn deposit_to_vault(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    ic_cdk::println!("we are here");
     OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
         let mut entry = vaults
             .get(&offramper_address)

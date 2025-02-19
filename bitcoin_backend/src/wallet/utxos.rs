@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use ic_cdk::api::management_canister::bitcoin::Utxo;
 
 use crate::{
+    api,
     errors::Result,
     memory::stable::utxos::{get_rune_utxos, list_rune_utxos},
     RuneUTXOEntry, TransactionType, WalletConfig,
@@ -14,7 +15,7 @@ pub async fn get_tx_utxos(
     address: String,
     tx_type: TransactionType,
 ) -> Result<(Vec<Utxo>, HashMap<Utxo, RuneUTXOEntry>)> {
-    let all_utxos = crate::api::bitcoin::get_utxos(config.network, address.to_string()).await?;
+    let all_utxos = api::bitcoin::get_utxos(config.network, address.to_string()).await?;
     let all_rune_utxos: Vec<(String, u32)> = list_rune_utxos()
         .iter()
         .map(|(_, utxo)| (utxo.txid.clone(), utxo.vout))

@@ -67,9 +67,9 @@ pub async fn send_key_spend(
         &dst_address,
         amount,
         &btc_utxos,
-        Some(rune_utxos),
+        Some(rune_utxos.clone()),
         fee_per_byte,
-        tx_type,
+        tx_type.clone(),
     )
     .await?;
 
@@ -83,8 +83,8 @@ pub async fn send_key_spend(
         transaction,
         &prevouts,
         &own_address,
-        config.key_name,
-        config.derivation_path,
+        config.key_name.clone(),
+        config.derivation_path.clone(),
         api::schnorr::sign_with_schnorr,
     )
     .await?;
@@ -96,7 +96,21 @@ pub async fn send_key_spend(
     );
 
     api::bitcoin::send_transaction(config.network, signed_transaction_bytes).await?;
-    Ok(signed_transaction.compute_txid())
+
+    let tx_id = signed_transaction.compute_txid();
+
+    if let TransactionType::RuneTransfer(rune_id) = tx_type {
+        super::monitor::monitor_rune_transaction(
+            config,
+            own_address.to_string(),
+            tx_id,
+            rune_id,
+            rune_utxos,
+            0,
+        );
+    }
+
+    Ok(tx_id)
 }
 
 // Builds a transaction to send the given `amount` of satoshis to the
