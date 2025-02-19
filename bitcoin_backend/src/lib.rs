@@ -170,6 +170,10 @@ pub fn deposit_to_address_vault(
     rune: Option<RuneID>,
     utxos: Vec<RuneUTXOEntry>,
 ) -> Result<()> {
+    if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
+
     vault::deposit::deposit_to_vault(offramper, amount, rune.clone())?;
 
     if let Some(rune_id) = rune {
@@ -179,12 +183,24 @@ pub fn deposit_to_address_vault(
     Ok(())
 }
 
-// TODO: do the transfer to the offramper here
 #[ic_cdk::update]
-pub fn cancel_deposit(offramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
-    vault::deposit::cancel_deposit(offramper, amount, rune)
+pub async fn cancel_deposit(
+    offramper: Address,
+    amount: u64,
+    rune: Option<RuneID>,
+) -> Result<String> {
+    let tx_type = if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(&rune_id)?;
+        TransactionType::RuneTransfer(rune_id.clone())
+    } else {
+        TransactionType::TaprootBitcoin
+    };
 
-    // TODO: transfer to offramper
+    vault::deposit::cancel_deposit(offramper.clone(), amount, rune.clone())?;
+
+    wallet::send::send_btc_or_ordinal(offramper, amount, tx_type)
+        .await
+        .map(|tx_id| tx_id.to_string())
 }
 
 #[ic_cdk::update]
@@ -194,6 +210,10 @@ pub fn lock_funds(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
+    if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
+
     vault::lock::lock_funds(offramper, onramper, amount, rune)
 }
 
@@ -202,25 +222,33 @@ pub fn unlock_funds(
     offramper: Address,
     onramper: Address,
     amount: u64,
-    runes: Option<RuneID>,
+    rune: Option<RuneID>,
 ) -> Result<()> {
-    vault::lock::unlock_funds(offramper, onramper, amount, runes)
+    if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
+
+    vault::lock::unlock_funds(offramper, onramper, amount, rune)
 }
 
 #[ic_cdk::update]
 pub async fn complete_order_and_send(
     onramper_address: Address,
     amount: u64,
-    tx_type: TransactionType,
+    rune: Option<RuneID>,
 ) -> Result<String> {
-    // Send Bitcoin or Runes
-    let tx_id =
-        wallet::send::send_btc_or_ordinal(onramper_address.clone(), amount, tx_type).await?;
+    let tx_type = if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(&rune_id)?;
+        TransactionType::RuneTransfer(rune_id.clone())
+    } else {
+        TransactionType::TaprootBitcoin
+    };
 
-    // Clear the locked funds in the vault
-    // vault::complete::complete_order(onramper_address, amount, rune)?;
+    vault::complete::complete_order(onramper_address.clone(), amount, rune.clone())?;
 
-    Ok(tx_id.to_string())
+    wallet::send::send_btc_or_ordinal(onramper_address, amount, tx_type)
+        .await
+        .map(|tx_id| tx_id.to_string())
 }
 
 // -----------
