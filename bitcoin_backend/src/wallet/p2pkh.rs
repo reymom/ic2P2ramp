@@ -130,12 +130,13 @@ async fn build_p2pkh_spend_tx(
     let mut total_fee = 0;
     loop {
         let (transaction, _prevouts) = super::helpers::build_transaction_with_fee(
-            own_utxos,
+            TransactionType::LegacyBitcoin,
             own_address,
             dst_address,
             amount,
             total_fee,
-            TransactionType::LegacyBitcoin,
+            own_utxos,
+            None,
         )?;
 
         // Sign the transaction. In this case, we only care about the size
