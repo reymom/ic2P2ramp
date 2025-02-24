@@ -1,4 +1,4 @@
-use bitcoin_backend::{errors::Result, RuneID, VaultEntry};
+use bitcoin_backend::types::{errors::Result, RuneID, VaultEntry};
 
 use crate::{
     common::helpers::{query_call, update_call},

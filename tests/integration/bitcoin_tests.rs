@@ -313,7 +313,7 @@ fn test_transfer_runes() {
     let mut binding = get_bitcoin_env();
     let env = binding.as_mut().unwrap();
 
-    let rune_id = env.rune.as_ref().unwrap();
+    let rune_id = env.rune.clone().unwrap();
     let rune_name = "ZZZ•DOG•TO•THE•MOON";
 
     let own_address = env.get_p2tr_raw_key_spend_address();
@@ -344,7 +344,7 @@ fn test_transfer_runes() {
         &mut env.pic,
         env.canister_id,
         "get_canister_rune_amount",
-        (rune_id,),
+        (rune_id.clone(),),
     )
     .expect("Failed to query rune balance");
     assert!(balance.is_ok(), "Failed to get rune balance: {:?}", balance);

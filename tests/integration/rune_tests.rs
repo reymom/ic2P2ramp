@@ -1,9 +1,7 @@
-use bitcoin_backend::{RuneID, RuneMetadata};
-
-use crate::common::helpers::{query_call, update_call};
-use bitcoin_backend::errors::Result;
+use bitcoin_backend::types::{errors::Result, RuneID, RuneMetadata};
 
 use super::env::get_bitcoin_env;
+use crate::common::helpers::{query_call, update_call};
 
 #[test]
 fn test_register_rune() {
