@@ -5,9 +5,16 @@ mod ordinals;
 mod vault;
 mod wallet;
 
+pub mod types;
+
 use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
 use std::collections::HashMap;
+use types::errors::BitcoinError;
 
+use crate::types::{
+    errors, Address, Inscription, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType, VaultEntry,
+    WalletConfig,
+};
 use errors::{Result, VaultError};
 use memory::{
     heap::config::{KEY_NAME, NETWORK},
@@ -16,16 +23,7 @@ use memory::{
         vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
     },
 };
-pub use model::types::{
-    errors,
-    runes::{RuneID, RuneMetadata},
-    transfer::TransactionType,
-    utxo::RuneUTXOEntry,
-    vault::VaultEntry,
-    wallet::WalletConfig,
-    Address,
-};
-use ordinals::inscription::{self, Inscription};
+use ordinals::inscription;
 use wallet::utxos::get_tx_utxos;
 
 #[ic_cdk::init]
@@ -84,9 +82,33 @@ pub async fn get_rune_utxos(rune_id: RuneID) -> Vec<RuneUTXOEntry> {
     memory::stable::utxos::get_rune_utxos(&rune_id)
 }
 
+#[ic_cdk::query]
+pub async fn get_canister_rune_amount(rune_id: RuneID) -> Result<u64> {
+    Ok(memory::stable::utxos::get_rune_utxos(&rune_id)
+        .iter()
+        .map(|r| r.rune_amount)
+        .sum())
+}
+
 // --------
 // END TEST
 // --------
+
+#[ic_cdk::update]
+pub async fn estimate_bitcoin_transaction_fee() -> Result<u64> {
+    let fee_per_byte = wallet::get_fee_per_byte(NETWORK.with(|n| n.get())).await?;
+
+    // Estimate transaction size in vBytes
+    let estimated_size = 200; // max cut for P2TR spend transaction in vBytes
+    let estimated_fee = estimated_size as u64 * fee_per_byte;
+
+    ic_cdk::println!(
+        "[estimate_bitcoin_transaction_fee] Estimated Fee: {} sats",
+        estimated_fee
+    );
+
+    Ok(estimated_fee)
+}
 
 // ---------
 // ADDRESSES
@@ -120,6 +142,39 @@ pub async fn get_p2tr_script_spend_address(tx_type: TransactionType) -> Result<S
 // -------
 // CONFIGS
 // -------
+
+#[ic_cdk::update]
+async fn withdraw_bitcoin_fees(destination_address: Address, amount: u64) -> Result<String> {
+    ic_cdk::println!(
+        "[withdraw_bitcoin_fees] Withdrawing {} sats to {}",
+        amount,
+        destination_address
+    );
+
+    let fee_per_byte = wallet::get_fee_per_byte(NETWORK.with(|n| n.get())).await?;
+
+    let estimated_size = 140;
+    let estimated_fee = estimated_size as u64 * fee_per_byte;
+
+    let net_amount = amount.saturating_sub(estimated_fee);
+    if net_amount == 0 {
+        return Err(BitcoinError::InvalidInput("Fees greater than amount".to_string()).into());
+    }
+
+    let tx_id = wallet::send::send_btc_or_ordinal(
+        destination_address,
+        net_amount,
+        TransactionType::TaprootBitcoin,
+    )
+    .await?;
+
+    ic_cdk::println!(
+        "[withdraw_bitcoin_fees] Withdrawal completed. TX ID: {}",
+        tx_id
+    );
+
+    Ok(tx_id.to_string())
+}
 
 #[ic_cdk::query]
 pub fn get_registered_runes() -> Result<Vec<RuneMetadata>> {
