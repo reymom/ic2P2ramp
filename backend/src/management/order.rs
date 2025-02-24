@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
+use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use icrc_ledger_types::icrc1::account::Account;
@@ -13,8 +15,12 @@ use crate::evm::{
     vault::Ic2P2ramp,
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
-use crate::inter_canister::bitcoin::{self, bitcoin_backend_validate_rune};
+use crate::inter_canister::bitcoin::{
+    self, bitcoin_backend_deposit_funds, bitcoin_backend_estimate_fee,
+    bitcoin_backend_validate_rune,
+};
 use crate::management::user as user_management;
+use crate::model::errors::RampError;
 use crate::model::guards;
 use crate::model::{
     helpers,
@@ -137,7 +143,10 @@ async fn order_crypto_fee(
 
             Ok(get_crypto_fee(crypto_amount, icp_fee * 2))
         }
-        Blockchain::Bitcoin => Ok(get_crypto_fee(crypto_amount, 100 * 2)),
+        Blockchain::Bitcoin => {
+            let fee = bitcoin_backend_estimate_fee().await?;
+            Ok(get_crypto_fee(crypto_amount, fee as u128))
+        }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
 }
@@ -164,6 +173,7 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
 pub async fn validate_deposit_tx(
     blockchain: &Blockchain,
     evm_input: Option<EvmOrderInput>,
+    runes: Option<Vec<RuneUTXOEntry>>,
     order_offramper: String,
     order_amount: u128,
     order_token: Option<String>,
@@ -217,9 +227,26 @@ pub async fn validate_deposit_tx(
             Ok(None)
         }
         Blockchain::Bitcoin => {
-            if let Some(rune_token) = order_token {
+            if let Some(rune_token) = order_token.clone() {
                 bitcoin_backend_validate_rune(rune_token).await?;
+                if runes.is_none() {
+                    return Err(BlockchainError::BitcoinBackendError(
+                        "runes utxos are required".to_string(),
+                    )
+                    .into());
+                }
             }
+
+            bitcoin_backend_deposit_funds(
+                order_offramper,
+                order_amount as u64,
+                order_token
+                    .as_ref()
+                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
+                    .transpose()?,
+                runes.unwrap(),
+            )
+            .await?;
             Ok(None)
         }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
@@ -449,6 +476,12 @@ pub async fn lock_order(
                 order.offramper_address.address,
                 onramper_address.address,
                 order.crypto.amount as u64,
+                order
+                    .crypto
+                    .token
+                    .as_ref()
+                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
+                    .transpose()?,
             )
             .await?;
             Ok(())
@@ -457,7 +490,7 @@ pub async fn lock_order(
     }
 }
 
-/// Unlocks an order, handling both ICP and EVM blockchain orders.
+/// Unlocks an order, handling both ICP, EVM and Bitcoin orders.
 ///
 /// # Parameters
 ///
@@ -466,6 +499,8 @@ pub async fn lock_order(
 /// # Behavior
 ///
 /// - **ICP Orders**: Unlocks the order directly.
+/// - **Bitcoin Orders**: Unlocks the order and calls the `bitcoin_backend` canister
+///   to update the vault tracking state.
 /// - **EVM Orders**: First, uncommits the funds in the EVM vault. The function
 ///   listens for the EVM transaction to complete successfully before proceeding
 ///   to update the corresponding ICP order status.
@@ -485,7 +520,7 @@ pub async fn lock_order(
 /// ```
 /// let result = unlock_order(12345).await;
 /// match result {
-///     Ok(tx_hash) => println!("Transaction succeeded with hash: {}", tx_hash),
+///     Ok(()) => println!("Transaction succeeded."),
 ///     Err(err) => eprintln!("Failed to unlock order: {:?}", err),
 /// }
 /// ```
@@ -530,6 +565,13 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
                 order.base.offramper_address.address,
                 order.onramper.address.address,
                 order.base.crypto.amount as u64,
+                order
+                    .base
+                    .crypto
+                    .token
+                    .as_ref()
+                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
+                    .transpose()?,
             )
             .await?;
 
@@ -591,6 +633,12 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
             bitcoin::bitcoin_backend_cancel_deposit(
                 order.offramper_address.address,
                 order.crypto.amount as u64,
+                order
+                    .crypto
+                    .token
+                    .as_ref()
+                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
+                    .transpose()?,
             )
             .await?;
 

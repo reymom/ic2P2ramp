@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
+use bitcoin_backend::types::RuneID;
 use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
@@ -9,6 +10,7 @@ use crate::{
     icp::vault::Ic2P2ramp as ICPRamp,
     inter_canister::bitcoin,
     management,
+    model::errors::RampError,
     outcalls::{paypal, revolut},
     types::{
         icp::get_icp_token,
@@ -134,6 +136,13 @@ pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
             bitcoin::bitcoin_backend_send_funds(
                 order.onramper.address.address.clone(),
                 order.base.crypto.amount as u64,
+                order
+                    .base
+                    .crypto
+                    .token
+                    .as_ref()
+                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
+                    .transpose()?,
             )
             .await
         }

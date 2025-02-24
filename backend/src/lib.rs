@@ -7,6 +7,7 @@ mod outcalls;
 
 use std::collections::{HashMap, HashSet};
 
+use bitcoin_backend::types::RuneUTXOEntry;
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
@@ -245,6 +246,7 @@ pub async fn create_evm_order_with_tx(
     order_management::validate_deposit_tx(
         &blockchain,
         Some(evm_input),
+        None,
         offramper.clone(),
         amount,
         token.clone(),
@@ -644,7 +646,7 @@ fn get_order(order_id: u64) -> Result<OrderState> {
 
 #[ic_cdk::update]
 async fn create_order(
-    _session_token: String,
+    session_token: String,
     currency: String,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     blockchain: Blockchain,
@@ -653,9 +655,10 @@ async fn create_order(
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
     evm_input: Option<EvmOrderInput>,
+    runes: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<u64> {
     let user = stable::users::get_user(&offramper_user_id)?;
-    // user.validate_session(&session_token)?;
+    user.validate_session(&session_token)?;
     user.is_banned()?;
     user.is_offramper()?;
 
@@ -668,6 +671,7 @@ async fn create_order(
     let tx_hash = order_management::validate_deposit_tx(
         &blockchain,
         evm_input.clone(),
+        runes,
         offramper_address.clone().address,
         crypto_amount,
         token_address.clone(),
@@ -714,6 +718,7 @@ async fn top_up_order(
     evm_input: Option<EvmOrderInput>,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
+    runes: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<()> {
     let order = orders::get_order(&order_id)?.created()?;
     order.is_processing()?;
@@ -726,6 +731,7 @@ async fn top_up_order(
     let tx_hash = order_management::validate_deposit_tx(
         &order.crypto.blockchain,
         evm_input.clone(),
+        runes,
         order.offramper_address.clone().address,
         amount,
         order.crypto.token.clone(),

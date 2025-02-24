@@ -1,5 +1,6 @@
 use std::num::ParseFloatError;
 
+use bitcoin_backend::types::errors::BitcoinError;
 use candid::CandidType;
 use ic_cdk::api::call::RejectionCode;
 use thiserror::Error;
@@ -191,6 +192,9 @@ pub enum BlockchainError {
 
     #[error("Evm Execution Reverted. Code: {0}, Message: {1}")]
     EvmExecutionReverted(i64, String),
+
+    #[error("Bitcoin Backend Error: {0}")]
+    BitcoinBackendError(String),
 }
 
 #[derive(Error, Debug, CandidType, Clone)]
@@ -256,5 +260,11 @@ impl From<rsa::errors::Error> for SystemError {
 impl From<rsa::pkcs8::Error> for SystemError {
     fn from(err: rsa::pkcs8::Error) -> Self {
         SystemError::Pkcs8Error(err.to_string())
+    }
+}
+
+impl From<BitcoinError> for RampError {
+    fn from(err: BitcoinError) -> Self {
+        RampError::BlockchainError(BlockchainError::BitcoinBackendError(err.to_string()))
     }
 }
