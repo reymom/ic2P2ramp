@@ -1,5 +1,6 @@
-pub mod setup;
+pub mod bitcoin;
 pub mod helpers;
+pub mod setup;
 
 pub fn setup_pic() -> pocket_ic::PocketIc {
     pocket_ic::PocketIcBuilder::new()

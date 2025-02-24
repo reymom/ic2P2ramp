@@ -9,10 +9,13 @@ use ic_btc_interface::{Config, Network};
 use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
 use pocket_ic::{PocketIc, PocketIcBuilder};
 
+pub const BTC_RPC_URL: &str = "http://127.0.0.1:18443";
+pub const RPC_USER: &str = "icp";
+pub const RPC_PASSWORD: &str = "test";
+pub const BTC_CANISTER_ID: &str = "g4xu7-jiaaa-aaaan-aaaaq-cai";
+
 const BITCOIN_BACKEND_WASM: &str = "../target/wasm32-unknown-unknown/release/bitcoin_backend.wasm";
-
 const _BACKEND_WASM: &str = "../target/wasm32-unknown-unknown/release/backend.wasm";
-
 const INIT_CYCLES: u128 = 2_000_000_000_000;
 
 pub(crate) fn setup_bitcoin_backend() -> (PocketIc, Principal) {
@@ -44,7 +47,7 @@ pub fn deploy_bitcoin_testnet_canister(pic: &PocketIc) {
     // The NNS root canister should be the controller of the bitcoin testnet canister.
     let nns_root_canister_id: Principal =
         Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
-    let btc_canister_id = Principal::from_text("g4xu7-jiaaa-aaaan-aaaaq-cai").unwrap();
+    let btc_canister_id = Principal::from_text(BTC_CANISTER_ID).unwrap();
     let actual_canister_id = pic
         .create_canister_with_id(Some(nns_root_canister_id), None, btc_canister_id)
         .unwrap();
