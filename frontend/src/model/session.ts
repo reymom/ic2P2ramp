@@ -1,6 +1,6 @@
 import { User } from '@/declarations/backend/backend.did';
-import { UserTypes } from './types';
-import { userTypeToString } from './utils';
+import { UserTypes } from '@/model/types';
+import { userTypeToString } from '@/model/utils/utils';
 
 export const sessionMarginMilisec = 240_000; // 4 minuts
 

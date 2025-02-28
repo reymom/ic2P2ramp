@@ -4,7 +4,7 @@ import {
   PaymentProviderType,
   UserType,
 } from '@/declarations/backend/backend.did';
-import { UserTypes, PaymentProviderTypes, BlockchainTypes } from './types';
+import { UserTypes, PaymentProviderTypes, BlockchainTypes } from '@/model/types';
 
 // Blockchain
 export const blockchainToBlockchainType = (

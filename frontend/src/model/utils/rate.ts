@@ -1,6 +1,6 @@
 import { backend } from '@/model/backendProxy';
 import { Crypto } from '@/declarations/backend/backend.did';
-import { rampErrorToString } from './error';
+import { rampErrorToString } from '@/model/utils/error';
 
 export const fetchOrderPrice = async (
   currency: string,
@@ -39,6 +39,12 @@ export const getExchangeRate = async (
     }
   } catch (error) {
     console.error('Error fetching XRC price: ', error);
+    // default to external query exchange rate
+    // queryExchangeRate();
     return null;
   }
 };
+
+const queryExchangeRate = async (): Promise<number | null> => {
+  return null
+}

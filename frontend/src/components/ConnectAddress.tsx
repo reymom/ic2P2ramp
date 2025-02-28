@@ -7,8 +7,8 @@ import { useAccount } from 'wagmi';
 import { backend, createActor } from '@/model/backendProxy';
 import { AuthenticationData, LoginAddress } from '@/declarations/backend/backend.did';
 import { validatePassword } from '@/utils/helper';
-import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/error';
-import { handleWeb3Error } from '@/model/evm';
+import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/utils/error';
+import { handleWeb3Error } from '@/model/blockchain/evm';
 import { useUser } from './user/UserContext';
 import DynamicDots from './ui/DynamicDots';
 

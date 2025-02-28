@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { rampErrorToString } from '@/model/error';
+import { rampErrorToString } from '@/model/utils/error';
 import { validatePassword } from '@/utils/helper';
 import { clearTempResetPasswordData, getTempResetPasswordData } from '@/model/emailConfirmation';
 

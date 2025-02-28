@@ -1,21 +1,16 @@
 import { bitcoin_backend } from '@/declarations/bitcoin_backend';
 import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
-
-const isTaprootAddress = (address: string): boolean => {
-  return address.startsWith('bc1p');
-};
+import { fetchRuneBalance, fetchTransactionOutputs, waitForTransactionConfirmation } from './unisat';
+import { RuneUTXOEntry } from '@/declarations/backend/backend.did';
 
 export const fetchBitcoinCanisterAddress = async (
   useTaproot: boolean,
-  isScriptSpend: boolean = false,
 ) => {
   try {
     let response;
 
     if (useTaproot) {
-      response = isScriptSpend
-        ? await bitcoin_backend.get_p2tr_script_spend_address()
-        : await bitcoin_backend.get_p2tr_raw_key_spend_address();
+      response = await bitcoin_backend.get_p2tr_raw_key_spend_address();
     } else {
       response = await bitcoin_backend.get_p2pkh_address();
     }
@@ -88,4 +83,41 @@ export const fetchRuneMetadata = async (
     console.error('Failed to fetch rune metadata:', error);
     throw error;
   }
+};
+
+export const handleBitcoinTransaction = async (txid: string, isRune: boolean): Promise<Array<RuneUTXOEntry> | []> => {
+  console.log(`Waiting for Bitcoin transaction ${txid} confirmation...`);
+  const confirmed = await waitForTransactionConfirmation(txid);
+  if (!confirmed) {
+    console.error(`Transaction ${txid} not confirmed.`);
+    return [];
+  }
+
+  if (!isRune) return [];
+  
+  console.log(`Fetching UTXOs for transaction ${txid}...`);
+  const utxos = await fetchTransactionOutputs(txid);
+  if (!Array.isArray(utxos) || utxos.length === 0) {
+    console.error(`No UTXOs found for transaction ${txid}`);
+    return [];
+  }
+
+  const runeUTXOs: RuneUTXOEntry[] = [];
+  for (const utxo of utxos) {
+    try {
+      const runeData = await fetchRuneBalance(utxo.txid, utxo.vout);
+      if (Array.isArray(runeData) && runeData.length > 0) {
+        runeUTXOs.push({
+          txid: utxo.txid,
+          vout: utxo.vout,
+          rune_amount: BigInt(runeData[0].amount),
+          script_pubkey: utxo.scriptPk,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to fetch Rune balance for ${utxo.txid}:${utxo.vout}: ${error}`);
+    }
+  }
+
+  return runeUTXOs;
 };

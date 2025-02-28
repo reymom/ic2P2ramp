@@ -23,7 +23,7 @@ import {
     savePreferredCurrency
 } from '@/model/session';
 import { UserTypes } from '@/model/types';
-import { icpHost, iiUrl } from '@/model/icp';
+import { icpHost, iiUrl } from '@/model/blockchain/icp';
 import { formatCryptoUnits } from '@/utils/helper';
 import { getChains } from '@/wagmi';
 import { supportedRuneSymbols } from '@/constants/runes';

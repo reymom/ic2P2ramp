@@ -2,8 +2,8 @@ import { HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 
-import { backend } from './backendProxy';
-import { rampErrorToString } from './error';
+import { backend } from '@/model/backendProxy';
+import { rampErrorToString } from '@/model/utils/error';
 
 console.log('FRONTEND_ICP_ENV = ', process.env.FRONTEND_ICP_ENV);
 

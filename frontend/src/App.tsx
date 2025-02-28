@@ -4,7 +4,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
 import { OrderFilter } from '@/declarations/backend/backend.did';
-import { userTypeToString } from './model/utils';
+import { userTypeToString } from './model/utils/utils';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useUser } from './components/user/UserContext';
 import Menu from './components/Menu';
@@ -56,7 +56,7 @@ function App() {
     return (
         <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
             <Menu />
-            <div className="flex-grow py-8">
+            <div className="flex-grow py-4">
                 {isAuthPage ? (
                     // Centered box
                     <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto">
@@ -75,7 +75,7 @@ function App() {
                     </div>
                 ) : (
                     // Full-width for DEX-style pages
-                    <div className="w-full px-12">
+                    <div className="w-full px-16">
                         <Routes>
                             <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
                         </Routes>
