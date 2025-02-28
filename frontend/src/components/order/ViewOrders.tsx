@@ -6,10 +6,11 @@ import { faArrowLeft, faArrowRight, faTh, faList } from '@fortawesome/free-solid
 
 import { backend } from '@/model/backendProxy';
 import { OrderFilter, OrderState } from '@/declarations/backend/backend.did';
-import { parseBigIntFields } from '@/model/mock';
+import { parseBigIntFields } from '@/model/utils/mock';
 import OrderFilters from '@/components/order/OrderFilters';
 import Order from '@/components/order/Order';
 import mockOrdersData from '@/assets/mocks/orders.json';
+import clsx from 'clsx';
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [loading, setLoading] = useState(false);
@@ -25,9 +26,19 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const pageSize = 5;
 
     useEffect(() => {
-        if (ordersRef.current) {
-            setOrdersHeight(ordersRef.current.clientHeight);
-        }
+        const updateHeight = () => {
+            if (ordersRef.current) {
+                setOrdersHeight(ordersRef.current.clientHeight);
+            }
+        };
+
+        updateHeight();
+
+        window.addEventListener("resize", updateHeight);
+
+        return () => {
+            window.removeEventListener("resize", updateHeight);
+        };
     }, [orders]);
 
     useEffect(() => {
@@ -88,7 +99,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     };
 
     return (
-        <div className="relative w-full px-6" ref={ordersRef}>
+        <div className="relative w-full" >
             <div className="flex justify-between items-center gap-4 mb-6">
                 {/* Filters */}
                 <div className="flex flex-grow justify-between items-center">
@@ -118,14 +129,14 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}
-                    className={`absolute left-0 w-[60px] h-[66%] flex items-center justify-center
-                        bg-gray-200 dark:bg-gray-800 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-r-lg
-                        ${page === 1 ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-600 dark:hover:bg-gray-500'}
-                    `}
+                    className={clsx(
+                        "absolute w-[40px] flex items-center justify-center",
+                        "bg-gray-200 dark:bg-gray-800 transition-all rounded-l-lg",
+                        page === 1 ? 'cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-700'
+                    )}
                     style={{
-                        position: "fixed",
-                        top: "50%",
-                        transform: "translateY(-50%)",
+                        height: `${ordersHeight}px`,
+                        marginLeft: "-50px",
                     }}
                 >
                     <FontAwesomeIcon icon={faArrowLeft} size="lg" />
@@ -137,14 +148,14 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                 <button
                     onClick={handleNextPage}
                     disabled={orders.length === 0}
-                    className={`absolute right-0 w-[60px] h-[66%] flex items-center justify-center
-                        bg-gray-200 dark:bg-gray-700 bg-opacity-30 hover:bg-opacity-80 transition-all rounded-l-lg
-                        ${orders.length < pageSize ? 'cursor-not-allowed opacity-40' : 'hover:bg-gray-600'}
-                    `}
+                    className={clsx(
+                        "absolute right-0 w-[40px] flex items-center justify-center",
+                        "bg-gray-200 dark:bg-gray-800 transition-all rounded-r-lg",
+                        orders.length < pageSize ? 'cursor-not-allowed' : 'hover:bg-gray-300 dark:hover:bg-gray-700'
+                    )}
                     style={{
-                        position: "fixed",
-                        top: "50%",
-                        transform: "translateY(-50%)",
+                        height: `${ordersHeight}px`,
+                        marginRight: "-50px",
                     }}
                 >
                     <FontAwesomeIcon icon={faArrowRight} size="lg" />
@@ -159,7 +170,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                     </div>
                 ) : (
                     isListView ? (
-                        <ul className={`${isListView ? "space-y-4" : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"}`}>
+                        <div className="overflow-x-auto">
                             <table className="w-full border-collapse">
                                 <thead>
                                     <tr className="bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
@@ -169,6 +180,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                                         <th className="px-4 py-3 text-left">Address</th>
                                         <th className="px-4 py-3 text-left">Network</th>
                                         <th className="px-4 py-3 text-left">Time Left</th>
+                                        <th className="px-4 py-3 text-left">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -177,13 +189,15 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                                     ))}
                                 </tbody>
                             </table>
-                        </ul>
+                        </div>
                     ) : (
-                        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {orders.map((order, index) => (
-                                <Order key={index} order={order} isListView={isListView} refetchOrders={fetchOrders} />
-                            ))}
-                        </ul>
+                        <div ref={ordersRef}>
+                            <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {orders.map((order, index) => (
+                                    <Order key={index} order={order} isListView={isListView} refetchOrders={fetchOrders} />
+                                ))}
+                            </ul>
+                        </div>
                     )
                 )
             }
