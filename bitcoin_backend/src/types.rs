@@ -2,12 +2,11 @@
 
 pub use crate::model::types::{
     errors,
+    inscription::Inscription,
     runes::Etching,
     runes::{RuneID, RuneMetadata},
     transfer::TransactionType,
     utxo::RuneUTXOEntry,
     vault::VaultEntry,
-    wallet::WalletConfig,
     Address,
 };
-pub use crate::ordinals::inscription::Inscription;

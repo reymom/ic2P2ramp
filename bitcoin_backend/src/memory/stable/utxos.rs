@@ -2,7 +2,10 @@ use std::cell::RefCell;
 
 use ic_stable_structures::{memory_manager::MemoryId, StableBTreeMap};
 
-use crate::{model::types::utxo::RuneUTXOList, RuneID, RuneUTXOEntry};
+use crate::model::types::{
+    runes::RuneID,
+    utxo::{RuneUTXOEntry, RuneUTXOList},
+};
 
 use super::{Memory, MEMORY_MANAGER};
 

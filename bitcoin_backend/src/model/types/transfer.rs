@@ -1,8 +1,8 @@
 use candid::{CandidType, Deserialize};
 
-use crate::{ordinals::inscription::Inscription, RuneID, WalletConfig};
+use crate::types::RuneID;
 
-use super::runes::Etching;
+use super::{inscription::Inscription, runes::Etching};
 
 #[derive(Deserialize, CandidType, Clone)]
 pub enum TransactionType {
@@ -15,17 +15,6 @@ pub enum TransactionType {
 }
 
 impl TransactionType {
-    pub fn get_wallet_config(self) -> WalletConfig {
-        match self {
-            Self::LegacyBitcoin => WalletConfig::for_p2pkh(),
-            Self::RuneTransfer(_) | Self::TaprootBitcoin | Self::OrdinalTransfer => {
-                WalletConfig::for_p2tr_raw_key()
-            }
-            Self::RuneEtching(_) => WalletConfig::for_p2tr_script(),
-            Self::OrdinalInscription(_) => WalletConfig::for_p2tr_script(),
-        }
-    }
-
     pub fn to_taproot_use_case(&self) -> Option<TaprootUseCase> {
         match self {
             TransactionType::RuneEtching(etching) => {

@@ -1,9 +1,10 @@
 use bitcoin::Txid;
 use ic_cdk::api::management_canister::bitcoin::Satoshi;
 
-use crate::{
-    errors::BitcoinError,
-    model::types::{errors::Result, transfer::TransactionType, wallet::WalletConfig},
+use crate::model::types::{
+    errors::{BitcoinError, Result},
+    transfer::TransactionType,
+    wallet::WalletConfig,
 };
 
 pub async fn send_btc_or_ordinal(

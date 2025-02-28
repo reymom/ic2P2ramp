@@ -29,7 +29,10 @@ thread_local! {
 }
 
 pub fn get_registered_runes() -> Result<Vec<RuneMetadata>> {
-    Ok(RUNES.with(|runes| runes.borrow().clone()).into_values().collect())
+    Ok(RUNES
+        .with(|runes| runes.borrow().clone())
+        .into_values()
+        .collect())
 }
 
 pub fn register_runes(rune_list: Vec<RuneMetadata>) -> Result<()> {
@@ -56,7 +59,8 @@ pub fn is_rune_supported(rune_id: &RuneID) -> Result<()> {
 pub fn get_rune_metadata(rune_id: &RuneID) -> Result<RuneMetadata> {
     rune_id.validate()?;
     let runes = RUNES.with(|runes| runes.borrow().clone());
-    runes.get(rune_id).cloned().ok_or_else(|| {
-        BitcoinError::UnsupportedRune(rune_id.to_string())
-    })
+    runes
+        .get(rune_id)
+        .cloned()
+        .ok_or_else(|| BitcoinError::UnsupportedRune(rune_id.to_string()))
 }

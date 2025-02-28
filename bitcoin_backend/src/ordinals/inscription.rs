@@ -1,6 +1,3 @@
-use candid::{CandidType, Deserialize};
-use serde::Serialize;
-
 use bitcoin::{
     opcodes,
     script::{Builder, PushBytesBuf},
@@ -8,18 +5,12 @@ use bitcoin::{
 };
 use ic_cdk::api::management_canister::bitcoin::Satoshi;
 
-use crate::{
-    errors::BitcoinError,
-    model::types::{errors::Result, wallet::WalletConfig},
-    TransactionType,
+use crate::model::types::{
+    errors::{BitcoinError, Result},
+    inscription::Inscription,
+    transfer::TransactionType,
+    wallet::WalletConfig,
 };
-
-#[derive(Serialize, CandidType, Deserialize, Clone)]
-pub struct Inscription {
-    pub content: String,
-    pub content_type: String,
-    pub metadata: Option<String>,
-}
 
 pub fn build_ordinal_inscription(inscription: &Inscription) -> Result<ScriptBuf> {
     let inscription_data = format!(

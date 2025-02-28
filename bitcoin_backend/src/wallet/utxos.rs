@@ -5,8 +5,8 @@ use ic_cdk::api::management_canister::bitcoin::Utxo;
 
 use crate::{
     api,
-    errors::Result,
     memory::stable::utxos::{get_rune_utxos, list_rune_utxos},
+    types::errors::Result,
     RuneUTXOEntry, TransactionType, WalletConfig,
 };
 
