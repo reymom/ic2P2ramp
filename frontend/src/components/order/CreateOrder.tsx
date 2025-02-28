@@ -8,26 +8,26 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider, PaymentProviderType, Blockchain, EvmOrderInput } from '@/declarations/backend/backend.did';
+import { PaymentProvider, PaymentProviderType, Blockchain, EvmOrderInput, RuneUTXOEntry } from '@/declarations/backend/backend.did';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
 import { supportedRuneSymbols } from '@/constants/runes';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { useUser } from '@/components/user/UserContext';
-import { rampErrorToString } from '@/model/error';
-import { blockchainToBlockchainType, providerToProviderType } from '@/model/utils';
-import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/icp';
-import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/evm';
+import { rampErrorToString } from '@/model/utils/error';
+import { blockchainToBlockchainType, providerToProviderType } from '@/model/utils/utils';
+import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
+import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
 import { BlockchainTypes, TokenOption } from '@/model/types';
 import { isSessionExpired } from '@/model/session';
-import { getExchangeRate } from '@/model/rate';
+import { getExchangeRate } from '@/model/utils/rate';
 import { formatPrice, truncate } from '@/utils/helper';
 import DynamicDots from '@/components/ui/DynamicDots';
 import CurrencySelect from '@/components/ui/CurrencySelect';
 import TokenSelect from '@/components/ui/TokenSelect';
 import BlockchainSelect from '@/components/ui/BlockchainSelect';
-import { fetchBitcoinCanisterAddress, fetchRuneMetadata, transferBitcoinToCanister, transferRuneToCanister } from '@/model/bitcoin';
+import { fetchBitcoinCanisterAddress, fetchRuneMetadata, handleBitcoinTransaction, transferBitcoinToCanister, transferRuneToCanister } from '@/model/blockchain/bitcoin';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 const CreateOrder: React.FC = () => {
@@ -288,6 +288,7 @@ const CreateOrder: React.FC = () => {
             }
 
             let evmOrderInput: [EvmOrderInput] | [] = []
+            let runeUTXOs: [Array<RuneUTXOEntry>] | [] = []
             const blockchain = blockchainToBlockchainType(selectedBlockchain);
             if (blockchain === 'EVM') {
                 if (!chainId) throw new Error('Chain id is not available');
@@ -377,10 +378,13 @@ const CreateOrder: React.FC = () => {
                     }
                     console.log("bitcoinBackendAddress = ", bitcoinBackendAddress);
 
+                    let txid = '';
+                    let isRune = false;
                     if (selectedToken.runeMetadata) {
+                        isRune = true;
                         setLoadingMessage("Sending Rune to canister");
                         try {
-                            const txid = await transferRuneToCanister(
+                            txid = await transferRuneToCanister(
                                 cryptoAmountUnits,
                                 bitcoinBackendAddress,
                                 selectedToken.address
@@ -395,7 +399,7 @@ const CreateOrder: React.FC = () => {
                     } else {
                         setLoadingMessage("Sending Bitcoin to canister");
                         try {
-                            const txid = await transferBitcoinToCanister(
+                            txid = await transferBitcoinToCanister(
                                 cryptoAmountUnits,
                                 bitcoinBackendAddress
                             );
@@ -408,6 +412,15 @@ const CreateOrder: React.FC = () => {
                         }
                     }
                     setLoadingMessage("Transaction sent, awaiting confirmation");
+
+                    setTxHash(txid);
+
+                    const utxos = await handleBitcoinTransaction(txid, isRune);
+                    if (isRune && utxos.length === 0) {
+                        setMessage("Failed to fetch UTXOs for transaction");
+                        setIsLoading(false);
+                        return;
+                    }
                 } catch (error) {
                     setMessage(`Error creating Bitcoin order, error: ${error}`);
                     setIsLoading(false);
@@ -418,6 +431,7 @@ const CreateOrder: React.FC = () => {
                 throw new Error('Unsupported blockchain selected');
             }
 
+
             const result = await backend.create_order(
                 sessionToken,
                 currency,
@@ -427,7 +441,8 @@ const CreateOrder: React.FC = () => {
                 cryptoAmountUnits,
                 selectedAddress,
                 user.id,
-                evmOrderInput
+                evmOrderInput,
+                runeUTXOs.length > 0 ? [runeUTXOs] : [],
             );
 
             if ('Ok' in result) {
