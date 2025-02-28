@@ -16,6 +16,7 @@ type BlockchainError = variant {
   ReplacementUnderpriced;
   UnsupportedBlockchain;
   LedgerPrincipalNotSupported : text;
+  BitcoinBackendError : text;
   EvmExecutionReverted : record { int64; text };
   EvmLogError : text;
   EthersAbiError : text;
@@ -253,6 +254,12 @@ type RpcServices = variant {
   ArbitrumOne : opt vec L2MainnetService;
   EthMainnet : opt vec EthMainnetService;
 };
+type RuneUTXOEntry = record {
+  script_pubkey : text;
+  txid : text;
+  vout : nat32;
+  rune_amount : nat64;
+};
 type Session = record { token : text; expires_at : nat64 };
 type SignRequestCandid = record {
   to : opt text;
@@ -382,6 +389,7 @@ service : (InstallArg) -> {
       TransactionAddress,
       nat64,
       opt EvmOrderInput,
+      opt vec RuneUTXOEntry,
     ) -> (Result_4);
   execute_revolut_payment : (nat64, text) -> (Result_5) query;
   freeze_order : (nat64, nat64, text) -> (Result);
@@ -434,6 +442,7 @@ service : (InstallArg) -> {
       opt EvmOrderInput,
       opt nat64,
       opt nat64,
+      opt vec RuneUTXOEntry,
     ) -> (Result) query;
   transfer_canister_funds : (principal, principal, nat) -> (Result);
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);

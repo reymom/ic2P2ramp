@@ -8,7 +8,7 @@ name = "tests"
 path = "lib.rs"
 
 [dev-dependencies]
-bitcoin_backend = { path = "../bitcoin_backend", default-features = false }
+bitcoin_backend = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
 ic-cdk = { workspace = true }
