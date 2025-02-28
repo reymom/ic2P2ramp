@@ -15,14 +15,15 @@ import {
     faTimes,
     faSun,
     faMoon,
-    faCog
+    faCog,
+    faTimeline,
+    IconDefinition
 } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import logo from '@/assets/icR-logo.png';
 
 import { useUser } from './user/UserContext';
-import { userTypeToString } from '@/model/utils';
 import { truncate, formatTimeLeft } from '@/utils/helper';
 import { sessionMarginMilisec } from '@/model/session';
 
@@ -34,7 +35,6 @@ const Menu: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = useState(
         document.documentElement.classList.contains("dark")
     );
-
 
     const { isConnected } = useAccount();
     const { user, icpBalances, loginInternetIdentity, logout } = useUser();
@@ -93,40 +93,97 @@ const Menu: React.FC = () => {
         setIsMenuOpen(false);
     };
 
-    const linkClasses = clsx(
-        "flex items-center space-x-2 py-2 px-3 border rounded-md",
-        "bg-gray-100 hover:bg-gray-200",
-        "dark:bg-gray-800 dark:hover:bg-gray-700",
-        "text-gray-700 dark:text-gray-200",
-        "transition-colors duration-200"
+    const menuGroups: Record<string, { to: string; label: string; icon: IconDefinition }[]> = {
+        "ONRAMPING": [
+            { to: "/view", label: "Orders", icon: faFileAlt },
+            { to: "/create", label: "Create Order", icon: faPlusCircle }
+        ],
+        "NFTs": [
+            { to: "#", label: "Coming Soon", icon: faTimeline }
+        ],
+        "STAKING": [
+            { to: "#", label: "Coming Soon", icon: faTimeline }
+        ]
+    };
+
+    const renderLinkGroup = (links: { to: string; label: string; icon: IconDefinition }[], isMobile: boolean) => {
+        return (
+            <div className={clsx(isMobile ? "p-3" : "flex flex-col", "text-gray-800 dark:text-gray-300")}>
+                {links.map(({ to, label, icon }) => {
+                    const active = location.pathname === to;
+                    return (
+                        <Link
+                            key={to}
+                            to={to}
+                            onClick={() => closeMenu()}
+                            className={clsx(
+                                isMobile ? "block px-4 py-3" : "flex items-center space-x-2 px-4 py-2",
+                                "bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 hover:dark:bg-gray-700 rounded-md transition-all ease-in-out",
+                                { 'bg-gray-300 dark:bg-gray-700': active }
+                            )}
+                        >
+                            <FontAwesomeIcon icon={icon} className="w-6" />
+                            <span>{label}</span>
+                        </Link>
+                    )
+                })}
+            </div>
+        );
+    };
+
+    const renderMenuGroups = (isMobile: boolean) => (
+        Object.entries(menuGroups).map(([title, links]) => {
+            const isTitleActive = links.some(({ to }) => location.pathname === to);
+
+            return (
+                isMobile ? (
+                    <div key={title}>
+                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-300 px-4 py-2">{title}</h3>
+                        {renderLinkGroup(links, true)}
+                    </div>
+                ) : (
+                    <div key={title} className="relative group flex items-center">
+                        <button
+                            onClick={() => closeMenu()}
+                            className={clsx(
+                                "px-4 py-2 text-lg font-semibold rounded-md bg-transparent",
+                                "hover:text-gray-500 hover:dark:text-white transition-all ease-in-out duration-300",
+                                isTitleActive ? 'text-gray-500 dark:text-white' : 'text-gray-800 dark:text-gray-300'
+                            )}
+                        >
+                            {title}
+                        </button>
+                        <div className={clsx(
+                            "z-50 absolute left-0 top-full mt-2 w-48 bg-gray-300 dark:bg-gray-800",
+                            "border border-gray-300 dark:border-gray-700 shadow-lg rounded-md opacity-0",
+                            "group-hover:opacity-100 group-hover:visible transition-all duration-300"
+                        )}>
+                            {renderLinkGroup(links, false)}
+                        </div>
+                    </div>
+                )
+            )
+        })
     );
 
-    const renderLinks = () => {
-        const viewLink =
-            <Link to="/view" onClick={closeMenu} className={linkClasses}>
-                <FontAwesomeIcon icon={faFileAlt} className="text-teal-900 dark:text-teal-500 w-6" />
-                <span>Orders</span>
-            </Link>
-
-        if (!user) return viewLink;
-        switch (userTypeToString(user.user_type)) {
-            case "Onramper": return viewLink;
-            case "Offramper":
-                return (
-                    <>
-                        <Link to="/view" onClick={closeMenu} className={linkClasses}>
-                            <FontAwesomeIcon icon={faFileAlt} className="text-yellow-900 dark:text-yellow-500 w-6" />
-                            <span>My Orders</span>
-                        </Link>
-                        <Link to="/create" onClick={closeMenu} className={linkClasses}>
-                            <FontAwesomeIcon icon={faPlusCircle} className="text-blue-900 dark:text-blue-500 w-6" />
-                            <span>Create Order</span>
-                        </Link>
-                    </>
-                );
-            default: return null;
-        }
-    };
+    const icRampLogo = (isMobile: boolean, closeMenu?: () => void) => (
+        <Link to="/" className={clsx("flex items-center space-x-1")} onClick={closeMenu}>
+            <img
+                src={logo}
+                className={clsx(
+                    "rounded-full mr-2",
+                    isMobile ? "h-14 w-14" : "h-20 w-20"
+                )}
+                alt="icRamp logo"
+            />
+            <h1 className={clsx(
+                "tracking-wider transition-colors duration-300 app-title",
+                isMobile ? "text-2xl" : "text-4xl"
+            )}>
+                icRamp
+            </h1>
+        </Link>
+    );
 
     const handleInternetIdentityLogin = async () => {
         await loginInternetIdentity();
@@ -151,7 +208,7 @@ const Menu: React.FC = () => {
     }, [user]);
 
     return (
-        <nav className="py-6 px-10 flex justify-between items-center rounded-lg bg-transparent relative">
+        <nav className="py-6 px-16 flex justify-between items-center rounded-lg bg-transparent relative">
             {isMobile &&
                 <>
                     <div className="flex items-center justify-between w-full">
@@ -159,31 +216,38 @@ const Menu: React.FC = () => {
                             <FontAwesomeIcon icon={faBars} size="2x" />
                         </button>
                     </div>
-                    <div className={`fixed inset-0 bg-gray-900 bg-opacity-75 z-50 lg:hidden ${isMenuOpen ? 'block' : 'hidden'}`}>
-                        <div className="absolute top-0 left-0 w-64 bg-gray-200 h-full shadow-md" ref={menuRef}>
+                    <div
+                        className={clsx(
+                            "fixed inset-0 bg-gray-900 bg-opacity-75 z-50 lg:hidden",
+                            isMenuOpen ? 'block' : 'hidden'
+                        )}
+                    >
+                        <div
+                            className={clsx(
+                                "absolute top-0 left-0 w-64 h-full shadow-md transition-transform duration-300",
+                                isMenuOpen ? 'translate-x-0' : '-translate-x-full',
+                                "bg-gray-100 dark:bg-gray-900 border-r border-gray-300 dark:border-gray-700"
+                            )}
+                            ref={menuRef}
+                        >
                             <div className="p-4 flex items-center justify-between">
-                                <div>
-                                    <Link to="/" className="flex items-center" onClick={closeMenu}>
-                                        <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
-                                        <h1 className="text-2xl text-sky-700 tracking-wider -mt-2" style={{
-                                            WebkitTextStroke: '1px #280d57',
-                                            WebkitTextFillColor: '#280d57',
-                                            letterSpacing: '0.08em',
-                                        }}>
-                                            icRamp
-                                        </h1>
-                                    </Link>
-                                </div>
-                                <button onClick={toggleMenu} className="p-2 text-gray-600">
+                                {icRampLogo(true, closeMenu)}
+                                <button onClick={toggleMenu} className="p-2 text-gray-600 dark:text-gray-300">
                                     <FontAwesomeIcon icon={faTimes} size="lg" />
                                 </button>
                             </div>
+
                             <div className="p-4 space-y-4">
-                                {renderLinks()}
+                                {renderMenuGroups(true)}
                             </div>
+
                             {icpBalances && icpBalances['ICP'] && (
                                 <div className="p-4">
-                                    <div className="border border-gray-300 rounded px-4 py-2 text-green-500 text-center font-medium">
+                                    <div
+                                        className={clsx(
+                                            "border border-gray-300 dark:border-gray-700 rounded",
+                                            "px-4 py-2 text-green-500 text-center font-medium bg-white dark:bg-gray-800"
+                                        )}>
                                         {icpBalances['ICP'].formatted} ICP
                                     </div>
                                 </div>
@@ -194,17 +258,10 @@ const Menu: React.FC = () => {
             }
 
             {!isMobile &&
-                <div className="flex items-center justify-between w-full">
-                    <Link to="/" className="flex items-center w-72 text-center align-middle">
-                        <img src={logo} className="rounded-full h-20 w-20 mr-2" alt="icRamp logo" />
-                        <h1 className="text-4xl tracking-wider -mt-2 transition-colors duration-300 app-title">
-                            icRamp
-                        </h1>
-                    </Link>
-                    <div className="flex-grow flex justify-center items-center">
-                        <div className="flex items-center space-x-6">
-                            {renderLinks()}
-                        </div>
+                <div className="flex items-center w-full space-x-10">
+                    {icRampLogo(false)}
+                    <div className="flex items-center space-x-6">
+                        {renderMenuGroups(false)}
                     </div>
                 </div>
             }
@@ -214,20 +271,21 @@ const Menu: React.FC = () => {
                     {/* Theme Toggle */}
                     <button
                         onClick={toggleDarkMode}
-                        className="px-3 py-2 rounded-lg transition-colors duration-200
-                            bg-gray-100 hover:bg-gray-200 
-                            dark:bg-gray-800 dark:hover:bg-gray-700 
-                            text-gray-600 dark:text-gray-200"
-                    >
+                        className={clsx("px-3 py-2 rounded-lg transition-colors duration-200",
+                            "bg-gray-100 hover:bg-gray-200",
+                            "dark:bg-gray-800 dark:hover:bg-gray-700",
+                            "text-gray-600 dark:text-gray-200"
+                        )}>
                         <FontAwesomeIcon icon={isDarkMode ? faSun : faMoon} size="lg" />
                     </button>
                     {/* Settings */}
                     <button
-                        className="px-3 py-2 rounded-lg transition-colors duration-200
-                                bg-gray-100 hover:bg-gray-200 
-                                dark:bg-gray-800 dark:hover:bg-gray-700 
-                                text-gray-600 dark:text-gray-200"
-                    >
+                        className={clsx(
+                            "px-3 py-2 rounded-lg transition-colors duration-200",
+                            "bg-gray-100 hover:bg-gray-200",
+                            "dark:bg-gray-800 dark:hover:bg-gray-700",
+                            "text-gray-600 dark:text-gray-200"
+                        )}>
                         <FontAwesomeIcon icon={faCog} size="lg" />
                     </button>
                 </div>
