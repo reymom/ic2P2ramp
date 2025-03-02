@@ -1,6 +1,9 @@
 use candid::{CandidType, Deserialize, Principal};
 
-use crate::errors::{BlockchainError, Result};
+use crate::{
+    errors::{BlockchainError, Result},
+    inter_canister::bitcoin,
+};
 
 use super::{
     evm::{chains, token},
@@ -33,7 +36,7 @@ impl Crypto {
         }
     }
 
-    pub fn get_symbol(&self) -> Result<String> {
+    pub async fn get_symbol(&self) -> Result<String> {
         match &self.blockchain {
             Blockchain::EVM { chain_id } => match &self.token {
                 Some(token_address) => {
@@ -44,12 +47,19 @@ impl Crypto {
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(ledger_principal)?.symbol)
             }
-            Blockchain::Bitcoin => Ok("BTC".to_string()),
+            Blockchain::Bitcoin => match &self.token {
+                Some(rune_id) => Ok(bitcoin::bitcoin_backend_get_rune_metadata(
+                    rune_id.to_string(),
+                )
+                .await?
+                .name),
+                None => Ok("BTC".to_string()),
+            },
             _ => Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 
-    fn get_decimals(&self) -> Result<u8> {
+    async fn get_decimals(&self) -> Result<u8> {
         match &self.blockchain {
             Blockchain::EVM { chain_id } => {
                 if let Some(token_address) = &self.token {
@@ -61,13 +71,23 @@ impl Crypto {
             Blockchain::ICP { ledger_principal } => {
                 Ok(icp::get_icp_token(ledger_principal)?.decimals)
             }
-            Blockchain::Bitcoin => Ok(8),
+            Blockchain::Bitcoin => {
+                if let Some(rune_id) = &self.token {
+                    Ok(
+                        bitcoin::bitcoin_backend_get_rune_metadata(rune_id.to_string())
+                            .await?
+                            .divisibility,
+                    )
+                } else {
+                    Ok(8)
+                }
+            }
             _ => Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 
-    pub fn to_whole_units(&self) -> Result<f64> {
-        let decimals = self.get_decimals()?;
+    pub async fn to_whole_units(&self) -> Result<f64> {
+        let decimals = self.get_decimals().await?;
         let divisor = 10u128.pow(decimals as u32);
         Ok((self.amount as f64) / (divisor as f64))
     }

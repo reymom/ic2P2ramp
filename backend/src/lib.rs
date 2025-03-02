@@ -19,6 +19,7 @@ use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
+use model::types::exchange_rate::{Asset, AssetClass};
 use model::types::{
     self,
     evm::{
@@ -47,10 +48,10 @@ use model::{
         stable::{self, orders, spent_transactions},
     },
 };
+use outcalls::pricing::rates;
 use outcalls::{
     paypal,
     revolut::{self, token as revolut_token},
-    xrc_rates::{self, Asset, AssetClass},
 };
 
 #[ic_cdk::pre_upgrade]
@@ -570,17 +571,28 @@ fn remove_user_payment_provider(
 // ------------
 
 #[ic_cdk::update]
-async fn get_exchange_rate(fiat_symbol: String, crypto_symbol: String) -> Result<f64> {
-    let base_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: crypto_symbol.to_string(),
+async fn get_exchange_rate(
+    fiat_symbol: String,
+    crypto_symbol: String,
+    is_rune: bool,
+) -> Result<f64> {
+    let base_asset = if is_rune {
+        Asset {
+            class: AssetClass::Rune,
+            symbol: crypto_symbol.to_string(),
+        }
+    } else {
+        Asset {
+            class: AssetClass::Cryptocurrency,
+            symbol: crypto_symbol.to_string(),
+        }
     };
     let quote_asset = Asset {
         class: AssetClass::FiatCurrency,
         symbol: fiat_symbol.to_string(),
     };
 
-    xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await
+    rates::get_cached_exchange_rate(base_asset, quote_asset).await
 }
 
 // <gas, gas_price>

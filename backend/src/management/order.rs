@@ -22,11 +22,12 @@ use crate::inter_canister::bitcoin::{
 use crate::management::user as user_management;
 use crate::model::errors::RampError;
 use crate::model::guards;
+use crate::model::types::exchange_rate::{Asset, AssetClass};
 use crate::model::{
     helpers,
     memory::{self, stable::spent_transactions},
 };
-use crate::outcalls::xrc_rates::{get_cached_exchange_rate, Asset, AssetClass};
+use crate::outcalls::pricing::rates::get_cached_exchange_rate;
 use crate::types::{
     self,
     evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
@@ -43,7 +44,7 @@ use super::payment;
 pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
     let base_asset = Asset {
         class: AssetClass::Cryptocurrency,
-        symbol: crypto.get_symbol()?,
+        symbol: crypto.get_symbol().await?,
     };
     let quote_asset = Asset {
         class: AssetClass::FiatCurrency,
@@ -51,7 +52,7 @@ pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<
     };
     let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
 
-    let fiat_amount = (crypto.to_whole_units()? * exchange_rate * 100.) as u64;
+    let fiat_amount = (crypto.to_whole_units().await? * exchange_rate * 100.) as u64;
 
     Ok((fiat_amount, get_fiat_fee(fiat_amount)))
 }
