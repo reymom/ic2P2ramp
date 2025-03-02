@@ -1,3 +1,3 @@
 pub mod paypal;
+pub mod pricing;
 pub mod revolut;
-pub mod xrc_rates;

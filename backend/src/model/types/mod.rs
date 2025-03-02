@@ -4,6 +4,7 @@ pub mod evm;
 pub mod exchange_rate;
 pub mod icp;
 pub mod orders;
+pub mod ordiscan;
 pub mod payment;
 pub mod session;
 pub mod user;
