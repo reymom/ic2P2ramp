@@ -5,7 +5,7 @@ use candid::CandidType;
 use ic_cdk::api::call::RejectionCode;
 use thiserror::Error;
 
-use crate::{outcalls::xrc_rates::ExchangeRateError, types::PaymentProviderType};
+use crate::types::PaymentProviderType;
 
 use super::types::AddressType;
 
@@ -267,4 +267,24 @@ impl From<BitcoinError> for RampError {
     fn from(err: BitcoinError) -> Self {
         RampError::BlockchainError(BlockchainError::BitcoinBackendError(err.to_string()))
     }
+}
+
+#[derive(CandidType, candid::Deserialize, Clone, Debug)]
+pub enum ExchangeRateError {
+    AnonymousPrincipalNotAllowed,
+    Pending,
+    CryptoBaseAssetNotFound,
+    CryptoQuoteAssetNotFound,
+    StablecoinRateNotFound,
+    StablecoinRateTooFewRates,
+    StablecoinRateZeroRate,
+    ForexInvalidTimestamp,
+    ForexBaseAssetNotFound,
+    ForexQuoteAssetNotFound,
+    ForexAssetsNotFound,
+    RateLimited,
+    NotEnoughCycles,
+    FailedToAcceptCycles,
+    InconsistentRatesReceived,
+    Other { code: u32, description: String },
 }

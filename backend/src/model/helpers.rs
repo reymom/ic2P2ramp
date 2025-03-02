@@ -7,10 +7,16 @@ use ethers_core::types::{Address, H160};
 
 use crate::{
     errors::{BlockchainError, Result},
-    outcalls::xrc_rates::{self, Asset, AssetClass},
+    outcalls::pricing::rates,
 };
 
-use super::{errors::UserError, types::AddressType};
+use super::{
+    errors::UserError,
+    types::{
+        exchange_rate::{Asset, AssetClass},
+        AddressType,
+    },
+};
 
 /// Introduces an asynchronous delay for the specified duration.
 ///
@@ -91,7 +97,7 @@ pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
         symbol: token_symbol.to_string(),
     };
 
-    match xrc_rates::get_cached_exchange_rate(base_asset, quote_asset).await {
+    match rates::get_cached_exchange_rate(base_asset, quote_asset).await {
         Ok(rate) => Ok(rate),
         Err(err) => Err(err),
     }

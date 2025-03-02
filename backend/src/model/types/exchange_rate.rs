@@ -33,3 +33,33 @@ impl ExchangeRateCache {
         None
     }
 }
+
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+pub enum AssetClass {
+    Cryptocurrency,
+    FiatCurrency,
+    Rune,
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct Asset {
+    pub symbol: String,
+    pub class: AssetClass,
+}
+
+impl Asset {
+    pub fn normalize(&mut self) {
+        if self.class == AssetClass::Cryptocurrency {
+            if self.symbol == "ckBTC" {
+                self.symbol = "BTC".to_string();
+            } else if self.symbol == "ckETH" {
+                self.symbol = "ETH".to_string();
+            }
+        }
+        if (self.symbol == "USD" || self.symbol == "EUR")
+            && self.class == AssetClass::Cryptocurrency
+        {
+            self.class = AssetClass::FiatCurrency;
+        }
+    }
+}
