@@ -6,6 +6,7 @@ use evm_rpc_canister_types::RpcServices;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
+use crate::model::types::ordiscan::OrdiscanState;
 use crate::model::types::{
     evm::chains::ChainState,
     payment::{paypal::PayPalState, revolut::RevolutState},
@@ -36,6 +37,12 @@ pub struct RevolutConfig {
     pub tan: String,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct OrdiscanConfig {
+    pub api_url: String,
+    pub api_key: String,
+}
+
 impl fmt::Debug for RevolutConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RevolutConfig")
@@ -56,6 +63,7 @@ pub struct InitArg {
     pub paypal: PaypalConfig,
     pub revolut: RevolutConfig,
     pub proxy_url: String,
+    pub ordiscan: OrdiscanConfig,
 }
 
 impl TryFrom<InitArg> for State {
@@ -68,6 +76,7 @@ impl TryFrom<InitArg> for State {
             paypal,
             revolut,
             proxy_url,
+            ordiscan,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -109,6 +118,10 @@ impl TryFrom<InitArg> for State {
                 tan: revolut.tan,
             },
             proxy_url,
+            ordiscan: OrdiscanState {
+                api_url: ordiscan.api_url,
+                api_key: ordiscan.api_key,
+            },
             icp_tokens: HashMap::new(),
         };
         Ok(state)

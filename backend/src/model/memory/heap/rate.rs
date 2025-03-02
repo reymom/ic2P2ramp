@@ -1,4 +1,4 @@
-use crate::{model::types::exchange_rate::ExchangeRateCache, outcalls::xrc_rates::Asset};
+use crate::model::types::exchange_rate::{Asset, ExchangeRateCache};
 
 use super::storage::EXCHANGE_RATE_CACHE;
 

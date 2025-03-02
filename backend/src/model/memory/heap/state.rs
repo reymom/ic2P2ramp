@@ -6,6 +6,7 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use crate::model::types::{
     evm::chains::ChainState,
     icp::IcpToken,
+    ordiscan::OrdiscanState,
     payment::{paypal::PayPalState, revolut::RevolutState},
 };
 
@@ -20,6 +21,7 @@ pub struct State {
     pub paypal: PayPalState,
     pub revolut: RevolutState,
     pub proxy_url: String,
+    pub ordiscan: OrdiscanState,
     pub icp_tokens: HashMap<Principal, IcpToken>,
 }
 
