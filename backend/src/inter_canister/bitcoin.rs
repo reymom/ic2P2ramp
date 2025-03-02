@@ -1,9 +1,10 @@
+use std::str::FromStr;
+
 use candid::Principal;
 use ic_cdk::api::call::call;
 
-use crate::model::errors::SystemError;
-use crate::Result;
-use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
+use crate::{model::errors::SystemError, Result};
+use bitcoin_backend::types::{RuneID, RuneMetadata, RuneUTXOEntry};
 
 const BITCOIN_BACKEND_CANISTER_ID: &str = "zhuzm-wqaaa-aaaap-qpk2q-cai";
 
@@ -127,5 +128,19 @@ pub async fn bitcoin_backend_estimate_fee() -> Result<u64> {
     )
     .await
     .map(|(fee,)| fee)
+    .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
+}
+
+pub async fn bitcoin_backend_get_rune_metadata(rune_id: String) -> Result<RuneMetadata> {
+    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
+        .map_err(|_| SystemError::InvalidInput("Invalid Bitcoin backend principal".to_string()))?;
+
+    call::<(RuneID,), (RuneMetadata, String)>(
+        bitcoin_backend_canister_id,
+        "get_serialized_rune_metadata",
+        (RuneID::from_str(&rune_id)?,),
+    )
+    .await
+    .map(|(rune, _)| rune)
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
 }
