@@ -102,3 +102,10 @@ pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
         Err(err) => Err(err),
     }
 }
+
+pub fn normalize_rune_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_uppercase()
+}
