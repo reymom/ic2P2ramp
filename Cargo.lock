@@ -267,6 +267,7 @@ dependencies = [
  "bitcoin",
  "candid",
  "hex",
+ "ic-btc-interface",
  "ic-cdk 0.17.1",
  "ic-cdk-timers",
  "ic-stable-structures",

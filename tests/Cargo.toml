@@ -12,7 +12,7 @@ bitcoin_backend = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
 ic-cdk = { workspace = true }
-ic-btc-interface = "0.2"
+ic-btc-interface = { workspace = true }
 pocket-ic = "6.0"
 serde_json = "1.0"
 bitcoincore-rpc = "0.19"
