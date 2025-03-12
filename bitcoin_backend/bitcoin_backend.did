@@ -15,13 +15,16 @@ type BitcoinError = variant {
   UnsupportedRune : text;
   UnsupportedTransaction;
 };
-type BitcoinNetwork = variant { mainnet; regtest; testnet };
 type Etching = record {
   height : opt record { nat64; nat64 };
   metadata : RuneMetadata;
   offset : opt record { nat64; nat64 };
   spacers : opt nat32;
   amount : opt nat;
+};
+type GetBlockHeadersResponse = record {
+  tip_height : nat32;
+  block_headers : vec blob;
 };
 type Inscription = record {
   content : text;
@@ -33,7 +36,8 @@ type InsufficientBalanceError = record {
   current_balance : nat64;
   transfer_amount : nat64;
 };
-type Outpoint = record { txid : blob; vout : nat32 };
+type Network = variant { mainnet; regtest; testnet };
+type OutPoint = record { txid : blob; vout : nat32 };
 type RejectionCode = variant {
   NoError;
   CanisterError;
@@ -43,16 +47,17 @@ type RejectionCode = variant {
   SysFatal;
   CanisterReject;
 };
-type Result = variant { Ok; Err : BitcoinError };
-type Result_1 = variant { Ok : text; Err : BitcoinError };
+type Result = variant { Ok : text; Err : BitcoinError };
+type Result_1 = variant { Ok; Err : BitcoinError };
 type Result_2 = variant { Ok : nat64; Err : BitcoinError };
-type Result_3 = variant { Ok : VaultEntry; Err : BitcoinError };
-type Result_4 = variant { Ok : vec RuneMetadata; Err : BitcoinError };
-type Result_5 = variant {
+type Result_3 = variant { Ok : GetBlockHeadersResponse; Err : BitcoinError };
+type Result_4 = variant { Ok : VaultEntry; Err : BitcoinError };
+type Result_5 = variant { Ok : vec RuneMetadata; Err : BitcoinError };
+type Result_6 = variant {
   Ok : record { RuneMetadata; text };
   Err : BitcoinError;
 };
-type Result_6 = variant {
+type Result_7 = variant {
   Ok : record { vec Utxo; vec record { Utxo; RuneUTXOEntry } };
   Err : BitcoinError;
 };
@@ -78,7 +83,7 @@ type TransactionType = variant {
   OrdinalTransfer;
   TaprootBitcoin;
 };
-type Utxo = record { height : nat32; value : nat64; outpoint : Outpoint };
+type Utxo = record { height : nat32; value : nat64; outpoint : OutPoint };
 type VaultEntry = record {
   bitcoin_balance : nat64;
   runes : vec record { text; nat64 };
@@ -88,28 +93,32 @@ type VaultError = variant {
   InsufficientLockedBalance;
   AddressVaultNotFound;
 };
-service : (BitcoinNetwork) -> {
+service : (Network) -> {
   cancel_deposit : (text, nat64, opt text) -> (Result);
-  complete_order_and_send : (text, nat64, TransactionType) -> (Result_1);
+  complete_order_and_send : (text, nat64, opt text) -> (Result);
   deposit_to_address_vault : (text, nat64, opt text, vec RuneUTXOEntry) -> (
-      Result,
-    );
-  get_btc_balance : (text) -> (Result_2);
-  get_offramper_deposits : (text) -> (Result_3) query;
-  get_onramper_deposits : (text) -> (Result_3) query;
-  get_p2pkh_address : () -> (Result_1);
-  get_p2tr_raw_key_spend_address : () -> (Result_1);
-  get_p2tr_script_spend_address : (TransactionType) -> (Result_1);
-  get_registered_runes : () -> (Result_4) query;
-  get_rune_utxos : (text) -> (vec RuneUTXOEntry) query;
-  get_serialized_rune_metadata : (text) -> (Result_5) query;
-  get_utxos : (text, TransactionType) -> (Result_6);
-  inscribe_ordinals_inscription : (text, text, opt text, text, nat64) -> (
       Result_1,
     );
-  lock_funds : (text, text, nat64, opt text) -> (Result);
-  register_runes : (vec RuneMetadata) -> (Result);
-  test_transfer : (text, nat64, TransactionType) -> (Result_1);
-  unlock_funds : (text, text, nat64, opt text) -> (Result);
-  validate_rune : (text) -> (Result) query;
+  estimate_bitcoin_transaction_fee : () -> (Result_2);
+  get_btc_balance : (text) -> (Result_2);
+  get_btc_block_headers : () -> (Result_3);
+  get_canister_rune_amount : (text) -> (Result_2) query;
+  get_offramper_deposits : (text) -> (Result_4) query;
+  get_onramper_deposits : (text) -> (Result_4) query;
+  get_p2pkh_address : () -> (Result);
+  get_p2tr_raw_key_spend_address : () -> (Result);
+  get_p2tr_script_spend_address : (TransactionType) -> (Result);
+  get_registered_runes : () -> (Result_5) query;
+  get_rune_utxos : (text) -> (vec RuneUTXOEntry) query;
+  get_serialized_rune_metadata : (text) -> (Result_6) query;
+  get_utxos : (text, TransactionType) -> (Result_7);
+  inscribe_ordinals_inscription : (text, text, opt text, text, nat64) -> (
+      Result,
+    );
+  lock_funds : (text, text, nat64, opt text) -> (Result_1);
+  register_runes : (vec RuneMetadata) -> (Result_1);
+  test_transfer : (text, nat64, TransactionType) -> (Result);
+  unlock_funds : (text, text, nat64, opt text) -> (Result_1);
+  validate_rune : (text) -> (Result_1) query;
+  withdraw_bitcoin_fees : (text, nat64) -> (Result);
 }

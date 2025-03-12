@@ -14,7 +14,7 @@ mod vault;
 mod wallet;
 
 #[cfg(feature = "canister")]
-use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
+use ic_btc_interface::{GetBlockHeadersResponse, Network, Utxo};
 #[cfg(feature = "canister")]
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ use crate::types::{
 };
 #[cfg(feature = "canister")]
 use memory::{
-    heap::config::{KEY_NAME, NETWORK},
+    heap::config::{BTC_PRINCIPAL, KEY_NAME, NETWORK},
     stable::{
         utxos::add_rune_utxo_entries,
         vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
@@ -41,14 +41,24 @@ use wallet::utxos::get_tx_utxos;
 
 #[cfg(feature = "canister")]
 #[ic_cdk::init]
-pub fn init(network: BitcoinNetwork) {
+pub fn init(network: Network) {
     NETWORK.with(|n| n.set(network));
 
     KEY_NAME.with(|key_name| {
         key_name.replace(String::from(match network {
-            BitcoinNetwork::Regtest => "dfx_test_key",
-            BitcoinNetwork::Mainnet | BitcoinNetwork::Testnet => "test_key_1",
+            Network::Regtest | Network::Testnet => "dfx_test_key",
+            Network::Mainnet => "test_key_1",
         }))
+    });
+
+    BTC_PRINCIPAL.with(|principal| {
+        principal.replace(
+            candid::Principal::from_text(match network {
+                Network::Regtest | Network::Testnet => "g4xu7-jiaaa-aaaan-aaaaq-cai",
+                Network::Mainnet => "ghsi2-tqaaa-aaaan-aaaca-cai",
+            })
+            .expect("invalid bitcoin canister principal"),
+        );
     });
 }
 
@@ -61,7 +71,16 @@ pub fn init(network: BitcoinNetwork) {
 #[ic_cdk::update]
 pub async fn get_btc_balance(address: String) -> Result<u64> {
     let network = NETWORK.with(|n| n.get());
-    api::bitcoin::get_balance(network, address).await
+    let btc_principal: candid::Principal = BTC_PRINCIPAL.with(|bp| *bp.borrow());
+    api::bitcoin::get_balance(network, btc_principal, address).await
+}
+
+#[cfg(feature = "canister")]
+#[ic_cdk::update]
+pub async fn get_btc_block_headers() -> Result<GetBlockHeadersResponse> {
+    let network = NETWORK.with(|n| n.get());
+    let btc_principal: candid::Principal = BTC_PRINCIPAL.with(|bp| *bp.borrow());
+    api::bitcoin::get_block_headers(network, btc_principal, 0, Some(u32::MAX)).await
 }
 
 #[cfg(feature = "canister")]
@@ -119,7 +138,11 @@ pub async fn get_canister_rune_amount(rune_id: RuneID) -> Result<u64> {
 #[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn estimate_bitcoin_transaction_fee() -> Result<u64> {
-    let fee_per_byte = wallet::get_fee_per_byte(NETWORK.with(|n| n.get())).await?;
+    let fee_per_byte = wallet::get_fee_per_byte(
+        NETWORK.with(|n| n.get()),
+        BTC_PRINCIPAL.with(|bp| *bp.borrow()),
+    )
+    .await?;
 
     // Estimate transaction size in vBytes
     let estimated_size = 200; // max cut for P2TR spend transaction in vBytes
@@ -178,7 +201,11 @@ async fn withdraw_bitcoin_fees(destination_address: Address, amount: u64) -> Res
         destination_address
     );
 
-    let fee_per_byte = wallet::get_fee_per_byte(NETWORK.with(|n| n.get())).await?;
+    let fee_per_byte = wallet::get_fee_per_byte(
+        NETWORK.with(|n| n.get()),
+        BTC_PRINCIPAL.with(|bp| *bp.borrow()),
+    )
+    .await?;
 
     let estimated_size = 140;
     let estimated_fee = estimated_size as u64 * fee_per_byte;
