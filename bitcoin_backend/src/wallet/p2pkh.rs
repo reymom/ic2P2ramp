@@ -5,9 +5,7 @@ use bitcoin::{
     sighash::SighashCache,
     Address, EcdsaSighashType, PublicKey, Transaction, Txid,
 };
-use ic_cdk::api::management_canister::bitcoin::{
-    BitcoinNetwork, MillisatoshiPerByte, Satoshi, Utxo,
-};
+use ic_btc_interface::{MillisatoshiPerByte, Network, Satoshi, Utxo};
 use std::str::FromStr;
 
 use crate::{
@@ -37,7 +35,7 @@ pub async fn get_address(config: WalletConfig) -> Result<Address> {
 }
 
 // Converts a public key to a P2PKH address.
-fn public_key_to_p2pkh_address(network: BitcoinNetwork, public_key: &[u8]) -> Result<Address> {
+fn public_key_to_p2pkh_address(network: Network, public_key: &[u8]) -> Result<Address> {
     Ok(Address::p2pkh(
         &PublicKey::from_slice(public_key).map_err(BitcoinError::from)?,
         transform_network(network),
@@ -48,7 +46,8 @@ fn public_key_to_p2pkh_address(network: BitcoinNetwork, public_key: &[u8]) -> Re
 /// given destination, where the source of the funds is the canister itself
 /// at the given derivation path.
 pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) -> Result<Txid> {
-    let fee_per_byte = super::helpers::get_fee_per_byte(config.network).await?;
+    let fee_per_byte =
+        super::helpers::get_fee_per_byte(config.network, config.btc_principal).await?;
 
     // Fetch our public key, P2PKH address, and UTXOs.
     let own_public_key =
@@ -58,7 +57,12 @@ pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) ->
     ic_cdk::println!("[p2pkh::send] own_address = {:?}", own_address);
 
     // Get utxos up to necessary amount
-    let own_utxos = api::bitcoin::get_utxos(config.network, own_address.to_string()).await?;
+    let own_utxos = api::bitcoin::get_utxos(
+        config.network,
+        config.btc_principal,
+        own_address.to_string(),
+    )
+    .await?;
     ic_cdk::println!("[p2pkh::send] utxos = {:?}", own_utxos);
 
     let own_address = Address::from_str(&own_address.to_string())
@@ -104,7 +108,12 @@ pub async fn send(config: WalletConfig, dst_address: String, amount: Satoshi) ->
         hex::encode(&signed_transaction_bytes)
     );
 
-    api::bitcoin::send_transaction(config.network, signed_transaction_bytes).await?;
+    api::bitcoin::send_transaction(
+        config.network,
+        config.btc_principal,
+        signed_transaction_bytes,
+    )
+    .await?;
     Ok(signed_transaction.compute_txid())
 }
 

@@ -10,7 +10,7 @@ use bitcoin::{
     Address, AddressType, ScriptBuf, Sequence, TapLeafHash, TapSighashType, Transaction, TxOut,
     Txid, Witness, XOnlyPublicKey,
 };
-use ic_cdk::api::management_canister::bitcoin::{MillisatoshiPerByte, Satoshi, Utxo};
+use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
 use std::str::FromStr;
 
 use crate::{
@@ -136,7 +136,8 @@ pub async fn send_script_spend(
         .require_network(crate::wallet::transform_network(config.network))
         .map_err(|e| BitcoinError::UnsupportedAddressType(e.to_string()))?;
 
-    let fee_per_byte = crate::wallet::get_fee_per_byte(config.network).await?;
+    let fee_per_byte =
+        crate::wallet::get_fee_per_byte(config.network, config.btc_principal).await?;
     let (transaction, prevouts) = build_p2tr_script_spend_transaction(
         tx_type,
         &address,
@@ -171,7 +172,12 @@ pub async fn send_script_spend(
         hex::encode(&signed_transaction_bytes)
     );
 
-    crate::api::bitcoin::send_transaction(config.network, signed_transaction_bytes).await?;
+    crate::api::bitcoin::send_transaction(
+        config.network,
+        config.btc_principal,
+        signed_transaction_bytes,
+    )
+    .await?;
 
     // ❌ TODO: Build & send the Reveal transaction
     // ❌ TODO: The commit UTXO must be spent using the script path!

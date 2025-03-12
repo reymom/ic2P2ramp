@@ -1,5 +1,5 @@
 use bitcoin::Txid;
-use ic_cdk::api::management_canister::bitcoin::Utxo;
+use ic_btc_interface::Utxo;
 use ic_cdk_timers::set_timer;
 use std::{collections::HashMap, time::Duration};
 
@@ -30,7 +30,9 @@ pub fn monitor_rune_transaction(
 
     set_timer(Duration::from_secs(TX_CHECK_INTERVAL), move || {
         ic_cdk::spawn(async move {
-            match api::bitcoin::get_utxos(config.network, address.to_string()).await {
+            match api::bitcoin::get_utxos(config.network, config.btc_principal, address.to_string())
+                .await
+            {
                 Ok(utxo_response) => {
                     // Check if the UTXOs from this tx_id are no longer present
                     let spent_utxos: Vec<Utxo> = runes

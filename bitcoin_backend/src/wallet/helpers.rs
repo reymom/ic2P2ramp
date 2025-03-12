@@ -4,7 +4,8 @@ use bitcoin::{
     absolute::LockTime, hashes::Hash, transaction::Version, Address, Amount, Network, OutPoint,
     ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
 };
-use ic_cdk::api::management_canister::bitcoin::{BitcoinNetwork, Utxo};
+use candid::Principal;
+use ic_btc_interface::{Network as BitcoinNetwork, Utxo};
 
 use crate::{
     api,
@@ -141,7 +142,7 @@ fn build_rune_inputs_and_outputs(
 
         r_inputs.push(TxIn {
             previous_output: OutPoint {
-                txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid).unwrap()),
+                txid: Txid::from_raw_hash(Hash::from_slice(utxo.outpoint.txid.as_ref()).unwrap()),
                 vout: utxo.outpoint.vout,
             },
             sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
@@ -225,7 +226,7 @@ fn build_btc_inputs_and_outputs(
         total_btc += utxo.value;
         inputs.push(TxIn {
             previous_output: OutPoint {
-                txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid).unwrap()),
+                txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid.as_ref()).unwrap()),
                 vout: utxo.outpoint.vout,
             },
             sequence: Sequence::MAX,
@@ -296,9 +297,9 @@ fn build_btc_transaction_with_fee(
     ))
 }
 
-pub async fn get_fee_per_byte(network: BitcoinNetwork) -> Result<u64> {
+pub async fn get_fee_per_byte(network: BitcoinNetwork, btc_principal: Principal) -> Result<u64> {
     // Get fee percentiles from previous transactions to estimate our own fee.
-    let fee_percentiles = api::bitcoin::get_current_fee_percentiles(network).await?;
+    let fee_percentiles = api::bitcoin::get_current_fee_percentiles(network, btc_principal).await?;
 
     if fee_percentiles.is_empty() {
         // There are no fee percentiles. This case can only happen on a regtest

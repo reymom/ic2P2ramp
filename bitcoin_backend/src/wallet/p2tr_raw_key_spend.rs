@@ -6,7 +6,7 @@ use bitcoin::{
     sighash::SighashCache,
     Address, AddressType, ScriptBuf, Sequence, TapSighashType, Transaction, TxOut, Txid, Witness,
 };
-use ic_cdk::api::management_canister::bitcoin::{MillisatoshiPerByte, Satoshi, Utxo};
+use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{api, TransactionType};
@@ -45,7 +45,7 @@ pub async fn send_key_spend(
     amount: Satoshi,
     tx_type: TransactionType,
 ) -> Result<Txid> {
-    let fee_per_byte = get_fee_per_byte(config.network).await?;
+    let fee_per_byte = get_fee_per_byte(config.network, config.btc_principal).await?;
 
     let dst_address = Address::from_str(&dst_address)
         .map_err(BitcoinError::from)?
@@ -95,7 +95,12 @@ pub async fn send_key_spend(
         hex::encode(&signed_transaction_bytes)
     );
 
-    api::bitcoin::send_transaction(config.network, signed_transaction_bytes).await?;
+    api::bitcoin::send_transaction(
+        config.network,
+        config.btc_principal,
+        signed_transaction_bytes,
+    )
+    .await?;
 
     let tx_id = signed_transaction.compute_txid();
 
