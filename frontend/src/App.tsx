@@ -6,9 +6,9 @@ import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 import { OrderFilter } from '@/declarations/backend/backend.did';
 import { userTypeToString } from './model/utils/utils';
 import ProtectedRoute from './components/ProtectedRoute';
-import { useUser } from './components/user/UserContext';
 import Menu from './components/Menu';
 import ConnectAddress from './components/ConnectAddress';
+import { useUser } from './components/user/UserContext';
 import RegisterUser from './components/user/RegisterUser';
 import ConfirmEmail from './components/user/ConfirmEmail';
 import ResetPassword from './components/user/ResetPassword';
@@ -22,8 +22,10 @@ function App() {
     const { user } = useUser();
     const location = useLocation();
 
-    const authRoutes = ["/", "/register", "/confirm-email", "/forgot-password", "/reset-password"];
-    const isAuthPage = authRoutes.includes(location.pathname);
+    const centeredRoutes = [
+        "/", "/register", "/confirm-email", "/forgot-password", "/reset-password", "/profile", "/create"
+    ];
+    const isCenteredPage = centeredRoutes.includes(location.pathname);
 
     useEffect(() => {
         if (user) {
@@ -56,31 +58,23 @@ function App() {
     return (
         <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
             <Menu />
-            <div className="flex-grow py-4">
-                {isAuthPage ? (
-                    // Centered box
-                    <div className="text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto">
-                        <Routes>
-                            <Route path="/" element={<ConnectAddress />} />
-                            <Route path="/register" element={<RegisterUser />} />
-                            <Route path="/confirm-email" element={<ConfirmEmail />} />
-                            <Route path="/forgot-password" element={<ForgotPassword />} />
-                            <Route path="/reset-password" element={<ResetPassword />} />
-                            <Route path="/profile" element={<UserProfile />} />
-                            <Route
-                                path="/create"
-                                element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
-                            />
-                        </Routes>
-                    </div>
-                ) : (
-                    // Full-width for DEX-style pages
-                    <div className="w-full px-16">
-                        <Routes>
-                            <Route path="/view" element={<ViewOrders initialFilter={getInitialOrderFilter()} />} />
-                        </Routes>
-                    </div>
-                )}
+            <div className={`flex-grow py-4 ${isCenteredPage ? 'text-center w-full sm:w-3/4 md:w-1/2 lg:w-5/12 xl:w-1/3 mx-auto' : 'w-full px-16'}`}>
+                <Routes>
+                    <Route path="/" element={<ConnectAddress />} />
+                    <Route path="/register" element={<RegisterUser />} />
+                    <Route path="/confirm-email" element={<ConfirmEmail />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/profile" element={<UserProfile />} />
+                    <Route
+                        path="/create"
+                        element={<ProtectedRoute allowedUserTypes={["Offramper"]} outlet={<CreateOrder />} />}
+                    />
+                    <Route
+                        path="/view"
+                        element={<ProtectedRoute allowedUserTypes={["Offramper", "Onramper"]} outlet={<ViewOrders initialFilter={getInitialOrderFilter()} />} />}
+                    />
+                </Routes>
             </div>
             <Footer />
         </div>
