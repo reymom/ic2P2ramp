@@ -1,6 +1,6 @@
 use candid::{CandidType, Deserialize};
 
-use crate::types::{Blockchain, TransactionAddress};
+use crate::types::{BlockchainAsset, TransactionAddress};
 
 #[derive(CandidType, Clone, Deserialize)]
 pub enum OrderFilter {
@@ -9,7 +9,7 @@ pub enum OrderFilter {
     ByOfframperAddress(TransactionAddress),
     LockedByOnramper(TransactionAddress),
     ByState(OrderStateFilter),
-    ByBlockchain(Blockchain),
+    ByBlockchainAsset(BlockchainAsset),
 }
 
 #[derive(CandidType, Clone, Deserialize)]

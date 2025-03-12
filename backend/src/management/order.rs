@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-
-use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
+use bitcoin_backend::types::RuneUTXOEntry;
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
+use std::collections::HashMap;
 
 use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
 use crate::evm::{
@@ -20,31 +18,34 @@ use crate::inter_canister::bitcoin::{
     bitcoin_backend_validate_rune,
 };
 use crate::management::user as user_management;
-use crate::model::errors::RampError;
-use crate::model::guards;
-use crate::model::types::exchange_rate::{Asset, AssetClass};
+
 use crate::model::{
-    helpers,
+    guards, helpers,
     memory::{self, stable::spent_transactions},
 };
 use crate::outcalls::pricing::rates::get_cached_exchange_rate;
 use crate::types::{
     self,
     evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
+    exchange_rate::{Asset, AssetClass},
     icp::{get_icp_token, is_icp_token_supported},
     orders::{
         fees::{get_crypto_fee, get_fiat_fee},
         EvmOrderInput, LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
     },
-    Blockchain, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
+    BlockchainAsset, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 
 use super::payment;
 
 pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
+    let asset_class = match crypto.asset.clone() {
+        BlockchainAsset::Bitcoin { rune_id } if rune_id.is_some() => AssetClass::Rune,
+        _ => AssetClass::Cryptocurrency,
+    };
     let base_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: crypto.get_symbol().await?,
+        class: asset_class,
+        symbol: crypto.asset.get_symbol().await?,
     };
     let quote_asset = Asset {
         class: AssetClass::FiatCurrency,
@@ -101,14 +102,16 @@ pub async fn calculate_order_evm_fees(
 }
 
 async fn order_crypto_fee(
-    blockchain: Blockchain,
+    asset: BlockchainAsset,
     crypto_amount: u128,
-    token: Option<String>,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u128> {
-    match blockchain {
-        Blockchain::EVM { chain_id } => {
+    match asset {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
             let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
                 SystemError::InvalidInput(
                     "Gas estimation for locking is required for EVM".to_string(),
@@ -123,13 +126,13 @@ async fn order_crypto_fee(
             calculate_order_evm_fees(
                 chain_id,
                 crypto_amount,
-                token.clone(),
+                token_address.clone(),
                 estimated_gas_lock,
                 estimated_gas_withdraw,
             )
             .await
         }
-        Blockchain::ICP { ledger_principal } => {
+        BlockchainAsset::ICP { ledger_principal } => {
             let icp_fee: u128 =
                 get_icp_token(&ledger_principal)?
                     .fee
@@ -144,7 +147,7 @@ async fn order_crypto_fee(
 
             Ok(get_crypto_fee(crypto_amount, icp_fee * 2))
         }
-        Blockchain::Bitcoin => {
+        BlockchainAsset::Bitcoin { .. } => {
             let fee = bitcoin_backend_estimate_fee().await?;
             Ok(get_crypto_fee(crypto_amount, fee as u128))
         }
@@ -172,17 +175,19 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
 }
 
 pub async fn validate_deposit_tx(
-    blockchain: &Blockchain,
+    asset: &BlockchainAsset,
     evm_input: Option<EvmOrderInput>,
     runes: Option<Vec<RuneUTXOEntry>>,
     order_offramper: String,
     order_amount: u128,
-    order_token: Option<String>,
 ) -> Result<Option<String>> {
-    match blockchain {
-        Blockchain::EVM { chain_id } => {
+    match asset {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
             chains::chain_is_supported(*chain_id)?;
-            if let Some(token) = order_token.clone() {
+            if let Some(token) = token_address.clone() {
                 token::evm_token_is_approved(*chain_id, &token)?;
             };
 
@@ -207,7 +212,7 @@ pub async fn validate_deposit_tx(
                         .into());
                     }
                     if deposit_event.token.clone().map(|t| t.to_lowercase())
-                        != order_token.map(|t| t.to_lowercase())
+                        != token_address.clone().map(|t| t.to_lowercase())
                     {
                         return Err(
                             BlockchainError::EvmLogError("Invalid Crypto".to_string()).into()
@@ -223,13 +228,13 @@ pub async fn validate_deposit_tx(
 
             Ok(Some(evm_input.tx_hash))
         }
-        Blockchain::ICP { ledger_principal } => {
+        BlockchainAsset::ICP { ledger_principal } => {
             is_icp_token_supported(ledger_principal)?;
             Ok(None)
         }
-        Blockchain::Bitcoin => {
-            if let Some(rune_token) = order_token.clone() {
-                bitcoin_backend_validate_rune(rune_token).await?;
+        BlockchainAsset::Bitcoin { rune_id } => {
+            if let Some(rune_id) = rune_id.clone() {
+                bitcoin_backend_validate_rune(rune_id).await?;
                 if runes.is_none() {
                     return Err(BlockchainError::BitcoinBackendError(
                         "runes utxos are required".to_string(),
@@ -241,10 +246,7 @@ pub async fn validate_deposit_tx(
             bitcoin_backend_deposit_funds(
                 order_offramper,
                 order_amount as u64,
-                order_token
-                    .as_ref()
-                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
-                    .transpose()?,
+                rune_id.clone(),
                 runes.unwrap(),
             )
             .await?;
@@ -259,16 +261,14 @@ pub async fn create_order(
     offramper_user_id: u64,
     offramper_address: TransactionAddress,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
-    blockchain: Blockchain,
-    token: Option<String>,
+    asset: BlockchainAsset,
     crypto_amount: u128,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u64> {
     let crypto_fee = order_crypto_fee(
-        blockchain.clone(),
+        asset.clone(),
         crypto_amount,
-        token.clone(),
         estimated_gas_lock,
         estimated_gas_withdraw,
     )
@@ -283,8 +283,7 @@ pub async fn create_order(
         offramper_user_id,
         offramper_address,
         offramper_providers,
-        blockchain,
-        token,
+        asset,
         crypto_amount,
         crypto_fee,
     )?;
@@ -300,9 +299,8 @@ pub async fn topup_order(
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<()> {
     let crypto_fee = order_crypto_fee(
-        order.crypto.blockchain.clone(),
+        order.crypto.asset.clone(),
         order.crypto.amount,
-        order.crypto.token.clone(),
         estimated_gas_lock,
         estimated_gas_withdraw,
     )
@@ -387,10 +385,10 @@ pub fn get_orders(
             page,
             page_size,
         ),
-        Some(OrderFilter::ByBlockchain(blockchain)) => memory::stable::orders::filter_orders(
+        Some(OrderFilter::ByBlockchainAsset(asset)) => memory::stable::orders::filter_orders(
             |order_state| match order_state {
-                OrderState::Created(order) => order.crypto.blockchain == blockchain,
-                OrderState::Locked(order) => order.base.crypto.blockchain == blockchain,
+                OrderState::Created(order) => order.crypto.asset == asset,
+                OrderState::Locked(order) => order.base.crypto.asset == asset,
                 _ => false,
             },
             page,
@@ -427,15 +425,18 @@ pub async fn lock_order(
     )
     .await?;
 
-    match order.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
+    match order.crypto.asset {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
             let estimated_gas =
                 Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Commit).await?;
             Ic2P2ramp::commit_deposit(
                 chain_id,
                 order_id,
                 order.offramper_address.address,
-                order.crypto.token,
+                token_address,
                 order.crypto.amount,
                 Some(estimated_gas),
                 LockInput {
@@ -450,7 +451,7 @@ pub async fn lock_order(
             .await?;
             Ok(())
         }
-        Blockchain::ICP { .. } => {
+        BlockchainAsset::ICP { .. } => {
             memory::stable::orders::lock_order(
                 order_id,
                 price,
@@ -462,7 +463,7 @@ pub async fn lock_order(
             )?;
             Ok(())
         }
-        Blockchain::Bitcoin => {
+        BlockchainAsset::Bitcoin { rune_id } => {
             memory::stable::orders::lock_order(
                 order_id,
                 price,
@@ -477,12 +478,7 @@ pub async fn lock_order(
                 order.offramper_address.address,
                 onramper_address.address,
                 order.crypto.amount as u64,
-                order
-                    .crypto
-                    .token
-                    .as_ref()
-                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
-                    .transpose()?,
+                rune_id,
             )
             .await?;
             Ok(())
@@ -540,39 +536,36 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
     let user = memory::stable::users::get_user(&order.onramper.user_id)?;
     user.validate_onramper()?;
 
-    match order.base.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
+    match order.base.crypto.asset {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
             let estimated_gas =
                 Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Uncommit).await?;
             Ic2P2ramp::uncommit_deposit(
                 chain_id,
                 order_id,
                 order.base.offramper_address.address,
-                order.base.crypto.token,
+                token_address,
                 order.base.crypto.amount,
                 Some(estimated_gas),
             )
             .await?;
             Ok(())
         }
-        Blockchain::ICP { .. } => {
+        BlockchainAsset::ICP { .. } => {
             memory::stable::orders::unlock_order(order.base.id)?;
             Ok(())
         }
-        Blockchain::Bitcoin => {
+        BlockchainAsset::Bitcoin { rune_id } => {
             memory::stable::orders::unlock_order(order.base.id)?;
 
             bitcoin::bitcoin_backend_unlock_funds(
                 order.base.offramper_address.address,
                 order.onramper.address.address,
                 order.base.crypto.amount as u64,
-                order
-                    .base
-                    .crypto
-                    .token
-                    .as_ref()
-                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
-                    .transpose()?,
+                rune_id,
             )
             .await?;
 
@@ -591,21 +584,24 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
     }
     user.validate_session(&session_token)?;
 
-    match &order.crypto.blockchain {
-        Blockchain::EVM { chain_id } => {
+    match &order.crypto.asset {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
             let fees = order.crypto.fee / 2;
             Ic2P2ramp::withdraw_deposit(
                 *chain_id,
                 order_id,
                 order.offramper_address.address,
-                order.crypto.token,
+                token_address.clone(),
                 order.crypto.amount,
                 fees,
             )
             .await?;
             Ok(())
         }
-        Blockchain::ICP { ledger_principal } => {
+        BlockchainAsset::ICP { ledger_principal } => {
             let offramper_principal =
                 Principal::from_text(&order.offramper_address.address).unwrap();
 
@@ -628,18 +624,13 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
             memory::stable::orders::cancel_order(order_id)?;
             Ok(())
         }
-        Blockchain::Bitcoin => {
+        BlockchainAsset::Bitcoin { rune_id } => {
             memory::stable::orders::cancel_order(order_id)?;
 
             bitcoin::bitcoin_backend_cancel_deposit(
                 order.offramper_address.address,
                 order.crypto.amount as u64,
-                order
-                    .crypto
-                    .token
-                    .as_ref()
-                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
-                    .transpose()?,
+                rune_id.clone(),
             )
             .await?;
 

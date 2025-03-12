@@ -2,7 +2,7 @@ use candid::{CandidType, Deserialize};
 
 use crate::{
     model::memory::heap,
-    types::{Blockchain, PaymentProvider, TransactionAddress},
+    types::{BlockchainAsset, PaymentProvider, TransactionAddress},
 };
 
 use super::order::Order;
@@ -85,7 +85,7 @@ pub struct CompletedOrder {
     pub offramper: TransactionAddress,
     pub price: u64,
     pub offramper_fee: u64,
-    pub blockchain: Blockchain,
+    pub asset: BlockchainAsset,
     pub completed_at: u64,
 }
 
@@ -97,7 +97,7 @@ impl From<LockedOrder> for CompletedOrder {
             offramper: base.offramper_address,
             price: locked_order.price,
             offramper_fee: locked_order.offramper_fee,
-            blockchain: base.crypto.blockchain,
+            asset: base.crypto.asset,
             completed_at: ic_cdk::api::time(),
         }
     }

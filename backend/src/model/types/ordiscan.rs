@@ -7,8 +7,13 @@ pub struct OrdiscanState {
     pub api_key: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OrdiscanRunePrice {
+    pub data: RuneMarketData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RuneMarketData {
     pub price_in_sats: f64,
     pub price_in_usd: f64,
     pub market_cap_in_btc: f64,

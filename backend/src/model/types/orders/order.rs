@@ -9,7 +9,7 @@ use crate::{
         memory::heap,
         types::{common::AddressType, Crypto, PaymentProviderType},
     },
-    types::{Blockchain, PaymentProvider, TransactionAddress},
+    types::{BlockchainAsset, PaymentProvider, TransactionAddress},
 };
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -37,18 +37,17 @@ impl Order {
         offramper_user_id: u64,
         offramper_address: TransactionAddress,
         offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
-        blockchain: Blockchain,
-        token: Option<String>,
+        asset: BlockchainAsset,
         crypto_amount: u128,
         crypto_fee: u128,
     ) -> Result<Self> {
         offramper_address.validate()?;
 
-        match (blockchain.clone(), &offramper_address.address_type) {
-            (Blockchain::EVM { .. }, AddressType::EVM)
-            | (Blockchain::ICP { .. }, AddressType::ICP)
-            | (Blockchain::Bitcoin, AddressType::Bitcoin)
-            | (Blockchain::Solana, AddressType::Solana) => (),
+        match (asset.clone(), &offramper_address.address_type) {
+            (BlockchainAsset::EVM { .. }, AddressType::EVM)
+            | (BlockchainAsset::ICP { .. }, AddressType::ICP)
+            | (BlockchainAsset::Bitcoin { .. }, AddressType::Bitcoin)
+            | (BlockchainAsset::Solana, AddressType::Solana) => (),
             _ => {
                 return Err(SystemError::InvalidInput(
                     "Address type does not match blockchain type".to_string(),
@@ -65,7 +64,7 @@ impl Order {
             offramper_user_id,
             offramper_address,
             offramper_providers,
-            crypto: Crypto::new(blockchain, token, crypto_amount, crypto_fee),
+            crypto: Crypto::new(asset, crypto_amount, crypto_fee),
             processing: false,
         };
         ic_cdk::println!("[new order] order = {:?}", order);
@@ -107,14 +106,11 @@ impl Order {
         revolut_consent: Option<RevolutConsent>,
     ) -> Result<LockedOrder> {
         // Check if the address type matches the blockchain type
-        match (
-            self.crypto.blockchain.clone(),
-            &onramper_address.address_type,
-        ) {
-            (Blockchain::EVM { .. }, AddressType::EVM)
-            | (Blockchain::ICP { .. }, AddressType::ICP)
-            | (Blockchain::Bitcoin, AddressType::Bitcoin)
-            | (Blockchain::Solana, AddressType::Solana) => (),
+        match (self.crypto.asset.clone(), &onramper_address.address_type) {
+            (BlockchainAsset::EVM { .. }, AddressType::EVM)
+            | (BlockchainAsset::ICP { .. }, AddressType::ICP)
+            | (BlockchainAsset::Bitcoin { .. }, AddressType::Bitcoin)
+            | (BlockchainAsset::Solana, AddressType::Solana) => (),
             _ => {
                 return Err(SystemError::InvalidInput(
                     "Address type does not match blockchain type".to_string(),

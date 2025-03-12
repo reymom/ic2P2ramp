@@ -1,6 +1,5 @@
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
-use bitcoin_backend::types::RuneID;
 use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
@@ -10,12 +9,11 @@ use crate::{
     icp::vault::Ic2P2ramp as ICPRamp,
     inter_canister::bitcoin,
     management,
-    model::errors::RampError,
     outcalls::{paypal, revolut},
     types::{
         icp::get_icp_token,
         orders::{LockedOrder, RevolutConsent},
-        Blockchain, PaymentProvider, PaymentProviderType,
+        BlockchainAsset, PaymentProvider, PaymentProviderType,
     },
 };
 
@@ -127,22 +125,31 @@ pub async fn verify_revolut_payment(
 }
 
 pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
-    match order.base.crypto.blockchain {
-        Blockchain::EVM { chain_id } => Ic2P2ramp::release_funds(order.clone(), chain_id).await,
-        Blockchain::ICP { ledger_principal } => {
+    let offramper = order.base.offramper_address.address.clone();
+    let onramper = order.onramper.address.address.clone();
+    match order.base.crypto.asset.clone() {
+        BlockchainAsset::EVM {
+            chain_id,
+            token_address,
+        } => {
+            Ic2P2ramp::release_funds(
+                order.base.id,
+                offramper,
+                onramper,
+                order.base.crypto.clone(),
+                chain_id,
+                token_address,
+            )
+            .await
+        }
+        BlockchainAsset::ICP { ledger_principal } => {
             handle_icp_payment_completion(order, &ledger_principal).await
         }
-        Blockchain::Bitcoin => {
+        BlockchainAsset::Bitcoin { rune_id } => {
             bitcoin::bitcoin_backend_send_funds(
                 order.onramper.address.address.clone(),
                 order.base.crypto.amount as u64,
-                order
-                    .base
-                    .crypto
-                    .token
-                    .as_ref()
-                    .map(|token| RuneID::from_str(token.as_str()).map_err(|e| RampError::from(e)))
-                    .transpose()?,
+                rune_id,
             )
             .await
         }
