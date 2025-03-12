@@ -23,8 +23,10 @@ pub async fn get_cached_exchange_rate(
 
                 let rate = match (base_asset.clone().class, quote_asset.clone().class) {
                     (AssetClass::Rune, _) => {
-                        let rune_price_in_usd =
-                            fetch_rune_price(&base_asset.symbol).await?.price_in_usd;
+                        let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
+                            .await?
+                            .data
+                            .price_in_usd;
                         if quote_asset.symbol == "USD" {
                             rune_price_in_usd
                         } else {
@@ -40,8 +42,10 @@ pub async fn get_cached_exchange_rate(
                         }
                     }
                     (_, AssetClass::Rune) => {
-                        let rune_price_in_usd =
-                            fetch_rune_price(&base_asset.symbol).await?.price_in_usd;
+                        let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
+                            .await?
+                            .data
+                            .price_in_usd;
                         if base_asset.symbol == "USD" {
                             1.0 / rune_price_in_usd
                         } else {

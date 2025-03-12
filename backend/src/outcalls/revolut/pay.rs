@@ -95,7 +95,7 @@ pub async fn initiate_domestic_payment(
         },
         HttpHeader {
             name: "x-idempotency-key".to_string(),
-            value: ic_cdk::api::time().to_string(),
+            value: format!("revolut-pay-key-{}", ic_cdk::api::time()).to_string(),
         },
         HttpHeader {
             name: "x-jws-signature".to_string(),

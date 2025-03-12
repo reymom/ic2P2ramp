@@ -94,7 +94,6 @@ pub async fn create_account_access_consent(
     );
 
     let jws_signature = jws::create_jws_signature(&jws_payload, &jws_header).await?;
-    let idempotency_key = ic_cdk::api::time().to_string();
     let request_headers = vec![
         HttpHeader {
             name: "Authorization".to_string(),
@@ -110,7 +109,7 @@ pub async fn create_account_access_consent(
         },
         HttpHeader {
             name: "x-idempotency-key".to_string(),
-            value: idempotency_key,
+            value: format!("revolut-consent-key-{}", ic_cdk::api::time()).to_string(),
         },
         HttpHeader {
             name: "x-jws-signature".to_string(),

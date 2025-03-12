@@ -58,7 +58,7 @@ pub async fn get_paypal_access_token() -> Result<String> {
         },
         HttpHeader {
             name: "idempotency-key".to_string(),
-            value: "auth-key-0".to_string(),
+            value: format!("auth-key-{}", ic_cdk::api::time()).to_string(),
         },
     ];
 
