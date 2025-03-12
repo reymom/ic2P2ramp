@@ -1,11 +1,16 @@
 import { bitcoin_backend } from '@/declarations/bitcoin_backend';
 import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
-import { fetchRuneBalance, fetchTransactionOutputs, waitForTransactionConfirmation } from './unisat';
+import {
+  fetchRuneUTXOBalance,
+  fetchTransactionOutputs,
+  waitForTransactionConfirmation,
+} from './unisat';
 import { RuneUTXOEntry } from '@/declarations/backend/backend.did';
+import { TokenOption } from '@/model/types';
+import { supportedRuneIds } from '@/constants/runes';
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
-export const fetchBitcoinCanisterAddress = async (
-  useTaproot: boolean,
-) => {
+export const fetchBitcoinCanisterAddress = async (useTaproot: boolean) => {
   try {
     let response;
 
@@ -36,10 +41,9 @@ export const transferBitcoinToCanister = async (
   amount: bigint,
   bitcoinBackendAddress: String,
 ) => {
-  const satoshiAmount = Number(amount);
   const txid = await (window as any).unisat.sendBitcoin(
     bitcoinBackendAddress,
-    satoshiAmount,
+    Number(amount),
     { feeRate: 55 },
   );
 
@@ -50,14 +54,13 @@ export const transferBitcoinToCanister = async (
 export const transferRuneToCanister = async (
   amount: bigint,
   canisterAddress: string,
-  runeData: string,
+  runeId: string,
 ) => {
-  const satoshiAmount = Number(amount);
-  const txid = await (window as any).unisat.sendBitcoin(
+  const txid = await (window as any).unisat.sendRunes(
     canisterAddress,
-    satoshiAmount,
+    runeId,
+    Number(amount),
     {
-      data: runeData, // Attach the rune metadata as additional data
       feeRate: 55,
     },
   );
@@ -66,11 +69,53 @@ export const transferRuneToCanister = async (
   return txid;
 };
 
-export const fetchRuneMetadata = async (
-  symbol: string,
+export const handleBitcoinTransaction = async (
+  txid: string,
+  isRune: boolean,
+): Promise<Array<RuneUTXOEntry> | []> => {
+  console.log(`Waiting for Bitcoin transaction ${txid} confirmation...`);
+  const confirmed = await waitForTransactionConfirmation(txid);
+  if (!confirmed) {
+    console.error(`Transaction ${txid} not confirmed.`);
+    return [];
+  }
+
+  if (!isRune) return [];
+
+  console.log(`Fetching UTXOs for transaction ${txid}...`);
+  const utxos = await fetchTransactionOutputs(txid);
+  if (!Array.isArray(utxos) || utxos.length === 0) {
+    console.error(`No UTXOs found for transaction ${txid}`);
+    return [];
+  }
+
+  const runeUTXOs: RuneUTXOEntry[] = [];
+  for (const utxo of utxos) {
+    try {
+      const runeData = await fetchRuneUTXOBalance(utxo.txid, utxo.vout);
+      if (Array.isArray(runeData) && runeData.length > 0) {
+        runeUTXOs.push({
+          txid: utxo.txid,
+          vout: utxo.vout,
+          rune_amount: BigInt(runeData[0].amount),
+          script_pubkey: utxo.scriptPk,
+        });
+      }
+    } catch (error) {
+      console.error(
+        `Failed to fetch Rune balance for ${utxo.txid}:${utxo.vout}: ${error}`,
+      );
+    }
+  }
+
+  return runeUTXOs;
+};
+
+const fetchRuneMetadata = async (
+  runeId: string,
 ): Promise<{ metadata: RuneMetadata; serialized: string }> => {
   try {
-    const response = await bitcoin_backend.get_serialized_rune_metadata(symbol);
+    const response = await bitcoin_backend.get_serialized_rune_metadata(runeId);
     if ('Ok' in response && response.Ok.length === 2) {
       return { metadata: response.Ok[0], serialized: response.Ok[1] };
     } else if ('Err' in response) {
@@ -85,39 +130,39 @@ export const fetchRuneMetadata = async (
   }
 };
 
-export const handleBitcoinTransaction = async (txid: string, isRune: boolean): Promise<Array<RuneUTXOEntry> | []> => {
-  console.log(`Waiting for Bitcoin transaction ${txid} confirmation...`);
-  const confirmed = await waitForTransactionConfirmation(txid);
-  if (!confirmed) {
-    console.error(`Transaction ${txid} not confirmed.`);
-    return [];
-  }
+export const fetchBitcoinTokenOptions = async (): Promise<
+  Array<TokenOption>
+> => {
+  const tokens: TokenOption[] = [
+    {
+      name: 'BTC',
+      address: '',
+      decimals: 8,
+      isNative: true,
+      rateSymbol: 'BTC',
+      logo: bitcoinLogo,
+    },
+  ];
 
-  if (!isRune) return [];
-  
-  console.log(`Fetching UTXOs for transaction ${txid}...`);
-  const utxos = await fetchTransactionOutputs(txid);
-  if (!Array.isArray(utxos) || utxos.length === 0) {
-    console.error(`No UTXOs found for transaction ${txid}`);
-    return [];
-  }
-
-  const runeUTXOs: RuneUTXOEntry[] = [];
-  for (const utxo of utxos) {
+  for (const rune of supportedRuneIds) {
     try {
-      const runeData = await fetchRuneBalance(utxo.txid, utxo.vout);
-      if (Array.isArray(runeData) && runeData.length > 0) {
-        runeUTXOs.push({
-          txid: utxo.txid,
-          vout: utxo.vout,
-          rune_amount: BigInt(runeData[0].amount),
-          script_pubkey: utxo.scriptPk,
-        });
-      }
+      const { metadata, serialized } = await fetchRuneMetadata(rune.runeId);
+      tokens.push({
+        name: rune.name,
+        address: serialized,
+        decimals: metadata.divisibility,
+        isNative: false,
+        rateSymbol: metadata.name,
+        logo: rune.logo,
+        runeMetadata: metadata,
+      });
     } catch (error) {
-      console.error(`Failed to fetch Rune balance for ${utxo.txid}:${utxo.vout}: ${error}`);
+      console.error(
+        `Failed to fetch metadata for ${MediaMetadata.name}:`,
+        error,
+      );
     }
   }
 
-  return runeUTXOs;
+  return tokens;
 };
