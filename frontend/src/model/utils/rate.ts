@@ -27,9 +27,10 @@ export const fetchOrderPrice = async (
 export const getExchangeRate = async (
   currency: string,
   crypto: string,
+  isRune: boolean,
 ): Promise<number | null> => {
   try {
-    const result = await backend.get_exchange_rate(currency, crypto);
+    const result = await backend.get_exchange_rate(currency, crypto, isRune);
     if ('Ok' in result) {
       console.log('[getExchangeRate] rate = ', result.Ok);
       return result.Ok;
@@ -46,5 +47,5 @@ export const getExchangeRate = async (
 };
 
 const queryExchangeRate = async (): Promise<number | null> => {
-  return null
-}
+  return null;
+};

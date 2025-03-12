@@ -1,19 +1,23 @@
 import {
-  Blockchain,
+  BlockchainAsset,
   PaymentProvider,
   PaymentProviderType,
   UserType,
 } from '@/declarations/backend/backend.did';
-import { UserTypes, PaymentProviderTypes, BlockchainTypes } from '@/model/types';
+import {
+  UserTypes,
+  PaymentProviderTypes,
+  BlockchainTypes,
+} from '@/model/types';
 
 // Blockchain
-export const blockchainToBlockchainType = (
-  blockchain: Blockchain,
+export const blockchainAssetToBlockchainType = (
+  asset: BlockchainAsset,
 ): BlockchainTypes => {
-  if ('EVM' in blockchain) return 'EVM';
-  if ('ICP' in blockchain) return 'ICP';
-  if ('Solana' in blockchain) return 'Solana';
-  if ('Bitcoin' in blockchain) return 'Bitcoin';
+  if ('EVM' in asset) return 'EVM';
+  if ('ICP' in asset) return 'ICP';
+  if ('Solana' in asset) return 'Solana';
+  if ('Bitcoin' in asset) return 'Bitcoin';
   throw new Error('Unknown blockchain');
 };
 
