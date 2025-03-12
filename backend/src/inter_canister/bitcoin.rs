@@ -104,17 +104,13 @@ pub async fn bitcoin_backend_send_funds(
 }
 
 /// Calls the `validate_rune_metadata` function on the `bitcoin_backend` canister.
-pub async fn bitcoin_backend_validate_rune(rune_data: String) -> Result<()> {
+pub async fn bitcoin_backend_validate_rune(rune_id: RuneID) -> Result<()> {
     let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
         .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
-    call::<(String,), ()>(
-        bitcoin_backend_canister_id,
-        "validate_rune_metadata",
-        (rune_data,),
-    )
-    .await
-    .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
+    call::<(RuneID,), ()>(bitcoin_backend_canister_id, "validate_rune", (rune_id,))
+        .await
+        .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
 }
 
 pub async fn bitcoin_backend_estimate_fee() -> Result<u64> {
