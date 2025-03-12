@@ -3,7 +3,7 @@ use bitcoin::{
     script::{Builder, PushBytesBuf},
     ScriptBuf, Txid,
 };
-use ic_cdk::api::management_canister::bitcoin::Satoshi;
+use ic_btc_interface::Satoshi;
 
 use crate::model::types::{
     errors::{BitcoinError, Result},

@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
 };
 
-use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
+use ic_btc_interface::Network;
 
 use crate::model::types::{
     errors::{BitcoinError, Result},
@@ -16,13 +16,16 @@ thread_local! {
     // When developing locally this should be `Regtest`.
     // When deploying to the IC this should be `Testnet`.
     // `Mainnet` is currently unsupported.
-    pub static NETWORK: Cell<BitcoinNetwork> = Cell::new(BitcoinNetwork::Testnet);
+    pub static NETWORK: Cell<Network> = Cell::new(Network::Testnet);
 
     // The derivation path to use for the threshold key.
     pub static DERIVATION_PATH: Vec<Vec<u8>> = vec![];
 
     // The ECDSA key name.
     pub static KEY_NAME: RefCell<String> = RefCell::new(String::from(""));
+
+    // The canister address.
+    pub static BTC_PRINCIPAL: RefCell<candid::Principal> = RefCell::new(candid::Principal::anonymous());
 
     // Registered Runes: rune ID is BLOCK:TX
     static RUNES: RefCell<HashMap<RuneID, RuneMetadata>> = RefCell::new(HashMap::new());

@@ -1,12 +1,14 @@
-use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
+use candid::Principal;
+use ic_btc_interface::Network;
 
-use crate::memory::heap::config::{DERIVATION_PATH, KEY_NAME, NETWORK};
+use crate::memory::heap::config::{BTC_PRINCIPAL, DERIVATION_PATH, KEY_NAME, NETWORK};
 
 #[derive(Clone)]
 pub struct WalletConfig {
     pub key_name: String,
-    pub network: BitcoinNetwork,
+    pub network: Network,
     pub derivation_path: Vec<Vec<u8>>,
+    pub btc_principal: Principal,
 }
 
 pub enum AddressType {
@@ -25,11 +27,13 @@ impl WalletConfig {
                 derivation_path.push(b"script_spend".to_vec());
             }
         }
+        let btc_principal = BTC_PRINCIPAL.with(|d| *d.borrow());
 
         Self {
             key_name: KEY_NAME.with(|kn| kn.borrow().to_string()),
             network: NETWORK.with(|n| n.get()),
             derivation_path,
+            btc_principal,
         }
     }
 
