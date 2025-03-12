@@ -22,10 +22,12 @@ import {
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import logo from '@/assets/icR-logo.png';
+import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 import { useUser } from './user/UserContext';
 import { truncate, formatTimeLeft } from '@/utils/helper';
 import { sessionMarginMilisec } from '@/model/session';
+import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -36,8 +38,8 @@ const Menu: React.FC = () => {
         document.documentElement.classList.contains("dark")
     );
 
-    const { isConnected } = useAccount();
-    const { user, icpBalances, loginInternetIdentity, logout } = useUser();
+    const { isConnected, chainId } = useAccount();
+    const { user, icpBalances, bitcoinAddress, bitcoinBalance, connectUnisat, loginInternetIdentity, logout } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -142,7 +144,7 @@ const Menu: React.FC = () => {
                         {renderLinkGroup(links, true)}
                     </div>
                 ) : (
-                    <div key={title} className="relative group flex items-center">
+                    <div key={title} className="relative group flex items-center justify-center">
                         <button
                             onClick={() => closeMenu()}
                             className={clsx(
@@ -187,6 +189,10 @@ const Menu: React.FC = () => {
 
     const handleInternetIdentityLogin = async () => {
         await loginInternetIdentity();
+    };
+
+    const handleConnectUnisat = async () => {
+        await connectUnisat();
     };
 
     useEffect(() => {
@@ -308,53 +314,76 @@ const Menu: React.FC = () => {
                     <div className="relative" ref={profileDropdownRef}>
                         {/* Dropdown */}
                         <button onClick={toggleProfileDropdown} className="flex items-center space-x-2 p-2 border border-gray-400 rounded-lg transition-all">
-                            <FontAwesomeIcon icon={faUserCircle} size="2x" className="text-violet-800" />
+                            <FontAwesomeIcon icon={faUserCircle} size="lg" className="text-violet-800 dark:text-violet-700" />
                             <svg className={`w-4 h-4 ml-1 transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
                         {isProfileDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-72 bg-white shadow-lg rounded-lg z-50">
-                                <div className="p-4 text-gray-700 border-b border-gray-200">
+                            <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 shadow-lg rounded-lg z-50">
+                                <div className="p-4 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 
                                     <div className="flex items-center text-center">
-                                        <span className="flex-grow text-sm font-semibold text-blue-600 truncate">
-                                            {(() => {
+                                        {(() => {
+                                            const { address, explorerUrl } = (() => {
                                                 if ('EVM' in user.login) {
-                                                    return truncate(user.login.EVM.address, 12, 12);
-                                                } else if ('ICP' in user.login) {
-                                                    return truncate(user.login.ICP.principal_id, 12, 12);
-                                                } else if ('Solana' in user.login) {
-                                                    return truncate(user.login.Solana.address, 12, 12);
-                                                } else if ('Email' in user.login) {
-                                                    return truncate(user.login.Email.email, 12, 12);
+                                                    if (!chainId) return { address: '', explorerUrl: null };
+                                                    const urls = getExplorerUrls('EVM', user.login.EVM.address, BigInt(chainId));
+                                                    return { address: user.login.EVM.address, explorerUrl: urls?.address };
                                                 }
-                                                return '';
-                                            })()}
-                                        </span>
+                                                if ('ICP' in user.login) {
+                                                    const urls = getExplorerUrls('ICP', user.login.ICP.principal_id);
+                                                    return { address: user.login.ICP.principal_id, explorerUrl: urls?.address };
+                                                }
+                                                if ('Solana' in user.login) {
+                                                    const urls = getExplorerUrls('Solana', user.login.Solana.address);
+                                                    return { address: user.login.Solana.address, explorerUrl: urls?.address };
+                                                }
+                                                if ('Email' in user.login) {
+                                                    return { address: user.login.Email.email, explorerUrl: null };
+                                                }
+                                                if ('Bitcoin' in user.login) {
+                                                    const urls = getExplorerUrls('ICP', user.login.Bitcoin.address);
+                                                    return { address: user.login.Bitcoin.address, explorerUrl: urls?.address };
+                                                }
+                                                return { address: '', explorerUrl: null };
+                                            })();
+
+                                            return (
+                                                <span className="flex-grow text-sm font-semibold text-blue-600 dark:text-blue-400 truncate">
+                                                    {explorerUrl ? (
+                                                        <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
+                                                            {truncate(address, 12, 12)}
+                                                        </a>
+                                                    ) : (
+                                                        truncate(address, 12, 12)
+                                                    )}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
-                                    <div className="items-center text-center">
-                                        <hr className="border-t border-gray-300 w-full my-2" />
-                                        {icpBalances && icpBalances['ICP'] ? (
-                                            <div className="relative flex justify-center items-center border border-gray-300 rounded-md px-3 py-2 text-green-800 text-center font-medium">
-                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
-                                                <span className="text-lg">{icpBalances['ICP'].formatted} ICP</span>
-                                            </div>
-                                        ) : (
-                                            <div
-                                                className="relative flex justify-center items-center px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer"
-                                                onClick={handleInternetIdentityLogin}
-                                            >
-                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
-                                                <span className="text-black dark:text-white text-lg">Connect ICP</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
+                                    {/* <div className="items-center text-center"> */}
+                                    {icpBalances && icpBalances['ICP'] ? (
+                                        <div className="relative flex justify-center items-center border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-green-800 dark:text-green-400 text-center font-medium">
+                                            <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-lg">{icpBalances['ICP'].formatted} ICP</span>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="relative flex justify-center items-center px-3 py-2 bg-amber-400 dark:bg-amber-700 rounded-md hover:bg-amber-300 dark:hover:bg-amber-800 cursor-pointer"
+                                            onClick={handleInternetIdentityLogin}
+                                        >
+                                            <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-black dark:text-white text-lg">Connect ICP</span>
+                                        </div>
+                                    )}
+                                    {/* </div> */}
 
-                                    <hr className="border-t border-gray-300 w-full my-2" />
+                                    <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
                                     {!isConnected ? (
-                                        <div className="relative flex justify-center items-center px-3 py-2 bg-amber-800 rounded-md hover:bg-amber-900 cursor-pointer">
+                                        <div className="relative flex justify-center items-center px-3 py-2 bg-amber-400 dark:bg-amber-700 rounded-md hover:bg-amber-300 dark:hover:bg-amber-800 cursor-pointer">
                                             <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 absolute left-3" />
                                             <div className="w-full text-left">
                                                 <ConnectButton.Custom>
@@ -376,17 +405,33 @@ const Menu: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+
+                                    <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
+
+                                    {bitcoinAddress && bitcoinBalance ? (
+                                        <div className="relative flex justify-center items-center border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-green-800 dark:text-green-400 text-center font-medium">
+                                            <img src={bitcoinLogo} alt="Bitocoin Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-lg">{bitcoinBalance.formatted} BTC</span>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="relative flex justify-center items-center px-3 py-2 bg-amber-400 dark:bg-amber-700 rounded-md hover:bg-amber-300 dark:hover:bg-amber-800 cursor-pointer"
+                                            onClick={handleConnectUnisat}>
+                                            <img src={bitcoinLogo} alt="Bitocoin Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-black dark:text-white text-lg">Connect Unisat</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                                     <FontAwesomeIcon icon={faUserCircle} size="lg" className='mr-2' />
                                     <span>Profile</span>
                                 </Link>
-                                <button onClick={logout} className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                <button onClick={logout} className="flex items-center w-full px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                                     <FontAwesomeIcon icon={faSignOutAlt} size="lg" className='mr-2' />
                                     <span>Logout</span>
                                     {timeLeft !== null && (
-                                        <span className="ml-auto text-sm text-gray-500">({formatTimeLeft(timeLeft)})</span>
+                                        <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">({formatTimeLeft(timeLeft)})</span>
                                     )}
                                 </button>
                             </div>
