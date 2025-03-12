@@ -4,7 +4,7 @@ import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 const BalancesDashboard: React.FC = () => {
-    const { user, bitcoinAddress, icpBalances, evmBalances, bitcoinBalance, refetchUser } = useUser();
+    const { icpBalances, evmBalances, bitcoinBalance } = useUser();
 
     const renderBalances = (balances: { [key: string]: Balance | any }, logo: string, title: string) => (
         <>

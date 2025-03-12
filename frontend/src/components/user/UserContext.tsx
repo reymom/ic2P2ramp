@@ -7,11 +7,12 @@ import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
-import { config } from '@/wagmi';
-import { backend, createActor } from '@/model/backendProxy';
+import { config, getChains } from '@/wagmi';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/backend/backend.did';
+import { backend, createActor } from '@/model/backendProxy';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
+import { supportedRuneIds } from '@/constants/runes';
 import {
     saveUserSession,
     getUserSession,
@@ -24,9 +25,8 @@ import {
 } from '@/model/session';
 import { UserTypes } from '@/model/types';
 import { icpHost, iiUrl } from '@/model/blockchain/icp';
+import { fetchRuneBalances, isCorrectUnisatChain, switchUnisatChain } from '@/model/blockchain/unisat';
 import { formatCryptoUnits } from '@/utils/helper';
-import { getChains } from '@/wagmi';
-import { supportedRuneSymbols } from '@/constants/runes';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 
 export interface Balance {
@@ -124,21 +124,26 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [chainId, address, isConnected])
 
     useEffect(() => {
-        if (unisatInstalled) {
+        if (unisatInstalled && bitcoinAddress !== null) {
             fetchBitcoinBalance();
         }
-    }, [unisatInstalled])
-
-    useEffect(() => {
-        if (typeof window !== "undefined" && (window as any).unisat) {
-            setUnisatInstalled(true);
-        }
-    }, []);
+    }, [unisatInstalled, bitcoinAddress])
 
     const connectUnisat = async (): Promise<string | null> => {
         if (unisatInstalled) {
             try {
                 if ((window as any).unisat) {
+                    console.log("[connectUnisat] onCorrectChain?");
+                    const onCorrectChain = await isCorrectUnisatChain();
+
+                    if (!onCorrectChain) {
+                        const switched = await switchUnisatChain();
+                        if (!switched) {
+                            console.error("Failed to switch network");
+                            return null;
+                        }
+                    }
+
                     const accounts = await (window as any).unisat.requestAccounts();
                     if (accounts && accounts.length > 0) {
                         const account = accounts[0];
@@ -177,6 +182,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         checkInternetIdentity();
+
+        if (typeof window !== "undefined" && (window as any).unisat) {
+            setUnisatInstalled(true);
+        }
     }, []);
 
     const loginInternetIdentity = async (): Promise<[Principal, HttpAgent]> => {
@@ -262,11 +271,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!sessionToken) return;
 
         backend.refetch_user(user.id, sessionToken)
-            .then((result) => {
+            .then(async (result) => {
                 if ('Ok' in result) {
                     const updatedUser = result.Ok;
                     setUser(updatedUser);
-                    fetchBalances();
+                    await fetchBalances();
 
                     saveUserSession(updatedUser);
                     console.log("User refetched and updated.");
@@ -360,24 +369,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
             console.log("[fetchBitcoinBalance] unisatGetBalance res = ", res);
 
-            for (const rune of supportedRuneSymbols) {
-                try {
-                    const runeBalanceRes = await fetch(
-                        `https://open-api.unisat.io/v1/indexer/address/${bitcoinAddress}/runes/${rune.runeid}/balance`
-                    );
-                    const runeBalanceData = await runeBalanceRes.json();
-
-                    bitcoinBalances.runes[rune.runeid] = {
-                        raw: BigInt(runeBalanceData.balance),
-                        formatted: formatCryptoUnits(runeBalanceData.balance / 10 ** runeBalanceData.divisibility),
-                        symbol: rune.symbol,
-                        logo: rune.logo,
-                        name: rune.name
-                    };
-                } catch (err) {
-                    console.error(`Failed to fetch balance for Rune ${rune.runeid}`, err);
-                }
-            }
+            bitcoinBalances.runes = await fetchRuneBalances(bitcoinAddress, supportedRuneIds);
 
             setBitcoinBalance(bitcoinBalances);
         } catch (e) {

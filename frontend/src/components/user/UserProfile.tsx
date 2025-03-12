@@ -20,6 +20,8 @@ import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
 import BalancesDashboard from './BalanceDashboard';
+import clsx from 'clsx';
+import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -37,7 +39,7 @@ const UserProfile: React.FC = () => {
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState<'profile' | 'balances'>('profile');
 
-    const { address, isConnected } = useAccount();
+    const { address, isConnected, chainId } = useAccount();
     const {
         user,
         currency,
@@ -212,33 +214,40 @@ const UserProfile: React.FC = () => {
             "Add"
         )
 
+    const tabClasses = ((tab: string) => clsx(
+        "px-4 py-2 rounded-md",
+        activeTab === tab ? "bg-gray-300 dark:bg-gray-800" : "bg-gray-200 dark:bg-gray-700"
+    ));
+
     return (
         <>
-            <div className="flex justify-between mb-4 text-black dark:text-white px-8">
+            <div className="mb-4 text-gray-600 dark:text-white mx-auto px-8 max-w-lg">
                 <button
-                    className={`px-4 py-2 rounded-md ${activeTab === 'profile' ? 'bg-gray-900' : 'bg-gray-600'}`}
+                    className={tabClasses('profile')}
                     onClick={() => setActiveTab('profile')}
                 >
                     Profile
                 </button>
                 <button
-                    className={`px-4 py-2 rounded-md ${activeTab === 'balances' ? 'bg-gray-900' : 'bg-gray-600'}`}
+                    className={tabClasses('balances')}
                     onClick={() => setActiveTab('balances')}
                 >
                     Balances
                 </button>
             </div>
-            <div className="bg-gray-700 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative text-black dark:text-white">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 max-w-lg mx-auto shadow-lg relative">
                 <button
-                    className={`absolute top-4 right-4text-gray-600 dark:text-gray-200 p-2 rounded-full flex items-center justify-center hover:bg-gray-500 transition duration-200 ease-in-out ${isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-500'
-                        }`}
+                    className={clsx(
+                        "absolute top-4 right-4 p-2 rounded-full flex items-center justify-center",
+                        "bg-gray-100 dark:bg-gray-700 transition duration-200 ease-in-out",
+                        isClicked ? 'outline outline-2 outline-blue-500' : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                    )}
                     onClick={handleRefresh}
                     title="Refresh Profile"
                     disabled={isClicked}
                 >
                     <FontAwesomeIcon icon={faSync} spin={isClicked} />
                 </button>
-
 
                 {activeTab === 'profile' ? (
                     <>
@@ -249,35 +258,35 @@ const UserProfile: React.FC = () => {
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">User Type:</span>
+                                    <span className="font-medium text-gray-600 dark:text-gray-200">User Type:</span>
                                     <span className="font-semibold">{userTypeToString(user.user_type)}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">Score:</span>
+                                    <span className="font-medium text-gray-600 dark:text-gray-200">Score:</span>
                                     <span className={`font-semibold ${user.score > 0 ? "text-green-400" : "text-red-400"}`}>{user.score}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center">
-                                    <span className="font-mediumtext-gray-600 dark:text-gray-200">Preferred currency:</span>
+                                    <span className="font-medium text-gray-600 dark:text-gray-200">Preferred currency:</span>
                                     <CurrencySelect
                                         selected={currency}
                                         onChange={setCurrency}
-                                        className="w-auto text-sm border-gray-600"
-                                        buttonClassName="rounded-md bg-gray-200 dark:bg-gray-800 hover:bg-gray-900 border-gray-600"
-                                        dropdownClassName="bg-gray-200 dark:bg-gray-800 hover:bg-gray-900"
+                                        className="w-auto text-sm border-gray-300 dark:border-gray-600"
+                                        buttonClassName="rounded-md bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                        dropdownClassName="bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700"
                                     />
                                 </div>
 
                                 {/* Ramped Amounts */}
                                 {user.fiat_amounts.length > 0 && (
                                     <div className="flex justify-between items-start">
-                                        <span className="font-mediumtext-gray-600 dark:text-gray-200">Ramped Amount:</span>
+                                        <span className="font-medium text-gray-600 dark:text-gray-200">Ramped Amount:</span>
                                         <div className="space-y-2 flex flex-col items-end">
                                             {user.fiat_amounts.map(([currency, amount]) => (
                                                 <div key={currency} className="flex items-center space-x-2">
                                                     <span className="font-semibold">{(Number(amount) / 100).toFixed(2)}</span>
-                                                    <span className="border border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
+                                                    <span className="border border-gray-600 dark:border-white bg-amber-600 rounded-full h-5 w-5 flex items-center justify-center text-sm leading-none">
                                                         <FontAwesomeIcon icon={CURRENCY_ICON_MAP[currency]} />
                                                     </span>
                                                 </div>
@@ -287,7 +296,7 @@ const UserProfile: React.FC = () => {
                                 )}
                             </div>
 
-                            <hr className="border-t border-gray-500 w-full" />
+                            <hr className="border-t border-gray-300 dark:border-gray-600 w-full" />
 
                             <div>
                                 <div className="flex justify-between items-center">
@@ -296,11 +305,23 @@ const UserProfile: React.FC = () => {
                                 <ul className="pl-4 mt-2">
                                     {user.addresses.map((addr, index) => {
                                         const isEmail = 'Email' in addr.address_type;
+                                        const addressType = Object.keys(addr.address_type)[0];
                                         const truncatedAddress = addr.address.length > 20 ? truncate(addr.address, 10, 10) : addr.address;
+                                        const explorerUrl = getExplorerUrls(addressType, addr.address, addressType === 'EVM' && chainId ? BigInt(chainId) : undefined);
                                         return (
                                             <li key={index} className={`py-1 ${isSameAddress(addr) ? "text-blue-400" : "text-gray-200"}`}>
-                                                <span className="flex-1 text-smtext-gray-600 dark:text-gray-200">({Object.keys(addr.address_type)[0]})</span>
-                                                <span className="ml-2">{truncatedAddress}</span>
+                                                <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">({addressType})</span>
+                                                <span className="ml-2 text-gray-500 dark:text-gray-100">
+                                                    {explorerUrl ? (() => {
+                                                        return (
+                                                            <a href={explorerUrl.address} target="_blank" rel="noopener noreferrer">
+                                                                {truncatedAddress}
+                                                            </a>
+                                                        );
+                                                    })() : (
+                                                        truncatedAddress
+                                                    )}
+                                                </span>
                                                 <span className="relative">
                                                     {!isEmail && (
                                                         <button
@@ -312,7 +333,10 @@ const UserProfile: React.FC = () => {
                                                         </button>
                                                     )}
                                                     {copiedIndex === index && (
-                                                        <span className="absolute left-8 -top-1.5 text-sm text-green-200 bg-gray-200 dark:bg-gray-700 border border-gray-500 rounded-md px-2 py-1 shadow-md">
+                                                        <span className={clsx(
+                                                            "absolute left-8 -top-1.5 px-2 py-1 rounded-md shadow-md text-sm text-green-400 dark:text-green-200",
+                                                            "bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500"
+                                                        )}>
                                                             Copied!
                                                         </span>
                                                     )}
@@ -326,7 +350,7 @@ const UserProfile: React.FC = () => {
                             <div className="flex gap-2 items-center justify-between w-full">
                                 <div className="relative w-1/6" ref={dropdownRef}>
                                     <button
-                                        className="w-full pl-3 pr-0.5 py-2 border border-gray-500 bg-gray-600 rounded-md focus:outline-none flex items-center justify-between"
+                                        className="w-full pl-3 pr-0.5 py-2 border border-gray-400 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none flex items-center justify-between"
                                         onClick={() => setAddressDropdownOpen(!addressDropdownOpen)}
                                     >
                                         {selectedAddressType === 'EVM' ? (
@@ -346,28 +370,40 @@ const UserProfile: React.FC = () => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                                         </svg>
                                     </button>
-                                    {addressDropdownOpen && (
-                                        <div className="absolute bg-gray-600 rounded-md mt-2 w-full shadow-lg z-10">
-                                            <div
-                                                className="flex items-center px-3 py-2 hover:bg-gray-500 cursor-pointer"
-                                                onClick={() => handleAddressSelectOption('EVM')}
-                                            >
-                                                <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6" />
+                                    {addressDropdownOpen && (() => {
+                                        const optionClass = "flex items-center px-3 py-2 hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer";
+                                        return (
+                                            <div className="absolute bg-gray-100 dark:bg-gray-700 rounded-md mt-2 w-full shadow-lg z-10">
+                                                <div
+                                                    className={clsx(
+                                                        optionClass,
+                                                        selectedAddressType === 'EVM' ? 'bg-gray-300 dark:bg-gray-500' : ''
+                                                    )}
+                                                    onClick={() => handleAddressSelectOption('EVM')}
+                                                >
+                                                    <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6" />
+                                                </div>
+                                                <div
+                                                    className={clsx(
+                                                        optionClass,
+                                                        selectedAddressType === 'ICP' ? 'bg-gray-300 dark:bg-gray-500' : ''
+                                                    )}
+                                                    onClick={() => handleAddressSelectOption('ICP')}
+                                                >
+                                                    <img src={icpLogo} alt="ICP Logo" className="h-6 w-6" />
+                                                </div>
+                                                <div
+                                                    className={clsx(
+                                                        optionClass,
+                                                        selectedAddressType === 'Bitcoin' ? 'bg-gray-300 dark:bg-gray-500' : ''
+                                                    )}
+                                                    onClick={() => handleAddressSelectOption('Bitcoin')}
+                                                >
+                                                    <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6" />
+                                                </div>
                                             </div>
-                                            <div
-                                                className="flex items-center px-3 py-2 hover:bg-gray-500 cursor-pointer"
-                                                onClick={() => handleAddressSelectOption('ICP')}
-                                            >
-                                                <img src={icpLogo} alt="ICP Logo" className="h-6 w-6" />
-                                            </div>
-                                            <div
-                                                className="flex items-center px-3 py-2 hover:bg-gray-500 cursor-pointer"
-                                                onClick={() => handleAddressSelectOption('Bitcoin')}
-                                            >
-                                                <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6" />
-                                            </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
                                 </div>
                                 {selectedAddressType === 'EVM' ? (
                                     isConnected ? (
@@ -376,15 +412,15 @@ const UserProfile: React.FC = () => {
                                                 type="text"
                                                 value={address}
                                                 readOnly
-                                                className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
+                                                className="px-3 py-2 border border-gray-400 dark:border-gray-500 w-full rounded-md bg-gray-300 dark:bg-gray-600"
                                             />
                                             <button
                                                 disabled={!address || isAddressInUserAddresses(address)}
                                                 onClick={() => handleAddAddress(address!)}
-                                                className={
-                                                    `ml-2 px-4 py-2 font-semibold rounded-md w-1/4 flex justify-center items-center 
-                                        ${!address || isAddressInUserAddresses(address) ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`
-                                                }
+                                                className={clsx(
+                                                    "ml-2 px-4 py-2 font-semibold rounded-md w-1/4 flex justify-center items-center",
+                                                    !address || isAddressInUserAddresses(address) ? 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed' : 'bg-indigo-300 dark:bg-indigo-700 hover:bg-indigo-200 dark:hover:bg-indigo-800'
+                                                )}
                                             >
                                                 {addButtonContent(loadingAddAddress)}
                                             </button>
@@ -394,7 +430,7 @@ const UserProfile: React.FC = () => {
                                             <ConnectButton.Custom>
                                                 {({ openConnectModal }) => (
                                                     <button
-                                                        className="w-full text-lg bg-amber-800 hover:bg-amber-900 cursor-pointer px-3 py-2 rounded-md"
+                                                        className="w-full text-lg bg-amber-200 dark:bg-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900 cursor-pointer px-3 py-2 rounded-md"
                                                         onClick={openConnectModal}
                                                     >
                                                         Connect wallet
@@ -411,17 +447,18 @@ const UserProfile: React.FC = () => {
                                                 type="text"
                                                 value={principal.toString()}
                                                 readOnly
-                                                className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
+                                                className="px-3 py-2 border border-gray-400 dark:border-gray-500 w-full rounded-md bg-gray-300 dark:bg-gray-600"
                                             />
                                             <button
                                                 disabled={isAddressInUserAddresses(principal.toString()) || loadingAddAddress}
                                                 onClick={() => handleAddAddress(principal.toString())}
-                                                className={`ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center 
-                                        ${!principal || isAddressInUserAddresses(principal.toString())
-                                                        ? 'bg-gray-500 cursor-not-allowed'
-                                                        : 'bg-indigo-700 hover:bg-indigo-800'} 
-                                        ${loadingAddAddress ? 'cursor-not-allowed' : ''}`
-                                                }>
+                                                className={clsx(
+                                                    "ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center",
+                                                    !principal || isAddressInUserAddresses(principal.toString())
+                                                        ? 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed'
+                                                        : 'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800',
+                                                    loadingAddAddress ? 'cursor-not-allowed' : ''
+                                                )}>
                                                 {addButtonContent(loadingAddAddress)}
                                             </button>
                                         </div>
@@ -429,7 +466,7 @@ const UserProfile: React.FC = () => {
                                         <div className="flex-grow">
                                             <button
                                                 onClick={handleInternetIdentityLogin}
-                                                className="px-4 py-2 bg-amber-800 text-lg font-bold rounded-md cursor-pointer w-full"
+                                                className="px-4 py-2 bg-amber-200 dark:bg-amber-800 text-lg font-bold rounded-md cursor-pointer w-full"
                                             >
                                                 Connect ICP
                                             </button>
@@ -442,17 +479,18 @@ const UserProfile: React.FC = () => {
                                                 type="text"
                                                 value={bitcoinAddress}
                                                 readOnly
-                                                className="px-3 py-2 border border-gray-500 w-full rounded-md bg-gray-600"
+                                                className="px-3 py-2 border border-gray-400 dark:border-gray-500 w-full rounded-md bg-gray-300 dark:bg-gray-600"
                                             />
                                             <button
                                                 disabled={isAddressInUserAddresses(bitcoinAddress) || loadingAddAddress}
                                                 onClick={() => handleAddAddress(bitcoinAddress)}
-                                                className={`ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center 
-                                        ${!bitcoinAddress || isAddressInUserAddresses(bitcoinAddress)
-                                                        ? 'bg-gray-500 cursor-not-allowed'
-                                                        : 'bg-indigo-700 hover:bg-indigo-800'} 
-                                        ${loadingAddAddress ? 'cursor-not-allowed' : ''}`
-                                                }>
+                                                className={clsx(
+                                                    "ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center",
+                                                    !bitcoinAddress || isAddressInUserAddresses(bitcoinAddress)
+                                                        ? 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed'
+                                                        : 'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800',
+                                                    loadingAddAddress ? 'cursor-not-allowed' : ''
+                                                )}>
                                                 {addButtonContent(loadingAddAddress)}
                                             </button>
                                         </div>
@@ -461,9 +499,12 @@ const UserProfile: React.FC = () => {
                                             <button
                                                 onClick={handleConnectUnisat}
                                                 disabled={loadingUnisat}
-                                                className={`px-4 py-2 font-bold rounded-md w-full cursor-pointer text-lg 
-                                ${loadingUnisat ? 'bg-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-800'}`}
-                                            >
+                                                className={clsx(
+                                                    "px-4 py-2 font-bold rounded-md w-full cursor-pointer text-lg",
+                                                    loadingUnisat
+                                                        ? 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed'
+                                                        : 'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800'
+                                                )}>
                                                 {loadingUnisat ? "Connecting..." : "Connect Unisat"}
                                             </button>
                                         </div>
@@ -471,7 +512,7 @@ const UserProfile: React.FC = () => {
                                 ) : null}
                             </div>
 
-                            <hr className="border-t border-gray-500 w-full" />
+                            <hr className="border-t border-gray-300 dark:border-gray-600 w-full" />
 
                             <div>
                                 <div className="flex justify-between items-center">
@@ -479,13 +520,13 @@ const UserProfile: React.FC = () => {
                                 </div>
                                 <ul className="pl-4 mt-2">
                                     {user.payment_providers
-                                        .sort((a, b) => ('PayPal' in b ? 1 : -1))
+                                        .sort((_, b) => ('PayPal' in b ? 1 : -1))
                                         .map((provider, index) => {
                                             if ('PayPal' in provider) {
                                                 return (
                                                     <li key={index} className="py-1 relative items-center">
-                                                        <span className="flex-1 text-smtext-gray-600 dark:text-gray-200">(PayPal)</span>
-                                                        <span className="ml-2">{provider.PayPal.id}</span>
+                                                        <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">(PayPal)</span>
+                                                        <span className="ml-2 mr-6">{provider.PayPal.id}</span>
                                                         <span className="absolute right-0 my-1">
                                                             <button
                                                                 className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
@@ -502,8 +543,8 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <li key={index} className="py-1 relative items-center">
                                                         <div className="flex-1">
-                                                            <span className="text-smtext-gray-600 dark:text-gray-200">(Revolut)</span>
-                                                            <span className="ml-2">{provider.Revolut.id}</span>
+                                                            <span className="text-sm text-gray-700 dark:text-gray-300">(Revolut)</span>
+                                                            <span className="ml-2 mr-6">{provider.Revolut.id}</span>
                                                         </div>
                                                         <div>{provider.Revolut.scheme}</div>
                                                         {provider.Revolut.name && provider.Revolut.name.length > 0 && (
@@ -511,7 +552,10 @@ const UserProfile: React.FC = () => {
                                                         )}
                                                         <span className="absolute right-0 top-1/2 transform -translate-y-1/2">
                                                             <button
-                                                                className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
+                                                                className={clsx(
+                                                                    "text-red-600 dark:text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-gray-600 dark:border-white border-opacity-40",
+                                                                    "flex items-center justify-center flex-shrink-0 dark:hover:text-red-500 transition duration-200 ease-in-out shadow-md"
+                                                                )}
                                                                 title="remove"
                                                                 onClick={() => handleRemoveProvider(provider)}
                                                                 disabled={removing}
@@ -531,7 +575,7 @@ const UserProfile: React.FC = () => {
                                 <select
                                     value={providerType}
                                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
-                                    className="w-1/2 px-3 py-2 border border-gray-500 bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900"
+                                    className="w-1/2 px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                 >
                                     <option value="" selected>Select Provider</option>
                                     {providerTypes.map(type => (
@@ -543,7 +587,7 @@ const UserProfile: React.FC = () => {
                                     value={providerId}
                                     onChange={(e) => setProviderId(e.target.value)}
                                     placeholder="ID"
-                                    className="w-full px-3 py-2 border border-gray-500 rounded-md bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-900"
+                                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                 />
 
                                 {providerType === 'Revolut' && (
@@ -551,7 +595,7 @@ const UserProfile: React.FC = () => {
                                         <select
                                             value={revolutScheme}
                                             onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
-                                            className="w-full px-3 py-2 border border-gray-500 bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900"
+                                            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                         >
                                             <option value="" selected>Scheme</option>
                                             {revolutSchemes.map(type => (
@@ -564,7 +608,7 @@ const UserProfile: React.FC = () => {
                                                 value={revolutName}
                                                 onChange={(e) => setRevolutName(e.target.value)}
                                                 placeholder="Name"
-                                                className="w-full px-3 py-2 border border-gray-500 bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-900"
+                                                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                             />
                                         )}
                                     </>
@@ -573,14 +617,16 @@ const UserProfile: React.FC = () => {
                                 <button
                                     disabled={loadingAddProvider}
                                     onClick={handleAddProvider}
-                                    className={`px-4 py-2 bg-indigo-700 text-black dark:text-white font-medium rounded-md hover:bg-indigo-800 ${loadingAddProvider
-                                        ? 'cursor-not-allowed' : ''}`
-                                    }>
+                                    className={clsx(
+                                        "px-4 py-2 font-medium rounded-md text-black dark:text-white",
+                                        "bg-indigo-300 dark:bg-indigo-700 hover:bg-indigo-200 dark:hover:bg-indigo-800",
+                                        loadingAddProvider ? 'cursor-not-allowed' : ''
+                                    )}>
                                     {addButtonContent(loadingAddProvider)}
                                 </button>
                             </div>
 
-                            <hr className="border-t border-gray-500 w-full" />
+                            <hr className="border-t border-gray-300 dark:border-gray-500 w-full" />
 
                             {message && <p className="text-sm font-medium text-red-600 break-all">{message}</p>}
                         </div>
