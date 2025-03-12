@@ -18,7 +18,8 @@ use crate::types::{
         request::SignRequest,
         transaction::{TransactionAction, TransactionVariant},
     },
-    orders::{LockInput, LockedOrder},
+    orders::LockInput,
+    Crypto,
 };
 
 pub struct Ic2P2ramp;
@@ -173,8 +174,14 @@ impl Ic2P2ramp {
         Ok((inputs, TransactionAction::Release(transaction_variant)))
     }
 
-    pub async fn release_funds(order: LockedOrder, chain_id: u64) -> Result<()> {
-        let crypto = order.base.crypto.clone();
+    pub async fn release_funds(
+        order_id: u64,
+        offramper: String,
+        onramper: String,
+        crypto: Crypto,
+        chain_id: u64,
+        token_address: Option<String>,
+    ) -> Result<()> {
         if crypto.amount < crypto.fee {
             return Err(BlockchainError::FundsBelowFees)?;
         }
@@ -182,16 +189,16 @@ impl Ic2P2ramp {
         ic_cdk::println!(
             "[release_funds] Releasing base currency with the following details: 
                 offramper_address = {}, onramper_address = {}, amount = {}, fees = {}",
-            order.base.offramper_address.address,
-            order.onramper.address.address,
-            order.base.crypto.amount,
-            order.base.crypto.fee,
+            offramper,
+            onramper,
+            crypto.amount,
+            crypto.fee,
         );
 
         let (release_inputs, transaction_type) = Self::release_inputs(
-            order.base.offramper_address.address,
-            order.onramper.address.address,
-            crypto.token,
+            offramper,
+            onramper,
+            token_address,
             crypto.amount,
             crypto.fee,
         )?;
@@ -208,9 +215,9 @@ impl Ic2P2ramp {
         )
         .await?;
 
-        logs::new_transaction_log(order.base.id, transaction_type.clone());
+        logs::new_transaction_log(order_id, transaction_type.clone());
         broadcast_transaction(
-            order.base.id,
+            order_id,
             chain_id,
             transaction_type,
             sign_request,
