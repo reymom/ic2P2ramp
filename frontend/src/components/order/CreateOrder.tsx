@@ -8,18 +8,17 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider, PaymentProviderType, Blockchain, EvmOrderInput, RuneUTXOEntry } from '@/declarations/backend/backend.did';
+import { PaymentProvider, PaymentProviderType, BlockchainAsset, EvmOrderInput, RuneUTXOEntry } from '@/declarations/backend/backend.did';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
-import { supportedRuneSymbols } from '@/constants/runes';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { NetworkIds, NetworkProps } from '@/constants/networks';
-import { useUser } from '@/components/user/UserContext';
 import { rampErrorToString } from '@/model/utils/error';
-import { blockchainToBlockchainType, providerToProviderType } from '@/model/utils/utils';
+import { BlockchainTypes, TokenOption } from '@/model/types';
+import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/utils/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
-import { BlockchainTypes, TokenOption } from '@/model/types';
+import { useUser } from '@/components/user/UserContext';
 import { isSessionExpired } from '@/model/session';
 import { getExchangeRate } from '@/model/utils/rate';
 import { formatPrice, truncate } from '@/utils/helper';
@@ -27,15 +26,20 @@ import DynamicDots from '@/components/ui/DynamicDots';
 import CurrencySelect from '@/components/ui/CurrencySelect';
 import TokenSelect from '@/components/ui/TokenSelect';
 import BlockchainSelect from '@/components/ui/BlockchainSelect';
-import { fetchBitcoinCanisterAddress, fetchRuneMetadata, handleBitcoinTransaction, transferBitcoinToCanister, transferRuneToCanister } from '@/model/blockchain/bitcoin';
-import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import {
+    fetchBitcoinCanisterAddress,
+    fetchBitcoinTokenOptions,
+    handleBitcoinTransaction,
+    transferBitcoinToCanister,
+    transferRuneToCanister
+} from '@/model/blockchain/bitcoin';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
     const [cryptoAmountUnits, setCryptoAmountUnits] = useState<bigint | null>(null);
     const [tokenOptions, setTokenOptions] = useState<TokenOption[]>([]);
     const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null);
-    const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain>();
+    const [selectedBlockchainAsset, setSelectedBlockchainAsset] = useState<BlockchainAsset>();
     const [blockchainType, setBlockchainType] = useState<BlockchainTypes>();
     const [selectedProviders, setSelectedProviders] = useState<PaymentProvider[]>([]);
 
@@ -82,92 +86,84 @@ const CreateOrder: React.FC = () => {
     }
 
     useEffect(() => {
-        if (blockchainType) {
+        if (blockchainType && blockchainType === 'EVM') {
+            setSelectedToken(null);
             let tokens: TokenOption[] = [];
-            if (blockchainType === 'EVM') {
-                if (!chainId || !isValidChainId(chainId)) {
-                    setSelectedBlockchain(undefined);
-                    setSelectedToken(null);
-                    return
-                };
-                setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
-                tokens = getEvmTokens(chainId);
-            } else if (blockchainType === 'ICP') {
-                if (!icpAgent) return;
-                tokens = ICP_TOKENS;
-            }
-
+            if (!chainId || !isValidChainId(chainId)) {
+                setSelectedBlockchainAsset(undefined);
+                return
+            };
+            setSelectedBlockchainAsset({ EVM: { chain_id: BigInt(chainId), token_address: [] } });
+            tokens = getEvmTokens(chainId);
             setTokenOptions(tokens);
         }
-    }, [blockchainType, chainId]);
+    }, [chainId]);
 
     useEffect(() => {
-        const fetchBitcoinTokens = async () => {
-            if (blockchainType === 'Bitcoin') {
-                const tokens: TokenOption[] = [];
-
-                // Add BTC as the native token
-                tokens.push({
-                    name: "BTC",
-                    address: "",
-                    decimals: 8,
-                    isNative: true,
-                    rateSymbol: "BTC",
-                    logo: bitcoinLogo,
-                });
-
-                for (const rune of supportedRuneSymbols) {
-                    try {
-                        const { metadata, serialized } = await fetchRuneMetadata(rune.symbol);
-                        tokens.push({
-                            name: rune.name,
-                            address: serialized,
-                            decimals: metadata.divisibility,
-                            isNative: false,
-                            rateSymbol: metadata.symbol,
-                            logo: rune.logo,
-                            runeMetadata: metadata,
-                        });
-                    } catch (error) {
-                        console.error(`Failed to fetch metadata for ${rune.symbol}:`, error);
-                    }
-                }
-
-                setTokenOptions(tokens);
-            }
-        };
-
+        setSelectedToken(null);
         if (blockchainType === 'Bitcoin') {
-            fetchBitcoinTokens();
+            fetchBitcoinTokenOptions().then((bitcoinTokens) => {
+                setTokenOptions(bitcoinTokens);
+            }).catch((error) => {
+                console.error("Error fetching bitcoin tokens:", error);
+            });
+        } else if (blockchainType === 'ICP') {
+            setTokenOptions(ICP_TOKENS);
+        } else if (blockchainType === 'EVM') {
+            if (!chainId || !isValidChainId(chainId)) {
+                setSelectedBlockchainAsset(undefined);
+            } else {
+                setTokenOptions(getEvmTokens(chainId));
+            };
         }
     }, [blockchainType]);
 
     const handleBlockchainChange = (blockchainName: string) => {
         if (loadingRate) return;
 
-        setSelectedToken(null);
         setTokenOptions([]);
+        setSelectedToken(null);
         setBlockchainType(blockchainName as BlockchainTypes);
         if (blockchainName === "EVM") {
             if (!chainId) return;
-            setSelectedBlockchain({ EVM: { chain_id: BigInt(chainId) } });
+            setSelectedBlockchainAsset({ EVM: { chain_id: BigInt(chainId), token_address: [] } });
         } else if (blockchainName === "ICP") {
-            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(ICP_TOKENS[0].address) } });
+            setSelectedBlockchainAsset({ ICP: { ledger_principal: Principal.fromText(ICP_TOKENS[0].address) } });
         } else if (blockchainName === "Solana") {
-            setSelectedBlockchain({ Solana: null });
+            setSelectedBlockchainAsset({ Solana: null });
         } else if (blockchainName === 'Bitcoin') {
-            setSelectedBlockchain({ Bitcoin: null });
+            setSelectedBlockchainAsset({ Bitcoin: { rune_id: [] } });
         }
     };
 
     const handleTokenChange = (tokenAddress: string) => {
         if (loadingRate) return;
 
-        const selected = tokenOptions.find(token => token.address === tokenAddress);
-        setSelectedToken(selected || null);
-
-        if (selected && selectedBlockchain && blockchainToBlockchainType(selectedBlockchain) === 'ICP') {
-            setSelectedBlockchain({ ICP: { ledger_principal: Principal.fromText(selected.address!) } });
+        const token = tokenOptions.find(token => token.address === tokenAddress);
+        if (token && selectedBlockchainAsset) {
+            setSelectedToken(token);
+            switch (blockchainAssetToBlockchainType(selectedBlockchainAsset)) {
+                case "ICP":
+                    setSelectedBlockchainAsset({ ICP: { ledger_principal: Principal.fromText(token.address) } });
+                case "Bitcoin":
+                    let rune_id: [string] | [] = [];
+                    if (!token.isNative) {
+                        rune_id = [token.runeMetadata?.id!]
+                    }
+                    setSelectedBlockchainAsset({ Bitcoin: { rune_id } })
+                case "EVM":
+                    let token_address: [string] | [] = [];
+                    if (!selectedToken?.isNative) {
+                        token_address = [token.address]
+                    }
+                    "EVM" in selectedBlockchainAsset &&
+                        setSelectedBlockchainAsset({
+                            EVM: {
+                                chain_id: selectedBlockchainAsset.EVM.chain_id,
+                                token_address
+                            }
+                        })
+            }
         }
     };
 
@@ -184,8 +180,8 @@ const CreateOrder: React.FC = () => {
         const fetchPriceRate = async () => {
             setMessage(null);
             setLoadingRate(true);
-            console.log("selectedToken = ", selectedToken);
-            let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol);
+            const isRune = selectedToken !== null && selectedToken.runeMetadata !== undefined;
+            let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol, isRune);
             if (priceRate) {
                 setExchangeRate(Number(priceRate))
             } else {
@@ -209,20 +205,20 @@ const CreateOrder: React.FC = () => {
     }, [exchangeRate, cryptoAmount]);
 
     useEffect(() => {
-        if (selectedBlockchain && selectedToken && cryptoAmount > 0) {
+        if (selectedBlockchainAsset && selectedToken && cryptoAmount > 0) {
             const roundedCryptoAmount = cryptoAmount.toFixed(selectedToken.decimals);
-            if ('EVM' in selectedBlockchain) {
+            if ('EVM' in selectedBlockchainAsset) {
                 setCryptoAmountUnits(
                     selectedToken.isNative ? ethers.parseEther(roundedCryptoAmount)
                         : ethers.parseUnits(roundedCryptoAmount, selectedToken.decimals)
                 );
-            } else if ('ICP' in selectedBlockchain) {
+            } else if ('ICP' in selectedBlockchainAsset) {
                 setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
-            } else if ('Bitcoin' in selectedBlockchain) {
-                setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** 8)));
+            } else if ('Bitcoin' in selectedBlockchainAsset) {
+                setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
             }
         }
-    }, [cryptoAmount, selectedBlockchain, selectedToken])
+    }, [cryptoAmount, selectedBlockchainAsset, selectedToken])
 
     const handleProviderSelection = (provider: PaymentProvider) => {
         if (selectedProviders.length === 0) {
@@ -267,7 +263,7 @@ const CreateOrder: React.FC = () => {
             return;
         }
 
-        if (!selectedBlockchain) throw new Error('No blockchain selected');
+        if (!selectedBlockchainAsset) throw new Error('No blockchain selected');
         if (!selectedToken) throw new Error('No token selected');
         if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
 
@@ -280,7 +276,9 @@ const CreateOrder: React.FC = () => {
             setIsLoading(true);
             setLoadingMessage("Creating order");
 
-            const selectedAddress = user.addresses.find(addr => Object.keys(selectedBlockchain)[0] in addr.address_type);
+            const selectedAddress = user.addresses.find(
+                addr => Object.keys(selectedBlockchainAsset)[0] in addr.address_type
+            );
             if (!selectedAddress) {
                 setMessage('No address available for the selected blockchain.');
                 setIsLoading(false);
@@ -289,7 +287,7 @@ const CreateOrder: React.FC = () => {
 
             let evmOrderInput: [EvmOrderInput] | [] = []
             let runeUTXOs: [Array<RuneUTXOEntry>] | [] = []
-            const blockchain = blockchainToBlockchainType(selectedBlockchain);
+            const blockchain = blockchainAssetToBlockchainType(selectedBlockchainAsset);
             if (blockchain === 'EVM') {
                 if (!chainId) throw new Error('Chain id is not available');
                 setLoadingMessage("Estimating order gas");
@@ -387,11 +385,11 @@ const CreateOrder: React.FC = () => {
                             txid = await transferRuneToCanister(
                                 cryptoAmountUnits,
                                 bitcoinBackendAddress,
-                                selectedToken.address
+                                selectedToken.runeMetadata.id
                             );
                             setTxHash(txid);
                         } catch (e: any) {
-                            setMessage(`Failed to send Rune: ${e}`);
+                            setMessage(`Failed to send Rune`);
                             console.error(e);
                             setIsLoading(false);
                             return;
@@ -405,7 +403,7 @@ const CreateOrder: React.FC = () => {
                             );
                             setTxHash(txid);
                         } catch (e: any) {
-                            setMessage(`Failed to send Bitcoin: ${e}`);
+                            setMessage(`Failed to send Bitcoin`);
                             console.error(e);
                             setIsLoading(false);
                             return;
@@ -431,13 +429,11 @@ const CreateOrder: React.FC = () => {
                 throw new Error('Unsupported blockchain selected');
             }
 
-
             const result = await backend.create_order(
                 sessionToken,
                 currency,
                 providerTuples,
-                selectedBlockchain,
-                selectedToken.isNative ? [] : [selectedToken.address],
+                selectedBlockchainAsset,
                 cryptoAmountUnits,
                 selectedAddress,
                 user.id,
@@ -473,7 +469,7 @@ const CreateOrder: React.FC = () => {
         if (blockchainType === 'EVM') {
             if (!chainId || !address) return (
                 <div className="my-2 text-red-400">
-                    Please connect your Wallet.
+                    Please connect your Ethereum Wallet.
                 </div>
             );
             return address && user?.addresses.some(
@@ -493,6 +489,11 @@ const CreateOrder: React.FC = () => {
                     Principal connected is not registered in your profile.
                 </div>
         } else if (blockchainType === 'Bitcoin') {
+            if (!bitcoinAddress || !bitcoinBalance) return (
+                <div className="my-2 text-red-400">
+                    Please connect your Bitcoin wallet.
+                </div>
+            );
             return bitcoinAddress && user?.addresses.some(
                 addr => 'Bitcoin' in addr.address_type && addr.address !== bitcoinAddress) &&
                 <div className="my-2 text-red-400">
@@ -508,13 +509,16 @@ const CreateOrder: React.FC = () => {
             if (selectedToken.isNative) return evmBalances[selectedToken.name] || '0';
             return evmBalances[selectedToken.address];
         } else if (blockchainType === 'Bitcoin') {
+            if (selectedToken?.runeMetadata && bitcoinBalance) {
+                return bitcoinBalance?.runes[selectedToken.runeMetadata.id];
+            }
             return bitcoinBalance;
         }
         return null
     };
 
     const validInputs = user !== null
-        && selectedBlockchain !== undefined
+        && selectedBlockchainAsset !== undefined
         && (isValidAddressMessage() === undefined || isValidAddressMessage() === false)
         && selectedProviders.length > 0
         && selectedToken !== null
@@ -531,9 +535,9 @@ const CreateOrder: React.FC = () => {
     }
 
     return (
-        <div className="bg-gray-700 rounded-xl p-8 max-w-md mx-auto shadow-lg relative text-black dark:text-white">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-auto p-6">
             {isLoading && (
-                <div className="absolute inset-0 rounded-xl bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
+                <div className="absolute inset-0 rounded-lg bg-black bg-opacity-60 flex flex-col items-center justify-center z-40">
                     <div className="w-10 h-10 border-t-4 border-b-4 border-indigo-400 rounded-full animate-spin mb-4"></div>
                     {loadingMessage && (
                         <div className="text-2xl font-bold mt-2">
@@ -544,12 +548,10 @@ const CreateOrder: React.FC = () => {
             )}
 
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-semibold relative">
-                    Create Order
-                </h2>
+                <h2 className="text-2xl font-semibold">Create Order</h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="flex justify-between items-center mb-4">
 
                     {/* Label and Info Icon */}
@@ -582,7 +584,7 @@ const CreateOrder: React.FC = () => {
                         <input
                             type="number"
                             value={estimatedPrice ? estimatedPrice : "0.00"}
-                            className="py-2 px-3 w-full border bg-gray-600 border-gray-500 rounded-l-lg flex-grow"
+                            className="py-2 px-3 w-full border bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-l-lg"
                             required
                             disabled
                             style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
@@ -590,25 +592,22 @@ const CreateOrder: React.FC = () => {
                         <CurrencySelect
                             selected={currency}
                             onChange={setCurrency}
-                            className="text-black dark:text-white border-gray-500"
-                            buttonClassName="bg-gray-600 border-gray-500 rounded-r-lg"
-                            dropdownClassName="bg-gray-600 border-gray-500 hover:bg-gray-700"
+                            className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
+                            buttonClassName="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-r-lg"
+                            dropdownClassName="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600"
                         />
                     </div>
-
                 </div>
 
                 <div className="flex justify-between items-center mb-4 relative">
-                    <label className="text-black dark:text-white w-24">Crypto:</label>
+                    <label className="w-24 text-gray-700 dark:text-gray-300">Crypto:</label>
                     <input
                         type="number"
                         value={cryptoAmount}
                         onChange={(e) => setCryptoAmount(selectedToken ? Number(Number(e.target.value).toFixed(selectedToken.decimals)) : Number(e.target.value))}
-                        className={
-                            `flex-grow py-2 px-3 border ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-500"
-                            } bg-gray-600 outline-none rounded-md focus:ring ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900"
-                            } text-black dark:text-white`
-                        }
+                        className={`flex-grow py-2 px-3 border ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-300 dark:border-gray-600"
+                            } bg-gray-100 dark:bg-gray-700 outline-none rounded-md focus:ring ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900"
+                            } text-gray-700 dark:text-gray-300`}
                         required
                         style={{
                             appearance: 'textfield',
@@ -622,24 +621,24 @@ const CreateOrder: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center mb-4">
-                    <label className="text-black dark:text-white w-24 flex-none">Blockchain:</label>
+                    <label className="w-24 text-gray-700 dark:text-gray-300">Blockchain:</label>
                     <BlockchainSelect
                         selectedBlockchain={blockchainType}
                         onChange={handleBlockchainChange}
-                        className="flex-grow flex items-center w-full"
-                        buttonClassName="bg-gray-600 border-gray-500 rounded-md"
+                        className="flex-grow flex items-center"
+                        buttonClassName="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md"
                     />
                 </div>
 
                 {blockchainType &&
                     <div className="flex justify-between items-center mb-4">
-                        <label className="text-black dark:text-white w-24 flex-none">Token:</label>
+                        <label className="w-24 text-gray-700 dark:text-gray-300">Token:</label>
                         <TokenSelect
                             tokenOptions={tokenOptions}
                             selectedToken={selectedToken}
                             onChange={handleTokenChange}
-                            className="flex-grow flex items-center w-full"
-                            buttonClassName="bg-gray-600 border-gray-500 rounded-md"
+                            className="flex-grow flex items-center"
+                            buttonClassName="bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-md"
                         />
                     </div>
                 }
@@ -647,22 +646,22 @@ const CreateOrder: React.FC = () => {
                 {loadingRate && (
                     <div className="my-2 flex justify-center items-center space-x-2">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
-                        <div className="text-sm font-medium text-black dark:text-white">Estimating Prices...</div>
+                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimating Prices...</div>
                     </div>
                 )}
 
                 {isValidAddressMessage()}
 
-                {chainId && selectedBlockchain && Object.keys(selectedBlockchain)[0] === "EVM" && (
+                {chainId && selectedBlockchainAsset && Object.keys(selectedBlockchainAsset)[0] === "EVM" && (
                     <div className={`my-2 text-sm font-medium ${isValidChainId(chainId) ? 'text-green-600' : 'text-red-600'}`}>
                         {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
                     </div>
                 )}
 
-                <hr className="border-t border-gray-500 w-full my-4" />
+                <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-4" />
 
                 <div className="my-4 mx-auto">
-                    <label className="block text-black dark:text-white mb-2">Payment Providers:</label>
+                    <label className="block text-gray-700 dark:text-gray-300 mb-2">Payment Providers:</label>
                     {user?.payment_providers.map((provider, index) => {
                         return (
                             <div key={index} className="block mb-2">
@@ -673,7 +672,7 @@ const CreateOrder: React.FC = () => {
                                     checked={selectedProviders!.includes(provider)}
                                     onChange={() => handleProviderSelection(provider)}
                                 />
-                                <label htmlFor={`provider-${index}`} className="text-black dark:text-white">
+                                <label htmlFor={`provider-${index}`} className="text-gray-700 dark:text-gray-300">
                                     {'PayPal' in provider &&
                                         <>
                                             <span className='font-semibold'>Paypal</span>
@@ -692,14 +691,14 @@ const CreateOrder: React.FC = () => {
                     })}
                 </div>
 
-                <hr className="border-t border-gray-500 w-full my-4" />
+                <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-4" />
 
                 <div className="flex justify-center">
                     <button
                         type="submit"
                         className={`px-4 py-2 rounded-md flex items-center justify-center space-x-2 ${validInputs ?
-                            'bg-green-800 text-black dark:text-white hover:bg-green-900 focus:outline-none'
-                            : 'bg-gray-500 text-black dark:text-white cursor-not-allowed'}`
+                            'bg-green-600 text-white hover:bg-green-700 focus:outline-none'
+                            : 'bg-gray-500 text-gray-300 cursor-not-allowed'}`
                         }
                         disabled={!validInputs}
                     >
@@ -721,7 +720,6 @@ const CreateOrder: React.FC = () => {
                         View tx: {truncate(txHash, 6, 6)}
                     </a>
                 </div>
-
             )}
             {!isLoading && message && <p className="mt-4 text-sm font-medium text-red-600">{message}</p>}
         </div>

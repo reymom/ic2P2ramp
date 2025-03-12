@@ -8,13 +8,15 @@ import { useUser } from '@/components/user/UserContext';
 import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
-import { blockchainToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/utils/utils';
-import { formatCryptoUnits, formatPrice, formatTimeLeft, truncate } from '@/utils/helper';
+import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/utils/utils';
+import { formatCryptoUnits, formatPrice } from '@/utils/helper';
 import { rampErrorToString } from '@/model/utils/error';
 import { PaymentProviderTypes, TokenOption } from '@/model/types';
 import { fetchOrderPrice } from '@/model/utils/rate';
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
+import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const defaultLoadingMessage = "Processing Transaction";
 const PRICE_DIFFERENCE_THRESHOLD = 0.025;
@@ -23,6 +25,8 @@ const LOCK_TIME_SECONDS = 1800;
 
 export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     const [committedProvider, setCommittedProvider] = useState<[PaymentProviderType, PaymentProvider]>();
+    const [bitcoinTokens, setBitcoinTokens] = useState<TokenOption[]>([]);
+    const [loadingTokens, setLoadingTokens] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState(defaultLoadingMessage);
     const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
@@ -39,6 +43,21 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     const [orderState, setOrderState] = useState(order);
     const [lockRefetched, setLockedRefetched] = useState(0);
 
+    useEffect(() => {
+        const fetchBitcoinTokens = async () => {
+            setLoadingTokens(true);
+            try {
+                const tokens = await fetchBitcoinTokenOptions();
+                setBitcoinTokens(tokens);
+            } catch (error) {
+                console.error('Failed to fetch Bitcoin tokens:', error);
+            }
+            setLoadingTokens(false);
+        };
+
+        fetchBitcoinTokens();
+    }, []);
+
     const orderId = useMemo(() => {
         return 'Created' in orderState ? orderState.Created.id
             : 'Locked' in orderState ? orderState.Locked.base.id
@@ -51,10 +70,10 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
                 : null;
     }, [orderState]);
 
-    const orderBlockchain = useMemo(() => {
-        return 'Created' in orderState ? orderState.Created.crypto.blockchain
-            : 'Locked' in orderState ? orderState.Locked.base.crypto.blockchain
-                : 'Completed' in orderState ? orderState.Completed.blockchain
+    const orderBlockchainAsset = useMemo(() => {
+        return 'Created' in orderState ? orderState.Created.crypto.asset
+            : 'Locked' in orderState ? orderState.Locked.base.crypto.asset
+                : 'Completed' in orderState ? orderState.Completed.asset
                     : null;
     }, [orderState]);
 
@@ -63,35 +82,38 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     const cancelledMessage = `Cancelled Order #${orderId}, refetching data`;
 
     const getToken = (): TokenOption | null => {
-        if (!baseOrder || !orderBlockchain) return null;
+        if (!baseOrder || !orderBlockchainAsset) return null;
 
-        // What about the runes?
-        if ('Bitcoin' in orderBlockchain) {
-            return {
-                name: "BTC",
-                address: "",
-                decimals: 8,
-                isNative: true,
-                rateSymbol: "BTC",
-                logo: bitcoinLogo
-            };
+        if ('Bitcoin' in orderBlockchainAsset) {
+            const runeId = orderBlockchainAsset.Bitcoin.rune_id;
+            if (runeId.length === 0) {
+                return bitcoinTokens.find(token => {
+                    return token.isNative
+                }) ?? null;
+            } else {
+                return bitcoinTokens.find(token => {
+                    return token.runeMetadata && token.runeMetadata.id === runeId[0];
+                }) ?? null;
+            }
+        } else if ('EVM' in orderBlockchainAsset) {
+            const tokens = getEvmTokens(Number(orderBlockchainAsset.EVM.chain_id))
+            const tokenAddress = orderBlockchainAsset.EVM.token_address?.[0] ?? '';
+            return tokens.find(token => {
+                return token.address === tokenAddress;
+            }) ?? null;
+        } else if ('ICP' in orderBlockchainAsset) {
+            const tokenAddress = orderBlockchainAsset.ICP.ledger_principal.toString()
+            return ICP_TOKENS.find(token => {
+                return token.address === tokenAddress;
+            }) ?? null;
+        } else {
+            return null;
         }
-
-        const tokens = 'EVM' in orderBlockchain ? getEvmTokens(Number(orderBlockchain.EVM.chain_id))
-            : 'ICP' in orderBlockchain ? ICP_TOKENS : null;
-        if (!tokens) return null;
-
-        const tokenAddress = 'EVM' in orderBlockchain ? baseOrder.crypto.token?.[0] ?? '' :
-            'ICP' in orderBlockchain ? orderBlockchain.ICP.ledger_principal.toString() : '';
-
-        return tokens.find(token => {
-            return token.address === tokenAddress;
-        }) ?? null;
     }
 
     const token = useMemo(() => {
         return getToken();
-    }, [baseOrder, orderBlockchain]);
+    }, [baseOrder, orderBlockchainAsset, bitcoinTokens]);
 
     const fetchOrder = async (orderId: bigint) => {
         try {
@@ -362,7 +384,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
 
     const commitToOrder = async (provider: PaymentProvider) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
-        if (!user || !('Onramper' in user.user_type) || !('Created' in orderState) || !(orderBlockchain) || !orderId) return;
+        if (!user || !('Onramper' in user.user_type) || !('Created' in orderState) || !(orderBlockchainAsset) || !orderId) return;
 
         setIsLoading(true);
         setTxHash(null);
@@ -392,7 +414,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
             }
         }
 
-        const onramperAddress = user.addresses.find(addr => Object.keys(orderBlockchain)[0] in addr.address_type);
+        const onramperAddress = user.addresses.find(addr => Object.keys(orderBlockchainAsset)[0] in addr.address_type);
         if (!onramperAddress) {
             setIsLoading(false);
             setMessage("No address matches for user");
@@ -403,7 +425,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         try {
             const result = await backend.lock_order(orderId, sessionToken, user.id, provider, onramperAddress);
             if ('Ok' in result) {
-                if ('EVM' in orderBlockchain) {
+                if ('EVM' in orderBlockchainAsset) {
                     pollTransactionLog(orderId, user.id);
                 } else {
                     setLoadingMessage(committedMessage);
@@ -428,7 +450,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
 
     const removeOrder = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
-        if (!user || !('Offramper' in user?.user_type) || !('Created' in orderState) || !orderBlockchain || !orderId) return;
+        if (!user || !('Offramper' in user?.user_type) || !('Created' in orderState) || !orderBlockchainAsset || !orderId) return;
         if (!baseOrder || user.id !== baseOrder.offramper_user_id) return;
 
         const scrollPosition = window.scrollY;
@@ -441,7 +463,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         try {
             const result = await backend.cancel_order(orderId, sessionToken);
             if ('Ok' in result) {
-                if ('EVM' in orderBlockchain) {
+                if ('EVM' in orderBlockchainAsset) {
                     setTxHash(result.Ok);
                     pollTransactionLog(orderId, user.id);
                 } else {
@@ -468,7 +490,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
 
     const handlePayPalSuccess = async (transactionId: string) => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
-        if (!('Locked' in orderState) || !orderId || !orderBlockchain) return;
+        if (!('Locked' in orderState) || !orderId || !orderBlockchainAsset) return;
         if (!user || !('Onramper' in user.user_type)) return;
 
         console.log("[handlePayPalSuccess] transactionID = ", transactionId);
@@ -482,7 +504,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
             // Send transaction ID to backend to verify payment
             const response = await backend.verify_transaction(orderId, [sessionToken], transactionId);
             if ('Ok' in response) {
-                if ('EVM' in orderBlockchain!) {
+                if ('EVM' in orderBlockchainAsset!) {
                     setTxHash(response.Ok);
                     pollTransactionLog(orderId, user!.id);
                 } else {
@@ -523,41 +545,51 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     };
 
     const getNetwork = (): NetworkProps | undefined => {
-        return (orderBlockchain && 'EVM' in orderBlockchain) ?
-            Object.values(NetworkIds).find(network => network.id === Number(orderBlockchain.EVM.chain_id)) : undefined;
+        return (orderBlockchainAsset && 'EVM' in orderBlockchainAsset) ?
+            Object.values(NetworkIds).find(network => network.id === Number(orderBlockchainAsset.EVM.chain_id)) : undefined;
     };
 
-    const getNetworkExplorer = (): string | undefined => {
-        return getNetwork()?.explorer;
-    };
+    const getExplorerLinks = (orderAddress: string, txHash?: string) => {
+        if (!orderBlockchainAsset || !baseOrder) return null;
+
+        const blockchainType = Object.keys(orderBlockchainAsset)[0];
+        // const address = baseOrder.offramper_address.address;
+
+        return getExplorerUrls(
+            blockchainType,
+            orderAddress,
+            'EVM' in orderBlockchainAsset ? orderBlockchainAsset.EVM.chain_id : undefined,
+            txHash ?? undefined,
+        );
+    }
 
     const getNetworkLogo = (): string | undefined => {
-        if (!orderBlockchain) return "";
-        if ('EVM' in orderBlockchain) {
+        if (!orderBlockchainAsset) return "";
+        if ('EVM' in orderBlockchainAsset) {
             return getNetwork()!.logo;
-        } else if ('ICP' in orderBlockchain) {
+        } else if ('ICP' in orderBlockchainAsset) {
             return icpLogo;
-        } else if ('Bitcoin' in orderBlockchain) {
+        } else if ('Bitcoin' in orderBlockchainAsset) {
             return bitcoinLogo;
         }
     };
 
     const getNetworkName = (): string | undefined => {
-        if (!orderBlockchain) return "";
-        if ('EVM' in orderBlockchain) {
+        if (!orderBlockchainAsset) return "";
+        if ('EVM' in orderBlockchainAsset) {
             return getNetwork()!.name;
-        } else if ('ICP' in orderBlockchain) {
+        } else if ('ICP' in orderBlockchainAsset) {
             return 'ICP';
-        } else if ('Bitcoin' in orderBlockchain) {
+        } else if ('Bitcoin' in orderBlockchainAsset) {
             return 'Bitcoin';
         }
     };
 
     const formatCryptoAmount = () => {
-        if (!baseOrder || !orderBlockchain || !token) return;
+        if (!baseOrder || !orderBlockchainAsset || !token) return;
         let crypto = baseOrder.crypto;
 
-        switch (blockchainToBlockchainType(orderBlockchain)) {
+        switch (blockchainAssetToBlockchainType(orderBlockchainAsset)) {
             case 'EVM':
                 let fullAmountEVM: string;
                 if (token.isNative) {
@@ -616,7 +648,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         orderState,
         baseOrder,
         orderId,
-        orderBlockchain,
+        orderBlockchainAsset,
         token,
         cryptoAmount,
         currentPrice,
@@ -632,9 +664,9 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         getStatusColors,
         getStatus,
         getNetwork,
-        getNetworkExplorer,
         getNetworkLogo,
         getNetworkName,
+        getExplorerLinks,
         handleProviderSelection,
         commitToOrder,
         removeOrder,

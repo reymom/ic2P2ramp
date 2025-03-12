@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import clsx from 'clsx';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faArrowRight, faTh, faList } from '@fortawesome/free-solid-svg-icons';
@@ -9,8 +10,8 @@ import { OrderFilter, OrderState } from '@/declarations/backend/backend.did';
 import { parseBigIntFields } from '@/model/utils/mock';
 import OrderFilters from '@/components/order/OrderFilters';
 import Order from '@/components/order/Order';
+import { useUser } from '@/components/user/UserContext';
 import mockOrdersData from '@/assets/mocks/orders.json';
-import clsx from 'clsx';
 
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [loading, setLoading] = useState(false);
@@ -24,6 +25,9 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const initialPage = Number(searchParams.get('page') || 1);
     const [page, setPage] = useState(initialPage);
     const pageSize = 5;
+
+    const { userType } = useUser();
+    const navigate = useNavigate();
 
     useEffect(() => {
         const updateHeight = () => {
@@ -66,7 +70,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     }, [filter, page]);
 
     const fetchOrders = async () => {
-        if (import.meta.env.VITE_USE_MOCKS) {
+        if (process.env.FRONTEND_USE_MOCKS === "true") {
             console.warn("Using mock orders");
             const mockOrders: OrderState[] = mockOrdersData.map(parseBigIntFields);
             setOrders(mockOrders as OrderState[]);
@@ -125,7 +129,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             </div>
 
             {/* Left Pagination Button */}
-            {ordersHeight && (
+            {ordersHeight && orders.length && (
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}
@@ -144,7 +148,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             )}
 
             {/* Right Pagination Button */}
-            {ordersHeight && (
+            {ordersHeight && orders.length > 0 && (
                 <button
                     onClick={handleNextPage}
                     disabled={orders.length === 0}
@@ -168,37 +172,59 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
                     <div className="flex justify-center items-center h-32">
                         <div className="w-6 h-6 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin"></div>
                     </div>
-                ) : (
-                    isListView ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
-                                        <th className="px-4 py-3 text-left">Status</th>
-                                        <th className="px-4 py-3 text-left">Price</th>
-                                        <th className="px-4 py-3 text-left">Amount</th>
-                                        <th className="px-4 py-3 text-left">Address</th>
-                                        <th className="px-4 py-3 text-left">Network</th>
-                                        <th className="px-4 py-3 text-left">Time Left</th>
-                                        <th className="px-4 py-3 text-left">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {orders.map((order, index) => (
-                                        <Order key={index} order={order} isListView={isListView} refetchOrders={fetchOrders} />
-                                    ))}
-                                </tbody>
-                            </table>
+                ) : orders.length === 0 ? (
+
+                    <div className="flex flex-col items-center justify-center h-64 text-center">
+                        <div className="text-gray-400 dark:text-gray-500 mb-3">
+                            <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
                         </div>
-                    ) : (
-                        <div ref={ordersRef}>
-                            <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            No orders found
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-500">
+                            There are no orders matching your current filters.
+                        </p>
+                        {userType === "Offramper" && (
+                            <button
+                                onClick={() => navigate('/create')}
+                                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
+                            >
+                                Create Order
+                            </button>
+                        )}
+                    </div>
+
+                ) : isListView ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr className="bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-300 border-b border-gray-300 dark:border-gray-700">
+                                    <th className="px-4 py-3 text-left">Status</th>
+                                    <th className="px-4 py-3 text-left">Price</th>
+                                    <th className="px-4 py-3 text-left">Amount</th>
+                                    <th className="px-4 py-3 text-left">Address</th>
+                                    <th className="px-4 py-3 text-left">Network</th>
+                                    <th className="px-4 py-3 text-left">Time Left</th>
+                                    <th className="px-4 py-3 text-left">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                                 {orders.map((order, index) => (
                                     <Order key={index} order={order} isListView={isListView} refetchOrders={fetchOrders} />
                                 ))}
-                            </ul>
-                        </div>
-                    )
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div ref={ordersRef}>
+                        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {orders.map((order, index) => (
+                                <Order key={index} order={order} isListView={isListView} refetchOrders={fetchOrders} />
+                            ))}
+                        </ul>
+                    </div>
                 )
             }
         </div>

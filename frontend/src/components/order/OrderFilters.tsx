@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FilterX } from "lucide-react";
 
-import { TransactionAddress, OrderFilter, Blockchain, OrderStateFilter } from '@/declarations/backend/backend.did';
+import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter } from '@/declarations/backend/backend.did';
 import { BlockchainTypes, OrderFilterTypes } from '@/model/types';
 import { useUser } from '@/components/user/UserContext';
 import { truncate } from '@/utils/helper';
@@ -11,6 +11,7 @@ import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import { FilterType } from 'viem';
+import clsx from 'clsx';
 
 interface OrderFiltersProps {
     setFilter: (filter: OrderFilter | null) => void;
@@ -21,7 +22,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
     const [filterType, setFilterType] = useState<OrderFilterTypes | null>(null);
     const [selectedState, setSelectedState] = useState<OrderStateFilter | null>(null);
     const [selectedAddress, setSelectedAddress] = useState<TransactionAddress | null>(null);
-    const [selectedBlockchain, setSelectedBlockchain] = useState<Blockchain | null>(null);
+    const [selectedBlockchainAsset, setSelectedBlockchainAsset] = useState<BlockchainAsset | null>(null);
     const [blockchainType, setBlockchainType] = useState<BlockchainTypes | null>(null);
 
     const { user, userType } = useUser();
@@ -40,9 +41,9 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
             setFilterType('ByOfframperId');
         } else if ('ByOnramperId' in filter) {
             setFilterType('ByOnramperId');
-        } else if ('ByBlockchain' in filter) {
-            setFilterType('ByBlockchain');
-            setSelectedBlockchain(filter.ByBlockchain);
+        } else if ('ByBlockchainAsset' in filter) {
+            setFilterType('ByBlockchainAsset');
+            setSelectedBlockchainAsset(filter.ByBlockchainAsset);
         } else if ('ByOfframperAddress' in filter) {
             setFilterType('ByOfframperAddress');
             setSelectedAddress(filter.ByOfframperAddress);
@@ -56,7 +57,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
 
     useEffect(() => {
         constructFilter();
-    }, [filterType, selectedState, selectedBlockchain, selectedAddress])
+    }, [filterType, selectedState, selectedBlockchainAsset, selectedAddress])
 
     const constructFilter = () => {
         if (!filterType) {
@@ -75,9 +76,9 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
                     setFilter({ [filterType]: selectedAddress } as OrderFilter)
                 }
                 break;
-            case "ByBlockchain":
-                if (selectedBlockchain) {
-                    setFilter({ [filterType]: selectedBlockchain } as OrderFilter);
+            case "ByBlockchainAsset":
+                if (selectedBlockchainAsset) {
+                    setFilter({ [filterType]: selectedBlockchainAsset } as OrderFilter);
                 }
                 break;
             case "ByOfframperId": case "ByOnramperId":
@@ -93,7 +94,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
     const handleFilterTypeChange = (value: string) => {
         if (!value.startsWith("ByBlockchain:")) {
             setBlockchainType(null);
-            setSelectedBlockchain(null);
+            setSelectedBlockchainAsset(null);
         };
         if (!value.startsWith('ByState')) setSelectedState(null);
         if (!(value in Array(["ByOfframperAddress", "LockedByOnramper"]))) {
@@ -109,9 +110,9 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
             setSelectedState({ [stateValue]: null } as OrderStateFilter);
         } else if (value.startsWith("ByBlockchain:")) {
             const chain = value.split(":")[1] as BlockchainTypes;
-            setFilterType("ByBlockchain");
+            setFilterType("ByBlockchainAsset");
             setBlockchainType(chain);
-            setSelectedBlockchain({ [chain]: null } as Blockchain);
+            setSelectedBlockchainAsset({ [chain]: null } as BlockchainAsset);
             return;
         } else {
             setFilterType(value as OrderFilterTypes);
@@ -228,22 +229,24 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
                     </Select>
                 )}
 
-                {(filterType || selectedBlockchain) && (
-                    <button
-                        onClick={() => {
-                            setFilterType(null);
-                            setSelectedBlockchain(null);
-                            setBlockchainType(null);
-                            setSelectedState(null);
-                            setSelectedAddress(null);
-                            setFilter(null);
-                        }}
-                        className="inline-flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
-                    >
-                        <FilterX className="h-4 w-4" />
-                        Clear
-                    </button>
-                )}
+                <button
+                    onClick={() => {
+                        setFilterType(null);
+                        setSelectedBlockchainAsset(null);
+                        setBlockchainType(null);
+                        setSelectedState(null);
+                        setSelectedAddress(null);
+                        setFilter(null);
+                    }}
+                    disabled={filterType === null && selectedBlockchainAsset === null}
+                    className={clsx(
+                        "inline-flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground",
+                        (filterType !== null || selectedBlockchainAsset !== null) && "hover:text-foreground",
+                    )}>
+                    <FilterX className="h-4 w-4" />
+                    Clear
+                </button>
+
             </div>
         </div >
     );

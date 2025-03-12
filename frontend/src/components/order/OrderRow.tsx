@@ -19,7 +19,7 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {
     const {
         orderState,
         baseOrder,
-        orderBlockchain,
+        orderBlockchainAsset,
         token,
         cryptoAmount,
         currentPrice,
@@ -29,7 +29,7 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {
         getStatusColors,
         getNetworkLogo,
         getNetworkName,
-        getNetworkExplorer,
+        getExplorerLinks,
     } = useOrderLogic(order, refetchOrders);
 
     const { textColor } = getStatusColors();
@@ -85,19 +85,15 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {
 
                 <td className="px-4 py-3">
                     {baseOrder ? (
-                        orderBlockchain && 'EVM' in orderBlockchain ? (
-                            <a
-                                href={`${getNetworkExplorer()}/address/${baseOrder.offramper_address.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
-                                title="View on Block Explorer"
-                            >
-                                {truncate(baseOrder.offramper_address.address, 8, 8)}
-                            </a>
-                        ) : (
-                            truncate(baseOrder.offramper_address.address, 8, 8)
-                        )
+                        <a
+                            href={`${getExplorerLinks(baseOrder.offramper_address.address)?.address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
+                            title="View on Block Explorer"
+                        >
+                            {truncate(baseOrder.offramper_address.address, 8, 8)}
+                        </a>
                     ) : "-"}
                 </td>
 

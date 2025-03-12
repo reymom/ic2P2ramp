@@ -20,7 +20,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const {
         orderState,
         baseOrder,
-        orderBlockchain,
+        orderBlockchainAsset,
         token,
         cryptoAmount,
         currentPrice,
@@ -34,9 +34,9 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         loadingPrice,
         committedProvider,
         getStatusColors,
-        getNetworkExplorer,
         getNetworkLogo,
         getNetworkName,
+        getExplorerLinks,
         handleProviderSelection,
         commitToOrder,
         removeOrder,
@@ -47,7 +47,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
     const { backgroundColor, borderColor, textColor } = getStatusColors();
     const { user, userType } = useUser();
 
-    const commonOrderDiv = baseOrder && orderBlockchain && (
+    const commonOrderDiv = baseOrder && orderBlockchainAsset && (
         <div className="space-y-3">
 
             {/* Fiat and Crypto Amount */}
@@ -83,23 +83,19 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
             <div className="text-lg flex justify-between">
                 <span className="opacity-90">Address:</span>
                 <span className="font-medium">
-                    {orderBlockchain && 'EVM' in orderBlockchain ? (
-                        <a
-                            href={`${getNetworkExplorer()}/address/${baseOrder!.offramper_address.address}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
-                            title="View on Block Explorer"
-                        >
-                            {truncate(baseOrder!.offramper_address.address, 8, 8)}
-                        </a>
-                    ) :
-                        <span className="font-medium">{truncate(baseOrder!.offramper_address.address, 8, 8)}</span>
-                    }
+                    <a
+                        href={`${getExplorerLinks(baseOrder.offramper_address.address)?.address}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
+                        title="View on Explorer"
+                    >
+                        {truncate(baseOrder.offramper_address.address, 8, 8)}
+                    </a>
                 </span>
             </div>
 
-            {'EVM' in baseOrder!.crypto.blockchain && (
+            {'EVM' in baseOrder!.crypto.asset && (
                 <div className="text-lg flex justify-between">
                     <span className="opacity-80">Network:</span>
                     <img
@@ -275,7 +271,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     )}
 
                     {remainingTime !== null && (
-                        <div className="text-smtext-gray-600 dark:text-gray-200 mt-2">
+                        <div className="text-sm text-gray-600 dark:text-gray-200 mt-2">
                             (Locked for {formatTimeLeft(remainingTime)})
                         </div>
                     )}
@@ -296,41 +292,34 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     <div className="text-lg flex justify-between">
                         <span className="opacity-90">Onramper:</span>
                         <span className="font-medium">
-                            {orderBlockchain && 'EVM' in orderBlockchain ? (
-                                <a
-                                    href={`${getNetworkExplorer()}/address/${orderState.Completed.onramper.address}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
-                                    title="View on Block Explorer"
-                                >
-                                    {truncate(orderState.Completed.onramper.address, 8, 8)}
-                                </a>
-                            ) :
-                                <span className="font-medium">{truncate(orderState.Completed.onramper.address, 8, 8)}</span>
-                            }
+                            <a
+                                href={`${getExplorerLinks(orderState.Completed.onramper.address)?.address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
+                                title="View on Block Explorer"
+                            >
+                                {truncate(orderState.Completed.onramper.address, 8, 8)}
+                            </a>
+
                         </span>
                     </div>
                     <div className="text-lg flex justify-between">
                         <span className="opacity-90">Offramper:</span>
                         <span className="font-medium">
-                            {orderBlockchain && 'EVM' in orderBlockchain ? (
-                                <a
-                                    href={`${getNetworkExplorer()}/address/${orderState.Completed.offramper.address}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
-                                    title="View on Block Explorer"
-                                >
-                                    {truncate(orderState.Completed.offramper.address, 8, 8)}
-                                </a>
-                            ) :
-                                <span className="font-medium">{truncate(orderState.Completed.offramper.address, 8, 8)}</span>
-                            }
+                            <a
+                                href={`${getExplorerLinks(orderState.Completed.offramper.address)?.address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
+                                title="View on Block Explorer"
+                            >
+                                {truncate(orderState.Completed.offramper.address, 8, 8)}
+                            </a>
                         </span>
                     </div>
 
-                    {'EVM' in orderState.Completed.blockchain && (
+                    {'EVM' in orderState.Completed.asset && (
                         <div className="text-lg flex justify-between">
                             <span className="opacity-80">Network:</span>
                             <img
@@ -351,7 +340,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
             {!message && txHash && (
                 <div className="relative mt-2 text-xs text-blue-400 z-50 flex items-center justify-center text-center">
-                    <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="hover:underline z-50">
+                    <a href={`${getExplorerLinks("", txHash)?.transaction}`} target="_blank" className="hover:underline z-50">
                         View Transaction {truncate(txHash, 5, 5)}
                     </a>
                 </div>
@@ -361,7 +350,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 <div className="relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
                     <p className="text-red-600">{message}&nbsp;</p>
                     {txHash &&
-                        <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="text-red-500 hover:underline z-50">
+                        <a href={`${getExplorerLinks("", txHash)?.transaction}`} target="_blank" className="text-red-500 hover:underline z-50">
                             View tx: {truncate(txHash, 6, 6)}
                         </a>
                     }
