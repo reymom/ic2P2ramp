@@ -19,6 +19,7 @@ use management::{
     order as order_management, payment as payment_management, random, user as user_management,
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
+use model::helpers::normalize_rune_name;
 use model::types::exchange_rate::{Asset, AssetClass};
 use model::types::{
     self,
@@ -34,7 +35,7 @@ use model::types::{
     orders::{EvmOrderInput, OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
-    AddressType, AuthenticationData, Blockchain, Crypto, LoginAddress, PaymentProvider,
+    AddressType, AuthenticationData, BlockchainAsset, Crypto, LoginAddress, PaymentProvider,
     PaymentProviderType, TransactionAddress,
 };
 use model::{
@@ -221,11 +222,11 @@ pub async fn create_evm_order_with_tx(
     providers: HashMap<PaymentProviderType, PaymentProvider>,
     currency: String,
     amount: u128,
-    token: Option<String>,
+    token_address: Option<String>,
 ) -> Result<u64> {
     guards::only_controller()?;
 
-    let transaction_variant = match token {
+    let transaction_variant = match token_address {
         Some(_) => TransactionVariant::Token,
         None => TransactionVariant::Native,
     };
@@ -243,16 +244,12 @@ pub async fn create_evm_order_with_tx(
         estimated_gas_withdraw,
     };
 
-    let blockchain = Blockchain::EVM { chain_id };
-    order_management::validate_deposit_tx(
-        &blockchain,
-        Some(evm_input),
-        None,
-        offramper.clone(),
-        amount,
-        token.clone(),
-    )
-    .await?;
+    let asset = BlockchainAsset::EVM {
+        chain_id,
+        token_address,
+    };
+    order_management::validate_deposit_tx(&asset, Some(evm_input), None, offramper.clone(), amount)
+        .await?;
 
     let order_id = order_management::create_order(
         &currency,
@@ -262,8 +259,7 @@ pub async fn create_evm_order_with_tx(
             address: offramper,
         },
         providers,
-        blockchain,
-        token,
+        asset,
         amount,
         Some(estimated_gas_lock),
         Some(estimated_gas_withdraw),
@@ -579,7 +575,7 @@ async fn get_exchange_rate(
     let base_asset = if is_rune {
         Asset {
             class: AssetClass::Rune,
-            symbol: crypto_symbol.to_string(),
+            symbol: normalize_rune_name(&crypto_symbol),
         }
     } else {
         Asset {
@@ -661,8 +657,7 @@ async fn create_order(
     session_token: String,
     currency: String,
     offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
-    blockchain: Blockchain,
-    token_address: Option<String>,
+    asset: BlockchainAsset,
     crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
@@ -681,12 +676,11 @@ async fn create_order(
     }
 
     let tx_hash = order_management::validate_deposit_tx(
-        &blockchain,
+        &asset,
         evm_input.clone(),
         runes,
         offramper_address.clone().address,
         crypto_amount,
-        token_address.clone(),
     )
     .await?;
 
@@ -695,8 +689,7 @@ async fn create_order(
         offramper_user_id,
         offramper_address,
         offramper_providers,
-        blockchain,
-        token_address,
+        asset,
         crypto_amount,
         evm_input.clone().map(|evm| evm.estimated_gas_lock),
         evm_input.map(|evm| evm.estimated_gas_withdraw),
@@ -741,12 +734,11 @@ async fn top_up_order(
     }
 
     let tx_hash = order_management::validate_deposit_tx(
-        &order.crypto.blockchain,
+        &order.crypto.asset,
         evm_input.clone(),
         runes,
         order.offramper_address.clone().address,
         amount,
-        order.crypto.token.clone(),
     )
     .await
     .map_err(|e| {

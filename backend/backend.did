@@ -4,11 +4,11 @@ type AuthenticationData = record {
   password : opt text;
   pubkey : opt text;
 };
-type Blockchain = variant {
-  EVM : record { chain_id : nat64 };
+type BlockchainAsset = variant {
+  EVM : record { token_address : opt text; chain_id : nat64 };
   ICP : record { ledger_principal : principal };
   Solana;
-  Bitcoin;
+  Bitcoin : record { rune_id : opt text };
 };
 type BlockchainError = variant {
   InvalidAddress : AddressType;
@@ -51,19 +51,14 @@ type ChainGasTracking = record {
   commit_gas : GasUsage;
 };
 type CompletedOrder = record {
+  asset : BlockchainAsset;
   offramper_fee : nat64;
   onramper : TransactionAddress;
   offramper : TransactionAddress;
-  blockchain : Blockchain;
   price : nat64;
   completed_at : nat64;
 };
-type Crypto = record {
-  fee : nat;
-  token : opt text;
-  blockchain : Blockchain;
-  amount : nat;
-};
+type Crypto = record { fee : nat; asset : BlockchainAsset; amount : nat };
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -114,6 +109,7 @@ type HttpResponse = record {
 type IcpToken = record { fee : nat; decimals : nat8; symbol : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
+  ordiscan : OrdiscanConfig;
   revolut : RevolutConfig;
   proxy_url : text;
   chains : vec ChainConfig;
@@ -184,8 +180,8 @@ type OrderFilter = variant {
   ByOfframperId : nat64;
   ByOfframperAddress : TransactionAddress;
   ByState : OrderStateFilter;
-  ByBlockchain : Blockchain;
   ByOnramperId : nat64;
+  ByBlockchainAsset : BlockchainAsset;
   LockedByOnramper : TransactionAddress;
 };
 type OrderState = variant {
@@ -195,6 +191,7 @@ type OrderState = variant {
   Completed : CompletedOrder;
 };
 type OrderStateFilter = variant { Locked; Cancelled; Created; Completed };
+type OrdiscanConfig = record { api_key : text; api_url : text };
 type PaymentProvider = variant {
   PayPal : record { id : text };
   Revolut : record { id : text; scheme : text; name : opt text };
@@ -324,6 +321,7 @@ type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
+  ordiscan : opt OrdiscanConfig;
   revolut : opt RevolutConfig;
   proxy_url : opt text;
   chains : opt vec ChainConfig;
@@ -383,8 +381,7 @@ service : (InstallArg) -> {
       text,
       text,
       vec record { PaymentProviderType; PaymentProvider },
-      Blockchain,
-      opt text,
+      BlockchainAsset,
       nat,
       TransactionAddress,
       nat64,
@@ -397,7 +394,7 @@ service : (InstallArg) -> {
   get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_6);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_7) query;
-  get_exchange_rate : (text, text) -> (Result_8);
+  get_exchange_rate : (text, text, bool) -> (Result_8);
   get_icp_token_info : (principal) -> (Result_9) query;
   get_offramper_fee : (nat64) -> (nat64) query;
   get_order : (nat64) -> (Result_10) query;
