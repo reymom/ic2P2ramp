@@ -2,6 +2,17 @@
 
 # ./init_bitcoind.sh
 
+# dfx stop
+# dfx=$(lsof -t -i:4943)
+# # Check if any PIDs were found
+# if [ -z "$dfx" ]; then
+#     echo "dfx not running."
+# else
+#     # Kill the processes
+#     kill $dfx && echo "Terminating running dfx instance."
+#     sleep 3
+# fi
+
 dfx start --background --clean
 
 DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)"
@@ -12,13 +23,13 @@ source "$DIR/../.env" || {
   exit
 }
 
-# cargo build --release --target wasm32-unknown-unknown --package backend
+cargo build --release --target wasm32-unknown-unknown --package backend
 
-# candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
 
-# cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
+cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
 
-# candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
+candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
 
 dfx identity use minter
 export MINTER_ACCOUNT_ID=$(dfx ledger account-id)
@@ -77,6 +88,8 @@ dfx deps deploy xrc
 dfx generate bitcoin_backend
 
 dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { testnet })'
+
+# dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
 
 dfx deps deploy evm_rpc
 
@@ -165,6 +178,10 @@ dfx deploy backend --argument "(
         tan = \"test-jwk.s3.eu-west-3.amazonaws.com\";
       };
       proxy_url = \"https://ic2p2ramp.xyz\";
+      ordiscan = record {
+        api_url = \"api.ordiscan.com\";
+        api_key = \"${ORDISCAN_API_KEY}\";
+      };
     }
   }
 )"
@@ -185,6 +202,8 @@ dfx canister call backend register_evm_tokens '(11155420 : nat64, vec {
 dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })'
+
+cd frontend && npm run build && cd ..
 
 dfx deploy frontend --mode reinstall
 
@@ -223,7 +242,6 @@ dfx canister call mc6ru-gyaaa-aaaar-qaaaq-cai icrc1_transfer \
 })'
 
 dfx canister call bitcoin_backend register_runes '(vec {
-    record { id = "2660209:4"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 0 : nat8; cap = 0 : nat; premine = 100_000_000_000 : nat };
-    record { id = "2585552:97"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
-    record { id = ""; name = ""; symbol = ""; divisibility = 0 : nat8; cap =  : nat; premine =  : nat };
+    record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
+    record { id = "73393:191"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
 })'

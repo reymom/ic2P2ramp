@@ -13,6 +13,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       paypal = null;
       revolut = null;
       proxy_url = null;
+      ordiscan = null;
     }
   }
 )"
@@ -59,6 +60,7 @@ dfx deploy backend_prod --upgrade-unchanged --argument "(
       paypal = null;
       revolut = null;
       proxy_url = null;
+      ordiscan = null;
     }
   }
 )" --ic
@@ -110,6 +112,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       paypal = null;
       revolut = null;
       proxy_url = null;
+      ordiscan = null;
     }
   }
 )" --ic
@@ -136,6 +139,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       paypal = null;
       revolut = null;
       proxy_url = null;
+      ordiscan = null;
     }
   }
 )" --ic
@@ -163,6 +167,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
     paypal = null;
     revolut = null;
     proxy_url = null;
+    ordiscan = null;
   }
 )"
 
@@ -179,6 +184,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
         };
         revolut = null;
         proxy_url = null;
+        ordiscan = null;
     }
   }
 )" --ic
@@ -199,6 +205,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       tan = \"new_tan\";
     };
     proxy_url = null;
+    ordiscan = null;
   }
 )"
 
@@ -211,6 +218,24 @@ dfx deploy backend --upgrade-unchanged --argument "(
       paypal = null;
       revolut = null;
       proxy_url = opt \"testing\";
+      ordiscan = null;
     }
   }
 )" --ic
+
+# Change ordiscan config
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant {
+    Upgrade = opt record {
+        ecdsa_key_id = null;
+        chains = null;
+        paypal = null;
+        revolut = null;
+        proxy_url = null;
+        ordiscan = opt record {
+          api_url = \"api.ordiscan.com\";
+          api_key = \"${ORDISCAN_API_KEY}\";
+        };
+    }
+  }
+)"

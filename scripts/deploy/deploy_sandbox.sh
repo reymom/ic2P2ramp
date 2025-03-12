@@ -12,6 +12,8 @@ source "$DIR/../.env.sandbox" || {
   exit
 }
 
+# dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
+
 # Might be necessary
 # dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic)
 # dfx cycles top-up --ic $(dfx identity get-wallet --ic) 1_000_000_000_000
@@ -101,6 +103,10 @@ dfx deploy backend --argument "(
         tan = \"test-jwk.s3.eu-west-3.amazonaws.com\";
       };
       proxy_url = \"https://ic2p2ramp.xyz\";
+      ordiscan = record {
+        api_url = \"https://api.ordiscan.io\";
+        api_key = \"${ORDISCAN_API_KEY}\";
+      };
     }
   }
 )" --ic
