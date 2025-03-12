@@ -5,6 +5,7 @@ import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
+import clsx from 'clsx';
 
 interface BlockchainSelectProps {
     selectedBlockchain: string | undefined;
@@ -45,7 +46,11 @@ const BlockchainSelect: React.FC<BlockchainSelectProps> = ({ selectedBlockchain,
         <div className={`relative ${className}`} ref={dropdownRef}>
             <button
                 type="button"
-                className={`w-full pl-3 pr-2 py-1.5 border focus:outline-none flex items-center justify-between ${buttonClassName}`}
+                className={clsx(
+                    "w-full pl-3 pr-2 py-1.5 border focus:outline-none",
+                    "flex items-center justify-between",
+                    buttonClassName
+                )}
                 onClick={() => setDropdownOpen(!dropdownOpen)}
             >
                 {/* Display selected blockchain with logo */}
