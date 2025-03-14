@@ -2,17 +2,26 @@
   "canisters": {
     "evm_rpc": {
       "type": "pull",
-      "id": "7hfb6-caaaa-aaaar-qadga-cai"
+      "id": "7hfb6-caaaa-aaaar-qadga-cai",
+      "declarations": {
+        "output": "frontend/src/declarations/evm_rpc"
+      }
     },
     "xrc": {
       "type": "pull",
-      "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
+      "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai",
+      "declarations": {
+        "output": "frontend/src/declarations/xrc"
+      }
     },
     "backend": {
       "dependencies": ["evm_rpc", "xrc"],
       "candid": "backend/backend.did",
       "package": "backend",
-      "type": "rust"
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/backend"
+      }
     },
     "frontend": {
       "dependencies": ["backend"],
@@ -24,13 +33,19 @@
       "dependencies": [],
       "candid": "bitcoin_backend/bitcoin_backend.did",
       "package": "bitcoin_backend",
-      "type": "rust"
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/bitcoin_backend"
+      }
     },
     "backend_prod": {
       "dependencies": ["evm_rpc", "xrc"],
       "candid": "backend/backend.did",
       "package": "backend",
-      "type": "rust"
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/backend_prod"
+      }
     },
     "frontend_prod": {
       "dependencies": ["backend_prod"],
@@ -46,7 +61,10 @@
           "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
         }
       },
-      "frontend": {}
+      "frontend": {},
+      "declarations": {
+        "output": "frontend/src/declarations/internet_identity"
+      }
     },
     "icp_ledger_canister": {
       "type": "custom",
@@ -57,7 +75,10 @@
           "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
         }
       },
-      "specified_id": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+      "specified_id": "ryjl3-tyaaa-aaaaa-aaaba-cai",
+      "declarations": {
+        "output": "frontend/src/declarations/icp_ledger_canister"
+      }
     },
     "ckbtc_ledger_canister_testnet": {
       "type": "custom",
@@ -68,18 +89,24 @@
           "ic": "mc6ru-gyaaa-aaaar-qaaaq-cai"
         }
       },
-      "specified_id": "mc6ru-gyaaa-aaaar-qaaaq-cai"
+      "specified_id": "mc6ru-gyaaa-aaaar-qaaaq-cai",
+      "declarations": {
+        "output": "frontend/src/declarations/ckbtc_ledger_canister_testnet"
+      }
     },
     "icrc1_ledger_canister": {
       "type": "custom",
       "candid": "https://raw.githubusercontent.com/dfinity/ic/08f32722df2f56f1e5c1e603fee0c87c40b77cba/rs/rosetta-api/icrc1/ledger/ledger.did",
-      "wasm": "https://download.dfinity.systems/ic/08f32722df2f56f1e5c1e603fee0c87c40b77cba/canisters/ic-icrc1-ledger.wasm.gz"
+      "wasm": "https://download.dfinity.systems/ic/08f32722df2f56f1e5c1e603fee0c87c40b77cba/canisters/ic-icrc1-ledger.wasm.gz",
+      "declarations": {
+        "output": "frontend/src/declarations/icrc1_ledger_canister"
+      }
     }
   },
   "defaults": {
     "bitcoin": {
       "enabled": true,
-      "log_level": "error",
+      "log_level": "info",
       "nodes": ["127.0.0.1:18444"]
     },
     "build": {
