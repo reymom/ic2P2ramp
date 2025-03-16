@@ -8,10 +8,12 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   console.log('mode = ', mode);
 
-  const envFile = mode === 'sandbox' || mode === 'production' ? `.env.${mode}` : `.env`;
+  const envFile =
+    mode === 'sandbox' || mode === 'production' ? `.env.${mode}` : `.env`;
   dotenv.config({ path: path.resolve(__dirname, '..', envFile) });
 
-  const domain = mode === 'sandbox' ? 'sandbox.icramp.xyz' : 'app.icramp.xyz';
+  const domain =
+    mode === 'production' ? 'app.icramp.xyz' : 'sandbox.icramp.xyz';
 
   return {
     root: path.resolve(__dirname, 'src'),
@@ -21,7 +23,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "src"),
+        '@': path.resolve(__dirname, 'src'),
       },
     },
     optimizeDeps: {

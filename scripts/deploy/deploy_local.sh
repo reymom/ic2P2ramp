@@ -87,7 +87,7 @@ dfx deps deploy xrc
 
 dfx generate bitcoin_backend
 
-dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { testnet })'
+dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { regtest })'
 
 # dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
 

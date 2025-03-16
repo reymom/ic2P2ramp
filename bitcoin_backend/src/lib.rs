@@ -46,8 +46,8 @@ pub fn init(network: Network) {
 
     KEY_NAME.with(|key_name| {
         key_name.replace(String::from(match network {
-            Network::Regtest | Network::Testnet => "dfx_test_key",
-            Network::Mainnet => "test_key_1",
+            Network::Regtest => "dfx_test_key",
+            Network::Mainnet | Network::Testnet => "test_key_1",
         }))
     });
 

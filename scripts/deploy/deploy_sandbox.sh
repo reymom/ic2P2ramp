@@ -20,6 +20,12 @@ source "$DIR/../.env.sandbox" || {
 
 cargo build --release --target wasm32-unknown-unknown --package backend
 
+candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+
+cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
+
+candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
+
 dfx canister create --with-cycles 1_000_000_000_000 backend --ic
 
 dfx deploy backend --argument "(
@@ -92,7 +98,7 @@ dfx deploy backend --argument "(
       paypal = record {
         client_id = \"${PAYPAL_CLIENT_ID}\";
         client_secret = \"${PAYPAL_CLIENT_SECRET}\";
-        api_url = \"api-m.paypal.com\";
+        api_url = \"api-m.sandbox.paypal.com\";
       };
       revolut = record {
         client_id = \"${REVOLUT_CLIENT_ID}\";
@@ -104,7 +110,7 @@ dfx deploy backend --argument "(
       };
       proxy_url = \"https://ic2p2ramp.xyz\";
       ordiscan = record {
-        api_url = \"https://api.ordiscan.io\";
+        api_url = \"api.ordiscan.com\";
         api_key = \"${ORDISCAN_API_KEY}\";
       };
     }
@@ -135,4 +141,14 @@ dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })' --ic
 
+
+dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { testnet })' --ic
+
+dfx canister call bitcoin_backend register_runes '(vec {
+    record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
+    record { id = "73393:191"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
+})' --ic
+
+dfx generate backend
+dfx generate bitcoin_backend
 dfx deploy frontend --mode reinstall --ic
