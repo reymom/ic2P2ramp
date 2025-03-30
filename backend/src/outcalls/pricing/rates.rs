@@ -4,7 +4,8 @@ use crate::{
         memory::heap,
         types::exchange_rate::{Asset, AssetClass},
     },
-    outcalls::pricing::{ordiscan::fetch_rune_price, xrc_rates::get_xrc_exchange_rate},
+    outcalls::ordiscan::price::fetch_rune_price,
+    outcalls::pricing::xrc_rates::get_xrc_exchange_rate,
 };
 
 pub async fn get_cached_exchange_rate(
@@ -21,12 +22,23 @@ pub async fn get_cached_exchange_rate(
             None => {
                 ic_cdk::println!("[get_cached_exchange_rate] Recalculating cache.");
 
+                base_asset.normalize();
+                quote_asset.normalize();
                 let rate = match (base_asset.clone().class, quote_asset.clone().class) {
                     (AssetClass::Rune, _) => {
+                        ic_cdk::println!(
+                            "[get_cached_exchange_rate] base_asset = {}, quote_asset = {}",
+                            base_asset.symbol,
+                            quote_asset.symbol
+                        );
                         let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
                             .await?
                             .data
                             .price_in_usd;
+                        ic_cdk::println!(
+                            "[get_cached_exchange_rate] rune_price_in_usd: {}",
+                            rune_price_in_usd
+                        );
                         if quote_asset.symbol == "USD" {
                             rune_price_in_usd
                         } else {
@@ -60,11 +72,7 @@ pub async fn get_cached_exchange_rate(
                             conversion_rate / rune_price_in_usd
                         }
                     }
-                    _ => {
-                        base_asset.normalize();
-                        quote_asset.normalize();
-                        get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?
-                    }
+                    _ => get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?,
                 };
 
                 heap::cache_exchange_rate(base_asset, quote_asset, rate);

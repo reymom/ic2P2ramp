@@ -6,9 +6,8 @@ use crate::model::{
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
-use std::string::String;
 
-pub(super) async fn fetch_rune_price(rune_name: &str) -> Result<OrdiscanRunePrice> {
+pub async fn fetch_rune_price(rune_name: &str) -> Result<OrdiscanRunePrice> {
     let (api_url, api_key, proxy_url) = read_state(|s| {
         (
             s.ordiscan.api_url.clone(),
@@ -51,7 +50,6 @@ pub(super) async fn fetch_rune_price(rune_name: &str) -> Result<OrdiscanRunePric
             let response_str =
                 String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
             ic_cdk::println!("[fetch_rune_price] response: {}", response_str);
-            ic_cdk::println!("[fetch_rune_price] status: {}", response.status);
             let rune_price: OrdiscanRunePrice = serde_json::from_str(&response_str)
                 .map_err(|e| SystemError::ParseError(e.to_string()))?;
 
