@@ -1,4 +1,4 @@
-use bitcoin_backend::types::RuneUTXOEntry;
+use bitcoin_backend::types::TransactionType;
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use icrc_ledger_types::icrc1::account::Account;
@@ -14,11 +14,13 @@ use crate::evm::{
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::inter_canister::bitcoin::{
-    self, bitcoin_backend_deposit_funds, bitcoin_backend_estimate_fee,
+    self, bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata,
     bitcoin_backend_validate_rune,
 };
+use crate::management::bitcoin as bitcoin_management;
 use crate::management::user as user_management;
 
+use crate::model::types::orders::BitcoinOrderInput;
 use crate::model::{
     guards, helpers,
     memory::{self, stable::spent_transactions},
@@ -147,8 +149,14 @@ async fn order_crypto_fee(
 
             Ok(get_crypto_fee(crypto_amount, icp_fee * 2))
         }
-        BlockchainAsset::Bitcoin { .. } => {
-            let fee = bitcoin_backend_estimate_fee().await?;
+        BlockchainAsset::Bitcoin { rune_id } => {
+            let mut fee = bitcoin_backend_estimate_fee().await?;
+            if let Some(rune_id) = rune_id {
+                let metadata = bitcoin_backend_get_rune_metadata(rune_id.to_string()).await?;
+                let rate = helpers::get_btc_token_rate(metadata.name).await?;
+                let scale_factor = 10u128.pow(metadata.divisibility as u32);
+                fee = (fee as f64 * rate * scale_factor as f64) as u64;
+            }
             Ok(get_crypto_fee(crypto_amount, fee as u128))
         }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
@@ -177,7 +185,7 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
 pub async fn validate_deposit_tx(
     asset: &BlockchainAsset,
     evm_input: Option<EvmOrderInput>,
-    runes: Option<Vec<RuneUTXOEntry>>,
+    bitcoin_input: Option<BitcoinOrderInput>,
     order_offramper: String,
     order_amount: u128,
 ) -> Result<Option<String>> {
@@ -235,22 +243,22 @@ pub async fn validate_deposit_tx(
         BlockchainAsset::Bitcoin { rune_id } => {
             if let Some(rune_id) = rune_id.clone() {
                 bitcoin_backend_validate_rune(rune_id).await?;
-                if runes.is_none() {
-                    return Err(BlockchainError::BitcoinBackendError(
-                        "runes utxos are required".to_string(),
-                    )
-                    .into());
-                }
-            }
+            };
+            if bitcoin_input.is_none() {
+                return Err(BlockchainError::BitcoinBackendError(
+                    "bitcoin input required".to_string(),
+                )
+                .into());
+            };
+            let bitcoin_txid = bitcoin_input.unwrap().tx_id;
+            if spent_transactions::is_tx_hash_processed(&bitcoin_txid) {
+                return Err(BlockchainError::BitcoinBackendError(
+                    "Transaction already processed".to_string(),
+                )
+                .into());
+            };
 
-            bitcoin_backend_deposit_funds(
-                order_offramper,
-                order_amount as u64,
-                rune_id.clone(),
-                runes.unwrap(),
-            )
-            .await?;
-            Ok(None)
+            Ok(Some(bitcoin_txid))
         }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
@@ -273,6 +281,12 @@ pub async fn create_order(
         estimated_gas_withdraw,
     )
     .await?;
+
+    ic_cdk::println!(
+        "[create_order] crypto_amount = {:?}, crypto_fee = {:?}",
+        crypto_amount,
+        crypto_fee
+    );
 
     if 2 * crypto_fee >= crypto_amount {
         return Err(BlockchainError::FundsTooLow)?;
@@ -625,14 +639,28 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
             Ok(())
         }
         BlockchainAsset::Bitcoin { rune_id } => {
-            memory::stable::orders::cancel_order(order_id)?;
-
-            bitcoin::bitcoin_backend_cancel_deposit(
-                order.offramper_address.address,
+            let dst_address = order.offramper_address.address.clone();
+            let tx_type = match rune_id.clone() {
+                Some(rune_id) => TransactionType::RuneTransfer(rune_id),
+                None => TransactionType::TaprootBitcoin,
+            };
+            let tx_id = bitcoin::bitcoin_backend_transfer(
+                dst_address.clone(),
                 order.crypto.amount as u64,
-                rune_id.clone(),
+                tx_type,
             )
             .await?;
+
+            bitcoin_management::spawn_bitcoin_tx_listener(
+                tx_id,
+                bitcoin_management::BitcoinTransactionAction::CancelOrder {
+                    order_id,
+                    amount: order.crypto.amount as u64,
+                    offramper_address: dst_address.clone(),
+                },
+                dst_address,
+                rune_id.clone(),
+            );
 
             Ok(())
         }

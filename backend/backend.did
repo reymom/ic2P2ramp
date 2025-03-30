@@ -4,6 +4,7 @@ type AuthenticationData = record {
   password : opt text;
   pubkey : opt text;
 };
+type BitcoinOrderInput = record { tx_id : text; canister_address : text };
 type BlockchainAsset = variant {
   EVM : record { token_address : opt text; chain_id : nat64 };
   ICP : record { ledger_principal : principal };
@@ -109,8 +110,9 @@ type HttpResponse = record {
 type IcpToken = record { fee : nat; decimals : nat8; symbol : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
-  ordiscan : OrdiscanConfig;
+  ordiscan : UnisatConfig;
   revolut : RevolutConfig;
+  unisat : UnisatConfig;
   proxy_url : text;
   chains : vec ChainConfig;
   paypal : PaypalConfig;
@@ -191,7 +193,6 @@ type OrderState = variant {
   Completed : CompletedOrder;
 };
 type OrderStateFilter = variant { Locked; Cancelled; Created; Completed };
-type OrdiscanConfig = record { api_key : text; api_url : text };
 type PaymentProvider = variant {
   PayPal : record { id : text };
   Revolut : record { id : text; scheme : text; name : opt text };
@@ -219,20 +220,20 @@ type RejectionCode = variant {
 };
 type Result = variant { Ok; Err : RampError };
 type Result_1 = variant { Ok : User; Err : RampError };
-type Result_10 = variant { Ok : OrderState; Err : RampError };
-type Result_11 = variant { Ok : opt EvmTransactionLog; Err : RampError };
-type Result_12 = variant { Ok : opt nat64; Err : RampError };
+type Result_10 = variant { Ok : IcpToken; Err : RampError };
+type Result_11 = variant { Ok : OrderState; Err : RampError };
+type Result_12 = variant { Ok : opt EvmTransactionLog; Err : RampError };
 type Result_13 = variant { Ok : record { nat; nat }; Err : RampError };
 type Result_14 = variant { Ok : ChainGasTracking; Err : RampError };
 type Result_15 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : nat; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
 type Result_4 = variant { Ok : nat64; Err : RampError };
-type Result_5 = variant { Ok : text; Err : RampError };
-type Result_6 = variant { Ok : opt record { nat64; nat }; Err : RampError };
-type Result_7 = variant { Ok : vec Token; Err : RampError };
-type Result_8 = variant { Ok : float64; Err : RampError };
-type Result_9 = variant { Ok : IcpToken; Err : RampError };
+type Result_5 = variant { Ok : opt nat64; Err : RampError };
+type Result_6 = variant { Ok : text; Err : RampError };
+type Result_7 = variant { Ok : opt record { nat64; nat }; Err : RampError };
+type Result_8 = variant { Ok : vec Token; Err : RampError };
+type Result_9 = variant { Ok : float64; Err : RampError };
 type RevolutConfig = record {
   kid : text;
   tan : text;
@@ -250,12 +251,6 @@ type RpcServices = variant {
   OptimismMainnet : opt vec L2MainnetService;
   ArbitrumOne : opt vec L2MainnetService;
   EthMainnet : opt vec EthMainnetService;
-};
-type RuneUTXOEntry = record {
-  script_pubkey : text;
-  txid : text;
-  vout : nat32;
-  rune_amount : nat64;
 };
 type Session = record { token : text; expires_at : nat64 };
 type SignRequestCandid = record {
@@ -275,6 +270,7 @@ type SystemError = variant {
   InvalidInput : text;
   ICRejectionError : record { RejectionCode; text };
   ExchangeRateError : ExchangeRateError;
+  ParseIntError : text;
   ParseFloatError : text;
   Pkcs8Error : text;
   ParseError : text;
@@ -319,10 +315,12 @@ type TransactionStatus = variant {
 };
 type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
+type UnisatConfig = record { api_key : text; api_url : text };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
-  ordiscan : opt OrdiscanConfig;
+  ordiscan : opt UnisatConfig;
   revolut : opt RevolutConfig;
+  unisat : opt UnisatConfig;
   proxy_url : opt text;
   chains : opt vec ChainConfig;
   paypal : opt PaypalConfig;
@@ -367,6 +365,16 @@ service : (InstallArg) -> {
   calculate_order_price : (text, Crypto) -> (Result_3);
   cancel_order : (nat64, text) -> (Result);
   clean_old_spent_txs : () -> ();
+  create_bitcoin_order_with_tx : (
+      text,
+      text,
+      nat64,
+      text,
+      vec record { PaymentProviderType; PaymentProvider },
+      text,
+      nat,
+      opt text,
+    ) -> (Result);
   create_evm_order_with_tx : (
       nat64,
       text,
@@ -386,19 +394,19 @@ service : (InstallArg) -> {
       TransactionAddress,
       nat64,
       opt EvmOrderInput,
-      opt vec RuneUTXOEntry,
-    ) -> (Result_4);
-  execute_revolut_payment : (nat64, text) -> (Result_5) query;
+      opt BitcoinOrderInput,
+    ) -> (Result_5);
+  execute_revolut_payment : (nat64, text) -> (Result_6) query;
   freeze_order : (nat64, nat64, text) -> (Result);
-  generate_auth_message : (LoginAddress) -> (Result_5);
-  get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_6);
+  generate_auth_message : (LoginAddress) -> (Result_6);
+  get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_7);
   get_evm_address : () -> (text) query;
-  get_evm_tokens : (nat64) -> (Result_7) query;
-  get_exchange_rate : (text, text, bool) -> (Result_8);
-  get_icp_token_info : (principal) -> (Result_9) query;
+  get_evm_tokens : (nat64) -> (Result_8) query;
+  get_exchange_rate : (text, text, bool) -> (Result_9);
+  get_icp_token_info : (principal) -> (Result_10) query;
   get_offramper_fee : (nat64) -> (nat64) query;
-  get_order : (nat64) -> (Result_10) query;
-  get_order_tx_log : (nat64, opt record { nat64; text }) -> (Result_11) query;
+  get_order : (nat64) -> (Result_11) query;
+  get_order_tx_log : (nat64, opt record { nat64; text }) -> (Result_12) query;
   get_orders : (opt OrderFilter, opt nat32, opt nat32) -> (
       vec OrderState,
     ) query;
@@ -419,8 +427,8 @@ service : (InstallArg) -> {
   resolve_tx_status : (nat64, text, nat64) -> ();
   retry_order_completion : (nat64) -> (Result);
   retry_order_unlock : (nat64) -> (Result);
-  test_estimate_gas_commit : (nat64, text, opt text, nat) -> (Result_12);
-  test_get_consent_url : () -> (Result_5);
+  test_estimate_gas_commit : (nat64, text, opt text, nat) -> (Result_5);
+  test_get_consent_url : () -> (Result_6);
   test_get_fee_estimates : (nat64) -> (Result_13);
   test_get_gas_tracking : (nat64) -> (Result_14) query;
   test_get_latest_block : (nat64) -> (Result_2);
@@ -429,8 +437,8 @@ service : (InstallArg) -> {
       vec record { record { text; text }; ExchangeRateCache },
     ) query;
   test_get_revolut_payment_details : (text) -> (Result);
-  test_get_revolut_payment_token : (text) -> (Result_5);
-  test_paypal : () -> (Result_5);
+  test_get_revolut_payment_token : (text) -> (Result_6);
+  test_paypal : () -> (Result_6);
   top_up_order : (
       nat64,
       nat64,
@@ -439,7 +447,7 @@ service : (InstallArg) -> {
       opt EvmOrderInput,
       opt nat64,
       opt nat64,
-      opt vec RuneUTXOEntry,
+      opt BitcoinOrderInput,
     ) -> (Result) query;
   transfer_canister_funds : (principal, principal, nat) -> (Result);
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);

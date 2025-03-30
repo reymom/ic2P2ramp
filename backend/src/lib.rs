@@ -6,8 +6,9 @@ mod model;
 mod outcalls;
 
 use std::collections::{HashMap, HashSet};
+use std::u64;
 
-use bitcoin_backend::types::RuneUTXOEntry;
+use bitcoin_backend::types::RuneID;
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
@@ -15,12 +16,12 @@ use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use evm::{fees, transaction, vault::Ic2P2ramp};
 use icp::vault::Ic2P2ramp as ICPRamp;
+use management::bitcoin::BitcoinTransactionAction;
 use management::{
-    order as order_management, payment as payment_management, random, user as user_management,
+    bitcoin as bitcoin_management, order as order_management, payment as payment_management,
+    random, user as user_management,
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
-use model::helpers::normalize_rune_name;
-use model::types::exchange_rate::{Asset, AssetClass};
 use model::types::{
     self,
     evm::{
@@ -30,9 +31,9 @@ use model::types::{
         token::{self, Token, TokenManager},
         transaction::{TransactionAction, TransactionVariant},
     },
-    exchange_rate::{ExchangeRateCache, CACHE_DURATION},
+    exchange_rate::{Asset, AssetClass, ExchangeRateCache, CACHE_DURATION},
     icp::{get_icp_token, IcpToken},
-    orders::{EvmOrderInput, OrderFilter, OrderState},
+    orders::{BitcoinOrderInput, EvmOrderInput, OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
     AddressType, AuthenticationData, BlockchainAsset, Crypto, LoginAddress, PaymentProvider,
@@ -49,9 +50,9 @@ use model::{
         stable::{self, orders, spent_transactions},
     },
 };
-use outcalls::pricing::rates;
 use outcalls::{
     paypal,
+    pricing::rates,
     revolut::{self, token as revolut_token},
 };
 
@@ -311,6 +312,60 @@ pub async fn resolve_tx_status(order_id: u64, tx_hash: String, chain_id: u64) {
         }
         _ => (),
     }
+}
+
+// --------------
+// Bitcoin Management
+// --------------
+
+#[ic_cdk::update]
+pub async fn create_bitcoin_order_with_tx(
+    tx_id: String,
+    canister_address: String,
+    user: u64,
+    offramper: String,
+    providers: HashMap<PaymentProviderType, PaymentProvider>,
+    currency: String,
+    amount: u128,
+    rune_id: Option<RuneID>,
+) -> Result<()> {
+    guards::only_controller()?;
+
+    let bitcoin_input = BitcoinOrderInput {
+        tx_id,
+        canister_address: canister_address.clone(),
+    };
+
+    let asset = BlockchainAsset::Bitcoin {
+        rune_id: rune_id.clone(),
+    };
+    let tx_id = order_management::validate_deposit_tx(
+        &asset,
+        None,
+        Some(bitcoin_input.clone()),
+        offramper.clone(),
+        amount,
+    )
+    .await?;
+
+    bitcoin_management::spawn_bitcoin_tx_listener(
+        tx_id.unwrap(),
+        BitcoinTransactionAction::DepositFunds {
+            offramper_providers: providers,
+            offramper_address: TransactionAddress {
+                address_type: AddressType::Bitcoin,
+                address: offramper,
+            },
+            offramper_id: user,
+            asset,
+            currency,
+            order_amount: amount,
+        },
+        bitcoin_input.canister_address,
+        rune_id,
+    );
+
+    Ok(())
 }
 
 // ---------
@@ -575,7 +630,7 @@ async fn get_exchange_rate(
     let base_asset = if is_rune {
         Asset {
             class: AssetClass::Rune,
-            symbol: normalize_rune_name(&crypto_symbol),
+            symbol: crypto_symbol,
         }
     } else {
         Asset {
@@ -662,8 +717,8 @@ async fn create_order(
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
     evm_input: Option<EvmOrderInput>,
-    runes: Option<Vec<RuneUTXOEntry>>,
-) -> Result<u64> {
+    bitcoin_input: Option<BitcoinOrderInput>,
+) -> Result<Option<u64>> {
     let user = stable::users::get_user(&offramper_user_id)?;
     user.validate_session(&session_token)?;
     user.is_banned()?;
@@ -678,29 +733,50 @@ async fn create_order(
     let tx_hash = order_management::validate_deposit_tx(
         &asset,
         evm_input.clone(),
-        runes,
+        bitcoin_input.clone(),
         offramper_address.clone().address,
         crypto_amount,
     )
     .await?;
 
-    let order_id = order_management::create_order(
-        &currency,
-        offramper_user_id,
-        offramper_address,
-        offramper_providers,
-        asset,
-        crypto_amount,
-        evm_input.clone().map(|evm| evm.estimated_gas_lock),
-        evm_input.map(|evm| evm.estimated_gas_withdraw),
-    )
-    .await?;
+    match asset.clone() {
+        BlockchainAsset::Bitcoin { rune_id } => {
+            bitcoin_management::spawn_bitcoin_tx_listener(
+                tx_hash.unwrap(),
+                BitcoinTransactionAction::DepositFunds {
+                    offramper_providers,
+                    offramper_address,
+                    offramper_id: offramper_user_id,
+                    asset,
+                    currency,
+                    order_amount: crypto_amount,
+                },
+                bitcoin_input.unwrap().canister_address,
+                rune_id,
+            );
 
-    if let Some(tx_hash) = tx_hash {
-        spent_transactions::mark_tx_hash_as_processed(tx_hash);
-    };
+            Ok(None)
+        }
+        _ => {
+            let order_id = order_management::create_order(
+                &currency,
+                offramper_user_id,
+                offramper_address,
+                offramper_providers,
+                asset,
+                crypto_amount,
+                evm_input.clone().map(|evm| evm.estimated_gas_lock),
+                evm_input.map(|evm| evm.estimated_gas_withdraw),
+            )
+            .await?;
 
-    Ok(order_id)
+            if let Some(tx_hash) = tx_hash {
+                spent_transactions::mark_tx_hash_as_processed(tx_hash);
+            };
+
+            Ok(Some(order_id))
+        }
+    }
 }
 
 #[ic_cdk::update]
@@ -723,7 +799,7 @@ async fn top_up_order(
     evm_input: Option<EvmOrderInput>,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
-    runes: Option<Vec<RuneUTXOEntry>>,
+    bitcoin_input: Option<BitcoinOrderInput>,
 ) -> Result<()> {
     let order = orders::get_order(&order_id)?.created()?;
     order.is_processing()?;
@@ -736,7 +812,7 @@ async fn top_up_order(
     let tx_hash = order_management::validate_deposit_tx(
         &order.crypto.asset,
         evm_input.clone(),
-        runes,
+        bitcoin_input.clone(),
         order.offramper_address.clone().address,
         amount,
     )

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bitcoin_backend::types::TransactionType;
 use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
@@ -9,6 +10,7 @@ use crate::{
     icp::vault::Ic2P2ramp as ICPRamp,
     inter_canister::bitcoin,
     management,
+    model::memory::stable::orders,
     outcalls::{paypal, revolut},
     types::{
         icp::get_icp_token,
@@ -146,12 +148,30 @@ pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
             handle_icp_payment_completion(order, &ledger_principal).await
         }
         BlockchainAsset::Bitcoin { rune_id } => {
-            bitcoin::bitcoin_backend_send_funds(
-                order.onramper.address.address.clone(),
+            let dst_address = order.onramper.address.address.clone();
+            let tx_type = match rune_id.clone() {
+                Some(rune_id) => TransactionType::RuneTransfer(rune_id),
+                None => TransactionType::TaprootBitcoin,
+            };
+            let tx_id = bitcoin::bitcoin_backend_transfer(
+                dst_address.clone(),
                 order.base.crypto.amount as u64,
-                rune_id,
+                tx_type,
             )
-            .await
+            .await?;
+
+            management::bitcoin::spawn_bitcoin_tx_listener(
+                tx_id,
+                management::bitcoin::BitcoinTransactionAction::CompleteOrder {
+                    order_id: order.base.id,
+                    amount: order.base.crypto.amount as u64,
+                    onramper_address: dst_address.clone(),
+                },
+                dst_address,
+                rune_id,
+            );
+
+            Ok(())
         }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
     }
@@ -178,6 +198,7 @@ async fn handle_icp_payment_completion(
     )
     .await?;
 
+    orders::unset_processing_order(&order.base.id)?;
     super::order::set_order_completed(order.base.id)?;
 
     Ok(())
