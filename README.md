@@ -1,5 +1,5 @@
 <p align="center">
-<img src="src/assets/icR-logo.png" width="250">
+<img src="frontend/src/assets/icR-logo.png" width="250">
 </p>
 
 # icRamp
@@ -18,29 +18,27 @@
 
 #
 
-**icRamp** is a decentralized protocol combining the Internet Computer (ICP) with Ethereum and other EVM blockchains to facilitate onramping and offramping of digital assets. This protocol simplifies onramping and offramping digital assets with a secure, user-friendly platform, eliminating the need for centralized exchanges and reducing trust issues.
+**icRamp** is a decentralized P2P platform for fiat and cryptocurrency transactions across multiple blockchains, including Bitcoin, Ethereum, and Internet Computer (ICP). It eliminates reliance on centralized exchanges by enabling secure and seamless onramping and offramping solutions with built-in Bitcoin Runes and Ordinals support.
 
-Created for [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30), this project leverages multiple ICP canisters for enhanced functionality, including HTTPS outcalls, EVM RPC communication, and real-time exchange rate retrieval. For the associated EVM smart contracts used in the frontend and backend canisters, visit the [icRamp-contracts](https://github.com/reymom/icRamp-contracts) repository. The platform now also enables seamless Bitcoin transactions through its integrated Bitcoin canister, added for [Devcon’s ICP Hackerhouse](https://github.com/ICP-Hacker-House/Devcon_BKK).
+Initiated in [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30), this project leverages multiple ICP canisters for enhanced functionality, including HTTPS outcalls, EVM RPC communication, and real-time exchange rate retrieval. For the associated EVM smart contracts used in the frontend and backend canisters, visit the [icRamp-contracts](https://github.com/reymom/icRamp-contracts) repository. The platform now also enables seamless Bitcoin and Runes transactions through its integrated Bitcoin canister, added for [Devcon’s ICP Hackerhouse](https://github.com/ICP-Hacker-House/Devcon_BKK).
 
 With this Bitcoin integration, users can now create Bitcoin-based orders alongside Ethereum and other EVM-based assets. The Bitcoin canister uses ICP’s threshold ECDSA signatures for secure transactions, allowing users to securely lock and unlock BTC funds without requiring an external wallet. To learn more about the EVM smart contracts that power these functionalities, visit the icRamp-contracts repository.
 
-## Use Cases
+## Features
 
-### Onramping Fiat to Crypto
+- P2P Onramping & Offramping: Users can trade fiat for crypto and vice versa in a decentralized manner.
 
-Users can convert their fiat currency (e.g., USD) into cryptocurrency directly from their bank accounts or payment processors like PayPal. This process involves verifying the payment and then executing a transaction on an EVM blockchain (e.g., Ethereum, MANTLE) to provide the user with the equivalent amount of cryptocurrency.
+- Bitcoin Runes Integration: Seamlessly lock, unlock, and manage balances with Runes.
 
-### Offramping Crypto to Fiat
+- Multi-Chain NFT & Ordinals Marketplace: Trade Ethereum NFTs, Bitcoin Ordinals/Runes, and ICP NFTs.
 
-Users can convert their cryptocurrency back into fiat currency. This involves locking the crypto in an escrow smart contract and verifying the equivalent fiat payment via payment processors. Once verified, the crypto is released to the onramper.
+- Decentralized Governance: Future DAO-based governance for decision-making.
 
-### Secure Cross-Chain Transactions
+- Multi-Wallet Authentication: Supports Internet Identity, Metamask, and Bitcoin wallets like Unisat.
 
-The protocol supports secure transactions across multiple EVM blockchains. This includes utilizing secure HTTPS outcalls for fetching external data, real-time exchange rate retrieval for accurate conversions, and EVM RPC for executing transactions on various blockchains.
+- Real-time Exchange Rates: Integrates with external APIs for accurate pricing.
 
-### Real-Time Exchange Rate Retrieval
-
-Using the Exchange Rate Canister, IC2P2Ramp provides users with real-time exchange rates for various cryptocurrencies. This ensures users get the best market rates for their transactions, enhancing the efficiency and transparency of the protocol.
+- Secure Bitcoin Canister Integration: Robust handling of transactions and storage.
 
 ## Screenshots
 
@@ -120,6 +118,22 @@ The Frontend Canister provides a user-friendly interface for interacting with th
 <img src="assets/diagrams/2-Token-transfer-and-Order-Creation.png" style="border-radius:10px">
 </p>
 
+## How icRamp Supports ICP Adoption
+
+- Multi-Chain Interoperability: Bridges Bitcoin, Ethereum, and ICP.
+
+- Open-Source SDKs & Modules: Provides reusable smart contracts and APIs.
+
+- Educational Content: Blogs, tutorials, and documentation to onboard developers.
+
+## Community Engagement & Future Plans
+
+- Open-source contributions to encourage adoption.
+
+- Workshops and hackathons to showcase icRamp.
+
+- Expanding to Solana and additional fiat onramping solutions.
+
 ## 🛠️ Usage
 
 ### Build
@@ -161,7 +175,7 @@ npm start # Start the development server
 Also, to deploy seamlessly with prepopulated init arguments:
 
 ```sh
-./scripts/deploy_local.sh
+./scripts/deploy/deploy_local.sh
 ```
 
 And for updates, check different argument options in:
@@ -180,6 +194,7 @@ And for updates, check different argument options in:
 - [`dfx.json` reference schema](https://internetcomputer.org/docs/current/references/dfx-json-reference/)
 - [Rust developer docs](https://internetcomputer.org/docs/current/developer-docs/backend/rust/)
 - [EVM RPC developer docs](https://internetcomputer.org/docs/current/developer-docs/integrations/ethereum/evm-rpc/)
+- [Bitcoin developer docs](https://internetcomputer.org/docs/references/bitcoin-how-it-works)
 - [Developer Experience Feedback Board](https://dx.internetcomputer.org/)
 
 ## License
