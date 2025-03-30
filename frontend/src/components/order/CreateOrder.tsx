@@ -8,7 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider, PaymentProviderType, BlockchainAsset, EvmOrderInput, RuneUTXOEntry } from '@/declarations/backend/backend.did';
+import { PaymentProvider, PaymentProviderType, BlockchainAsset, EvmOrderInput, BitcoinOrderInput } from '@/declarations/backend/backend.did';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
@@ -29,10 +29,10 @@ import BlockchainSelect from '@/components/ui/BlockchainSelect';
 import {
     fetchBitcoinCanisterAddress,
     fetchBitcoinTokenOptions,
-    handleBitcoinTransaction,
     transferBitcoinToCanister,
     transferRuneToCanister
 } from '@/model/blockchain/bitcoin';
+import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -215,7 +215,14 @@ const CreateOrder: React.FC = () => {
             } else if ('ICP' in selectedBlockchainAsset) {
                 setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
             } else if ('Bitcoin' in selectedBlockchainAsset) {
-                setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
+                console.log("roundedCryptoAmoun = ", roundedCryptoAmount);
+                if (selectedToken.isNative) {
+                    setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
+                    console.log("cryptoAmountUnits = ", BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
+                } else {
+                    setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount))));
+                    console.log("cryptoAmountUnits = ", BigInt(Math.round(Number(roundedCryptoAmount))))
+                }
             }
         }
     }, [cryptoAmount, selectedBlockchainAsset, selectedToken])
@@ -286,7 +293,7 @@ const CreateOrder: React.FC = () => {
             }
 
             let evmOrderInput: [EvmOrderInput] | [] = []
-            let runeUTXOs: [Array<RuneUTXOEntry>] | [] = []
+            let bitcoinOrderInput: [BitcoinOrderInput] | [] = []
             const blockchain = blockchainAssetToBlockchainType(selectedBlockchainAsset);
             if (blockchain === 'EVM') {
                 if (!chainId) throw new Error('Chain id is not available');
@@ -368,7 +375,7 @@ const CreateOrder: React.FC = () => {
                     }
                     setLoadingMessage("Fetching bitcoin canister address");
 
-                    const bitcoinBackendAddress = await fetchBitcoinCanisterAddress(false);
+                    const bitcoinBackendAddress = await fetchBitcoinCanisterAddress(true);
                     if (!bitcoinBackendAddress) {
                         setMessage("Failed to retrieve Bitcoin canister address.");
                         setIsLoading(false);
@@ -376,10 +383,8 @@ const CreateOrder: React.FC = () => {
                     }
                     console.log("bitcoinBackendAddress = ", bitcoinBackendAddress);
 
-                    let txid = '';
-                    let isRune = false;
+                    let txid = "";
                     if (selectedToken.runeMetadata) {
-                        isRune = true;
                         setLoadingMessage("Sending Rune to canister");
                         try {
                             txid = await transferRuneToCanister(
@@ -409,16 +414,11 @@ const CreateOrder: React.FC = () => {
                             return;
                         }
                     }
+                    bitcoinOrderInput = [{
+                        tx_id: txid,
+                        canister_address: bitcoinBackendAddress,
+                    } as BitcoinOrderInput]
                     setLoadingMessage("Transaction sent, awaiting confirmation");
-
-                    setTxHash(txid);
-
-                    const utxos = await handleBitcoinTransaction(txid, isRune);
-                    if (isRune && utxos.length === 0) {
-                        setMessage("Failed to fetch UTXOs for transaction");
-                        setIsLoading(false);
-                        return;
-                    }
                 } catch (error) {
                     setMessage(`Error creating Bitcoin order, error: ${error}`);
                     setIsLoading(false);
@@ -438,7 +438,7 @@ const CreateOrder: React.FC = () => {
                 selectedAddress,
                 user.id,
                 evmOrderInput,
-                runeUTXOs.length > 0 ? [runeUTXOs] : [],
+                bitcoinOrderInput,
             );
 
             if ('Ok' in result) {
@@ -448,6 +448,7 @@ const CreateOrder: React.FC = () => {
             } else {
                 setIsLoading(false);
                 const errorMessage = rampErrorToString(result.Err);
+                console.log("error  = ", errorMessage);
                 setMessage(errorMessage);
             }
         } catch (error) {
@@ -524,15 +525,6 @@ const CreateOrder: React.FC = () => {
         && selectedToken !== null
         && cryptoAmountUnits && cryptoAmountUnits > 0
         && (getAvailableBalance() ? cryptoAmountUnits <= getAvailableBalance()!.raw : true);
-
-    const getNetwork = (): NetworkProps | undefined => {
-        return (chainId ?
-            Object.values(NetworkIds).find(network => network.id === Number(chainId)) : undefined);
-    }
-
-    const getNetworkExplorer = (): string | undefined => {
-        return getNetwork()?.explorer
-    }
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-auto p-6">
@@ -714,9 +706,9 @@ const CreateOrder: React.FC = () => {
                 </div>
             </form>
 
-            {txHash && (
+            {txHash && blockchainType && (
                 <div className="text-blue-400 relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
-                    <a href={`${getNetworkExplorer()}/tx/${txHash}`} target="_blank" className="hover:underline z-50">
+                    <a href={`${getExplorerUrls(blockchainType, "", undefined, txHash)?.transaction}`} target="_blank" className="hover:underline z-50">
                         View tx: {truncate(txHash, 6, 6)}
                     </a>
                 </div>

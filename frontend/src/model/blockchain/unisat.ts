@@ -37,52 +37,6 @@ const fetchFromUnisat = async (
   }
 };
 
-/**
- * Listen for a transaction until it has been confirmed.
- */
-export const waitForTransactionConfirmation = async (
-  txid: string,
-  maxRetries = 20,
-  delay = 10000,
-): Promise<boolean> => {
-  for (let i = 0; i < maxRetries; i++) {
-    const txStatus = await fetchFromUnisat(`/v1/indexer/tx/${txid}`);
-    if (txStatus && txStatus.confirmations > 0) {
-      console.log(`Transaction ${txid} confirmed.`);
-      return true;
-    }
-    console.log(`Waiting for transaction ${txid} confirmation...`);
-    await new Promise((res) => setTimeout(res, delay));
-  }
-  console.warn(
-    `Transaction ${txid} not confirmed after ${maxRetries} retries.`,
-  );
-  return false;
-};
-
-/**
- * Fetch the UTXOs from a confirmed transaction.
- */
-export const fetchTransactionOutputs = async (txid: string) => {
-  const utxos = await fetchFromUnisat(`/v1/indexer/tx/${txid}/outs`);
-  if (!utxos) {
-    console.error(`No UTXOs found for transaction ${txid}`);
-    return [];
-  }
-  return utxos;
-};
-
-export const fetchRuneUTXOBalance = async (txid: string, vout: number) => {
-  const runeBalance = await fetchFromUnisat(
-    `/v1/indexer/runes/utxo/${txid}/${vout}/balance`,
-  );
-  if (!runeBalance) {
-    console.error(`No rune balance found for UTXO ${txid}:${vout}`);
-    return [];
-  }
-  return runeBalance;
-};
-
 export const fetchRuneBalances = async (
   bitcoinAddress: string,
   runes: { runeId: string; symbol: string; logo: string; name: string }[],
@@ -115,20 +69,6 @@ export const fetchRuneBalances = async (
   );
 
   return runeBalances;
-};
-
-export const fetchRunePrice = async (tick: string) => {
-  const endpoint = `/v3/market/runes/auction/runes_types_specified`;
-  try {
-    const data = await fetchFromUnisat(endpoint, 'POST', {
-      tick,
-      timeType: 'day1',
-    });
-    return data?.curPrice ?? null;
-  } catch (error) {
-    console.error(`Error fetching Rune price for ${tick}:`, error);
-    return null;
-  }
 };
 
 interface unisatChains {
