@@ -103,9 +103,18 @@ pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
     }
 }
 
-pub fn normalize_rune_name(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .collect::<String>()
-        .to_uppercase()
+pub async fn get_btc_token_rate(rune_id: String) -> Result<f64> {
+    let base_asset = Asset {
+        class: AssetClass::Rune,
+        symbol: rune_id.to_string(),
+    };
+    let quote_asset = Asset {
+        class: AssetClass::Cryptocurrency,
+        symbol: "BTC".to_string(),
+    };
+
+    match rates::get_cached_exchange_rate(base_asset, quote_asset).await {
+        Ok(rate) => Ok(rate),
+        Err(err) => Err(err),
+    }
 }

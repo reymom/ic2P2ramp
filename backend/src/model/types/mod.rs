@@ -7,6 +7,7 @@ pub mod orders;
 pub mod ordiscan;
 pub mod payment;
 pub mod session;
+pub mod unisat;
 pub mod user;
 
 pub use blockchain::{BlockchainAsset, Crypto};

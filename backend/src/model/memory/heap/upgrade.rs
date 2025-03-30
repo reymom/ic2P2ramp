@@ -14,6 +14,7 @@ use crate::{
             exchange_rate::ExchangeRateCache,
             ordiscan::OrdiscanState,
             payment::{paypal::PayPalState, revolut::RevolutState},
+            unisat::UnisatState,
         },
     },
 };
@@ -21,7 +22,7 @@ use crate::{
 use super::{
     clear_order_timer, get_exchange_rate_cache, get_locked_order_timers, get_order_id_counter,
     get_state, get_user_id_counter,
-    init::{ChainConfig, OrdiscanConfig, PaypalConfig, RevolutConfig},
+    init::{ChainConfig, OrdiscanConfig, PaypalConfig, RevolutConfig, UnisatConfig},
     initialize_state, set_exchange_rate_cache, set_order_id_counter, set_order_timer,
     set_user_id_counter, State, LOCK_DURATION_TIME_SECONDS,
 };
@@ -36,6 +37,7 @@ pub struct UpdateArg {
     pub revolut: Option<RevolutConfig>,   // Optional Revolut configuration update
     pub proxy_url: Option<String>,        // Optional proxy URL update
     pub ordiscan: Option<OrdiscanConfig>, // Optional Ordiscan configuration update
+    pub unisat: Option<UnisatConfig>,     // Optional Unisat configuration update
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -195,6 +197,13 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
         state.ordiscan = OrdiscanState {
             api_key: ordiscan_config.api_key,
             api_url: ordiscan_config.api_url,
+        };
+    }
+
+    if let Some(unisat_config) = update_arg.unisat {
+        state.unisat = UnisatState {
+            api_key: unisat_config.api_key,
+            api_url: unisat_config.api_url,
         };
     }
 }

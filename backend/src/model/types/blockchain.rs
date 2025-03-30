@@ -4,7 +4,6 @@ use candid::{CandidType, Deserialize, Principal};
 use crate::{
     errors::{BlockchainError, Result},
     inter_canister::bitcoin,
-    model::helpers::normalize_rune_name,
 };
 
 use super::{
@@ -60,11 +59,11 @@ impl BlockchainAsset {
             },
             Self::ICP { ledger_principal } => Ok(icp::get_icp_token(ledger_principal)?.symbol),
             Self::Bitcoin { rune_id } => match rune_id {
-                Some(rune_id) => Ok(normalize_rune_name(
-                    &bitcoin::bitcoin_backend_get_rune_metadata(rune_id.to_string())
-                        .await?
-                        .name,
-                )),
+                Some(rune_id) => Ok(bitcoin::bitcoin_backend_get_rune_metadata(
+                    rune_id.to_string(),
+                )
+                .await?
+                .name),
                 None => Ok("BTC".to_string()),
             },
             _ => Err(BlockchainError::UnsupportedBlockchain.into()),

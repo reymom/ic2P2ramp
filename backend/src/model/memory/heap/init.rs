@@ -7,6 +7,7 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
 use crate::model::types::ordiscan::OrdiscanState;
+use crate::model::types::unisat::UnisatState;
 use crate::model::types::{
     evm::chains::ChainState,
     payment::{paypal::PayPalState, revolut::RevolutState},
@@ -43,6 +44,12 @@ pub struct OrdiscanConfig {
     pub api_key: String,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct UnisatConfig {
+    pub api_url: String,
+    pub api_key: String,
+}
+
 impl fmt::Debug for RevolutConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RevolutConfig")
@@ -64,6 +71,7 @@ pub struct InitArg {
     pub revolut: RevolutConfig,
     pub proxy_url: String,
     pub ordiscan: OrdiscanConfig,
+    pub unisat: UnisatConfig,
 }
 
 impl TryFrom<InitArg> for State {
@@ -77,6 +85,7 @@ impl TryFrom<InitArg> for State {
             revolut,
             proxy_url,
             ordiscan,
+            unisat,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -121,6 +130,10 @@ impl TryFrom<InitArg> for State {
             ordiscan: OrdiscanState {
                 api_url: ordiscan.api_url,
                 api_key: ordiscan.api_key,
+            },
+            unisat: UnisatState {
+                api_url: unisat.api_url,
+                api_key: unisat.api_key,
             },
             icp_tokens: HashMap::new(),
         };

@@ -226,6 +226,9 @@ pub enum SystemError {
     #[error("Failed to parse float amount: {0}")]
     ParseFloatError(String),
 
+    #[error("Failed to parse integer amount: {0}")]
+    ParseIntError(String),
+
     #[error("pkcs8 error: {0}")]
     Pkcs8Error(String),
 
@@ -242,6 +245,12 @@ pub enum SystemError {
 impl From<ParseFloatError> for SystemError {
     fn from(err: ParseFloatError) -> Self {
         SystemError::ParseFloatError(err.to_string())
+    }
+}
+
+impl From<std::num::ParseIntError> for SystemError {
+    fn from(err: std::num::ParseIntError) -> Self {
+        SystemError::ParseIntError(err.to_string())
     }
 }
 

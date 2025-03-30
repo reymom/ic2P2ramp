@@ -31,6 +31,12 @@ pub struct EvmOrderInput {
     pub estimated_gas_withdraw: u64,
 }
 
+#[derive(CandidType, Deserialize, Clone)]
+pub struct BitcoinOrderInput {
+    pub tx_id: String,
+    pub canister_address: String,
+}
+
 impl Order {
     pub fn new(
         currency: String,

@@ -61,5 +61,13 @@ impl Asset {
         {
             self.class = AssetClass::FiatCurrency;
         }
+        if self.class == AssetClass::Rune {
+            self.symbol = self
+                .symbol
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_uppercase()
+        }
     }
 }

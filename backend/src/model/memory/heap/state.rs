@@ -8,6 +8,7 @@ use crate::model::types::{
     icp::IcpToken,
     ordiscan::OrdiscanState,
     payment::{paypal::PayPalState, revolut::RevolutState},
+    unisat::UnisatState,
 };
 
 use super::storage::STATE;
@@ -22,6 +23,7 @@ pub struct State {
     pub revolut: RevolutState,
     pub proxy_url: String,
     pub ordiscan: OrdiscanState,
+    pub unisat: UnisatState,
     pub icp_tokens: HashMap<Principal, IcpToken>,
 }
 
