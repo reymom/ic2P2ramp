@@ -207,8 +207,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                             }
                             setIcpAgent(agent);
 
-                            if (!process.env.CANISTER_ID_BACKEND_FUSION) throw new Error("Backend Canister ID not in env file");
-                            const actor = createActor(process.env.CANISTER_ID_BACKEND_FUSION, { agent });
+                            if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
+                            const actor = createActor(process.env.CANISTER_ID_BACKEND, { agent });
                             setBackendActor(actor)
 
                             resolve([principal, agent]);

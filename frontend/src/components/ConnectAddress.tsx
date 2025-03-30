@@ -278,7 +278,7 @@ const ConnectAddress: React.FC = () => {
     const handleInternetIdentityLogin = async (autoLogin?: boolean) => {
         cleanMessages();
 
-        if (!process.env.CANISTER_ID_BACKEND_FUSION) throw new Error("Backend Canister ID not in env file");
+        if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
         try {
             setLoadingIcp(true);
 
@@ -290,7 +290,7 @@ const ConnectAddress: React.FC = () => {
             if (!loginPrincipal) throw new Error("Principal not set after II login");
             if (!loginAgent) throw new Error("ICP Agent not set after II login");
 
-            const backendActor = createActor(process.env.CANISTER_ID_BACKEND_FUSION, { agent: loginAgent });
+            const backendActor = createActor(process.env.CANISTER_ID_BACKEND, { agent: loginAgent });
             const loginAddress: LoginAddress = {
                 ICP: { principal_id: loginPrincipal.toText() }
             };
