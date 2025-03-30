@@ -104,17 +104,6 @@ pub async fn send_key_spend(
 
     let tx_id = signed_transaction.compute_txid();
 
-    if let TransactionType::RuneTransfer(rune_id) = tx_type {
-        super::monitor::monitor_rune_transaction(
-            config,
-            own_address.to_string(),
-            tx_id,
-            rune_id,
-            rune_utxos,
-            0,
-        );
-    }
-
     Ok(tx_id)
 }
 

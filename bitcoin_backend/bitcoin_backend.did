@@ -47,11 +47,11 @@ type RejectionCode = variant {
   SysFatal;
   CanisterReject;
 };
-type Result = variant { Ok : text; Err : BitcoinError };
-type Result_1 = variant { Ok; Err : BitcoinError };
-type Result_2 = variant { Ok : nat64; Err : BitcoinError };
-type Result_3 = variant { Ok : GetBlockHeadersResponse; Err : BitcoinError };
-type Result_4 = variant { Ok : VaultEntry; Err : BitcoinError };
+type Result = variant { Ok; Err : BitcoinError };
+type Result_1 = variant { Ok : nat64; Err : BitcoinError };
+type Result_2 = variant { Ok : GetBlockHeadersResponse; Err : BitcoinError };
+type Result_3 = variant { Ok : VaultEntry; Err : BitcoinError };
+type Result_4 = variant { Ok : text; Err : BitcoinError };
 type Result_5 = variant { Ok : vec RuneMetadata; Err : BitcoinError };
 type Result_6 = variant {
   Ok : record { RuneMetadata; text };
@@ -94,31 +94,31 @@ type VaultError = variant {
   AddressVaultNotFound;
 };
 service : (Network) -> {
-  cancel_deposit : (text, nat64, opt text) -> (Result);
-  complete_order_and_send : (text, nat64, opt text) -> (Result);
+  cancel_deposit : (text, nat64, opt text, vec RuneUTXOEntry) -> (Result);
+  complete_order : (text, nat64, opt text, vec RuneUTXOEntry) -> (Result);
   deposit_to_address_vault : (text, nat64, opt text, vec RuneUTXOEntry) -> (
-      Result_1,
+      Result,
     );
-  estimate_bitcoin_transaction_fee : () -> (Result_2);
-  get_btc_balance : (text) -> (Result_2);
-  get_btc_block_headers : () -> (Result_3);
-  get_canister_rune_amount : (text) -> (Result_2) query;
-  get_offramper_deposits : (text) -> (Result_4) query;
-  get_onramper_deposits : (text) -> (Result_4) query;
-  get_p2pkh_address : () -> (Result);
-  get_p2tr_raw_key_spend_address : () -> (Result);
-  get_p2tr_script_spend_address : (TransactionType) -> (Result);
+  estimate_bitcoin_transaction_fee : () -> (Result_1);
+  get_btc_balance : (text) -> (Result_1);
+  get_btc_block_headers : () -> (Result_2);
+  get_canister_rune_amount : (text) -> (Result_1) query;
+  get_offramper_deposits : (text) -> (Result_3) query;
+  get_onramper_deposits : (text) -> (Result_3) query;
+  get_p2pkh_address : () -> (Result_4);
+  get_p2tr_raw_key_spend_address : () -> (Result_4);
+  get_p2tr_script_spend_address : (TransactionType) -> (Result_4);
   get_registered_runes : () -> (Result_5) query;
   get_rune_utxos : (text) -> (vec RuneUTXOEntry) query;
   get_serialized_rune_metadata : (text) -> (Result_6) query;
   get_utxos : (text, TransactionType) -> (Result_7);
   inscribe_ordinals_inscription : (text, text, opt text, text, nat64) -> (
-      Result,
+      Result_4,
     );
-  lock_funds : (text, text, nat64, opt text) -> (Result_1);
-  register_runes : (vec RuneMetadata) -> (Result_1);
-  test_transfer : (text, nat64, TransactionType) -> (Result);
-  unlock_funds : (text, text, nat64, opt text) -> (Result_1);
-  validate_rune : (text) -> (Result_1) query;
-  withdraw_bitcoin_fees : (text, nat64) -> (Result);
+  lock_funds : (text, text, nat64, opt text) -> (Result);
+  register_runes : (vec RuneMetadata) -> (Result);
+  transfer : (text, nat64, TransactionType) -> (Result_4);
+  unlock_funds : (text, text, nat64, opt text) -> (Result);
+  validate_rune : (text) -> (Result) query;
+  withdraw_bitcoin_fees : (text, nat64) -> (Result_4);
 }

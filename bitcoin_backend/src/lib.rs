@@ -28,7 +28,7 @@ use crate::types::{
 use memory::{
     heap::config::{BTC_PRINCIPAL, KEY_NAME, NETWORK},
     stable::{
-        utxos::add_rune_utxo_entries,
+        utxos::{add_rune_utxo_entries, remove_rune_utxo_entries},
         vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
     },
 };
@@ -85,11 +85,15 @@ pub async fn get_btc_block_headers() -> Result<GetBlockHeadersResponse> {
 
 #[cfg(feature = "canister")]
 #[ic_cdk::update]
-pub async fn test_transfer(
+pub async fn transfer(
     dst_address: String,
     amount: u64,
     tx_type: TransactionType,
 ) -> Result<String> {
+    if let TransactionType::RuneTransfer(ref rune_id) = tx_type {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
+
     let tx_id = wallet::send::send_btc_or_ordinal(dst_address, amount, tx_type).await?;
     Ok(tx_id.to_string())
 }
@@ -305,19 +309,19 @@ pub async fn cancel_deposit(
     offramper: Address,
     amount: u64,
     rune: Option<RuneID>,
-) -> Result<String> {
-    let tx_type = if let Some(ref rune_id) = rune {
-        memory::heap::config::is_rune_supported(&rune_id)?;
-        TransactionType::RuneTransfer(rune_id.clone())
-    } else {
-        TransactionType::TaprootBitcoin
-    };
+    utxos: Vec<RuneUTXOEntry>,
+) -> Result<()> {
+    if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
 
     vault::deposit::cancel_deposit(offramper.clone(), amount, rune.clone())?;
 
-    wallet::send::send_btc_or_ordinal(offramper, amount, tx_type)
-        .await
-        .map(|tx_id| tx_id.to_string())
+    if let Some(rune_id) = rune {
+        remove_rune_utxo_entries(&rune_id, utxos);
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "canister")]
@@ -352,23 +356,23 @@ pub fn unlock_funds(
 
 #[cfg(feature = "canister")]
 #[ic_cdk::update]
-pub async fn complete_order_and_send(
+pub async fn complete_order(
     onramper_address: Address,
     amount: u64,
     rune: Option<RuneID>,
-) -> Result<String> {
-    let tx_type = if let Some(ref rune_id) = rune {
-        memory::heap::config::is_rune_supported(&rune_id)?;
-        TransactionType::RuneTransfer(rune_id.clone())
-    } else {
-        TransactionType::TaprootBitcoin
-    };
+    utxos: Vec<RuneUTXOEntry>,
+) -> Result<()> {
+    if let Some(ref rune_id) = rune {
+        memory::heap::config::is_rune_supported(rune_id)?;
+    }
 
     vault::complete::complete_order(onramper_address.clone(), amount, rune.clone())?;
 
-    wallet::send::send_btc_or_ordinal(onramper_address, amount, tx_type)
-        .await
-        .map(|tx_id| tx_id.to_string())
+    if let Some(rune_id) = rune {
+        remove_rune_utxo_entries(&rune_id, utxos);
+    };
+
+    Ok(())
 }
 
 // -----------
