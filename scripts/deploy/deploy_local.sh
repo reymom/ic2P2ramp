@@ -182,6 +182,10 @@ dfx deploy backend --argument "(
         api_url = \"api.ordiscan.com\";
         api_key = \"${ORDISCAN_API_KEY}\";
       };
+      unisat = record {
+        api_url = \"open-api-testnet4.unisat.io\";
+        api_key = \"${UNISAT_API_KEY}\";
+      };
     }
   }
 )"

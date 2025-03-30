@@ -14,6 +14,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       revolut = null;
       proxy_url = null;
       ordiscan = null;
+      unisat = null;
     }
   }
 )"
@@ -61,6 +62,7 @@ dfx deploy backend_prod --upgrade-unchanged --argument "(
       revolut = null;
       proxy_url = null;
       ordiscan = null;
+      unisat = null;
     }
   }
 )" --ic
@@ -113,6 +115,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       revolut = null;
       proxy_url = null;
       ordiscan = null;
+      unisat = null;
     }
   }
 )" --ic
@@ -140,6 +143,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       revolut = null;
       proxy_url = null;
       ordiscan = null;
+      unisat = null;
     }
   }
 )" --ic
@@ -168,6 +172,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
     revolut = null;
     proxy_url = null;
     ordiscan = null;
+    unisat = null;
   }
 )"
 
@@ -185,6 +190,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
         revolut = null;
         proxy_url = null;
         ordiscan = null;
+        unisat = null;
     }
   }
 )" --ic
@@ -206,6 +212,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
     };
     proxy_url = null;
     ordiscan = null;
+    unisat = null;
   }
 )"
 
@@ -219,6 +226,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
       revolut = null;
       proxy_url = opt \"testing\";
       ordiscan = null;
+      unisat = null;
     }
   }
 )" --ic
@@ -235,6 +243,24 @@ dfx deploy backend --upgrade-unchanged --argument "(
         ordiscan = opt record {
           api_url = \"api.ordiscan.com\";
           api_key = \"${ORDISCAN_API_KEY}\";
+        };
+        unisat = null;
+    }
+  }
+)"
+
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant {
+    Upgrade = opt record {
+        ecdsa_key_id = null;
+        chains = null;
+        paypal = null;
+        revolut = null;
+        proxy_url = null;
+        ordiscan = null;
+        unisat = opt record {
+          api_url = \"open-api-testnet4.unisat.io\";
+          api_key = \"${UNISAT_API_KEY}\";
         };
     }
   }

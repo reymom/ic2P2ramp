@@ -18,13 +18,15 @@ source "$DIR/../.env.sandbox" || {
 # dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic)
 # dfx cycles top-up --ic $(dfx identity get-wallet --ic) 1_000_000_000_000
 
-cargo build --release --target wasm32-unknown-unknown --package backend
-
-candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
-
 cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
 
 candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
+
+dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { testnet })' --ic
+
+cargo build --release --target wasm32-unknown-unknown --package backend
+
+candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
 
 dfx canister create --with-cycles 1_000_000_000_000 backend --ic
 
@@ -113,6 +115,10 @@ dfx deploy backend --argument "(
         api_url = \"api.ordiscan.com\";
         api_key = \"${ORDISCAN_API_KEY}\";
       };
+      unisat = record {
+        api_url = \"open-api-testnet4.unisat.io\";
+        api_key = \"${UNISAT_API_KEY}\";
+      };
     }
   }
 )" --ic
@@ -140,9 +146,6 @@ dfx canister call backend register_evm_tokens '(11155420 : nat64, vec {
 dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })' --ic
-
-
-dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { testnet })' --ic
 
 dfx canister call bitcoin_backend register_runes '(vec {
     record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
