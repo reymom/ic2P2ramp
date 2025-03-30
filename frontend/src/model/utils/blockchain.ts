@@ -45,8 +45,8 @@ export const getExplorerUrls = (
     case 'Bitcoin': {
       const baseExplorer =
         FRONTEND_BTC_ENV === 'test'
-          ? 'https://testnet4.unisat.io'
-          : 'https://unisat.io';
+          ? 'https://mempool.space/testnet4'
+          : 'https://mempool.space';
       return {
         address: `${baseExplorer}/address/${address}`,
         transaction: txHash ? `${baseExplorer}/tx/${txHash}` : undefined,

@@ -37,7 +37,7 @@ export const transferICPTokensToCanister = async (
   amount: bigint,
   fee: bigint,
 ) => {
-  if (!process.env.CANISTER_ID_BACKEND_FUSION) {
+  if (!process.env.CANISTER_ID_BACKEND) {
     throw new Error('Backend Canister ID not defined in env variables');
   }
 
@@ -45,7 +45,7 @@ export const transferICPTokensToCanister = async (
   try {
     const result = await ledger.transfer({
       to: {
-        owner: Principal.fromText(process.env.CANISTER_ID_BACKEND_FUSION),
+        owner: Principal.fromText(process.env.CANISTER_ID_BACKEND),
         subaccount: [],
       },
       amount: amount + fee,
