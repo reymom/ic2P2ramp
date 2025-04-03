@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use bitcoin_backend::types::RuneUTXOEntry;
 use candid::{CandidType, Deserialize};
 
 use super::locked_order::{LockedOrder, Onramper, RevolutConsent};
@@ -46,6 +47,7 @@ impl Order {
         asset: BlockchainAsset,
         crypto_amount: u128,
         crypto_fee: u128,
+        rune_utxos: Option<Vec<RuneUTXOEntry>>,
     ) -> Result<Self> {
         offramper_address.validate()?;
 
@@ -70,7 +72,7 @@ impl Order {
             offramper_user_id,
             offramper_address,
             offramper_providers,
-            crypto: Crypto::new(asset, crypto_amount, crypto_fee),
+            crypto: Crypto::new(asset, crypto_amount, crypto_fee, rune_utxos)?,
             processing: false,
         };
         ic_cdk::println!("[new order] order = {:?}", order);

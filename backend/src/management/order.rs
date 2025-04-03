@@ -1,4 +1,4 @@
-use bitcoin_backend::types::TransactionType;
+use bitcoin_backend::types::{RuneUTXOEntry, TransactionType};
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use icrc_ledger_types::icrc1::account::Account;
@@ -273,6 +273,7 @@ pub async fn create_order(
     crypto_amount: u128,
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
+    runes: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<u64> {
     let crypto_fee = order_crypto_fee(
         asset.clone(),
@@ -300,6 +301,7 @@ pub async fn create_order(
         asset,
         crypto_amount,
         crypto_fee,
+        runes,
     )?;
 
     memory::stable::orders::insert_order(&order);
@@ -395,6 +397,19 @@ pub fn get_orders(
                         | (OrderStateFilter::Completed, OrderState::Completed(_))
                         | (OrderStateFilter::Cancelled, OrderState::Cancelled(_))
                 )
+            },
+            page,
+            page_size,
+        ),
+        Some(OrderFilter::ByBlockchain(blockchain_type)) => memory::stable::orders::filter_orders(
+            |order_state| match order_state {
+                OrderState::Created(order) => {
+                    order.crypto.asset.blockchain_type() == blockchain_type
+                }
+                OrderState::Locked(order) => {
+                    order.base.crypto.asset.blockchain_type() == blockchain_type
+                }
+                _ => false,
             },
             page,
             page_size,
@@ -648,6 +663,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
                 dst_address.clone(),
                 order.crypto.amount as u64,
                 tx_type,
+                order.crypto.rune_utxos,
             )
             .await?;
 
@@ -660,6 +676,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
                 },
                 dst_address,
                 rune_id.clone(),
+                0,
             );
 
             Ok(())

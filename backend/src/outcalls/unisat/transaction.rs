@@ -1,5 +1,5 @@
 use crate::model::{
-    errors::{Result, SystemError},
+    errors::{BlockchainError, Result, SystemError},
     memory::heap::read_state,
     types::unisat::{UnisatTxOut, UnisatTxOutResponse, UnisatTxStatusResponse},
 };
@@ -50,6 +50,14 @@ pub async fn fetch_unisat_tx_status(txid: &str) -> Result<bool> {
         .map_err(|(code, msg)| SystemError::HttpRequestError(code as u64, msg))?;
 
     let response_str = String::from_utf8(response.body).map_err(|_| SystemError::Utf8Error)?;
+
+    let json_value: serde_json::Value =
+        serde_json::from_str(&response_str).map_err(|e| SystemError::ParseError(e.to_string()))?;
+
+    if json_value["data"].is_null() {
+        return Err(BlockchainError::TransactionNotFound(txid.to_string()).into());
+    }
+
     let tx_response: UnisatTxStatusResponse =
         serde_json::from_str(&response_str).map_err(|e| SystemError::ParseError(e.to_string()))?;
 

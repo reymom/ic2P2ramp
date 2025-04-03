@@ -22,6 +22,7 @@ use management::{
     random, user as user_management,
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
+use model::memory::heap::get_state;
 use model::types::{
     self,
     evm::{
@@ -80,12 +81,7 @@ fn post_upgrade(install_arg: InstallArg) {
         }
     }
 
-    let state = STATE.with_borrow(|state| {
-        state
-            .as_ref()
-            .expect("BUG: state is not initialized")
-            .clone()
-    });
+    let state = get_state();
     ic_cdk::println!("[post_upgrade]: state = {:?}", state);
 }
 
@@ -264,6 +260,7 @@ pub async fn create_evm_order_with_tx(
         amount,
         Some(estimated_gas_lock),
         Some(estimated_gas_withdraw),
+        None,
     )
     .await?;
 
@@ -359,10 +356,11 @@ pub async fn create_bitcoin_order_with_tx(
             offramper_id: user,
             asset,
             currency,
-            order_amount: amount,
+            amount,
         },
         bitcoin_input.canister_address,
         rune_id,
+        0,
     );
 
     Ok(())
@@ -749,10 +747,11 @@ async fn create_order(
                     offramper_id: offramper_user_id,
                     asset,
                     currency,
-                    order_amount: crypto_amount,
+                    amount: crypto_amount,
                 },
                 bitcoin_input.unwrap().canister_address,
                 rune_id,
+                0,
             );
 
             Ok(None)
@@ -767,6 +766,7 @@ async fn create_order(
                 crypto_amount,
                 evm_input.clone().map(|evm| evm.estimated_gas_lock),
                 evm_input.map(|evm| evm.estimated_gas_withdraw),
+                None,
             )
             .await?;
 

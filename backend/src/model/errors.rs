@@ -142,6 +142,9 @@ pub enum BlockchainError {
     #[error("Token is unregistered")]
     UnregisteredEvmToken,
 
+    #[error("Transaction not found: {0}")]
+    TransactionNotFound(String),
+
     #[error("Transaction timeout")]
     TransactionTimeout,
 

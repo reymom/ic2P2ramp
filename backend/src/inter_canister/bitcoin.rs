@@ -1,4 +1,3 @@
-// use num_traits::ToPrimitive;
 use std::str::FromStr;
 
 use candid::Principal;
@@ -9,23 +8,24 @@ use bitcoin_backend::types::{
     errors::Result as BitcoinResult, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType,
 };
 
-const BITCOIN_BACKEND_CANISTER_ID: &str = "xhpap-jaaaa-aaaap-qpyta-cai";
+const BITCOIN_BACKEND_CANISTER_ID: &str = "viuz6-wyaaa-aaaap-qpy7q-cai";
 
 pub async fn bitcoin_backend_transfer(
     dst_address: String,
     amount: u64,
     tx_type: TransactionType,
+    rune_utxos: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<String> {
     let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
         .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
     let (tx_id,): (BitcoinResult<String>,) = (call::<
-        (String, u64, TransactionType),
+        (String, u64, TransactionType, Option<Vec<RuneUTXOEntry>>),
         (BitcoinResult<String>,),
     >(
         bitcoin_backend_canister_id,
         "transfer",
-        (dst_address, amount, tx_type),
+        (dst_address, amount, tx_type, rune_utxos),
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?
@@ -38,15 +38,14 @@ pub async fn bitcoin_backend_deposit_funds(
     offramper: String,
     amount: u64,
     rune: Option<RuneID>,
-    utxos: Vec<RuneUTXOEntry>,
 ) -> Result<()> {
     let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
         .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
-    call::<(String, u64, Option<RuneID>, Vec<RuneUTXOEntry>), ()>(
+    call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
         "deposit_to_address_vault",
-        (offramper, amount, rune, utxos),
+        (offramper, amount, rune),
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
@@ -95,15 +94,14 @@ pub async fn bitcoin_backend_cancel_deposit(
     offramper_address: String,
     amount: u64,
     rune: Option<RuneID>,
-    utxos: Vec<RuneUTXOEntry>,
 ) -> Result<()> {
     let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
         .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
-    call::<(String, u64, Option<RuneID>, Vec<RuneUTXOEntry>), ()>(
+    call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
         "cancel_deposit",
-        (offramper_address, amount, rune, utxos),
+        (offramper_address, amount, rune),
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
@@ -114,15 +112,14 @@ pub async fn bitcoin_backend_complete_order(
     onramper_address: String,
     amount: u64,
     rune: Option<RuneID>,
-    utxos: Vec<RuneUTXOEntry>,
 ) -> Result<()> {
     let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
         .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
 
-    call::<(String, u64, Option<RuneID>, Vec<RuneUTXOEntry>), ()>(
+    call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
         "complete_order",
-        (onramper_address, amount, rune, utxos),
+        (onramper_address, amount, rune),
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err).into())
