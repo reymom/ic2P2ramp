@@ -22,19 +22,19 @@ dfx canister call backend test_estimate_gas_commit '(
 )'
 
 dfx canister call backend create_bitcoin_order_with_tx '(
-    "3a30c17104a45214bd926a8dbde30c6af892db99d3c41bb5f399d781796af2cc",
-    "tb1p8gskffp4t4amg6kn7vcs7w5qh0wdq7zcw736lt9zctqday3vfa9q7vwhpr",
+    "aecdee36f22d61ec57888149ece3c01d4d0596ad054cc0595aeba929e0a19256",
+    "tb1pz4w8rd9xuxltaec8n0wvtsafh33xyyhzmx3302n7h54zlev99egsnugs9h",
     1 : nat64,
     "tb1prmkx3hvhttcga8z0n28jalzca0wemn8fp5gaj5lncw6cy4lcrnnszpve2m",
     vec {
-        record { 
-            variant { PayPal }; 
-            variant { PayPal = record { id = "sb-ioze230588840@personal.example.com" : text } }; 
+        record {
+            variant { PayPal };
+            variant { PayPal = record { id = "sb-ioze230588840@personal.example.com" : text } };
         }
     },
     "USD",
-    15 : nat,
+    19 : nat,
     opt "73393:191"
-)'
+)' --ic
 
 dfx canister call backend retry_order_completion '(1: nat64)' --ic

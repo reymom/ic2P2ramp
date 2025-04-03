@@ -18,6 +18,19 @@ source "$DIR/../.env.production" || {
 # dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic)
 # dfx cycles top-up --ic $(dfx identity get-wallet --ic) 1_000_000_000_000
 
+dfx deploy bitcoin_backend --argument "(
+    variant { 
+        Reinstall = record { 
+            network = variant { mainnet }; 
+            proxy_url = \"https://ic2p2ramp.xyz\";
+            unisat = record {
+                api_url = \"open-api-testnet4.unisat.io\";
+                api_key = \"${UNISAT_API_KEY}\";
+            }; 
+        }
+    }
+)" --ic
+
 # cargo build --release --target wasm32-unknown-unknown --package backend
 
 # dfx canister create --with-cycles 1_000_000_000_000 backend_prod --ic
