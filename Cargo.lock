@@ -272,6 +272,7 @@ dependencies = [
  "ic-cdk-timers",
  "ic-stable-structures",
  "serde",
+ "serde_json",
  "thiserror 1.0.65",
 ]
 
