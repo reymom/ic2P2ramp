@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 bitcoin = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
+serde_json = "1.0.117"
 hex = "0.4.3"
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }

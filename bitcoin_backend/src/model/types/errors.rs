@@ -10,6 +10,9 @@ pub enum BitcoinError {
     #[error(transparent)]
     VaultError(#[from] VaultError),
 
+    #[error(transparent)]
+    SystemError(#[from] SystemError),
+
     #[error("Rejection Code: {0:?}, Error: {1}")]
     CallRejectionError(RejectionCode, String),
 
@@ -65,6 +68,18 @@ pub enum VaultError {
     InsufficientLockedBalance,
 }
 
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
+pub enum SystemError {
+    #[error("HTTP request failed. RejectionCode: {0:?}, Error: {1}")]
+    HttpRequestError(u64, String),
+
+    #[error("Failed to parse response: {0}")]
+    ParseError(String),
+
+    #[error("Response is not UTF-8 encoded.")]
+    Utf8Error,
+}
+
 impl From<ParseError> for BitcoinError {
     fn from(error: ParseError) -> Self {
         // Convert the `ParseError` to a string to retain compatibility with `CandidType`
@@ -75,6 +90,12 @@ impl From<ParseError> for BitcoinError {
 impl From<ParseAmountError> for BitcoinError {
     fn from(error: ParseAmountError) -> Self {
         BitcoinError::ParsingError(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for SystemError {
+    fn from(err: serde_json::Error) -> Self {
+        SystemError::ParseError(err.to_string())
     }
 }
 
