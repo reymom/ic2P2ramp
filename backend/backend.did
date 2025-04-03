@@ -31,12 +31,14 @@ type BlockchainError = variant {
   UnregisteredEvmToken;
   EmptyTransactionHash;
   NonceTooHigh;
+  TransactionNotFound : text;
   GasEstimationFailed;
   VaultManagerAddressNotFound : nat64;
   InsufficientFunds;
   InconsistentStatus;
   RpcProviderNotFound;
 };
+type BlockchainType = variant { EVM; ICP; Solana; Bitcion };
 type ChainConfig = record {
   currency_symbol : text;
   chain_id : nat64;
@@ -59,7 +61,12 @@ type CompletedOrder = record {
   price : nat64;
   completed_at : nat64;
 };
-type Crypto = record { fee : nat; asset : BlockchainAsset; amount : nat };
+type Crypto = record {
+  fee : nat;
+  asset : BlockchainAsset;
+  rune_utxos : opt vec RuneUTXOEntry;
+  amount : nat;
+};
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
@@ -182,6 +189,7 @@ type OrderFilter = variant {
   ByOfframperId : nat64;
   ByOfframperAddress : TransactionAddress;
   ByState : OrderStateFilter;
+  ByBlockchain : BlockchainType;
   ByOnramperId : nat64;
   ByBlockchainAsset : BlockchainAsset;
   LockedByOnramper : TransactionAddress;
@@ -251,6 +259,12 @@ type RpcServices = variant {
   OptimismMainnet : opt vec L2MainnetService;
   ArbitrumOne : opt vec L2MainnetService;
   EthMainnet : opt vec EthMainnetService;
+};
+type RuneUTXOEntry = record {
+  script_pubkey : text;
+  txid : text;
+  vout : nat32;
+  rune_amount : nat64;
 };
 type Session = record { token : text; expires_at : nat64 };
 type SignRequestCandid = record {

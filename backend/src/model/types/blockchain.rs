@@ -1,8 +1,8 @@
-use bitcoin_backend::types::RuneID;
+use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
 use candid::{CandidType, Deserialize, Principal};
 
 use crate::{
-    errors::{BlockchainError, Result},
+    errors::{BlockchainError, Result, SystemError},
     inter_canister::bitcoin,
 };
 
@@ -10,6 +10,14 @@ use super::{
     evm::{chains, token},
     icp,
 };
+
+#[derive(CandidType, Deserialize, PartialEq, Clone)]
+pub enum BlockchainType {
+    EVM,
+    ICP,
+    Bitcion,
+    Solana,
+}
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BlockchainAsset {
@@ -31,11 +39,38 @@ pub struct Crypto {
     pub asset: BlockchainAsset,
     pub amount: u128,
     pub fee: u128,
+    pub rune_utxos: Option<Vec<RuneUTXOEntry>>,
 }
 
 impl Crypto {
-    pub fn new(asset: BlockchainAsset, amount: u128, fee: u128) -> Self {
-        Self { asset, amount, fee }
+    pub fn new(
+        asset: BlockchainAsset,
+        amount: u128,
+        fee: u128,
+        rune_utxos: Option<Vec<RuneUTXOEntry>>,
+    ) -> Result<Self> {
+        if let BlockchainAsset::Bitcoin { ref rune_id } = asset {
+            if rune_id.is_some() {
+                let utxos = rune_utxos.as_ref().ok_or_else(|| {
+                    SystemError::InvalidInput("Missing rune UTXOs for Bitcoin order".to_string())
+                })?;
+                let total_runes: u64 = utxos.iter().map(|u| u.rune_amount).sum();
+                if total_runes != amount as u64 {
+                    return Err(SystemError::InvalidInput(format!(
+                        "Rune UTXOs total {} does not equal expected amount {}",
+                        total_runes, amount
+                    ))
+                    .into());
+                }
+            }
+        }
+
+        Ok(Self {
+            asset,
+            amount,
+            fee,
+            rune_utxos,
+        })
     }
 
     pub async fn to_whole_units(&self) -> Result<f64> {
@@ -46,6 +81,15 @@ impl Crypto {
 }
 
 impl BlockchainAsset {
+    pub fn blockchain_type(&self) -> BlockchainType {
+        match &self {
+            Self::EVM { .. } => BlockchainType::EVM,
+            Self::Bitcoin { .. } => BlockchainType::Bitcion,
+            Self::ICP { .. } => BlockchainType::ICP,
+            Self::Solana => BlockchainType::Solana,
+        }
+    }
+
     pub async fn get_symbol(&self) -> Result<String> {
         match &self {
             Self::EVM {

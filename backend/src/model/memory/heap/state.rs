@@ -50,7 +50,7 @@ pub fn initialize_state(state: State) {
     STATE.set(Some(state));
 }
 
-pub(super) fn get_state() -> State {
+pub fn get_state() -> State {
     STATE.with_borrow(|state| {
         state
             .as_ref()
