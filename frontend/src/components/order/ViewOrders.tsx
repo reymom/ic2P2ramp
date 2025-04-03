@@ -79,6 +79,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
         try {
             setLoading(true);
+            console.log("loading with filter = ", filter);
             const orders = await backend.get_orders(filter ? [filter] : [], [page], [pageSize]);
             setOrders(orders);
         } catch (err) {

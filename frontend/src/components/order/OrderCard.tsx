@@ -346,6 +346,17 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 </div>
             )}
 
+            {isLoading && ('Bitcoin' in orderBlockchainAsset!) && txHash && (
+                <div className="relative mt-4 text-sm font-medium flex items-center justify-center text-center flex-col z-50">
+                    <p className="mb-2">
+                        Bitcoin transactions typically take 15-60+ minutes to confirm.
+                    </p>
+                    <p className="text-amber-500 dark:text-amber-400">
+                        Your funds will be released automatically once confirmed.
+                    </p>
+                </div>
+            )}
+
             {message && (
                 <div className="relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
                     <p className="text-red-600">{message}&nbsp;</p>

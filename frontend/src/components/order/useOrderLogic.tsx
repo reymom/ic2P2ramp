@@ -507,6 +507,11 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
                 if ('EVM' in orderBlockchainAsset!) {
                     setTxHash(response.Ok);
                     pollTransactionLog(orderId, user!.id);
+                } else if ('Bitcoin' in orderBlockchainAsset!) {
+                    setTxHash(response.Ok);
+                    setLoadingMessage(
+                        "Bitcoin transaction is being processed. This may take some time to confirm (15-60+ minutes). You can check the status using the link below."
+                    );
                 } else {
                     setLoadingMessage(releasedMessage);
                     setTimeout(() => {
