@@ -20,7 +20,7 @@ use crate::{
     RuneID, RuneUTXOEntry, TransactionType,
 };
 
-const DUST_THRESHOLD: u64 = 1000;
+const DUST_THRESHOLD: u64 = 546;
 
 pub fn transform_network(network: BitcoinNetwork) -> Network {
     match network {
@@ -60,9 +60,15 @@ pub fn build_transaction_with_fee(
                 ));
             };
 
+            let required_dust: u64 = r_outputs
+                .iter()
+                .filter(|output| output.value.to_sat() > 0)
+                .map(|output| output.value.to_sat())
+                .sum();
+
             // 2. Handle BTC UTXOs for fee
             let (btc_inputs, btc_prevouts, btc_outputs) =
-                build_btc_inputs_and_outputs(btc_utxos, own_address, None, 0, fee)?;
+                build_btc_inputs_and_outputs(btc_utxos, own_address, None, required_dust, fee)?;
 
             // 3. Add all inputs, prevouts and outputs
             inputs.extend(r_inputs);
@@ -172,8 +178,11 @@ fn build_rune_inputs_and_outputs(
         ));
     }
 
-    // 2: OP_RETURN (Runestone) Output
-    let runestone = build_runestone_edict(&rune_id, amount, 1)?;
+    let rune_change = total_runes.saturating_sub(amount);
+    let output_index: u32 = if rune_change > 0 { 2 } else { 1 };
+
+    // 1: OP_RETURN (Runestone) Output (vout[0])
+    let runestone = build_runestone_edict(&rune_id, amount, output_index)?;
     if runestone.len() > 82 {
         return Err(BitcoinError::InvalidRunestone(
             "Exceeds OP_RETURN size of 82".to_string(),
@@ -184,20 +193,19 @@ fn build_rune_inputs_and_outputs(
         script_pubkey: runestone,
     });
 
-    // 3: Receiver's Output (vout[1])
-    r_outputs.push(TxOut {
-        value: Amount::from_sat(DUST_THRESHOLD),
-        script_pubkey: dst_address.script_pubkey(),
-    });
-
-    // 4: Sender's Change Output
-    let rune_change = total_runes - amount;
+    // 2: Sender's Change Output (vout[1])
     if rune_change > 0 {
         r_outputs.push(TxOut {
             value: Amount::from_sat(DUST_THRESHOLD),
             script_pubkey: own_address.script_pubkey(),
         });
     }
+
+    // 3: Receiver's Output (vout[output_index])
+    r_outputs.push(TxOut {
+        value: Amount::from_sat(DUST_THRESHOLD),
+        script_pubkey: dst_address.script_pubkey(),
+    });
 
     Ok((r_inputs, r_prevouts, r_outputs))
 }
@@ -305,11 +313,19 @@ pub async fn get_fee_per_byte(network: BitcoinNetwork, btc_principal: Principal)
         // There are no fee percentiles. This case can only happen on a regtest
         // network where there are no non-coinbase transactions. In this case,
         // we use a default of 2000 millisatoshis/byte (i.e. 2 satoshi/byte)
-        Ok(2000)
-    } else {
-        // Choose the 50th percentile for sending fees.
-        Ok(fee_percentiles[50])
+        return Ok(2000);
     }
+
+    let median_index = fee_percentiles.len() / 2;
+    let fee_per_msat = fee_percentiles[median_index];
+
+    ic_cdk::println!(
+        "[get_fee_per_byte] Fee percentiles: {:?}, selected (50th percentile): {} msat/byte",
+        fee_percentiles,
+        fee_per_msat
+    );
+
+    Ok(fee_per_msat)
 }
 
 // A mock for rubber-stamping signatures.
