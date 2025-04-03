@@ -9,16 +9,13 @@ use bitcoin::{
 use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
 use std::{collections::HashMap, str::FromStr};
 
+use crate::model::types::{
+    errors::{BitcoinError, Result},
+    wallet::WalletConfig,
+};
 use crate::{api, TransactionType};
 use crate::{
-    model::types::{
-        errors::{BitcoinError, Result},
-        wallet::WalletConfig,
-    },
-    wallet::utxos::get_tx_utxos,
-};
-use crate::{
-    wallet::{get_fee_per_byte, transform_network},
+    wallet::{get_fee_per_byte, transform_network, utxos::get_tx_utxos},
     RuneUTXOEntry,
 };
 
@@ -44,6 +41,7 @@ pub async fn send_key_spend(
     dst_address: String,
     amount: Satoshi,
     tx_type: TransactionType,
+    rune_utxos: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<Txid> {
     let fee_per_byte = get_fee_per_byte(config.network, config.btc_principal).await?;
 
@@ -55,11 +53,11 @@ pub async fn send_key_spend(
     ic_cdk::println!("[send_key_spend] own_address = {:?}", own_address);
 
     // Get the utxos
-    let (btc_utxos, rune_utxos) =
-        get_tx_utxos(config.clone(), own_address.to_string(), tx_type.clone()).await?;
+    let (btc_utxos, rune_utxo_map) =
+        get_tx_utxos(config.clone(), own_address.to_string(), rune_utxos).await?;
 
-    ic_cdk::println!("[send_key_spend] Rune UTXOs = {:?}", rune_utxos);
     ic_cdk::println!("[send_key_spend] BTC UTXOs = {:?}", btc_utxos);
+    ic_cdk::println!("[send_key_spend] Rune UTXOs = {:?}", rune_utxo_map);
 
     // Build & Sign the Transaction
     let (transaction, prevouts) = build_p2tr_key_path_spend_tx(
@@ -67,7 +65,7 @@ pub async fn send_key_spend(
         &dst_address,
         amount,
         &btc_utxos,
-        Some(rune_utxos.clone()),
+        Some(rune_utxo_map),
         fee_per_byte,
         tx_type.clone(),
     )
@@ -126,7 +124,6 @@ async fn build_p2tr_key_path_spend_tx(
     // We solve this problem iteratively. We start with a fee of zero, build
     // and sign a transaction, see what its size is, and then update the fee,
     // rebuild the transaction, until the fee is set to the correct amount.
-    ic_cdk::println!("Building transaction...");
     let mut total_fee = 0;
     loop {
         let (transaction, prevouts) = super::helpers::build_transaction_with_fee(
@@ -207,7 +204,7 @@ where
             .to_vec();
 
         let raw_signature = signer(key_name.clone(), derivation_path.clone(), signing_data).await?;
-        ic_cdk::println!("[DEBUG] Signature for input {}: {:?}", i, raw_signature);
+        // ic_cdk::println!("[DEBUG] Signature for input {}: {:?}", i, raw_signature);
 
         // Update the witness stack.
         let signature = bitcoin::taproot::Signature {

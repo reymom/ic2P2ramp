@@ -1,16 +1,20 @@
 use bitcoin::Txid;
 use ic_btc_interface::Satoshi;
 
-use crate::model::types::{
-    errors::{BitcoinError, Result},
-    transfer::TransactionType,
-    wallet::WalletConfig,
+use crate::{
+    model::types::{
+        errors::{BitcoinError, Result},
+        transfer::TransactionType,
+        wallet::WalletConfig,
+    },
+    types::RuneUTXOEntry,
 };
 
 pub async fn send_btc_or_ordinal(
     dst_address: String,
     amount: Satoshi,
     tx_type: TransactionType,
+    rune_utxos: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<Txid> {
     match tx_type {
         TransactionType::LegacyBitcoin => {
@@ -24,6 +28,7 @@ pub async fn send_btc_or_ordinal(
                 dst_address,
                 amount,
                 tx_type,
+                rune_utxos,
             )
             .await
         }

@@ -124,8 +124,7 @@ pub async fn send_script_spend(
         .ok_or_else(|| BitcoinError::InternalError("Missing ControlBlock".to_string()))?;
 
     // Fetch UTXOs for the Taproot address.
-    let (btc_utxos, rune_utxos) =
-        get_tx_utxos(config.clone(), address.to_string(), tx_type.clone()).await?;
+    let (btc_utxos, rune_utxos) = get_tx_utxos(config.clone(), address.to_string(), None).await?;
 
     ic_cdk::println!("[send_script_spend] Rune UTXOs = {:?}", rune_utxos);
     ic_cdk::println!("[send_script_spend] BTC UTXOs = {:?}", btc_utxos);

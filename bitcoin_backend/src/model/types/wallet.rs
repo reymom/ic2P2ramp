@@ -1,7 +1,10 @@
 use candid::Principal;
 use ic_btc_interface::Network;
 
-use crate::memory::heap::config::{BTC_PRINCIPAL, DERIVATION_PATH, KEY_NAME, NETWORK};
+use crate::memory::heap::{
+    config::{get_derivation_path, get_key_name, get_network},
+    state::read_state,
+};
 
 #[derive(Clone)]
 pub struct WalletConfig {
@@ -19,19 +22,19 @@ pub enum AddressType {
 
 impl WalletConfig {
     fn new(address_type: AddressType) -> Self {
-        let mut derivation_path = DERIVATION_PATH.with(|d| d.clone());
+        let mut derivation_path = get_derivation_path();
         match address_type {
             AddressType::P2PKH => (),
             AddressType::P2TRRawKey => derivation_path.push(b"key_spend".to_vec()),
             AddressType::P2TRScript => {
-                derivation_path.push(b"script_spend".to_vec());
+                get_derivation_path().push(b"script_spend".to_vec());
             }
         }
-        let btc_principal = BTC_PRINCIPAL.with(|d| *d.borrow());
+        let btc_principal = read_state(|s| s.btc_principal.clone());
 
         Self {
-            key_name: KEY_NAME.with(|kn| kn.borrow().to_string()),
-            network: NETWORK.with(|n| n.get()),
+            key_name: get_key_name(),
+            network: get_network(),
             derivation_path,
             btc_principal,
         }

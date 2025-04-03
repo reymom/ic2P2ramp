@@ -19,8 +19,12 @@ pub fn deposit_to_vault(
             .unwrap_or_else(VaultEntry::new);
 
         if let Some(rune_id) = rune {
-            let rune_balance = entry.runes.entry(rune_id).or_insert(0);
+            let mut rune_balances = entry.runes.clone();
+
+            let rune_balance = rune_balances.entry(rune_id).or_insert(0);
             *rune_balance += amount;
+
+            entry.runes = rune_balances;
         } else {
             entry.bitcoin_balance += amount;
         }
