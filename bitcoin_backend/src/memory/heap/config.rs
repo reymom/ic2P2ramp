@@ -10,6 +10,8 @@ use crate::model::types::{
     runes::{RuneID, RuneMetadata},
 };
 
+use super::state::State;
+
 thread_local! {
     // The bitcoin network to connect to.
     //
@@ -19,16 +21,47 @@ thread_local! {
     pub static NETWORK: Cell<Network> = Cell::new(Network::Testnet);
 
     // The derivation path to use for the threshold key.
-    pub static DERIVATION_PATH: Vec<Vec<u8>> = vec![];
+    pub static DERIVATION_PATH: RefCell<Vec<Vec<u8>>> = RefCell::new(vec![]);
 
     // The ECDSA key name.
     pub static KEY_NAME: RefCell<String> = RefCell::new(String::from(""));
 
-    // The canister address.
-    pub static BTC_PRINCIPAL: RefCell<candid::Principal> = RefCell::new(candid::Principal::anonymous());
+    pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
 
     // Registered Runes: rune ID is BLOCK:TX
-    static RUNES: RefCell<HashMap<RuneID, RuneMetadata>> = RefCell::new(HashMap::new());
+    pub(crate) static RUNES: RefCell<HashMap<RuneID, RuneMetadata>> = RefCell::new(HashMap::new());
+}
+
+pub fn get_network() -> Network {
+    NETWORK.with(|n| n.get())
+}
+
+pub fn set_network(network: Network) {
+    NETWORK.with(|n| n.set(network));
+}
+
+pub fn get_derivation_path() -> Vec<Vec<u8>> {
+    DERIVATION_PATH.with(|d| d.borrow().clone())
+}
+
+pub fn set_derivation_path(path: Vec<Vec<u8>>) {
+    DERIVATION_PATH.with_borrow_mut(|p| *p = path);
+}
+
+pub fn get_key_name() -> String {
+    KEY_NAME.with(|kn| kn.borrow().to_string())
+}
+
+pub fn set_key_name(key_name: String) {
+    KEY_NAME.with_borrow_mut(|kn| *kn = key_name)
+}
+
+pub(crate) fn get_runes() -> HashMap<RuneID, RuneMetadata> {
+    RUNES.with(|runes| runes.borrow().clone())
+}
+
+pub(crate) fn set_runes(runes: HashMap<RuneID, RuneMetadata>) {
+    RUNES.with_borrow_mut(|r| *r = runes)
 }
 
 pub fn get_registered_runes() -> Result<Vec<RuneMetadata>> {
