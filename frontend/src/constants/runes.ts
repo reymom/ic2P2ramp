@@ -37,7 +37,7 @@ const mainnetRuneIds: RuneIds[] = [
     name: 'BITCOIN•FROGS',
   },
   {
-    runeId: '2585371:62',
+    runeId: '868973:1169',
     symbol: '🧙',
     logo: magicalBitcoinLogo,
     name: 'MAKE•BITCOIN•MAGICAL•AGAIN',

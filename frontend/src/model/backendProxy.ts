@@ -9,5 +9,7 @@ import {
 
 const isProduction = process.env.FRONTEND_EVM_ENV === 'production';
 
+console.log('isProduction', isProduction);
+
 export const backend = isProduction ? prodBackend : devBackend;
 export const createActor = isProduction ? createProdActor : createDevActor;

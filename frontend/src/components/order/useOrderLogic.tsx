@@ -558,7 +558,6 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         if (!orderBlockchainAsset || !baseOrder) return null;
 
         const blockchainType = Object.keys(orderBlockchainAsset)[0];
-        // const address = baseOrder.offramper_address.address;
 
         return getExplorerUrls(
             blockchainType,

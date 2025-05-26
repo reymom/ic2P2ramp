@@ -4,8 +4,7 @@ import { ethers } from 'ethers';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 
-// import { backend, createActor } from '@/model/backendProxy';
-import { backend, createActor } from '@/declarations/backend';
+import { backend, createActor } from '@/model/backendProxy';
 import { AuthenticationData, LoginAddress } from '@/declarations/backend/backend.did';
 import { validatePassword } from '@/utils/helper';
 import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/utils/error';
@@ -63,6 +62,7 @@ const ConnectAddress: React.FC = () => {
         const isAuth = searchParams.get('auth') === 'true';
         const pwd = searchParams.get('pwd');
         const email = searchParams.get('email');
+        console.log("loginMethod = ", loginMethod);
 
         const performLogin = async () => {
             setLoginAttempt(true);
@@ -278,7 +278,11 @@ const ConnectAddress: React.FC = () => {
     const handleInternetIdentityLogin = async (autoLogin?: boolean) => {
         cleanMessages();
 
-        if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
+        let canisterId = process.env.CANISTER_ID_BACKEND;
+        if (process.env.FRONTEND_BTC_ENV === "mainnet") {
+            canisterId = process.env.CANISTER_ID_BACKEND_PROD
+        }
+        if (!canisterId) throw new Error("Backend Canister ID not in env file");
         try {
             setLoadingIcp(true);
 
@@ -290,7 +294,7 @@ const ConnectAddress: React.FC = () => {
             if (!loginPrincipal) throw new Error("Principal not set after II login");
             if (!loginAgent) throw new Error("ICP Agent not set after II login");
 
-            const backendActor = createActor(process.env.CANISTER_ID_BACKEND, { agent: loginAgent });
+            const backendActor = createActor(canisterId, { agent: loginAgent });
             const loginAddress: LoginAddress = {
                 ICP: { principal_id: loginPrincipal.toText() }
             };

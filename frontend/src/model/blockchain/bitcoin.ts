@@ -1,4 +1,4 @@
-import { bitcoin_backend } from '@/declarations/bitcoin_backend';
+import { bitcoin_backend } from '@/model/bitcoinBackendProxy';
 import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
 import { TokenOption } from '@/model/types';
 import { supportedRuneIds } from '@/constants/runes';

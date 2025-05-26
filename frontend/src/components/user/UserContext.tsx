@@ -207,10 +207,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                             }
                             setIcpAgent(agent);
 
-                            if (!process.env.CANISTER_ID_BACKEND) throw new Error("Backend Canister ID not in env file");
-                            const actor = createActor(process.env.CANISTER_ID_BACKEND, { agent });
+                            let canisterId = process.env.CANISTER_ID_BACKEND;
+                            if (process.env.FRONTEND_BTC_ENV === "mainnet") {
+                                canisterId = process.env.CANISTER_ID_BACKEND_PROD
+                            }
+                            if (!canisterId) throw new Error("Backend Canister ID not in env file");
+                            const actor = createActor(canisterId, { agent });
                             setBackendActor(actor)
 
+                            console.log("[loginII] Backend Actor = ", actor);
                             resolve([principal, agent]);
                         } catch (error) {
                             console.error("Error during Internet Identity login success handling:", error);
@@ -239,6 +244,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if ('EVM' in login && (!authData || !authData.signature)) throw new Error("EVM Signature is required");
         if ('Bitcoin' in login && (!authData || !authData.signature || !authData.pubkey)) throw new Error("Bitcoin Signature and Public Key are required");
 
+        console.log("[authenticateUser] authData = ", authData);
         try {
             let tmpActor = backend;
             if (actor) {
@@ -248,6 +254,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 tmpActor = backendActor;
             }
             const result = await tmpActor.authenticate_user(login, authData ? [authData] : []);
+            console.log("[authenticateUser] result = ", result);
 
             if ('Ok' in result) {
                 setHasRefetched(true);

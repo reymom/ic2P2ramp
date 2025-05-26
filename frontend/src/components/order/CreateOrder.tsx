@@ -153,7 +153,7 @@ const CreateOrder: React.FC = () => {
                     setSelectedBlockchainAsset({ Bitcoin: { rune_id } })
                 case "EVM":
                     let token_address: [string] | [] = [];
-                    if (!selectedToken?.isNative) {
+                    if (!token?.isNative) {
                         token_address = [token.address]
                     }
                     "EVM" in selectedBlockchainAsset &&
@@ -429,6 +429,7 @@ const CreateOrder: React.FC = () => {
                 throw new Error('Unsupported blockchain selected');
             }
 
+            console.log("selectedBlockchainAsset = ", selectedBlockchainAsset);
             const result = await backend.create_order(
                 sessionToken,
                 currency,
