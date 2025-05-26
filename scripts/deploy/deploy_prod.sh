@@ -103,8 +103,8 @@ dfx deploy backend_prod --argument "(
 )" --ic
 
 # configurations
-dfx canister call backend_prod register_icp_tokens '(vec { 
-    "ryjl3-tyaaa-aaaaa-aaaba-cai"; 
+dfx canister call backend_prod register_icp_tokens '(vec {
+    "ryjl3-tyaaa-aaaaa-aaaba-cai";
     "lkwrt-vyaaa-aaaaq-aadhq-cai";
     "2ouva-viaaa-aaaaq-aaamq-cai";
     "mxzaz-hqaaa-aaaar-qaada-cai";
