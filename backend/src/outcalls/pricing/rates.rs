@@ -27,7 +27,7 @@ pub async fn get_cached_exchange_rate(
                 let rate = match (base_asset.clone().class, quote_asset.clone().class) {
                     (AssetClass::Rune, _) => {
                         ic_cdk::println!(
-                            "[get_cached_exchange_rate] base_asset = {}, quote_asset = {}",
+                            "[get_cached_exchange_rate] for (Rune, _) base_asset = {}, quote_asset = {}",
                             base_asset.symbol,
                             quote_asset.symbol
                         );
@@ -54,10 +54,19 @@ pub async fn get_cached_exchange_rate(
                         }
                     }
                     (_, AssetClass::Rune) => {
+                        ic_cdk::println!(
+                            "[get_cached_exchange_rate] for (_, Rune): base_asset = {}, quote_asset = {}",
+                            base_asset.symbol,
+                            quote_asset.symbol
+                        );
                         let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
                             .await?
                             .data
                             .price_in_usd;
+                        ic_cdk::println!(
+                            "[get_cached_exchange_rate] rune_price_in_usd: {}",
+                            rune_price_in_usd
+                        );
                         if base_asset.symbol == "USD" {
                             1.0 / rune_price_in_usd
                         } else {

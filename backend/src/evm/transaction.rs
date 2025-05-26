@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, time::Duration};
 
+use candid::Nat;
 use ethers_core::types::U256;
 use evm_rpc_canister_types::{
     BlockTag, GetTransactionCountArgs, GetTransactionCountResult, GetTransactionReceiptResult,
@@ -296,6 +297,7 @@ async fn send_raw_transaction(tx: String, chain_id: u64) -> Result<CustomTransac
     let cycles = 10_000_000_000;
 
     let arg: Option<RpcConfig> = Some(RpcConfig {
+        responseConsensus: None,
         responseSizeEstimate: Some(1024),
     });
     match EVM_RPC
@@ -347,7 +349,7 @@ pub async fn check_transaction_status(tx_hash: &String, chain_id: u64) -> Transa
         Ok((MultiGetTransactionReceiptResult::Consistent(receipt),)) => match receipt {
             GetTransactionReceiptResult::Ok(receipt) => {
                 if let Some(receipt) = receipt {
-                    if receipt.status == 1_u32 {
+                    if receipt.status == Some(Nat::from(1u32)) {
                         TransactionStatus::Confirmed(receipt)
                     } else {
                         TransactionStatus::Failed(format!("Transaction failed: {:?}", receipt))

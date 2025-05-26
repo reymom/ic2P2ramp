@@ -44,9 +44,7 @@ pub(super) async fn fee_history(
     {
         Ok((res,)) => match res {
             MultiFeeHistoryResult::Consistent(fee_history) => match fee_history {
-                FeeHistoryResult::Ok(fee_history) => fee_history.ok_or_else(|| {
-                    SystemError::InternalError("Could not find fee history".to_string()).into()
-                }),
+                FeeHistoryResult::Ok(fee_history) => Ok(fee_history),
                 FeeHistoryResult::Err(e) => Err(SystemError::RpcError(format!("{:?}", e)))?,
             },
             MultiFeeHistoryResult::Inconsistent(_) => Err(SystemError::InternalError(

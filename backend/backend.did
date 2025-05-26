@@ -71,10 +71,18 @@ type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
 type EthMainnetService = variant {
   Alchemy;
+  Llama;
   BlockPi;
   Cloudflare;
   PublicNode;
   Ankr;
+};
+type EthSepoliaService = variant {
+  Alchemy;
+  BlockPi;
+  PublicNode;
+  Ankr;
+  Sepolia;
 };
 type EvmOrderInput = record {
   estimated_gas_withdraw : nat64;
@@ -125,7 +133,7 @@ type InitArg = record {
   paypal : PaypalConfig;
 };
 type InstallArg = variant { Upgrade : opt UpdateArg; Reinstall : InitArg };
-type L2MainnetService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type L2MainnetService = variant { Alchemy; Llama; BlockPi; PublicNode; Ankr };
 type LockedOrder = record {
   locked_at : nat64;
   payment_done : bool;
@@ -253,7 +261,7 @@ type RevolutConfig = record {
 type RevolutConsent = record { id : text; url : text };
 type RpcApi = record { url : text; headers : opt vec HttpHeader_1 };
 type RpcServices = variant {
-  EthSepolia : opt vec L2MainnetService;
+  EthSepolia : opt vec EthSepoliaService;
   BaseMainnet : opt vec L2MainnetService;
   Custom : record { chainId : nat64; services : vec RpcApi };
   OptimismMainnet : opt vec L2MainnetService;
@@ -304,8 +312,8 @@ type TransactionAction = variant {
 };
 type TransactionAddress = record { address_type : AddressType; address : text };
 type TransactionReceipt = record {
-  to : text;
-  status : nat;
+  to : opt text;
+  status : opt nat;
   transactionHash : text;
   blockNumber : nat;
   from : text;
@@ -329,6 +337,10 @@ type TransactionStatus = variant {
 };
 type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
+type TransformContext = record {
+  function : func (TransformArgs) -> (HttpResponse) query;
+  context : blob;
+};
 type UnisatConfig = record { api_key : text; api_url : text };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
@@ -465,6 +477,7 @@ service : (InstallArg) -> {
     ) -> (Result) query;
   transfer_canister_funds : (principal, principal, nat) -> (Result);
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);
+  transform : (TransformContext, HttpResponse) -> (HttpResponse) query;
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
   unprocess_order : (nat64) -> (Result);

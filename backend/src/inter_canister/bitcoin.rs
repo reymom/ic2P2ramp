@@ -8,7 +8,8 @@ use bitcoin_backend::types::{
     errors::Result as BitcoinResult, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType,
 };
 
-const BITCOIN_BACKEND_CANISTER_ID: &str = "viuz6-wyaaa-aaaap-qpy7q-cai";
+// const BITCOIN_BACKEND_CANISTER_ID: &str = "viuz6-wyaaa-aaaap-qpy7q-cai";
+const BITCOIN_BACKEND_CANISTER_ID: &str = "ng6kh-iaaaa-aaaap-qp2fa-cai";
 
 pub async fn bitcoin_backend_transfer(
     dst_address: String,

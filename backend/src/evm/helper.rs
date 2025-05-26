@@ -43,8 +43,8 @@ pub fn nat_to_u256(n: &candid::Nat) -> U256 {
 
 pub fn empty_transaction_receipt() -> TransactionReceipt {
     TransactionReceipt {
-        to: String::new(),
-        status: candid::Nat::default(),
+        to: Some(String::new()),
+        status: Some(candid::Nat::default()),
         transactionHash: String::new(),
         blockNumber: candid::Nat::default(),
         from: String::new(),
