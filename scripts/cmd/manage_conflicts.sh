@@ -4,7 +4,7 @@ dfx canister call backend create_evm_order_with_tx '(
     1 : nat64,
     "0x632b39E5Fe4EAAFDF21601b2Bc206ca0f602C85A",
     vec {
-        record { 
+        record {
             variant { PayPal }; 
             variant { PayPal = record { id = "sb-ioze230588840@personal.example.com" : text } }; 
         }

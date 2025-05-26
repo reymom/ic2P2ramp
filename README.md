@@ -45,19 +45,25 @@ With this Bitcoin integration, users can now create Bitcoin-based orders alongsi
 ### Login Page
 
 <p align="center">
-<img src="assets/screenshots/login.png" alt="Login Page" width="600"/>
+<img src="assets/screenshots/new-signup.png" alt="Login Page" width="600"/>
 </p>
 
 ### Profile Page
 
 <p align="center">
-<img src="assets/screenshots/profile.png" alt="Profile Page" width="600"/>
+<img src="assets/screenshots/new-profile.png" alt="Profile Page" width="600"/>
 </p>
 
-### Create Order
+### Create EVM Order
 
 <p align="center">
 <img src="assets/screenshots/create-evm-order.png" alt="Create EVM Order" width="600"/>
+</p>
+
+### Create Bitcoin Order
+
+<p align="center">
+<img src="assets/screenshots/create-bitcoin-order.png" alt="Create EVM Order" width="600"/>
 </p>
 
 ### View and Lock Orders
@@ -69,7 +75,7 @@ With this Bitcoin integration, users can now create Bitcoin-based orders alongsi
 ### Pay Order
 
 <p align="center">
-<img src="assets/screenshots/locked-order.png" alt="Lock Orders" width="600"/>
+<img src="assets/screenshots/locked-bitcoin-order.png" alt="Lock Orders" width="600"/>
 </p>
 
 ## Canisters and components

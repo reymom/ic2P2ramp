@@ -15,12 +15,14 @@ source "$DIR/../.env.sandbox" || {
 # dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
 
 # Might be necessary
-# dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic)
+# dfx ledger fabricate-cycles --icp 10000 --canister $(dfx identity get-wallet --ic) --ic
 # dfx cycles top-up --ic $(dfx identity get-wallet --ic) 1_000_000_000_000
 
 cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
 
 candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
+
+dfx canister create --with-cycles 1_000_000_000_000 bitcoin_backend --ic
 
 dfx deploy bitcoin_backend --argument "(
     variant { 

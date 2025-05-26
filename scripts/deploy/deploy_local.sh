@@ -89,7 +89,7 @@ dfx generate bitcoin_backend
 
 dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { regtest })'
 
-# dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy
+dfx deps pull && dfx deps init evm_rpc --argument '(record {})' && dfx deps deploy
 
 dfx deps deploy evm_rpc
 
@@ -207,9 +207,7 @@ dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })'
 
-cd frontend && npm run build && cd ..
-
-dfx deploy frontend --mode reinstall
+cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall
 
 export TO_PRINCIPAL="dvbrj-gc3mc-56aem-lxs4s-yq2sj-5xryx-zgkrd-zk3xu-glhtj-wpotk-tae"
 export TO_SUBACCOUNT="null"
