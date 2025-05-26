@@ -53,13 +53,13 @@ impl RuneID {
         let block = parts[0]
             .parse::<u64>()
             .map_err(|_| BitcoinError::InvalidRuneID("Invalid block number.".to_string()))?;
-        let tx_index = parts[1]
+        parts[1]
             .parse::<u32>()
             .map_err(|_| BitcoinError::InvalidRuneID("Invalid transaction index.".to_string()))?;
 
-        if block == 0 || tx_index == 0 {
+        if block == 0 {
             return Err(BitcoinError::InvalidRuneID(
-                "Block and transaction index must be greater than 0.".to_string(),
+                "Block must be greater than 0".to_string(),
             ));
         }
 

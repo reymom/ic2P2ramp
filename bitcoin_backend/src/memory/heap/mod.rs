@@ -1,5 +1,5 @@
 pub mod config;
-mod init;
+pub mod init;
 pub mod state;
 pub mod upgrade;
 

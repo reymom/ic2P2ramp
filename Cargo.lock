@@ -859,9 +859,9 @@ dependencies = [
 
 [[package]]
 name = "evm-rpc-canister-types"
-version = "3.0.0"
+version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "423bd32abb8c7a979e72dd7ef056d0808b8e50bd1685dbea9f63df94010aaaed"
+checksum = "43ca514087adf7d8654f4b5b1f6fa828f68163f2aba11e05a1e02c031f0d630b"
 dependencies = [
  "candid",
  "candid_parser",

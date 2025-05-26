@@ -1,7 +1,7 @@
 #[cfg(feature = "canister")]
 mod api;
 #[cfg(feature = "canister")]
-mod memory;
+pub mod memory;
 #[cfg(feature = "types")]
 mod model;
 #[cfg(feature = "canister")]

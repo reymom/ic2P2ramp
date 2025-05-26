@@ -50,7 +50,17 @@
     "frontend_prod": {
       "dependencies": ["backend_prod"],
       "type": "assets",
-      "source": ["dist/"]
+      "source": ["frontend/dist/"],
+      "workspace": "frontend"
+    },
+    "bitcoin_backend_prod": {
+      "dependencies": [],
+      "candid": "bitcoin_backend/bitcoin_backend.did",
+      "package": "bitcoin_backend",
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/bitcoin_backend_prod"
+      }
     },
     "internet_identity": {
       "type": "custom",
@@ -123,6 +133,6 @@
       }
     }
   },
-  "output_env_file": ".env",
+  "output_env_file": ".env.production",
   "version": 1
 }

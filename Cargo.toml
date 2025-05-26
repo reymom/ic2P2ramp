@@ -9,4 +9,4 @@ ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 bitcoin = "0.32"
-bitcoin_backend = { path = "bitcoin_backend", default-features = false, features = ["types"] }
+bitcoin_backend = { path = "bitcoin_backend", default-features = false, features = ["types", "canister"] }

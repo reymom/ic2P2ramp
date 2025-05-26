@@ -6,8 +6,9 @@ use std::{
 
 use candid::{Encode, Principal};
 use ic_btc_interface::{Config, Network};
-use ic_cdk::api::management_canister::bitcoin::BitcoinNetwork;
 use pocket_ic::{PocketIc, PocketIcBuilder};
+
+use bitcoin_backend::memory::heap::{init::UnisatConfig, InitArg, InstallArg};
 
 pub const BTC_RPC_URL: &str = "http://127.0.0.1:18443";
 pub const RPC_USER: &str = "icp";
@@ -32,9 +33,18 @@ pub(crate) fn setup_bitcoin_backend() -> (PocketIc, Principal) {
     pic.set_time(SystemTime::now());
 
     let bitcoin_backend_canister = pic.create_canister();
-    pic.add_cycles(bitcoin_backend_canister, INIT_CYCLES);
-    let arg = Encode!(&BitcoinNetwork::Regtest).expect("Failed to encode init args");
     let wasm = fs::read(BITCOIN_BACKEND_WASM).expect("Wasm file not found, run 'dfx build'.");
+
+    let arg = InstallArg::Reinstall(InitArg {
+        network: Network::Regtest,
+        proxy_url: "https://example.xyz".to_string(),
+        unisat: UnisatConfig {
+            api_url: "https://open-api-testnet4.unisat.io".to_string(),
+            api_key: std::env::var("UNISAT_API_KEY").unwrap_or_default(),
+        },
+    });
+    let arg = Encode!(&arg).expect("Failed to encode init args");
+    pic.add_cycles(bitcoin_backend_canister, INIT_CYCLES);
     pic.install_canister(bitcoin_backend_canister, wasm, arg, None);
 
     deploy_bitcoin_testnet_canister(&pic);
