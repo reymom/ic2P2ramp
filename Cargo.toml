@@ -1,5 +1,5 @@
 [workspace]
-members = ["backend", "bitcoin_backend", "tests"]
+members = ["backend", "bitcoin_backend", "solana_backend", "tests"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -10,3 +10,30 @@ ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 bitcoin = "0.32"
 bitcoin_backend = { path = "bitcoin_backend", default-features = false, features = ["types", "canister"] }
+num-traits = "0.2.19"
+
+# Transitive dependency
+# See https://forum.dfinity.org/t/module-imports-function-wbindgen-describe-from-wbindgen-placeholder-that-is-not-exported-by-the-runtime/11545/8
+getrandom = { version = "0.2.16", default-features = false, features = ["custom"] }
+
+# TODO XC-297: Currently, the solana-* crates have a dependency on wasm-bindgen
+#   when they are built for wasm32-unknown-unknown target. For this reason, we
+#   are using forked version of the relevant repositories.
+#   see [solana-sdk#117](https://github.com/anza-xyz/solana-sdk/issues/117)
+[patch.crates-io]
+solana-program = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-signature = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-message = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-pubkey = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-system-interface = { git = "https://github.com/dfinity/solana-system-program", tag = "6185b40-js-feature-flag" }
+solana-instruction = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-account = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-keypair = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-feature-gate-interface = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-program-entrypoint = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-program-error = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-transaction = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-sysvar = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-sysvar-id = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-nonce = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }
+solana-hash = { git = "https://github.com/dfinity/solana-sdk", tag = "46ca4e2-js-feature-flag" }

@@ -7,6 +7,17 @@
         "output": "frontend/src/declarations/evm_rpc"
       }
     },
+    "sol_rpc": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/sol-rpc-canister/releases/latest/download/sol_rpc_canister.did",
+      "wasm": "https://github.com/dfinity/sol-rpc-canister/releases/latest/download/sol_rpc_canister.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "tghme-zyaaa-aaaar-qarca-cai"
+        }
+      },
+      "init_arg": "( record {} )"
+    },
     "xrc": {
       "type": "pull",
       "id": "uf6dk-hyaaa-aaaaq-qaaaq-cai",
@@ -36,6 +47,15 @@
       "type": "rust",
       "declarations": {
         "output": "frontend/src/declarations/bitcoin_backend"
+      }
+    },
+    "solana_backend": {
+      "dependencies": [],
+      "candid": "solana_backend/solana_backend.did",
+      "package": "solana_backend",
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/solana_backend"
       }
     },
     "backend_prod": {
@@ -114,11 +134,6 @@
     }
   },
   "defaults": {
-    "bitcoin": {
-      "enabled": true,
-      "log_level": "info",
-      "nodes": ["127.0.0.1:18444"]
-    },
     "build": {
       "args": "",
       "packtool": "npm run --silent sources"
