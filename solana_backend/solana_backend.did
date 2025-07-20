@@ -1,0 +1,61 @@
+type Ed25519KeyName = variant {
+  MainnetTestKey1;
+  LocalDevelopment;
+  MainnetProdKey1;
+};
+type InitArg = record {
+  ed25519_key_name : Ed25519KeyName;
+  network : SolanaCluster;
+  sol_rpc_canister_id : opt principal;
+  proxy_url : text;
+};
+type InstallArg = variant { Upgrade : opt UpdateArg; Reinstall : InitArg };
+type Result = variant { Ok; Err : SolanaError };
+type Result_1 = variant { Ok : VaultEntry; Err : SolanaError };
+type Result_2 = variant { Ok : text; Err : SolanaError };
+type SolanaCluster = variant { Mainnet; Testnet; Devnet };
+type SolanaError = variant {
+  RpcError : text;
+  SystemError : SystemError;
+  VaultError : VaultError;
+  UnsupportedToken : text;
+};
+type SystemError = variant {
+  HttpRequestError : record { nat64; text };
+  ParseError : text;
+  Utf8Error;
+};
+type TokenAmount = record {
+  decimals : nat8;
+  uiAmount : opt float64;
+  uiAmountString : text;
+  amount : text;
+};
+type UpdateArg = record {
+  network : opt SolanaCluster;
+  sol_rpc_canister_id : opt principal;
+  proxy_url : opt text;
+};
+type VaultEntry = record {
+  lamports : nat64;
+  tokens : vec record { text; nat64 };
+};
+type VaultError = variant { InsufficientBalance; AddressVaultNotFound };
+service : (InstallArg) -> {
+  associated_canister_token_account : (text) -> (text);
+  associated_token_account : (opt principal, text) -> (text);
+  cancel_deposit_canister : (text, nat64, opt text) -> (Result);
+  canister_solana_account : () -> (text);
+  create_associated_token_account : (opt principal, text) -> (text);
+  deposit_to_vault_canister : (text, nat64, opt text) -> (Result);
+  get_balance : (text) -> (nat);
+  get_offramper_deposits : (text) -> (Result_1) query;
+  get_onramper_deposits : (text) -> (Result_1) query;
+  get_registered_tokens : () -> (vec record { text; nat8 }) query;
+  get_spl_token_balance : (opt text, text) -> (TokenAmount);
+  register_tokens : (vec record { text; nat8 }) -> (Result);
+  send_sol_from_canister : (text, nat) -> (Result_2);
+  send_spl_token_from_canister : (text, text, nat) -> (text);
+  solana_account : (opt principal) -> (text);
+  withdraw_solana_fees : (text, nat64) -> (Result_2);
+}
