@@ -284,7 +284,7 @@ dependencies = [
  "ic-btc-interface",
  "ic-cdk 0.17.2",
  "ic-cdk-timers",
- "ic-stable-structures",
+ "ic-stable-structures 0.7.0",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -1867,6 +1867,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-stable-structures"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e54aeb082293c69def5ab34c70593ba85ff000386f7d0eacdf73514daaeca031"
+dependencies = [
+ "ic_principal",
+]
+
+[[package]]
 name = "ic-transport-types"
 version = "0.37.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1925,7 +1934,7 @@ dependencies = [
  "candid",
  "crc32fast",
  "hex",
- "ic-stable-structures",
+ "ic-stable-structures 0.6.9",
  "icrc-cbor",
  "itertools 0.12.1",
  "minicbor",
@@ -3139,7 +3148,7 @@ dependencies = [
  "hex",
  "ic-cdk 0.14.2",
  "ic-cdk-timers",
- "ic-stable-structures",
+ "ic-stable-structures 0.7.0",
  "icrc-ledger-types",
  "num-traits",
  "pbkdf2 0.12.2",
@@ -3151,6 +3160,15 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "ramp_types"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk 0.17.2",
+ "ic-stable-structures 0.7.0",
 ]
 
 [[package]]
@@ -3999,7 +4017,7 @@ dependencies = [
  "ic-cdk 0.17.2",
  "ic-cdk-timers",
  "ic-ed25519",
- "ic-stable-structures",
+ "ic-stable-structures 0.7.0",
  "num-traits",
  "serde",
  "sol_rpc_client",

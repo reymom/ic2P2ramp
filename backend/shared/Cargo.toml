@@ -1,0 +1,9 @@
+[package]
+name = "ramp_types"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+ic-stable-structures = { workspace = true }

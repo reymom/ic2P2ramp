@@ -2,7 +2,8 @@
 members = [
     "backend/ramp",
     "backend/bitcoin",
-    "backend/solana", 
+    "backend/solana",
+    "backend/shared", 
     "tests",
 ]
 resolver = "2"
@@ -17,6 +18,7 @@ serde = "1.0"
 ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
+ic-stable-structures = "0.7"
 bitcoin = "0.32"
 bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types", "canister"] }
 num-traits = "0.2.19"
