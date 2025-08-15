@@ -31,61 +31,70 @@
         "output": "frontend/src/declarations/xrc"
       }
     },
-    "backend": {
+    "ramp": {
       "dependencies": ["evm_rpc", "xrc"],
-      "candid": "backend/backend.did",
-      "package": "backend",
+      "candid": "backend/ramp/ramp.did",
+      "package": "ramp_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/backend"
+        "output": "frontend/src/declarations/ramp"
       }
     },
     "frontend": {
-      "dependencies": ["backend"],
+      "dependencies": ["ramp"],
       "type": "assets",
       "source": ["frontend/dist/"],
       "workspace": "frontend"
     },
-    "bitcoin_backend": {
+    "bitcoin": {
       "dependencies": [],
-      "candid": "bitcoin_backend/bitcoin_backend.did",
+      "candid": "backend/bitcoin/bitcoin.did",
       "package": "bitcoin_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/bitcoin_backend"
+        "output": "frontend/src/declarations/bitcoin"
       }
     },
-    "solana_backend": {
+    "solana": {
       "dependencies": [],
-      "candid": "solana_backend/solana_backend.did",
+      "candid": "backend/solana/solana.did",
       "package": "solana_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/solana_backend"
+        "output": "frontend/src/declarations/solana"
       }
     },
-    "backend_prod": {
+    "ramp_prod": {
       "dependencies": ["evm_rpc", "xrc"],
-      "candid": "backend/backend.did",
-      "package": "backend",
+      "candid": "backend/ramp/ramp.did",
+      "package": "ramp_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/backend_prod"
+        "output": "frontend/src/declarations/ramp_prod"
       }
     },
     "frontend_prod": {
-      "dependencies": ["backend_prod"],
+      "dependencies": ["ramp_prod"],
       "type": "assets",
       "source": ["frontend/dist/"],
       "workspace": "frontend"
     },
-    "bitcoin_backend_prod": {
+    "bitcoin_prod": {
       "dependencies": [],
-      "candid": "bitcoin_backend/bitcoin_backend.did",
+      "candid": "backend/bitcoin/bitcoin.did",
       "package": "bitcoin_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/bitcoin_backend_prod"
+        "output": "frontend/src/declarations/bitcoin_prod"
+      }
+    },
+    "solana_prod": {
+      "dependencies": [],
+      "candid": "backend/solana/solana.did",
+      "package": "solana_backend",
+      "type": "rust",
+      "declarations": {
+        "output": "frontend/src/declarations/solana_prod"
       }
     },
     "internet_identity": {

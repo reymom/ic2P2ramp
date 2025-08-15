@@ -1,6 +1,15 @@
 [workspace]
-members = ["backend", "bitcoin_backend", "solana_backend", "tests"]
+members = [
+    "backend/ramp",
+    "backend/bitcoin",
+    "backend/solana", 
+    "tests",
+]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
 
 [workspace.dependencies]
 candid = "0.10"
@@ -9,7 +18,7 @@ ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 bitcoin = "0.32"
-bitcoin_backend = { path = "bitcoin_backend", default-features = false, features = ["types", "canister"] }
+bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types", "canister"] }
 num-traits = "0.2.19"
 base64 = "0.22"
 
