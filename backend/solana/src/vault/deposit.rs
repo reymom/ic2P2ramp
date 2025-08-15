@@ -1,9 +1,7 @@
+use ramp_types::solana::errors::{Result, VaultError};
+
 use crate::memory::stable::vault::OFFRAMPER_VAULTS;
-use crate::model::types::{
-    Address,
-    errors::{Result, VaultError},
-    vault::VaultEntry,
-};
+use crate::model::types::{Address, vault::VaultEntry};
 
 /// Deposit lamports or a specific SPL token amount into an offramper’s vault.
 pub fn deposit_to_vault(

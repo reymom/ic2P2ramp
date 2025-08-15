@@ -1,8 +1,9 @@
 use candid::Principal;
+use ramp_types::solana::errors::Result;
 use sol_rpc_types::SolanaCluster;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::model::types::{ed25519::Ed25519KeyName, errors::Result};
+use crate::model::types::ed25519::Ed25519KeyName;
 
 use super::state::State;
 

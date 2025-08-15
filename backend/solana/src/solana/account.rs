@@ -1,11 +1,9 @@
+use ramp_types::solana::errors::{Result, SolanaError};
 use sol_rpc_types::GetAccountInfoEncoding;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
 
-use crate::{
-    model::types::errors::{Result, SolanaError},
-    solana::client::client,
-};
+use crate::solana::client::client;
 
 pub async fn get_account_owner(account: &Pubkey) -> Result<Pubkey> {
     let owner = client()

@@ -7,3 +7,7 @@ edition.workspace = true
 candid = { workspace = true }
 ic-cdk = { workspace = true }
 ic-stable-structures = { workspace = true }
+serde = { workspace = true }
+sol_rpc_types  = { workspace = true }
+solana-pubkey = { workspace = true }
+thiserror = { workspace = true }

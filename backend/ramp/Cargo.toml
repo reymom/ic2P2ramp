@@ -9,27 +9,28 @@ edition.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+base64 = { workspace = true }
+bitcoin = { workspace = true }
+bitcoin_backend = { workspace = true }
+candid = { workspace = true }
+email_address = "0.2.5"
+ethers-core = "2.0.14"
+evm-rpc-canister-types = "5.0.1"
+futures = "0.3"
+getrandom = { version = "0.2", features = ["custom"] }
+hex = "0.4.3"
 ic-cdk = "0.14"
 ic-cdk-timers = { workspace = true }
 ic-stable-structures = { workspace = true }
 icrc-ledger-types = "0.1.6"
-candid = { workspace = true }
-bitcoin_backend = { workspace = true }
+num-traits = { workspace = true }
+pbkdf2 = { version="0.12.2", features = ["simple"] }
+ramp_types = { workspace = true }
+rand = "0.8"
+rsa = "0.6"
 serde = { workspace = true }
 serde_bytes = "0.11.12"
 serde_json = "1.0.117"
-ethers-core = "2.0.14"
-bitcoin = { workspace = true }
 secp256k1 = { version = "0.30", features = [ "global-context", "recovery" ] }
-getrandom = { version = "0.2", features = ["custom"] }
-hex = "0.4.3"
-base64 = "0.22.1"
-thiserror = "1.0"
-futures = "0.3"
-email_address = "0.2.5"
-rsa = "0.6"
 sha2 = "0.10"
-rand = "0.8"
-num-traits = { workspace = true }
-pbkdf2 = { version="0.12.2", features = ["simple"] }
-evm-rpc-canister-types = "5.0.1"
+thiserror = "1.0"

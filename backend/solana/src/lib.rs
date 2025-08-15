@@ -7,6 +7,7 @@ pub mod vault;
 use candid::{Nat, Principal};
 use ic_cdk::{init, post_upgrade, pre_upgrade, query, update};
 use num_traits::cast::ToPrimitive;
+use ramp_types::solana::errors::{Result, SolanaError, SystemError, VaultError};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -18,14 +19,8 @@ use solana_transaction::Transaction;
 
 use crate::memory::stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS};
 use crate::model::helpers::validate_caller_not_anonymous;
-use crate::model::types::errors::SystemError;
 use crate::model::types::tokens::fetch_mint_decimals;
-use crate::model::types::{
-    Address,
-    errors::{Result, SolanaError, VaultError},
-    tokens::validate_token_mint,
-    vault::VaultEntry,
-};
+use crate::model::types::{Address, tokens::validate_token_mint, vault::VaultEntry};
 use crate::solana::client::client;
 use crate::solana::spl;
 use crate::solana::wallet::SolanaWallet;

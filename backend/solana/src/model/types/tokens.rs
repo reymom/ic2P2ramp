@@ -1,13 +1,11 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
+use ramp_types::solana::errors::{Result, SolanaError, SystemError};
 use sol_rpc_types::{AccountData, AccountEncoding, DataSlice, GetAccountInfoEncoding};
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
 
-use crate::{
-    model::types::errors::{Result, SolanaError, SystemError},
-    solana::{account::get_account_owner, client::client},
-};
+use crate::solana::{account::get_account_owner, client::client};
 
 const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM_ID: &str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnSLz2gjX3b";

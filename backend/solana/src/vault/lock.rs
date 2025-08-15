@@ -1,6 +1,8 @@
+use ramp_types::solana::errors::Result;
+
 use crate::{
     memory::stable::vault::ONRAMPER_VAULTS,
-    model::types::{Address, errors::Result, vault::VaultEntry},
+    model::types::{Address, vault::VaultEntry},
 };
 
 pub fn lock_funds(

@@ -12,21 +12,22 @@ ic-cdk-timers = { workspace = true }
 ic-stable-structures = { workspace = true }
 ic-ed25519 = { version = "0.2.0", optional = false }
 base64 = { workspace = true }
-candid = { workspace = true }
-serde = { workspace = true }
 bs58 = "0.5.1"
+candid = { workspace = true }
+ramp_types = { workspace = true }
+num-traits = { workspace = true }
+serde = { workspace = true }
 sol_rpc_client = { package = "sol_rpc_client", git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", features = ["ed25519"], default-features = false }
-sol_rpc_types  = { package = "sol_rpc_types",  git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", default-features = false }
+sol_rpc_types  = { workspace = true }
 solana-program = "=2.3.0"
 solana-signature = "=2.3.0"
 solana-transaction = "=2.2.3"
 solana-transaction-status-client-types = "=2.3.3"
 solana-message = "=2.4.0"
-solana-pubkey = "=2.4.0"
+solana-pubkey = { workspace = true }
 solana-instruction = "=2.3.0"
 solana-system-interface = "1.0.0"
-num-traits = { workspace = true }
-thiserror = "2.0"
+thiserror = { workspace = true }
 
 [dependencies.getrandom]
 version = "0.2.16"

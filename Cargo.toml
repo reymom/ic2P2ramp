@@ -13,16 +13,20 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+base64 = "0.22"
+bitcoin = "0.32"
+bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types", "canister"] }
 candid = "0.10"
-serde = "1.0"
 ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 ic-stable-structures = "0.7"
-bitcoin = "0.32"
-bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types", "canister"] }
 num-traits = "0.2.19"
-base64 = "0.22"
+ramp_types = { path = "backend/shared" }
+serde = "1.0"
+sol_rpc_types  = { package = "sol_rpc_types",  git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", default-features = false }
+solana-pubkey = "=2.4.0"
+thiserror = "2.0"
 
 # Transitive dependency
 # See https://forum.dfinity.org/t/module-imports-function-wbindgen-describe-from-wbindgen-placeholder-that-is-not-exported-by-the-runtime/11545/8

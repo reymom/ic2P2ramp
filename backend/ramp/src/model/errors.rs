@@ -3,11 +3,10 @@ use std::num::ParseFloatError;
 use bitcoin_backend::types::errors::BitcoinError;
 use candid::CandidType;
 use ic_cdk::api::call::RejectionCode;
+use ramp_types::solana::errors::SolanaError;
 use thiserror::Error;
 
-use crate::types::PaymentProviderType;
-
-use super::types::AddressType;
+use crate::types::{AddressType, PaymentProviderType};
 
 pub type Result<T> = std::result::Result<T, RampError>;
 
@@ -198,6 +197,9 @@ pub enum BlockchainError {
 
     #[error("Bitcoin Backend Error: {0}")]
     BitcoinBackendError(String),
+
+    #[error(transparent)]
+    SolanaBackendError(#[from] SolanaError),
 }
 
 #[derive(Error, Debug, CandidType, Clone)]
@@ -278,6 +280,12 @@ impl From<rsa::pkcs8::Error> for SystemError {
 impl From<BitcoinError> for RampError {
     fn from(err: BitcoinError) -> Self {
         RampError::BlockchainError(BlockchainError::BitcoinBackendError(err.to_string()))
+    }
+}
+
+impl From<SolanaError> for RampError {
+    fn from(e: SolanaError) -> Self {
+        RampError::BlockchainError(BlockchainError::from(e))
     }
 }
 

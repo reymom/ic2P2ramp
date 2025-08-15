@@ -1,11 +1,11 @@
-use candid::CandidType;
+use candid::{CandidType, Deserialize};
 use sol_rpc_types::RpcError;
 use solana_pubkey::ParsePubkeyError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SolanaError>;
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum SolanaError {
     #[error(transparent)]
     VaultError(#[from] VaultError),
@@ -29,7 +29,7 @@ pub enum SolanaError {
     BlockhashErrors(String),
 }
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum VaultError {
     #[error("Vault for address not found")]
     AddressVaultNotFound,
@@ -40,7 +40,7 @@ pub enum VaultError {
 #[derive(Error, Debug)]
 pub enum InternalError {}
 
-#[derive(Error, Debug, CandidType)]
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum SystemError {
     #[error("HTTP request failed. RejectionCode: {0:?}, Error: {1}")]
     HttpRequestError(u64, String),
