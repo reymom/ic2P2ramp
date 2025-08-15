@@ -1,5 +1,6 @@
 use candid::CandidType;
 use sol_rpc_types::RpcError;
+use solana_pubkey::ParsePubkeyError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SolanaError>;
@@ -17,6 +18,15 @@ pub enum SolanaError {
 
     #[error("RPC error: {0}")]
     RpcError(String),
+
+    #[error("Account not found")]
+    AccountNotFound,
+
+    #[error("Parse pubkey error: {0}")]
+    ParsePubkeyError(String),
+
+    #[error("Estimate blockhash errors: {0}")]
+    BlockhashErrors(String),
 }
 
 #[derive(Error, Debug, CandidType)]
@@ -26,6 +36,9 @@ pub enum VaultError {
     #[error("Insufficient balance")]
     InsufficientBalance,
 }
+
+#[derive(Error, Debug)]
+pub enum InternalError {}
 
 #[derive(Error, Debug, CandidType)]
 pub enum SystemError {
@@ -42,5 +55,11 @@ pub enum SystemError {
 impl From<RpcError> for SolanaError {
     fn from(error: RpcError) -> Self {
         SolanaError::RpcError(error.to_string())
+    }
+}
+
+impl From<ParsePubkeyError> for SolanaError {
+    fn from(error: ParsePubkeyError) -> Self {
+        SolanaError::ParsePubkeyError(error.to_string())
     }
 }
