@@ -12,7 +12,7 @@ use crate::{
     solana::ed25519::Ed25519ExtendedPublicKey,
 };
 
-#[derive(Clone, Debug, CandidType, Deserialize)]
+#[derive(Clone, CandidType, Deserialize)]
 pub struct State {
     /// SOL-RPC canister we call for outcalls
     pub sol_rpc_canister_id: Principal,
@@ -71,4 +71,16 @@ pub async fn lazy_root_public_key() -> Ed25519ExtendedPublicKey {
     });
 
     root
+}
+
+impl core::fmt::Debug for State {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("State")
+            .field("sol_rpc_canister_id", &self.sol_rpc_canister_id.to_text())
+            .field("network", &self.network)
+            .field("ed25519_key_name", &self.ed25519_key_name)
+            .field("ed25519_root_pk", &self.ed25519_root_pk)
+            .field("proxy_url", &self.proxy_url)
+            .finish()
+    }
 }

@@ -2,7 +2,7 @@ use candid::Principal;
 use sol_rpc_types::SolanaCluster;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::model::types::{ed25519::Ed25519KeyName, errors::Result, tokens::validate_token_mint};
+use crate::model::types::{ed25519::Ed25519KeyName, errors::Result};
 
 use super::state::State;
 
@@ -66,10 +66,7 @@ pub(crate) fn set_tokens(runes: HashMap<String, u8>) {
 /// Register SPL‐token mint
 pub fn register_tokens(new_tokens: HashMap<String, u8>) -> Result<()> {
     TOKENS.with_borrow_mut(|tokens| {
-        for (mint, decimals) in new_tokens {
-            validate_token_mint(mint.to_string())?;
-            tokens.insert(mint.to_string(), decimals);
-        }
+        tokens.extend(new_tokens);
         Ok(())
     })
 }
