@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_btc_interface::Network;
-use ic_stable_structures::{storable::Bound, Storable};
+use ic_stable_structures::{Storable, storable::Bound};
 
 use crate::{
     memory::stable::HEAP_STATE,
@@ -15,7 +15,7 @@ use super::{
         set_key_name, set_network, set_runes,
     },
     init::UnisatConfig,
-    state::{get_state, initialize_state, State},
+    state::{State, get_state, initialize_state},
 };
 
 const MAX_STATE_SIZE: u32 = 64 * 1024; // 64KB
@@ -39,11 +39,15 @@ pub struct SerializableHeap {
 
 impl Storable for SerializableHeap {
     fn to_bytes(&self) -> Cow<[u8]> {
-        Cow::Owned(Encode!(self).expect("Failed to encode SerializableState"))
+        Cow::Owned(Encode!(self).expect("Failed to encode SerializableHeap"))
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).expect("Failed to encode SerializableHeap")
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).expect("Failed to decode SerializableState")
+        Decode!(bytes.as_ref(), Self).expect("Failed to decode SerializableHeap")
     }
 
     const BOUND: Bound = Bound::Bounded {

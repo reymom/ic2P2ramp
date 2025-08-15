@@ -32,6 +32,10 @@ impl Storable for SerializableHeap {
         Cow::Owned(Encode!(self).expect("Failed to encode SerializableState"))
     }
 
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).expect("Failed to encode SerializableHeap")
+    }
+
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
         Decode!(bytes.as_ref(), Self).expect("Failed to decode SerializableState")
     }

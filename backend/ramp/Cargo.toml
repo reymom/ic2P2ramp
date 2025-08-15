@@ -10,8 +10,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ic-cdk = "0.14"
-ic-stable-structures = "0.6"
 ic-cdk-timers = { workspace = true }
+ic-stable-structures = { workspace = true }
 icrc-ledger-types = "0.1.6"
 candid = { workspace = true }
 bitcoin_backend = { workspace = true }

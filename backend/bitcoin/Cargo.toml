@@ -14,7 +14,7 @@ serde_json = "1.0.117"
 hex = "0.4.3"
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
-ic-stable-structures = "0.6.5"
+ic-stable-structures = { workspace = true }
 ic-btc-interface = { workspace = true }
 thiserror = "2.0"
 

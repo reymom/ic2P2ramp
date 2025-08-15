@@ -27,6 +27,10 @@ impl Storable for VaultEntry {
         std::borrow::Cow::Owned(Encode!(self).unwrap())
     }
 
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).unwrap()
+    }
+
     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
         Decode!(bytes.as_ref(), VaultEntry).unwrap()
     }

@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use candid::{Encode, Decode, CandidType, Deserialize};
-use ic_stable_structures::{storable::Bound, Storable};
+use candid::{CandidType, Decode, Deserialize, Encode};
+use ic_stable_structures::{Storable, storable::Bound};
 
 use super::runes::RuneID;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct VaultEntry {
-    pub bitcoin_balance: u64,         // BTC balance in Satoshi
-    pub runes: HashMap<RuneID, u64>,  // Mapping of RuneID to balance
+    pub bitcoin_balance: u64,        // BTC balance in Satoshi
+    pub runes: HashMap<RuneID, u64>, // Mapping of RuneID to balance
 }
 
 const MAX_VAULT_ENTRY_SIZE: u32 = 1024;
@@ -16,6 +16,10 @@ const MAX_VAULT_ENTRY_SIZE: u32 = 1024;
 impl Storable for VaultEntry {
     fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
         std::borrow::Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).unwrap()
     }
 
     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {

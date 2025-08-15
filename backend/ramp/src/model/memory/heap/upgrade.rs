@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap};
 use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 use ic_cdk_timers::TimerId;
-use ic_stable_structures::{storable::Bound, Storable};
+use ic_stable_structures::{Storable, storable::Bound};
 
 use crate::{
     management,
@@ -20,11 +20,11 @@ use crate::{
 };
 
 use super::{
-    clear_order_timer, get_exchange_rate_cache, get_locked_order_timers, get_order_id_counter,
-    get_state, get_user_id_counter,
+    LOCK_DURATION_TIME_SECONDS, State, clear_order_timer, get_exchange_rate_cache,
+    get_locked_order_timers, get_order_id_counter, get_state, get_user_id_counter,
     init::{ChainConfig, OrdiscanConfig, PaypalConfig, RevolutConfig, UnisatConfig},
     initialize_state, set_exchange_rate_cache, set_order_id_counter, set_order_timer,
-    set_user_id_counter, State, LOCK_DURATION_TIME_SECONDS,
+    set_user_id_counter,
 };
 
 const MAX_HEAP_SIZE: u32 = 128 * 1024; // 128KB
@@ -52,6 +52,10 @@ pub struct SerializableHeap {
 impl Storable for SerializableHeap {
     fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
         Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).unwrap()
     }
 
     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {

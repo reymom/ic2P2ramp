@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
-ic-stable-structures = "0.6.5"
+ic-stable-structures = { workspace = true }
 ic-ed25519 = { version = "0.2.0", optional = false }
 base64 = { workspace = true }
 candid = { workspace = true }

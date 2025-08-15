@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::str::FromStr;
 
 use candid::{CandidType, Deserialize};
-use ic_stable_structures::{storable::Bound, Storable};
+use ic_stable_structures::{Storable, storable::Bound};
 
 use crate::model::types::errors::{BitcoinError, Result};
 
@@ -78,6 +78,10 @@ impl RuneID {
 impl Storable for RuneID {
     fn to_bytes(&self) -> Cow<[u8]> {
         Cow::Owned(self.0.as_bytes().to_vec())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.as_bytes().to_vec()
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {

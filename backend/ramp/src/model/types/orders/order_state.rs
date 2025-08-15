@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt};
 
 use candid::{CandidType, Decode, Deserialize, Encode};
-use ic_stable_structures::{storable::Bound, Storable};
+use ic_stable_structures::{Storable, storable::Bound};
 
 use crate::errors::{OrderError, Result};
 
@@ -56,6 +56,10 @@ impl fmt::Display for OrderState {
 impl Storable for OrderState {
     fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
         Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).unwrap()
     }
 
     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {
