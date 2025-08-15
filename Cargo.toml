@@ -11,6 +11,7 @@ ic-btc-interface = "0.2"
 bitcoin = "0.32"
 bitcoin_backend = { path = "bitcoin_backend", default-features = false, features = ["types", "canister"] }
 num-traits = "0.2.19"
+base64 = "0.22"
 
 # Transitive dependency
 # See https://forum.dfinity.org/t/module-imports-function-wbindgen-describe-from-wbindgen-placeholder-that-is-not-exported-by-the-runtime/11545/8

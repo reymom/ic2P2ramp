@@ -11,6 +11,7 @@ ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic-stable-structures = "0.6.5"
 ic-ed25519 = { version = "0.2.0", optional = false }
+base64 = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
 bs58 = "0.5.1"

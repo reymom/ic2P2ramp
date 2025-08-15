@@ -5010,6 +5010,7 @@ dependencies = [
 name = "solana_backend"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bs58",
  "candid",
  "getrandom 0.2.16",

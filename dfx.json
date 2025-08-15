@@ -8,15 +8,21 @@
       }
     },
     "sol_rpc": {
+      "specified_id": "tghme-zyaaa-aaaar-qarca-cai",
       "type": "custom",
       "candid": "https://github.com/dfinity/sol-rpc-canister/releases/latest/download/sol_rpc_canister.did",
       "wasm": "https://github.com/dfinity/sol-rpc-canister/releases/latest/download/sol_rpc_canister.wasm.gz",
+      "metadata": [
+        {
+          "name": "candid:service"
+        }
+      ],
+      "init_arg": "( record {} )",
       "remote": {
         "id": {
           "ic": "tghme-zyaaa-aaaar-qarca-cai"
         }
-      },
-      "init_arg": "( record {} )"
+      }
     },
     "xrc": {
       "type": "pull",
