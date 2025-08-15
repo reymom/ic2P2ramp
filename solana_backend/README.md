@@ -1,67 +1,186 @@
 # Solana Backend Canister
 
-The Solana backend canister provides functionality for managing Solana transactions and supporting custom SPL‐token on the Internet Computer. This includes generating Solana addresses and creating instructions, transactions and registering SPL-token metadata. It serves as a foundational component for managing the Solana Vault in the icRamp platform.
+Solana canister for icRamp: address derivation, SOL/SPL transfers, a guarded token registry (allowlist), and a thin vault layer to mirror backend escrow state.
+
+- **Escrow model**: users lock funds to the canister; backend coordinates vault entries + on-chain transfers.
+- All token amounts are **base units** (lamports for SOL; raw mint units for SPL).
+
+![Sequence: register_token → deposit_to_vault → lock_funds → send (create ATA if needed) → complete_order](/docs/images/solana-backend-vault-interaction.png)
 
 ## Features
 
-## Vault Functionality
-
-### Vault Overview
-
-### Deposit Workflow
-
-### Withdrawal Workflow
+- **Addresses**: derive canister & per-principal Solana pubkeys; compute ATAs.
+- **Transfers**: send SOL and SPL (derives ATAs; you should ensure destination ATA exists or create it).
+- **Token registry (allowlist)**: register SPL mints; decimals fetched on-chain; rejects unsupported mints.
+- **Vaults**: stable maps for offramper/onramper balances (lamports + per-mint tokens).
 
 ## Setup and Deployment
 
-### 1. Generate the Candid File
-
-Solana backend canister:
+### 0. Build + DID
 
 ```bash
 cargo build --release --target wasm32-unknown-unknown --package solana_backend
-```
-
-Extract the Candid methods from the compiled WebAssembly file:
-
-```bash
 candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > solana_backend/solana_backend.did
 ```
 
-### 2. Generate TypeScript Declarations
-
-To use the canister in your frontend application, generate TypeScript bindings:
+### 1. Deploy Solana RPC canister + API keys
 
 ```bash
+dfx deploy sol_rpc
+
+dfx canister call sol_rpc updateApiKeys "(vec {
+  record { variant { AlchemyDevnet }; opt \"$ALCHEMY_KEY\" };
+  record { variant { AnkrDevnet };   opt \"$ANKR_KEY\"   };
+})"
+```
+
+### 2. Deploy `solana_backend`:
+
+Example (Devnet + local ed25519 key):
+
+```bash
+dfx deploy solana_backend --argument "(
+  variant { Reinstall = record {
+    sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
+    ed25519_key_name    = variant { LocalDevelopment };
+    network             = variant { Devnet };
+    proxy_url           = \"https://ic2p2ramp.xyz\";
+  }}
+)"
+```
+
+Upgrade later (no state reset):
+
+```bash
+dfx deploy solana_backend --argument "(variant { Upgrade = null })" --upgrade-unchanged
+```
+
+## Quick API Cheatsheet (dfx)
+
+### Addresses & Balances
+
+```bash
+# Canister’s Solana address
+dfx canister call solana_backend canister_solana_account '()'
+
+# SOL balance (lamports)
+dfx canister call solana_backend get_balance '("<solana-pubkey>")'
+```
+
+### Token Registry (allowlist)
+
+```bash
+# Register by mint; decimals resolved on-chain
+dfx canister call solana_backend register_tokens '(vec { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE" })'
+
+# Inspect registry
+dfx canister call solana_backend get_registered_tokens '()'
+
+# Check allowlist
+dfx canister call solana_backend is_token_supported '("FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE")'
+```
+
+### Transfers
+
+```bash
+# Send SOL (lamports)
+dfx canister call solana_backend send_sol '(opt principal "u6s2n-gx777-77774-qaaba-cai", "<to-pubkey>", 1000)'
+
+# Send SPL (base units); ensure recipient ATA exists or create it first
+dfx canister call solana_backend send_spl_token '(opt principal "u6s2n-gx777-77774-qaaba-cai", "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE", "<to-pubkey>", 1000000)'
+```
+
+> Tip: 1 token with 6 decimals = `1_000_000` base units.
+
+### Vaults
+
+Two stable maps:
+
+- `OFFRAMPER_VAULTS: Address -> VaultEntry`
+- `ONRAMPER_VAULTS: Address -> VaultEntry`
+
+`VaultEntry { lamports: u64, tokens: HashMap<mint, u64> }`
+
+#### Read
+
+```bash
+dfx canister call solana_backend get_offramper_deposits '("<offramper-id>")'
+dfx canister call solana_backend get_onramper_deposits  '("<onramper-id>")'
+```
+
+#### Flows
+
+![icRamp Solana escrow flow — overview](/docs/images/solana-backend-diagram.png)
+
+Using local identities as our offramper and onramper principals:
+
+```bash
+# create if not present
+# dfx identity new maker
+dfx identity use maker
+export OFF=$(dfx identity get-principal)
+
+# likewise for onramper
+# dfx identity new taker
+dfx identity use taker
+export ON=$(dfx identity get-principal)
+```
+
+1. SOL: deposit → lock → complete
+
+```bash
+# deposit 1_000_000 lamports to OFF
+dfx canister call solana_backend deposit_to_vault_canister '("'$OFF'", 1000000, null)'
+
+# lock to ON
+dfx canister call solana_backend lock_funds '("'$OFF'", "'$ON'", 1000000, null)'
+
+# complete (release ON)
+dfx canister call solana_backend complete_order '("'$ON'", 1000000, null)'
+```
+
+2. SPL: deposit → lock → unlock → cancel
+
+```bash
+MINT="FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"
+
+# deposit 1 token (6 decimals) to OFF
+dfx canister call solana_backend deposit_to_vault_canister '("'$OFF'", 1000000, opt "'$MINT'")'
+
+# lock to ON
+dfx canister call solana_backend lock_funds '("'$OFF'", "'$ON'", 1000000, opt "'$MINT'")'
+
+# unlock back to OFF
+dfx canister call solana_backend unlock_funds '("'$OFF'", "'$ON'", 1000000, opt "'$MINT'")'
+
+# cancel original OFF deposit
+dfx canister call solana_backend cancel_deposit '("'$OFF'", 1000000, opt "'$MINT'")'
+```
+
+## Dev Notes
+
+- **Public updates**: Methods you call via `dfx` must be `#[update] pub fn ...`. (E.g., `deposit_to_vault_canister`, `cancel_deposit`.)
+- **Errors**, not panics: all RPC/parse errors bubble up via `Result`, never `panic!`.
+- **Registry policy**: allowlist only by default. Decimals are read from the Mint (byte 44) and stored once.
+- **Token-2022**: supported at owner check level; review per-mint extensions (fees/hooks) before enabling broadly.
+- **Base units everywhere**: UI converts using stored decimals.
+
+### Rebuild DID after changes
+
+```bash
+cargo build --release --target wasm32-unknown-unknown --package solana_backend
+candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > solana_backend/solana_backend.did
 dfx generate
 ```
 
-This will output TypeScript declarations in the corresponding frontend canister directory.
+### Troubleshooting
 
-### 3. Configuration
+- `UnsupportedToken(...)`: mint not in allowlist → register_tokens first.
+- `InvalidAccountData / simulation failed`: recipient ATA missing → create ATA before SPL transfer (or include a create-ATA instruction).
+- `Source token account does not exist`: fund or create the sender’s ATA for that mint.
+- `ParseError`: invalid base58 input (pubkey/mint).
 
-- **Solana Network**: Configure the canister to connect to `Testnet`, `Devnet`, or `Mainnet`. Update the `network` parameter in canister calls as required.
-- **Vault Management**: Ensure the canister has sufficient lamports for operations.
-
-## Using the Canister
-
-### 1. Register SPL-tokens
-
-Before handling tokens in your application, you must register their metadata with the Solana backend. This allows the canister to recognize and process specific SPL-tokens.
-
-### 2. Fetch Solana and Token Balances
-
-The backend canister supports fetching Solana and SPL-token balances.
-
-### 3. Transfer Solana or SPL-tokens
-
-- **Solana Transfer**
-
-- **SPL-token Transfer**
-
-## Development
-
-### Address Generation
+---
 
 ## Contributing
 
