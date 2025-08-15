@@ -69,8 +69,3 @@ pub fn cancel_deposit(
     })?;
     Ok(())
 }
-
-/// Read one vault entry for a given address
-pub fn get_vault_entry(offramper_address: &Address) -> Option<VaultEntry> {
-    OFFRAMPER_VAULTS.with(|vaults_cell| vaults_cell.borrow().get(offramper_address))
-}
