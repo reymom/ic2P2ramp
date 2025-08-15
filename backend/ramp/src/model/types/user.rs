@@ -1,14 +1,14 @@
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
-use ic_stable_structures::{storable::Bound, Storable};
+use ic_stable_structures::{Storable, storable::Bound};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
 
 use super::{
+    AuthenticationData, PaymentProvider,
     common::{LoginAddress, TransactionAddress},
     session::Session,
-    AuthenticationData, PaymentProvider,
 };
 use crate::{
     errors::{BlockchainError, Result, SystemError, UserError},
@@ -183,6 +183,10 @@ impl User {
 impl Storable for User {
     fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
         Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        Encode!(&self).unwrap()
     }
 
     fn from_bytes(bytes: std::borrow::Cow<[u8]>) -> Self {

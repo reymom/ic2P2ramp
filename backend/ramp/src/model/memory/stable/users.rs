@@ -1,5 +1,5 @@
 use crate::errors::{Result, UserError};
-use crate::types::{user::User, LoginAddress};
+use crate::types::{LoginAddress, user::User};
 
 use super::storage::USERS;
 
@@ -36,7 +36,8 @@ pub fn get_user(user_id: &u64) -> Result<User> {
 
 pub fn find_user_by_login_address(login_address: &LoginAddress) -> Result<u64> {
     USERS.with(|users| {
-        for (id, user) in users.borrow().iter() {
+        for e in users.borrow().iter() {
+            let (id, user) = e.into_pair();
             if user.login == *login_address {
                 return Ok(id);
             }
@@ -49,7 +50,8 @@ pub fn reset_password_user(login_address: &LoginAddress, password: String) -> Re
     USERS.with_borrow_mut(|users| {
         let mut user_to_update = None;
 
-        for (_, user) in users.iter() {
+        for e in users.iter() {
+            let user = e.value();
             if user.login == *login_address {
                 user_to_update = Some(User {
                     hashed_password: Some(password.clone()),

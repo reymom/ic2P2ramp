@@ -16,7 +16,8 @@ pub fn discard_old_transactions() {
     PROCESSED_TX_HASHES.with_borrow_mut(|hashes| {
         let keys_to_remove: Vec<String> = hashes
             .iter()
-            .filter_map(|(tx_hash, timestamp)| {
+            .filter_map(|e| {
+                let (tx_hash, timestamp) = e.into_pair();
                 // Check if the transaction is too old
                 if timestamp < ic_cdk::api::time() / 1_000_000_000 - TXS_THRESHOLD_DISCARD {
                     Some(tx_hash.clone()) // Collect the tx_hash for removal

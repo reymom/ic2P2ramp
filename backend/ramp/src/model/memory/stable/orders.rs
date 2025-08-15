@@ -1,8 +1,8 @@
 use crate::errors::{OrderError, Result};
 use crate::model::memory::heap::{clear_order_timer, set_order_timer};
 use crate::types::{
-    orders::{Order, OrderState, RevolutConsent},
     PaymentProvider, TransactionAddress,
+    orders::{Order, OrderState, RevolutConsent},
 };
 
 use super::storage::ORDERS;
@@ -27,7 +27,8 @@ where
     ORDERS.with_borrow(|orders| {
         orders
             .iter()
-            .filter_map(|(_, order_state)| {
+            .filter_map(|e| {
+                let order_state = e.value();
                 if filter(&order_state) {
                     Some(order_state.clone())
                 } else {

@@ -27,15 +27,14 @@ use crate::model::{
 };
 use crate::outcalls::pricing::rates::get_cached_exchange_rate;
 use crate::types::{
-    self,
+    self, BlockchainAsset, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
     evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
     exchange_rate::{Asset, AssetClass},
     icp::{get_icp_token, is_icp_token_supported},
     orders::{
-        fees::{get_crypto_fee, get_fiat_fee},
         EvmOrderInput, LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+        fees::{get_crypto_fee, get_fiat_fee},
     },
-    BlockchainAsset, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
 };
 
 use super::payment;
@@ -351,7 +350,7 @@ pub fn get_orders(
                 .rev()
                 .skip(start_index as usize)
                 .take((end_index - start_index) as usize)
-                .map(|(_, v)| v.clone())
+                .map(|e| e.value())
                 .collect()
         }),
         Some(OrderFilter::ByOfframperId(offramper_id)) => memory::stable::orders::filter_orders(
