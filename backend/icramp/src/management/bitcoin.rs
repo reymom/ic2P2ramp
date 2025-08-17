@@ -1,17 +1,16 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use bitcoin::{
-    self,
+    self, AddressType,
     address::Address,
-    hashes::{sha256, sha256d, Hash},
+    hashes::{Hash, sha256, sha256d},
     secp256k1::Scalar,
-    AddressType,
 };
 use secp256k1::{
-    ecdsa::{RecoverableSignature, RecoveryId, Signature},
     Message, PublicKey, Secp256k1,
+    ecdsa::{RecoverableSignature, RecoveryId, Signature},
 };
 
 use crate::{
@@ -26,8 +25,8 @@ use crate::{
             spent_transactions::mark_tx_hash_as_processed,
         },
         types::{
-            unisat::UnisatTxOut, AddressType as CommonAddressType, BlockchainAsset,
-            PaymentProvider, PaymentProviderType, TransactionAddress,
+            AddressType as CommonAddressType, BlockchainAsset, PaymentProvider,
+            PaymentProviderType, TransactionAddress, unisat::UnisatTxOut,
         },
     },
     outcalls::unisat::{
@@ -140,9 +139,9 @@ pub fn spawn_bitcoin_tx_listener(
                                     }
                                     _ => {
                                         ic_cdk::println!(
-                                    "[spawn_bitcoin_tx_listener] No rune UTXOs found for tx {}",
-                                    txid_clone
-                                );
+                                            "[spawn_bitcoin_tx_listener] No rune UTXOs found for tx {}",
+                                            txid_clone
+                                        );
                                         return;
                                     }
                                 }
@@ -151,46 +150,51 @@ pub fn spawn_bitcoin_tx_listener(
                             };
                             if !action.validate_rune_amount(runes.clone()) {
                                 ic_cdk::println!(
-                                        "[spawn_bitcoin_tx_listener] Error: Rune amount mismatch for tx {}",
-                                        txid_clone
-                                    );
+                                    "[spawn_bitcoin_tx_listener] Error: Rune amount mismatch for tx {}",
+                                    txid_clone
+                                );
                                 return;
                             }
                             match bitcoin_backend_deposit_funds(
-                                    offramper_address.clone().address,
-                                    amount as u64,
-                                    rune_id.clone(),
-                                )
-                                .await {
-                                    Ok(()) => {
-                                        match super::order::create_order(
-                                            &currency,
-                                            offramper_id,
-                                            offramper_address,
-                                            offramper_providers,
-                                            asset,
-                                            amount,
-                                            None,
-                                            None,
-                                            Some(runes),
-                                        )
-                                        .await {
-                                            Ok(order_id) => {
-                                                // Mark tx as processed to avoid double processing
-                                                mark_tx_hash_as_processed(txid);
-                                                ic_cdk::println!("[spawn_bitcoin_tx_listener] bitcoin order created, order id = {}", order_id)
-                                            },
-                                            Err(e) => ic_cdk::println!(
-                                                "[spawn_bitcoin_tx_listener] Error creating order: {:?}",
-                                                e
+                                offramper_address.clone().address,
+                                amount as u64,
+                                rune_id.clone(),
+                            )
+                            .await
+                            {
+                                Ok(()) => {
+                                    match super::order::create_order(
+                                        &currency,
+                                        offramper_id,
+                                        offramper_address,
+                                        offramper_providers,
+                                        asset,
+                                        amount,
+                                        None,
+                                        None,
+                                        Some(runes),
+                                    )
+                                    .await
+                                    {
+                                        Ok(order_id) => {
+                                            // Mark tx as processed to avoid double processing
+                                            mark_tx_hash_as_processed(txid);
+                                            ic_cdk::println!(
+                                                "[spawn_bitcoin_tx_listener] bitcoin order created, order id = {}",
+                                                order_id
                                             )
                                         }
-                                    },
-                                    Err(e) => ic_cdk::println!(
-                                        "[spawn_bitcoin_tx_listener] Error depositing funds to bitcoin backend: {:?}",
-                                        e
-                                    )
+                                        Err(e) => ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] Error creating order: {:?}",
+                                            e
+                                        ),
+                                    }
                                 }
+                                Err(e) => ic_cdk::println!(
+                                    "[spawn_bitcoin_tx_listener] Error depositing funds to bitcoin backend: {:?}",
+                                    e
+                                ),
+                            }
                         }
                         BitcoinTransactionAction::CompleteOrder {
                             onramper_address,
@@ -207,22 +211,25 @@ pub fn spawn_bitcoin_tx_listener(
                                 Ok(()) => match super::order::set_order_completed(order_id) {
                                     Ok(()) => {
                                         let _ = unset_processing_order(&order_id);
-                                        ic_cdk::println!("[spawn_bitcoin_tx_listener] bitcoin order completed, order id = {}", order_id)
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] bitcoin order completed, order id = {}",
+                                            order_id
+                                        )
                                     }
                                     Err(e) => {
                                         let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                                    "[spawn_bitcoin_tx_listener] Error creating order: {:?}",
-                                                    e
-                                                )
+                                            "[spawn_bitcoin_tx_listener] Error setting order as completed: {:?}",
+                                            e
+                                        )
                                     }
                                 },
                                 Err(e) => {
                                     let _ = unset_processing_order(&order_id);
                                     ic_cdk::println!(
-                                            "[spawn_bitcoin_tx_listener] Error depositing funds to bitcoin backend: {:?}",
-                                            e
-                                        )
+                                        "[spawn_bitcoin_tx_listener] Error completing order: {:?}",
+                                        e
+                                    )
                                 }
                             }
                         }
@@ -241,22 +248,25 @@ pub fn spawn_bitcoin_tx_listener(
                                 Ok(()) => match cancel_order(order_id) {
                                     Ok(()) => {
                                         let _ = unset_processing_order(&order_id);
-                                        ic_cdk::println!("[spawn_bitcoin_tx_listener] bitcoin order completed, order id = {}", order_id)
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] bitcoin order cancelled, order id = {}",
+                                            order_id
+                                        )
                                     }
                                     Err(e) => {
                                         let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                                    "[spawn_bitcoin_tx_listener] Error creating order: {:?}",
-                                                    e
-                                                )
+                                            "[spawn_bitcoin_tx_listener] Error cancelling order: {:?}",
+                                            e
+                                        )
                                     }
                                 },
                                 Err(e) => {
                                     let _ = unset_processing_order(&order_id);
                                     ic_cdk::println!(
-                                            "[spawn_bitcoin_tx_listener] Error depositing funds to bitcoin backend: {:?}",
-                                            e
-                                        )
+                                        "[spawn_bitcoin_tx_listener] Error cancelling deposit: {:?}",
+                                        e
+                                    )
                                 }
                             }
                         }

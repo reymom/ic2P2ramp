@@ -216,8 +216,7 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
         match canister_ids.try_into() {
             Ok(canister_ids) => state.canister_ids = canister_ids,
             Err(e) => {
-                ic_cdk::println!("couldnt parse canister ids: {:?}", e);
-                ic_cdk::trap("Failed to parse canister ids")
+                ic_cdk::println!("couldn't parse canister ids: {:?}", e);
             }
         }
     }

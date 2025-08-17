@@ -14,10 +14,13 @@ use crate::evm::{
 };
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::inter_canister::bitcoin::{
-    self, bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata,
-    bitcoin_backend_validate_rune,
+    bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata, bitcoin_backend_lock_funds,
+    bitcoin_backend_transfer, bitcoin_backend_unlock_funds, bitcoin_backend_validate_rune,
 };
-use crate::inter_canister::solana::{solana_backend_send_sol, solana_backend_send_spl_token};
+use crate::inter_canister::solana::{
+    solana_backend_lock_funds, solana_backend_send_sol, solana_backend_send_spl_token,
+    solana_backend_unlock_funds,
+};
 use crate::management::bitcoin as bitcoin_management;
 use crate::management::solana::{SolanaTransactionAction, spawn_solana_tx_listener};
 use crate::management::user as user_management;
@@ -504,13 +507,34 @@ pub async fn lock_order(
                 revolut_consent,
             )?;
 
-            bitcoin::bitcoin_backend_lock_funds(
+            bitcoin_backend_lock_funds(
                 order.offramper_address.address,
                 onramper_address.address,
                 order.crypto.amount as u64,
                 rune_id,
             )
             .await?;
+            Ok(())
+        }
+        BlockchainAsset::Solana { spl_token } => {
+            memory::stable::orders::lock_order(
+                order_id,
+                price,
+                offramper_fee,
+                onramper_user_id,
+                onramper_provider,
+                onramper_address.clone(),
+                revolut_consent,
+            )?;
+
+            solana_backend_lock_funds(
+                order.offramper_address.address,
+                onramper_address.address,
+                order.crypto.amount as u64,
+                spl_token,
+            )
+            .await?;
+
             Ok(())
         }
         _ => Err(BlockchainError::UnsupportedBlockchain)?,
@@ -528,6 +552,7 @@ pub async fn lock_order(
 /// - **ICP Orders**: Unlocks the order directly.
 /// - **Bitcoin Orders**: Unlocks the order and calls the `bitcoin_backend` canister
 ///   to update the vault tracking state.
+/// - **Solana orders**: Unlocks the order both in here and mirrors it in `solana_backend`.
 /// - **EVM Orders**: First, uncommits the funds in the EVM vault. The function
 ///   listens for the EVM transaction to complete successfully before proceeding
 ///   to update the corresponding ICP order status.
@@ -591,7 +616,7 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
         BlockchainAsset::Bitcoin { rune_id } => {
             memory::stable::orders::unlock_order(order.base.id)?;
 
-            bitcoin::bitcoin_backend_unlock_funds(
+            bitcoin_backend_unlock_funds(
                 order.base.offramper_address.address,
                 order.onramper.address.address,
                 order.base.crypto.amount as u64,
@@ -601,7 +626,19 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
 
             Ok(())
         }
-        _ => Err(BlockchainError::UnsupportedBlockchain)?,
+        BlockchainAsset::Solana { spl_token } => {
+            memory::stable::orders::unlock_order(order.base.id)?;
+
+            solana_backend_unlock_funds(
+                order.base.offramper_address.address,
+                order.onramper.address.address,
+                order.base.crypto.amount as u64,
+                spl_token,
+            )
+            .await?;
+
+            Ok(())
+        }
     }
 }
 
@@ -660,7 +697,7 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
                 Some(rune_id) => TransactionType::RuneTransfer(rune_id),
                 None => TransactionType::TaprootBitcoin,
             };
-            let tx_id = bitcoin::bitcoin_backend_transfer(
+            let tx_id = bitcoin_backend_transfer(
                 dst_address.clone(),
                 order.crypto.amount as u64,
                 tx_type,
@@ -689,18 +726,25 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
             // 1. Refund
             let sig = match &spl_token {
                 Some(mint) => {
-                    // SPL refund
                     solana_backend_send_spl_token(mint.clone(), to.clone(), amt_nat).await?
                 }
                 None => {
-                    // SOL refund
                     solana_backend_send_sol(to.clone(), candid::Nat::from(order.crypto.amount))
                         .await?
                 }
             };
 
             // 2. Cancel order after confirmation
-            spawn_solana_tx_listener(sig, SolanaTransactionAction::CancelOrder { order_id }, 0);
+            spawn_solana_tx_listener(
+                sig,
+                SolanaTransactionAction::CancelOrder {
+                    order_id,
+                    amount: order.crypto.amount as u64,
+                    offramper: to,
+                    token: spl_token.clone(),
+                },
+                0,
+            );
 
             Ok(())
         }

@@ -2,7 +2,7 @@ use ic_cdk_timers::set_timer;
 use std::time::Duration;
 
 use crate::{
-    inter_canister::solana::solana_backend_get_tx,
+    inter_canister::solana::{solana_backend_cancel_deposit, solana_backend_get_tx},
     model::memory::stable::orders::{cancel_order, unset_processing_order},
 };
 
@@ -13,7 +13,12 @@ const MIN_SOL_CONF: u64 = 2;
 
 #[derive(Clone)]
 pub enum SolanaTransactionAction {
-    CancelOrder { order_id: u64 },
+    CancelOrder {
+        order_id: u64,
+        amount: u64,
+        offramper: String,
+        token: Option<String>,
+    },
     // (add DepositFunds / CompleteOrder as you wire them to L1 transfers)
 }
 
@@ -34,18 +39,33 @@ pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionActi
 
                     if confs >= MIN_SOL_CONF {
                         match action.clone() {
-                            SolanaTransactionAction::CancelOrder { order_id } => {
-                                match cancel_order(order_id) {
-                                    Ok(()) => {
-                                        let _ = unset_processing_order(&order_id);
-                                        ic_cdk::println!("[solana] order canceled: {order_id}");
-                                    }
+                            SolanaTransactionAction::CancelOrder {
+                                order_id,
+                                offramper,
+                                amount,
+                                token,
+                            } => {
+                                match solana_backend_cancel_deposit(offramper, amount, token).await
+                                {
+                                    Ok(()) => match cancel_order(order_id) {
+                                        Ok(()) => {
+                                            let _ = unset_processing_order(&order_id);
+                                            ic_cdk::println!("[solana] order canceled: {order_id}");
+                                        }
+                                        Err(e) => {
+                                            let _ = unset_processing_order(&order_id);
+                                            ic_cdk::println!(
+                                                "[solana] cancel_order storage error: {:?}",
+                                                e
+                                            );
+                                        }
+                                    },
                                     Err(e) => {
                                         let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                            "[solana] cancel_order storage error: {:?}",
+                                            "[solana] Error cancelling solana deposit: {:?}",
                                             e
-                                        );
+                                        )
                                     }
                                 }
                             }
