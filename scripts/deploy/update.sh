@@ -1,6 +1,25 @@
 # Update with no changes
 dfx deploy backend --argument "( variant { Upgrade = null } )" --upgrade-unchanged
 
+# Update with new canister ids
+dfx deploy backend --upgrade-unchanged --argument "(
+  variant { 
+    Upgrade = opt record {
+      canister_ids = opt record {
+        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
+        bitcoin_backend_id = \"ng6kh-iaaaa-aaaap-qp2fa-cai\";
+      };
+      ecdsa_key_id = null;
+      chains = null;
+      paypal = null;
+      revolut = null;
+      proxy_url = null;
+      ordiscan = null;
+      unisat = null;
+    }
+  }
+)"
+
 # Update with new ecdsa key
 dfx deploy backend --upgrade-unchanged --argument "(
   variant { 

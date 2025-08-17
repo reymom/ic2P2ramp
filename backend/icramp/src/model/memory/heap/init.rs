@@ -6,11 +6,12 @@ use evm_rpc_canister_types::RpcServices;
 use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
-use crate::model::types::ordiscan::OrdiscanState;
-use crate::model::types::unisat::UnisatState;
+use crate::model::memory::heap::CanisterIds;
 use crate::model::types::{
     evm::chains::ChainState,
+    ordiscan::OrdiscanState,
     payment::{paypal::PayPalState, revolut::RevolutState},
+    unisat::UnisatState,
 };
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
@@ -50,6 +51,29 @@ pub struct UnisatConfig {
     pub api_key: String,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct CanisterIdsConfig {
+    pub solana_backend_id: String,
+    pub bitcoin_backend_id: String,
+}
+
+impl TryFrom<CanisterIdsConfig> for CanisterIds {
+    type Error = InvalidStateError;
+
+    fn try_from(cfg: CanisterIdsConfig) -> Result<Self, Self::Error> {
+        let sol = candid::Principal::from_text(&cfg.solana_backend_id)
+            .map_err(|e| InvalidStateError::InvalidCanisterId(format!("solana_backend_id: {e}")))?;
+        let btc = candid::Principal::from_text(&cfg.bitcoin_backend_id).map_err(|e| {
+            InvalidStateError::InvalidCanisterId(format!("bitcoin_backend_id: {e}"))
+        })?;
+
+        Ok(CanisterIds {
+            solana_backend_id: sol,
+            bitcoin_backend_id: btc,
+        })
+    }
+}
+
 impl fmt::Debug for RevolutConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RevolutConfig")
@@ -65,6 +89,7 @@ impl fmt::Debug for RevolutConfig {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
+    pub canister_ids: CanisterIdsConfig,
     pub chains: Vec<ChainConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub paypal: PaypalConfig,
@@ -86,6 +111,7 @@ impl TryFrom<InitArg> for State {
             proxy_url,
             ordiscan,
             unisat,
+            canister_ids,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
         let mut chains_map = HashMap::new();
@@ -105,6 +131,7 @@ impl TryFrom<InitArg> for State {
         }
 
         let state = Self {
+            canister_ids: canister_ids.try_into()?,
             chains: chains_map,
             ecdsa_pub_key: None,
             ecdsa_key_id,

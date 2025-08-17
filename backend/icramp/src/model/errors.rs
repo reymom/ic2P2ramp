@@ -1,4 +1,4 @@
-use std::num::ParseFloatError;
+use std::num::{ParseFloatError, ParseIntError};
 
 use bitcoin_backend::types::errors::BitcoinError;
 use candid::CandidType;
@@ -253,8 +253,8 @@ impl From<ParseFloatError> for SystemError {
     }
 }
 
-impl From<std::num::ParseIntError> for SystemError {
-    fn from(err: std::num::ParseIntError) -> Self {
+impl From<ParseIntError> for SystemError {
+    fn from(err: ParseIntError) -> Self {
         SystemError::ParseIntError(err.to_string())
     }
 }

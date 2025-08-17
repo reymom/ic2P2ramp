@@ -41,11 +41,15 @@ cargo build --release --target wasm32-unknown-unknown --package backend
 
 candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
 
-dfx canister create --with-cycles 1_000_000_000_000 backend --ic
+dfx canister create --with-cycles 1_000_000_000_000 icramp --ic
 
-dfx deploy backend --argument "(
+dfx deploy icramp --argument "(
   variant { 
     Reinstall = record {
+      canister_ids = record {
+        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
+        bitcoin_backend_id = \"ng6kh-iaaaa-aaaap-qp2fa-cai\";
+      };
       ecdsa_key_id = record {
         name = \"test_key_1\";
         curve = variant { secp256k1 };

@@ -31,17 +31,17 @@
         "output": "frontend/src/declarations/xrc"
       }
     },
-    "ramp": {
+    "icramp": {
       "dependencies": ["evm_rpc", "xrc"],
-      "candid": "backend/ramp/ramp.did",
-      "package": "ramp_backend",
+      "candid": "backend/icramp/icramp.did",
+      "package": "icramp_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/ramp"
+        "output": "frontend/src/declarations/icramp"
       }
     },
     "frontend": {
-      "dependencies": ["ramp"],
+      "dependencies": ["icramp"],
       "type": "assets",
       "source": ["frontend/dist/"],
       "workspace": "frontend"

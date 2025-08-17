@@ -8,7 +8,7 @@ use ic_stable_structures::{Storable, storable::Bound};
 use crate::{
     management,
     model::{
-        memory::stable::storage::HEAP_STATE,
+        memory::{heap::init::CanisterIdsConfig, stable::storage::HEAP_STATE},
         types::{
             evm::chains::ChainState,
             exchange_rate::ExchangeRateCache,
@@ -31,6 +31,7 @@ const MAX_HEAP_SIZE: u32 = 128 * 1024; // 128KB
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct UpdateArg {
+    pub canister_ids: Option<CanisterIdsConfig>,
     pub chains: Option<Vec<ChainConfig>>, // Optional chain configuration updates
     pub ecdsa_key_id: Option<EcdsaKeyId>, // Optional ECDSA key update
     pub paypal: Option<PaypalConfig>,     // Optional PayPal configuration update
@@ -209,5 +210,15 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
             api_key: unisat_config.api_key,
             api_url: unisat_config.api_url,
         };
+    }
+
+    if let Some(canister_ids) = update_arg.canister_ids {
+        match canister_ids.try_into() {
+            Ok(canister_ids) => state.canister_ids = canister_ids,
+            Err(e) => {
+                ic_cdk::println!("couldnt parse canister ids: {:?}", e);
+                ic_cdk::trap("Failed to parse canister ids")
+            }
+        }
     }
 }

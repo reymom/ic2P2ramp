@@ -13,8 +13,16 @@ use crate::model::types::{
 
 use super::storage::STATE;
 
-#[derive(Clone, Debug, CandidType, Deserialize)]
+/// Canister ids to make intercall canisters
+#[derive(Clone, CandidType, Deserialize)]
+pub struct CanisterIds {
+    pub solana_backend_id: Principal,
+    pub bitcoin_backend_id: Principal,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
 pub struct State {
+    pub canister_ids: CanisterIds,
     pub chains: HashMap<u64, ChainState>,
     pub ecdsa_pub_key: Option<Vec<u8>>,
     pub ecdsa_key_id: EcdsaKeyId,
@@ -27,9 +35,45 @@ pub struct State {
     pub icp_tokens: HashMap<Principal, IcpToken>,
 }
 
+impl std::fmt::Debug for CanisterIds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CanisterIds")
+            .field("solana_backend_id", &self.solana_backend_id.to_text())
+            .field("bitcoin_backend_id", &self.bitcoin_backend_id.to_text())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("canister_ids", &self.canister_ids) // CanisterIds gets custom Debug too
+            .field("chains", &self.chains)
+            .field("ecdsa_pub_key", &self.ecdsa_pub_key)
+            .field("ecdsa_key_id", &self.ecdsa_key_id)
+            .field("evm_address", &self.evm_address)
+            .field("paypal", &self.paypal)
+            .field("revolut", &self.revolut)
+            .field("proxy_url", &self.proxy_url)
+            .field("ordiscan", &self.ordiscan)
+            .field("unisat", &self.unisat)
+            // For icp_tokens, print principals as text
+            .field(
+                "icp_tokens",
+                &self
+                    .icp_tokens
+                    .iter()
+                    .map(|(p, t)| (p.to_text(), t))
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum InvalidStateError {
     InvalidEthereumContractAddress(String),
+    InvalidCanisterId(String),
 }
 
 /// Mutates (part of) the current state using `f`.

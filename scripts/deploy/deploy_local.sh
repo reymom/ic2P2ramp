@@ -93,13 +93,17 @@ dfx deps pull && dfx deps init evm_rpc --argument '(record {})' && dfx deps depl
 
 dfx deps deploy evm_rpc
 
-dfx generate backend
+dfx generate icramp
 
 # dfx_test_key, test_key_1
 # api-m.paypal.com, api-m.sandbox.paypal.com
-dfx deploy backend --argument "(
+dfx deploy icramp --argument "(
   variant { 
     Reinstall = record {
+      canister_ids = record {
+        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
+        bitcoin_backend_id = \"ng6kh-iaaaa-aaaap-qp2fa-cai\";
+      };
       ecdsa_key_id = record {
         name = \"dfx_test_key\";
         curve = variant { secp256k1 };

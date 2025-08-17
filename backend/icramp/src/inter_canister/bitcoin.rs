@@ -1,15 +1,13 @@
+use ic_cdk::api::call::call;
 use std::str::FromStr;
 
-use candid::Principal;
-use ic_cdk::api::call::call;
-
-use crate::{model::errors::SystemError, Result};
-use bitcoin_backend::types::{
-    errors::Result as BitcoinResult, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType,
+use crate::{
+    Result,
+    model::{errors::SystemError, memory::heap::read_state},
 };
-
-// const BITCOIN_BACKEND_CANISTER_ID: &str = "viuz6-wyaaa-aaaap-qpy7q-cai";
-const BITCOIN_BACKEND_CANISTER_ID: &str = "ng6kh-iaaaa-aaaap-qp2fa-cai";
+use bitcoin_backend::types::{
+    RuneID, RuneMetadata, RuneUTXOEntry, TransactionType, errors::Result as BitcoinResult,
+};
 
 pub async fn bitcoin_backend_transfer(
     dst_address: String,
@@ -17,8 +15,7 @@ pub async fn bitcoin_backend_transfer(
     tx_type: TransactionType,
     rune_utxos: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<String> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     let (tx_id,): (BitcoinResult<String>,) = (call::<
         (String, u64, TransactionType, Option<Vec<RuneUTXOEntry>>),
@@ -40,8 +37,7 @@ pub async fn bitcoin_backend_deposit_funds(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
@@ -59,8 +55,7 @@ pub async fn bitcoin_backend_lock_funds(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(String, String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
@@ -78,8 +73,7 @@ pub async fn bitcoin_backend_unlock_funds(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(String, String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
@@ -96,8 +90,7 @@ pub async fn bitcoin_backend_cancel_deposit(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
@@ -114,8 +107,7 @@ pub async fn bitcoin_backend_complete_order(
     amount: u64,
     rune: Option<RuneID>,
 ) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(String, u64, Option<RuneID>), ()>(
         bitcoin_backend_canister_id,
@@ -128,8 +120,7 @@ pub async fn bitcoin_backend_complete_order(
 
 /// Calls the `validate_rune_metadata` function on the `bitcoin_backend` canister.
 pub async fn bitcoin_backend_validate_rune(rune_id: RuneID) -> Result<()> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid ledger principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     call::<(RuneID,), ()>(bitcoin_backend_canister_id, "validate_rune", (rune_id,))
         .await
@@ -137,8 +128,7 @@ pub async fn bitcoin_backend_validate_rune(rune_id: RuneID) -> Result<()> {
 }
 
 pub async fn bitcoin_backend_estimate_fee() -> Result<u64> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid Bitcoin backend principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     let (fee,): (BitcoinResult<u64>,) = (call::<(), (BitcoinResult<u64>,)>(
         bitcoin_backend_canister_id,
@@ -153,8 +143,7 @@ pub async fn bitcoin_backend_estimate_fee() -> Result<u64> {
 }
 
 pub async fn bitcoin_backend_get_rune_metadata(rune_id: String) -> Result<RuneMetadata> {
-    let bitcoin_backend_canister_id = Principal::from_text(BITCOIN_BACKEND_CANISTER_ID)
-        .map_err(|_| SystemError::InvalidInput("Invalid Bitcoin backend principal".to_string()))?;
+    let bitcoin_backend_canister_id = read_state(|s| s.canister_ids.bitcoin_backend_id);
 
     Ok(call::<(RuneID,), (BitcoinResult<(RuneMetadata, String)>,)>(
         bitcoin_backend_canister_id,
