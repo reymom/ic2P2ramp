@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use ramp_types::solana::errors::{Result, SolanaError, SystemError};
+use icramp_types::solana::errors::{Result, SolanaError, SystemError};
 use sol_rpc_types::{AccountData, AccountEncoding, DataSlice, GetAccountInfoEncoding};
 use solana_pubkey::Pubkey;
 use std::str::FromStr;

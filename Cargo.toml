@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "backend/ramp",
+    "backend/icramp",
     "backend/bitcoin",
     "backend/solana",
     "backend/shared", 
@@ -21,8 +21,8 @@ ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 ic-stable-structures = "0.7"
+icramp_types = { path = "backend/shared" }
 num-traits = "0.2.19"
-ramp_types = { path = "backend/shared" }
 serde = "1.0"
 sol_rpc_types  = { package = "sol_rpc_types",  git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", default-features = false }
 solana-pubkey = "=2.4.0"

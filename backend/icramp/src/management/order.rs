@@ -17,7 +17,9 @@ use crate::inter_canister::bitcoin::{
     self, bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata,
     bitcoin_backend_validate_rune,
 };
+use crate::inter_canister::solana::{solana_backend_send_sol, solana_backend_send_spl_token};
 use crate::management::bitcoin as bitcoin_management;
+use crate::management::solana::{SolanaTransactionAction, spawn_solana_tx_listener};
 use crate::management::user as user_management;
 
 use crate::model::types::orders::BitcoinOrderInput;
@@ -680,7 +682,28 @@ pub async fn cancel_order(order_id: u64, session_token: String) -> Result<()> {
 
             Ok(())
         }
-        _ => Err(BlockchainError::UnsupportedBlockchain)?,
+        BlockchainAsset::Solana { spl_token } => {
+            let to = order.offramper_address.address.clone();
+            let amt_nat = candid::Nat::from(order.crypto.amount);
+
+            // 1. Refund
+            let sig = match &spl_token {
+                Some(mint) => {
+                    // SPL refund
+                    solana_backend_send_spl_token(mint.clone(), to.clone(), amt_nat).await?
+                }
+                None => {
+                    // SOL refund
+                    solana_backend_send_sol(to.clone(), candid::Nat::from(order.crypto.amount))
+                        .await?
+                }
+            };
+
+            // 2. Cancel order after confirmation
+            spawn_solana_tx_listener(sig, SolanaTransactionAction::CancelOrder { order_id }, 0);
+
+            Ok(())
+        }
     }
 }
 

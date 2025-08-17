@@ -1,5 +1,5 @@
 [package]
-name = "ramp_types"
+name = "icramp_types"
 version.workspace = true
 edition.workspace = true
 

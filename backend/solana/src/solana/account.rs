@@ -1,4 +1,4 @@
-use ramp_types::solana::errors::{Result, SolanaError};
+use icramp_types::solana::errors::{Result, SolanaError};
 use sol_rpc_types::GetAccountInfoEncoding;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;

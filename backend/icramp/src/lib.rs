@@ -22,9 +22,9 @@ use management::{
     random, user as user_management,
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
-use model::memory::heap::get_state;
 use model::types::{
-    self,
+    self, AddressType, AuthenticationData, BlockchainAsset, Crypto, LoginAddress, PaymentProvider,
+    PaymentProviderType, TransactionAddress,
     evm::{
         gas::{self, ChainGasTracking},
         logs::{EvmTransactionLog, TransactionStatus},
@@ -32,21 +32,19 @@ use model::types::{
         token::{self, Token, TokenManager},
         transaction::{TransactionAction, TransactionVariant},
     },
-    exchange_rate::{Asset, AssetClass, ExchangeRateCache, CACHE_DURATION},
-    icp::{get_icp_token, IcpToken},
+    exchange_rate::{Asset, AssetClass, CACHE_DURATION, ExchangeRateCache},
+    icp::{IcpToken, get_icp_token},
     orders::{BitcoinOrderInput, EvmOrderInput, OrderFilter, OrderState},
     session::Session,
     user::{User, UserType},
-    AddressType, AuthenticationData, BlockchainAsset, Crypto, LoginAddress, PaymentProvider,
-    PaymentProviderType, TransactionAddress,
 };
 use model::{
     guards, helpers,
     memory::{
         self,
         heap::{
-            self, initialize_state, logs, read_state, setup_timers, upgrade, InstallArg, State,
-            STATE,
+            self, InstallArg, STATE, State, get_state, initialize_state, logs, read_state,
+            setup_timers, upgrade,
         },
         stable::{self, orders, spent_transactions},
     },

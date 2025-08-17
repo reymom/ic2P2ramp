@@ -1,5 +1,5 @@
 use candid::Principal;
-use ramp_types::solana::errors::Result;
+use icramp_types::solana::errors::Result;
 use sol_rpc_types::SolanaCluster;
 use std::{cell::RefCell, collections::HashMap};
 

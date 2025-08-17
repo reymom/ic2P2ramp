@@ -1,4 +1,4 @@
-use ramp_types::solana::errors::{Result, VaultError};
+use icramp_types::solana::errors::{Result, VaultError};
 
 use crate::memory::stable::vault::OFFRAMPER_VAULTS;
 use crate::model::types::{Address, vault::VaultEntry};

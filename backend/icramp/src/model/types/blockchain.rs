@@ -31,7 +31,9 @@ pub enum BlockchainAsset {
     Bitcoin {
         rune_id: Option<RuneID>,
     },
-    Solana,
+    Solana {
+        spl_token: Option<String>,
+    },
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -86,7 +88,7 @@ impl BlockchainAsset {
             Self::EVM { .. } => BlockchainType::EVM,
             Self::Bitcoin { .. } => BlockchainType::Bitcion,
             Self::ICP { .. } => BlockchainType::ICP,
-            Self::Solana => BlockchainType::Solana,
+            Self::Solana { .. } => BlockchainType::Solana,
         }
     }
 

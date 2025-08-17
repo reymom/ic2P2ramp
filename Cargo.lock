@@ -1913,6 +1913,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "icramp_backend"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bitcoin",
+ "bitcoin_backend",
+ "candid",
+ "email_address",
+ "ethers-core",
+ "evm-rpc-canister-types",
+ "futures",
+ "getrandom 0.2.16",
+ "hex",
+ "ic-cdk 0.14.2",
+ "ic-cdk-timers",
+ "ic-stable-structures 0.7.0",
+ "icramp_types",
+ "icrc-ledger-types",
+ "num-traits",
+ "pbkdf2 0.12.2",
+ "rand 0.8.5",
+ "rsa",
+ "secp256k1 0.30.0",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "icramp_types"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk 0.17.2",
+ "ic-stable-structures 0.7.0",
+ "serde",
+ "sol_rpc_types",
+ "solana-pubkey",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "icrc-cbor"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3133,50 +3177,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
-name = "ramp_backend"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "bitcoin",
- "bitcoin_backend",
- "candid",
- "email_address",
- "ethers-core",
- "evm-rpc-canister-types",
- "futures",
- "getrandom 0.2.16",
- "hex",
- "ic-cdk 0.14.2",
- "ic-cdk-timers",
- "ic-stable-structures 0.7.0",
- "icrc-ledger-types",
- "num-traits",
- "pbkdf2 0.12.2",
- "ramp_types",
- "rand 0.8.5",
- "rsa",
- "secp256k1 0.30.0",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "ramp_types"
-version = "0.1.0"
-dependencies = [
- "candid",
- "ic-cdk 0.17.2",
- "ic-stable-structures 0.7.0",
- "serde",
- "sol_rpc_types",
- "solana-pubkey",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4023,8 +4023,8 @@ dependencies = [
  "ic-cdk-timers",
  "ic-ed25519",
  "ic-stable-structures 0.7.0",
+ "icramp_types",
  "num-traits",
- "ramp_types",
  "serde",
  "sol_rpc_client",
  "sol_rpc_types",

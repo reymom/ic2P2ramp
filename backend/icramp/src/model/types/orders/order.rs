@@ -8,7 +8,7 @@ use crate::{
     errors::{OrderError, Result, SystemError},
     model::{
         memory::heap,
-        types::{common::AddressType, Crypto, PaymentProviderType},
+        types::{Crypto, PaymentProviderType, common::AddressType},
     },
     types::{BlockchainAsset, PaymentProvider, TransactionAddress},
 };
@@ -55,7 +55,7 @@ impl Order {
             (BlockchainAsset::EVM { .. }, AddressType::EVM)
             | (BlockchainAsset::ICP { .. }, AddressType::ICP)
             | (BlockchainAsset::Bitcoin { .. }, AddressType::Bitcoin)
-            | (BlockchainAsset::Solana, AddressType::Solana) => (),
+            | (BlockchainAsset::Solana { .. }, AddressType::Solana) => (),
             _ => {
                 return Err(SystemError::InvalidInput(
                     "Address type does not match blockchain type".to_string(),
@@ -118,7 +118,7 @@ impl Order {
             (BlockchainAsset::EVM { .. }, AddressType::EVM)
             | (BlockchainAsset::ICP { .. }, AddressType::ICP)
             | (BlockchainAsset::Bitcoin { .. }, AddressType::Bitcoin)
-            | (BlockchainAsset::Solana, AddressType::Solana) => (),
+            | (BlockchainAsset::Solana { .. }, AddressType::Solana) => (),
             _ => {
                 return Err(SystemError::InvalidInput(
                     "Address type does not match blockchain type".to_string(),

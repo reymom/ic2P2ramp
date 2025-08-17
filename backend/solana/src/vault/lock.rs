@@ -1,4 +1,4 @@
-use ramp_types::solana::errors::Result;
+use icramp_types::solana::errors::Result;
 
 use crate::{
     memory::stable::vault::ONRAMPER_VAULTS,

@@ -2,6 +2,7 @@ pub mod bitcoin;
 pub mod order;
 pub mod payment;
 pub mod random;
+pub mod solana;
 pub mod user;
 pub mod vault;
 

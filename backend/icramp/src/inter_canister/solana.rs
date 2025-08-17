@@ -2,7 +2,7 @@ use candid::{Nat, Principal};
 use ic_cdk::call;
 
 use crate::model::errors::{Result, SystemError};
-use ramp_types::solana::errors::Result as SolanaResult;
+use icramp_types::solana::{errors::Result as SolanaResult, transaction::TxInfo};
 
 const SOLANA_BACKEND_CANISTER_ID: &str = "u6s2n-gx777-77774-qaaba-cai";
 
@@ -46,6 +46,17 @@ pub async fn solana_backend_send_spl_token(
     .0,);
 
     Ok(tx_id?)
+}
+
+pub async fn solana_backend_get_tx(signature: String) -> Result<TxInfo> {
+    let can_id = Principal::from_text(SOLANA_BACKEND_CANISTER_ID)
+        .map_err(|_| SystemError::InvalidInput("Invalid solana_backend principal".to_string()))?;
+
+    let (res,): (SolanaResult<TxInfo>,) = call::<(String,), _>(can_id, "get_tx", (signature,))
+        .await
+        .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?;
+
+    Ok(res?)
 }
 
 pub async fn solana_backend_deposit_funds(

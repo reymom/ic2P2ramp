@@ -3,7 +3,7 @@ use std::num::ParseFloatError;
 use bitcoin_backend::types::errors::BitcoinError;
 use candid::CandidType;
 use ic_cdk::api::call::RejectionCode;
-use ramp_types::solana::errors::SolanaError;
+use icramp_types::solana::errors::SolanaError;
 use thiserror::Error;
 
 use crate::types::{AddressType, PaymentProviderType};
