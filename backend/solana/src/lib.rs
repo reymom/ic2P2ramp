@@ -6,8 +6,11 @@ pub mod vault;
 
 use candid::{Nat, Principal};
 use ic_cdk::{init, post_upgrade, pre_upgrade, query, update};
+use icramp_types::solana::{
+    errors::{Result, SolanaError, SystemError, VaultError},
+    transaction::TxInfo,
+};
 use num_traits::cast::ToPrimitive;
-use ramp_types::solana::errors::{Result, SolanaError, SystemError, VaultError};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -414,6 +417,11 @@ async fn send_spl_token(
 #[update]
 async fn withdraw_solana_fees(_destination_address: Address, _amount: u64) -> Result<String> {
     ic_cdk::trap("TO DO")
+}
+
+#[query]
+async fn get_tx(signature: String) -> Result<TxInfo> {
+    solana::transaction::get_tx(signature).await
 }
 
 // ------
