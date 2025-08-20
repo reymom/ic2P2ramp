@@ -5,17 +5,23 @@ use candid::Principal;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use crate::{
-    errors::{BlockchainError, OrderError, Result, UserError},
+    errors::{OrderError, Result, UserError},
     evm::vault::Ic2P2ramp,
     icp::vault::Ic2P2ramp as ICPRamp,
-    inter_canister::bitcoin,
-    management,
+    inter_canister::{
+        bitcoin,
+        solana::{solana_backend_send_sol, solana_backend_send_spl_token},
+    },
+    management::{
+        self,
+        solana::{SolanaTransactionAction, spawn_solana_tx_listener},
+    },
     model::memory::stable::orders,
     outcalls::{paypal, revolut},
     types::{
+        BlockchainAsset, PaymentProvider, PaymentProviderType,
         icp::get_icp_token,
         orders::{LockedOrder, RevolutConsent},
-        BlockchainAsset, PaymentProvider, PaymentProviderType,
     },
 };
 
@@ -176,7 +182,37 @@ pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
 
             Ok(())
         }
-        _ => Err(BlockchainError::UnsupportedBlockchain)?,
+        BlockchainAsset::Solana { spl_token } => {
+            let amt_nat = candid::Nat::from(order.base.crypto.amount);
+
+            // Send payout to onramper on Solana
+            let sig = match spl_token.clone() {
+                Some(mint) => {
+                    solana_backend_send_spl_token(mint, onramper.clone(), amt_nat).await?
+                }
+                None => {
+                    solana_backend_send_sol(
+                        onramper.clone(),
+                        candid::Nat::from(order.base.crypto.amount),
+                    )
+                    .await?
+                }
+            };
+
+            // After L1 confirm, settle escrow + mark completed
+            spawn_solana_tx_listener(
+                sig,
+                SolanaTransactionAction::CompleteOrder {
+                    order_id: order.base.id,
+                    amount: order.base.crypto.amount as u64,
+                    onramper,         // to whom we paid
+                    token: spl_token, // mint if SPL
+                },
+                0,
+            );
+
+            Ok(())
+        }
     }
 }
 

@@ -2,7 +2,10 @@ use ic_cdk_timers::set_timer;
 use std::time::Duration;
 
 use crate::{
-    inter_canister::solana::{solana_backend_cancel_deposit, solana_backend_get_tx},
+    inter_canister::solana::{
+        solana_backend_cancel_deposit, solana_backend_complete_order, solana_backend_get_tx,
+    },
+    management::order::set_order_completed,
     model::memory::stable::orders::{cancel_order, unset_processing_order},
 };
 
@@ -19,7 +22,12 @@ pub enum SolanaTransactionAction {
         offramper: String,
         token: Option<String>,
     },
-    // (add DepositFunds / CompleteOrder as you wire them to L1 transfers)
+    CompleteOrder {
+        order_id: u64,
+        amount: u64,
+        onramper: String,
+        token: Option<String>,
+    },
 }
 
 pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionAction, attempt: u32) {
@@ -66,6 +74,37 @@ pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionActi
                                             "[solana] Error cancelling solana deposit: {:?}",
                                             e
                                         )
+                                    }
+                                }
+                            }
+                            SolanaTransactionAction::CompleteOrder {
+                                order_id,
+                                onramper,
+                                amount,
+                                token,
+                            } => {
+                                match solana_backend_complete_order(onramper, amount, token).await {
+                                    Ok(()) => match set_order_completed(order_id) {
+                                        Ok(()) => {
+                                            let _ = unset_processing_order(&order_id);
+                                            ic_cdk::println!(
+                                                "[solana] order completed: {order_id}"
+                                            );
+                                        }
+                                        Err(e) => {
+                                            let _ = unset_processing_order(&order_id);
+                                            ic_cdk::println!(
+                                                "[solana] set_order_completed storage error: {:?}",
+                                                e
+                                            );
+                                        }
+                                    },
+                                    Err(e) => {
+                                        let _ = unset_processing_order(&order_id);
+                                        ic_cdk::println!(
+                                            "[solana] Error completing solana order: {:?}",
+                                            e
+                                        );
                                     }
                                 }
                             }
