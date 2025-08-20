@@ -1,5 +1,5 @@
 use candid::Principal;
-use icramp_types::solana::errors::Result;
+use icramp_types::solana::{errors::Result, token::TokenInfo};
 use sol_rpc_types::SolanaCluster;
 use std::{cell::RefCell, collections::HashMap};
 
@@ -12,7 +12,7 @@ thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = RefCell::default();
 
     /// Registered SPL‐token mints → metadata (if you need to track tokens)
-    pub(crate) static TOKENS: RefCell<HashMap<String, u8>> = RefCell::new(HashMap::new());
+    pub(crate) static TOKENS: RefCell<HashMap<String, TokenInfo>> = RefCell::new(HashMap::new());
 }
 
 pub fn init_state(state: State) {
@@ -56,16 +56,20 @@ pub fn proxy_url() -> String {
     read_state(|s| s.proxy_url.clone())
 }
 
-pub(crate) fn get_tokens() -> HashMap<String, u8> {
-    TOKENS.with(|token| token.borrow().clone())
+pub(crate) fn get_tokens() -> HashMap<String, TokenInfo> {
+    TOKENS.with_borrow(|tokens| tokens.clone())
 }
 
-pub(crate) fn set_tokens(runes: HashMap<String, u8>) {
-    TOKENS.with_borrow_mut(|t| *t = runes)
+pub fn get_token(mint: &str) -> Option<TokenInfo> {
+    TOKENS.with_borrow(|tokens| tokens.get(mint).cloned())
+}
+
+pub(crate) fn set_tokens(tokens: HashMap<String, TokenInfo>) {
+    TOKENS.with_borrow_mut(|t| *t = tokens)
 }
 
 /// Register SPL‐token mint
-pub fn register_tokens(new_tokens: HashMap<String, u8>) -> Result<()> {
+pub fn register_tokens(new_tokens: HashMap<String, TokenInfo>) -> Result<()> {
     TOKENS.with_borrow_mut(|tokens| {
         tokens.extend(new_tokens);
         Ok(())

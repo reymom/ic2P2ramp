@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use candid::{CandidType, Decode, Deserialize, Encode, Principal};
 use ic_stable_structures::{Storable, storable::Bound};
+use icramp_types::solana::token::TokenInfo;
 use sol_rpc_types::SolanaCluster;
 
 use crate::memory::{
@@ -24,7 +25,7 @@ pub struct UpdateArg {
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct SerializableHeap {
     state: State,
-    tokens: HashMap<String, u8>,
+    tokens: HashMap<String, TokenInfo>,
 }
 
 impl Storable for SerializableHeap {
@@ -47,7 +48,7 @@ impl Storable for SerializableHeap {
 }
 
 impl SerializableHeap {
-    pub fn from_internal(state: State, tokens: HashMap<String, u8>) -> Self {
+    pub fn from_internal(state: State, tokens: HashMap<String, TokenInfo>) -> Self {
         SerializableHeap { state, tokens }
     }
 }
