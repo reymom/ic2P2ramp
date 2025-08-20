@@ -26,6 +26,13 @@ pub struct Order {
 }
 
 #[derive(CandidType, Deserialize, Clone)]
+pub enum DepositInput {
+    Evm(EvmOrderInput),
+    Bitcoin(BitcoinOrderInput),
+    Solana(SolanaOrderInput),
+}
+
+#[derive(CandidType, Deserialize, Clone)]
 pub struct EvmOrderInput {
     pub tx_hash: String,
     pub estimated_gas_lock: u64,
@@ -36,6 +43,12 @@ pub struct EvmOrderInput {
 pub struct BitcoinOrderInput {
     pub tx_id: String,
     pub canister_address: String,
+}
+
+#[derive(CandidType, Deserialize, Clone)]
+pub struct SolanaOrderInput {
+    pub signature: String,
+    pub mint: Option<String>,
 }
 
 impl Order {

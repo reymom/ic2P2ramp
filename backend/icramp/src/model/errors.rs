@@ -119,6 +119,9 @@ pub enum OrderError {
 
     #[error("Payment Verification Failed")]
     PaymentVerificationFailed,
+
+    #[error("Invalid Input: {0}")]
+    InvalidInput(String),
 }
 
 #[derive(Error, Debug, CandidType, Clone)]
@@ -146,6 +149,9 @@ pub enum BlockchainError {
 
     #[error("Transaction timeout")]
     TransactionTimeout,
+
+    #[error("Transaction is already processed")]
+    TransactionAlreadyProcessed,
 
     #[error("Inconsistent transaction status")]
     InconsistentStatus,
