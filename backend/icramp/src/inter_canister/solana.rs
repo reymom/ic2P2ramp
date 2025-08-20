@@ -5,7 +5,12 @@ use crate::model::{
     errors::{Result, SystemError},
     memory::heap::read_state,
 };
-use icramp_types::solana::{errors::Result as SolanaResult, transaction::TxInfo};
+use icramp_types::solana::{
+    errors::Result as SolanaResult,
+    fees::SolanaFeeEstimates,
+    token::TokenInfo,
+    transaction::{TxInfo, TxMetadata},
+};
 
 pub async fn solana_backend_send_sol(dst: String, lamports: Nat) -> Result<String> {
     let can_id = read_state(|s| s.canister_ids.solana_backend_id);
@@ -53,6 +58,33 @@ pub async fn solana_backend_get_tx(signature: String) -> Result<TxInfo> {
         .await
         .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?;
 
+    Ok(res?)
+}
+
+pub async fn solana_backend_get_tx_metadata(signature: String) -> Result<TxMetadata> {
+    let can_id = read_state(|s| s.canister_ids.solana_backend_id);
+    let (res,): (SolanaResult<TxMetadata>,) =
+        call::<(String,), _>(can_id, "get_tx_metadata", (signature,))
+            .await
+            .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?;
+    Ok(res?)
+}
+
+pub async fn solana_backend_estimate_fees(mint: Option<String>) -> Result<SolanaFeeEstimates> {
+    let can_id = read_state(|s| s.canister_ids.solana_backend_id);
+    let (res,): (SolanaResult<SolanaFeeEstimates>,) =
+        call::<(Option<String>,), _>(can_id, "estimate_fees", (mint,))
+            .await
+            .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?;
+    Ok(res?)
+}
+
+pub async fn solana_backend_get_token_info(mint: String) -> Result<TokenInfo> {
+    let can_id = read_state(|s| s.canister_ids.solana_backend_id);
+    let (res,): (SolanaResult<TokenInfo>,) =
+        call::<(String,), _>(can_id, "get_token_info", (mint,))
+            .await
+            .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?;
     Ok(res?)
 }
 
