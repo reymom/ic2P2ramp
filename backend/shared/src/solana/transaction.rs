@@ -1,6 +1,8 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
+use sol_rpc_types::TransactionStatusMeta;
 
+/// mostly for checking confirmation
 #[derive(Debug, Clone, CandidType, Deserialize, Serialize)]
 pub struct TxInfo {
     pub signature: String,
@@ -10,4 +12,12 @@ pub struct TxInfo {
     pub confirmation_status: Option<String>, // "processed" | "confirmed" | "finalized" (stringified)
     pub slot: Option<u64>,
     pub err: Option<String>,
+}
+
+/// to check transaction metadata
+#[derive(CandidType, Deserialize, Serialize, Clone, Debug)]
+pub struct TxMetadata {
+    pub signature: String,
+    pub slot: u64,
+    pub meta: TransactionStatusMeta, // Candid-ready mirror type from sol-rpc-types
 }

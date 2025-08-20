@@ -13,7 +13,10 @@ pub enum SolanaError {
     #[error(transparent)]
     SystemError(#[from] SystemError),
 
-    #[error("Unsupported token")]
+    #[error(transparent)]
+    TransactionError(#[from] TransactionError),
+
+    #[error("Unsupported token: {0}")]
     UnsupportedToken(String),
 
     #[error("RPC error: {0}")]
@@ -35,6 +38,18 @@ pub enum VaultError {
     AddressVaultNotFound,
     #[error("Insufficient balance")]
     InsufficientBalance,
+}
+
+#[derive(Error, Debug, Clone, CandidType, Deserialize)]
+pub enum TransactionError {
+    #[error("Transaction not found: {0}")]
+    NotFound(String),
+
+    #[error("Transaction not confirmed: {0}")]
+    Unconfirmed(String),
+
+    #[error("Transaction meta error: {0}")]
+    MetaError(String),
 }
 
 #[derive(Error, Debug)]
