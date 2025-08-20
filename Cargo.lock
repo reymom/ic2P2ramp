@@ -4026,6 +4026,7 @@ dependencies = [
  "icramp_types",
  "num-traits",
  "serde",
+ "serde_json",
  "sol_rpc_client",
  "sol_rpc_types",
  "solana-instruction",

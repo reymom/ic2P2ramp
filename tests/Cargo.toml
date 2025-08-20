@@ -9,11 +9,11 @@ path = "lib.rs"
 
 [dev-dependencies]
 bitcoin_backend = { workspace = true }
+bitcoincore-rpc = "0.19"
 candid = { workspace = true }
-serde = { workspace = true }
 ic-cdk = { workspace = true }
 ic-btc-interface = { workspace = true }
-pocket-ic = "6.0"
-serde_json = "1.0"
-bitcoincore-rpc = "0.19"
 lazy_static = "1.5"
+pocket-ic = "6.0"
+serde = { workspace = true }
+serde_json = { workspace = true }

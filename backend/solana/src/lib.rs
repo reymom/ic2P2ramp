@@ -8,34 +8,34 @@ use candid::{Nat, Principal};
 use ic_cdk::{init, post_upgrade, pre_upgrade, query, update};
 use icramp_types::solana::{
     errors::{Result, SolanaError, SystemError, VaultError},
-    transaction::TxInfo,
+    fees::SolanaFeeEstimates,
+    token::TokenInfo,
+    transaction::{TxInfo, TxMetadata},
 };
 use num_traits::cast::ToPrimitive;
-use std::collections::HashMap;
-use std::str::FromStr;
-
+use serde_json::json;
 use sol_rpc_types::{GetAccountInfoEncoding, TokenAmount};
 use solana_message::Message;
 use solana_pubkey::Pubkey;
 use solana_system_interface::instruction;
 use solana_transaction::Transaction;
+use std::collections::HashMap;
+use std::str::FromStr;
 
-use crate::memory::stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS};
-use crate::model::helpers::validate_caller_not_anonymous;
-use crate::model::types::tokens::fetch_mint_decimals;
-use crate::model::types::{Address, tokens::validate_token_mint, vault::VaultEntry};
-use crate::solana::client::client;
-use crate::solana::spl;
-use crate::solana::wallet::SolanaWallet;
-use crate::{
-    memory::heap::{
-        InstallArg,
-        config::{get_state, init_state},
-        state::State,
-        upgrade,
-    },
-    solana::account::get_account_owner,
+use memory::heap::{
+    InstallArg,
+    config::{get_state, init_state, is_token_registered},
+    state::State,
+    upgrade,
 };
+use memory::stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS};
+use model::helpers::validate_caller_not_anonymous;
+use model::types::{
+    Address,
+    tokens::{fetch_mint_decimals, validate_token_mint},
+    vault::VaultEntry,
+};
+use solana::{account::get_account_owner, client::client, spl, wallet::SolanaWallet};
 
 #[pre_upgrade]
 fn pre_upgrade() {
@@ -87,6 +87,58 @@ fn init(install_arg: InstallArg) {
 // ------
 // Solana
 // ------
+
+// ----
+// fees
+// ----
+
+/// Heuristic fee estimates used by icramp for pricing:
+/// - lock: payout to onramper (may require creating ATA if SPL)
+/// - withdraw: refund back to offramper (assume ATA already exists)
+#[query]
+async fn estimate_fees(token_mint: Option<String>) -> Result<SolanaFeeEstimates> {
+    // lamports per signature via JSON-RPC getFees
+    let lps = {
+        let s = client()
+            .json_request(json!({"jsonrpc":"2.0","id":1,"method":"getFees"}))
+            .send()
+            .await
+            .expect_consistent()
+            .map_err(SolanaError::from)?;
+        let v: serde_json::Value = serde_json::from_str(&s)
+            .map_err(|e| SolanaError::SystemError(SystemError::ParseError(e.to_string())))?;
+        v.get("result")
+            .and_then(|r| r.get("value"))
+            .and_then(|v| v.get("feeCalculator"))
+            .and_then(|fc| fc.get("lamportsPerSignature"))
+            .and_then(|n| n.as_u64())
+            .unwrap_or(5_000)
+    };
+
+    // ATA rent (only on payout path) via JSON-RPC getMinimumBalanceForRentExemption(165)
+    let ata_rent = if token_mint.is_some() {
+        let s = client()
+            .json_request(json!({
+                "jsonrpc":"2.0","id":1,
+                "method":"getMinimumBalanceForRentExemption",
+                "params":[165]
+            }))
+            .send()
+            .await
+            .expect_consistent()
+            .map_err(SolanaError::from)?;
+        let v: serde_json::Value = serde_json::from_str(&s)
+            .map_err(|e| SolanaError::SystemError(SystemError::ParseError(e.to_string())))?;
+        v.get("result").and_then(|n| n.as_u64()).unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(SolanaFeeEstimates {
+        lock_lamports: lps + ata_rent, // payout might need ATA
+        withdraw_lamports: lps,        // refund: ATA presumed to exist
+    })
+}
 
 // ----------------------------------------
 // owned_* functions are just for reference
@@ -420,8 +472,13 @@ async fn withdraw_solana_fees(_destination_address: Address, _amount: u64) -> Re
 }
 
 #[query]
-async fn get_tx(signature: String) -> Result<TxInfo> {
-    solana::transaction::get_tx(signature).await
+async fn get_tx(signature_b58: String) -> Result<TxInfo> {
+    solana::transaction::get_tx(signature_b58).await
+}
+
+#[query]
+async fn get_tx_metadata(signature_b58: String) -> Result<TxMetadata> {
+    solana::transaction::get_tx_metadata(signature_b58).await
 }
 
 // ------
@@ -429,22 +486,38 @@ async fn get_tx(signature: String) -> Result<TxInfo> {
 // ------
 
 #[query]
-fn get_registered_tokens() -> HashMap<String, u8> {
+fn get_registered_tokens() -> HashMap<String, TokenInfo> {
     memory::heap::config::get_tokens()
 }
 
-#[update]
-async fn register_tokens(tokens: Vec<String>) -> Result<()> {
-    let mut verified: HashMap<String, u8> = HashMap::with_capacity(tokens.len());
+#[query]
+fn get_token_info(mint: String) -> Result<TokenInfo> {
+    validate_token_mint(mint.clone())?;
 
-    for mint_str in tokens {
+    let dec = memory::heap::config::get_token(&mint)
+        .ok_or_else(|| SolanaError::UnsupportedToken(mint))?;
+    Ok(dec)
+}
+
+#[update]
+async fn register_tokens(tokens: Vec<(String, String, String)>) -> Result<()> {
+    let mut verified: HashMap<String, TokenInfo> = HashMap::with_capacity(tokens.len());
+
+    for (mint_str, symbol, rate_symbol) in tokens {
         validate_token_mint(mint_str.clone())?;
 
         let mint = Pubkey::from_str(&mint_str)
             .map_err(|e| SolanaError::SystemError(SystemError::ParseError(e.to_string())))?;
 
-        let dec = fetch_mint_decimals(&mint).await?;
-        verified.insert(mint_str, dec);
+        let decimals = fetch_mint_decimals(&mint).await?;
+        verified.insert(
+            mint_str,
+            TokenInfo {
+                decimals,
+                symbol,
+                rate_symbol,
+            },
+        );
     }
 
     memory::heap::config::register_tokens(verified)
@@ -453,7 +526,7 @@ async fn register_tokens(tokens: Vec<String>) -> Result<()> {
 #[query]
 fn is_token_supported(mint: String) -> Result<()> {
     validate_token_mint(mint.clone())?;
-    if !crate::memory::heap::config::is_token_registered(mint.as_str()) {
+    if !is_token_registered(mint.as_str()) {
         return Err(SolanaError::UnsupportedToken(mint.to_string()));
     };
     Ok(())
@@ -485,7 +558,7 @@ fn deposit_to_vault_canister(
     token_mint: Option<String>,
 ) -> Result<()> {
     if let Some(ref mint) = token_mint {
-        if !crate::memory::heap::config::is_token_registered(mint) {
+        if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }
@@ -499,7 +572,7 @@ fn deposit_to_vault_canister(
 #[update]
 fn cancel_deposit(offramper: String, amount: u64, token_mint: Option<String>) -> Result<()> {
     if let Some(ref mint) = token_mint {
-        if !crate::memory::heap::config::is_token_registered(mint) {
+        if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }
@@ -517,7 +590,7 @@ fn lock_funds(
     token_mint: Option<String>,
 ) -> Result<()> {
     if let Some(ref mint) = token_mint {
-        if !crate::memory::heap::config::is_token_registered(mint) {
+        if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }
@@ -533,7 +606,7 @@ fn unlock_funds(
     token_mint: Option<String>,
 ) -> Result<()> {
     if let Some(ref mint) = token_mint {
-        if !crate::memory::heap::config::is_token_registered(mint) {
+        if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }
@@ -548,7 +621,7 @@ async fn complete_order(
     token_mint: Option<String>,
 ) -> Result<()> {
     if let Some(ref mint) = token_mint {
-        if !crate::memory::heap::config::is_token_registered(mint) {
+        if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }

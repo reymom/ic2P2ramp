@@ -24,6 +24,7 @@ ic-stable-structures = "0.7"
 icramp_types = { path = "backend/shared" }
 num-traits = "0.2.19"
 serde = "1.0"
+serde_json = "1.0"
 sol_rpc_types  = { package = "sol_rpc_types",  git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", default-features = false }
 solana-pubkey = "=2.4.0"
 thiserror = "2.0"
