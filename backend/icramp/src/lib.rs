@@ -16,6 +16,7 @@ use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use evm::{fees, transaction, vault::Ic2P2ramp};
 use icp::vault::Ic2P2ramp as ICPRamp;
+use inter_canister::solana::solana_backend_deposit_funds;
 use management::bitcoin::BitcoinTransactionAction;
 use management::{
     bitcoin as bitcoin_management, order as order_management, payment as payment_management,
@@ -34,7 +35,9 @@ use model::types::{
     },
     exchange_rate::{Asset, AssetClass, CACHE_DURATION, ExchangeRateCache},
     icp::{IcpToken, get_icp_token},
-    orders::{BitcoinOrderInput, EvmOrderInput, OrderFilter, OrderState},
+    orders::{
+        BitcoinOrderInput, DepositInput, EvmOrderInput, OrderFilter, OrderState, SolanaOrderInput,
+    },
     session::Session,
     user::{User, UserType},
 };
@@ -243,8 +246,13 @@ pub async fn create_evm_order_with_tx(
         chain_id,
         token_address,
     };
-    order_management::validate_deposit_tx(&asset, Some(evm_input), None, offramper.clone(), amount)
-        .await?;
+    order_management::validate_deposit_tx(
+        &asset,
+        Some(DepositInput::Evm(evm_input)),
+        offramper.clone(),
+        amount,
+    )
+    .await?;
 
     let order_id = order_management::create_order(
         &currency,
@@ -309,9 +317,9 @@ pub async fn resolve_tx_status(order_id: u64, tx_hash: String, chain_id: u64) {
     }
 }
 
-// --------------
+// ------------------
 // Bitcoin Management
-// --------------
+// ------------------
 
 #[ic_cdk::update]
 pub async fn create_bitcoin_order_with_tx(
@@ -336,8 +344,7 @@ pub async fn create_bitcoin_order_with_tx(
     };
     let tx_id = order_management::validate_deposit_tx(
         &asset,
-        None,
-        Some(bitcoin_input.clone()),
+        Some(DepositInput::Bitcoin(bitcoin_input.clone())),
         offramper.clone(),
         amount,
     )
@@ -362,6 +369,57 @@ pub async fn create_bitcoin_order_with_tx(
     );
 
     Ok(())
+}
+
+// ------------------
+// Solana Management
+// ------------------
+pub async fn create_solana_order_with_tx(
+    signature: String,
+    user: u64,
+    offramper: String,
+    providers: HashMap<PaymentProviderType, PaymentProvider>,
+    currency: String,
+    amount: u128,
+    spl_token: Option<String>,
+) -> Result<u64> {
+    guards::only_controller()?;
+
+    let asset = BlockchainAsset::Solana {
+        spl_token: spl_token.clone(),
+    };
+    order_management::validate_deposit_tx(
+        &asset,
+        Some(DepositInput::Solana(SolanaOrderInput {
+            signature: signature.clone(),
+            mint: spl_token.clone(),
+        })),
+        offramper.clone(),
+        amount,
+    )
+    .await?;
+
+    solana_backend_deposit_funds(offramper.clone(), amount as u64, spl_token.clone()).await?;
+
+    let order_id = order_management::create_order(
+        &currency,
+        user,
+        TransactionAddress {
+            address_type: AddressType::Solana,
+            address: offramper,
+        },
+        providers,
+        asset,
+        amount,
+        None,
+        None,
+        None,
+    )
+    .await?;
+
+    spent_transactions::mark_tx_hash_as_processed(signature);
+
+    Ok(order_id)
 }
 
 // ---------
@@ -712,8 +770,7 @@ async fn create_order(
     crypto_amount: u128,
     offramper_address: TransactionAddress,
     offramper_user_id: u64,
-    evm_input: Option<EvmOrderInput>,
-    bitcoin_input: Option<BitcoinOrderInput>,
+    deposit_input: Option<DepositInput>,
 ) -> Result<Option<u64>> {
     let user = stable::users::get_user(&offramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -728,8 +785,7 @@ async fn create_order(
 
     let tx_hash = order_management::validate_deposit_tx(
         &asset,
-        evm_input.clone(),
-        bitcoin_input.clone(),
+        deposit_input.clone(),
         offramper_address.clone().address,
         crypto_amount,
     )
@@ -737,6 +793,13 @@ async fn create_order(
 
     match asset.clone() {
         BlockchainAsset::Bitcoin { rune_id } => {
+            let canister_address = match deposit_input {
+                Some(DepositInput::Bitcoin(v)) => Ok(v.canister_address),
+                _ => Err(OrderError::InvalidInput(
+                    "Missing bitcoin order input".to_string(),
+                )),
+            }?;
+
             bitcoin_management::spawn_bitcoin_tx_listener(
                 tx_hash.unwrap(),
                 BitcoinTransactionAction::DepositFunds {
@@ -747,14 +810,22 @@ async fn create_order(
                     currency,
                     amount: crypto_amount,
                 },
-                bitcoin_input.unwrap().canister_address,
+                canister_address,
                 rune_id,
                 0,
             );
 
             Ok(None)
         }
-        _ => {
+        BlockchainAsset::Solana { spl_token } => {
+            // Escrow-accounting only (no L1 tx): persist deposit in Solana backend
+            solana_backend_deposit_funds(
+                offramper_address.address.clone(),
+                crypto_amount as u64,
+                spl_token.clone(),
+            )
+            .await?;
+
             let order_id = order_management::create_order(
                 &currency,
                 offramper_user_id,
@@ -762,8 +833,36 @@ async fn create_order(
                 offramper_providers,
                 asset,
                 crypto_amount,
-                evm_input.clone().map(|evm| evm.estimated_gas_lock),
-                evm_input.map(|evm| evm.estimated_gas_withdraw),
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+            if let Some(sig) = tx_hash {
+                spent_transactions::mark_tx_hash_as_processed(sig);
+            }
+
+            Ok(Some(order_id))
+        }
+        // shared ICP and EVM arm branches, though icp's gas lock and withdraw are None
+        _ => {
+            let (gas_lock, gas_withdraw) = match deposit_input {
+                Some(DepositInput::Evm(v)) => {
+                    (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw))
+                }
+                _ => (None, None),
+            };
+
+            let order_id = order_management::create_order(
+                &currency,
+                offramper_user_id,
+                offramper_address,
+                offramper_providers,
+                asset,
+                crypto_amount,
+                gas_lock,
+                gas_withdraw,
                 None,
             )
             .await?;
@@ -794,10 +893,7 @@ async fn top_up_order(
     user_id: u64,
     session_token: String,
     amount: u128,
-    evm_input: Option<EvmOrderInput>,
-    estimated_gas_lock: Option<u64>,
-    estimated_gas_withdraw: Option<u64>,
-    bitcoin_input: Option<BitcoinOrderInput>,
+    deposit_input: Option<DepositInput>,
 ) -> Result<()> {
     let order = orders::get_order(&order_id)?.created()?;
     order.is_processing()?;
@@ -809,8 +905,7 @@ async fn top_up_order(
 
     let tx_hash = order_management::validate_deposit_tx(
         &order.crypto.asset,
-        evm_input.clone(),
-        bitcoin_input.clone(),
+        deposit_input.clone(),
         order.offramper_address.clone().address,
         amount,
     )
@@ -820,8 +915,12 @@ async fn top_up_order(
         e
     })?;
 
-    order_management::topup_order(&order, amount, estimated_gas_lock, estimated_gas_withdraw)
-        .await?;
+    let (gas_lock, gas_withdraw) = match deposit_input {
+        Some(DepositInput::Evm(v)) => (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw)),
+        _ => (None, None),
+    };
+
+    order_management::topup_order(&order, amount, gas_lock, gas_withdraw).await?;
 
     if let Some(tx_hash) = tx_hash {
         spent_transactions::mark_tx_hash_as_processed(tx_hash);
