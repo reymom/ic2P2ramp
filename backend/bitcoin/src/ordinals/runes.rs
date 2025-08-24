@@ -1,16 +1,10 @@
 use bitcoin::{
-    opcodes,
+    ScriptBuf, opcodes,
     script::{Builder, PushBytesBuf},
-    ScriptBuf,
 };
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
-use crate::{
-    model::types::{
-        errors::{BitcoinError, Result},
-        runes::Etching,
-    },
-    RuneID,
-};
+use crate::{RuneID, model::types::runes::Etching};
 
 pub fn build_runestone_edict(
     rune_id: &RuneID,

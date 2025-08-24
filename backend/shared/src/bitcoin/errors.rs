@@ -138,7 +138,9 @@ impl From<bitcoin::consensus::encode::Error> for BitcoinError {
 }
 
 #[derive(Debug, Error, Clone, CandidType, Deserialize)]
-#[error("Insufficient balance: {current_balance} satoshi, trying to transfer {transfer_amount} satoshi with fee {fee}")]
+#[error(
+    "Insufficient balance: {current_balance} satoshi, trying to transfer {transfer_amount} satoshi with fee {fee}"
+)]
 pub struct InsufficientBalanceError {
     pub current_balance: u64,
     pub transfer_amount: u64,

@@ -1,12 +1,10 @@
 use candid::Principal;
+use icramp_types::bitcoin::errors::Result;
 
 use crate::model::{
-    types::{
-        errors::Result,
-        schnorr::{
-            SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKey, SchnorrPublicKeyReply,
-            SignWithSchnorr, SignWithSchnorrReply,
-        },
+    types::schnorr::{
+        SchnorrAlgorithm, SchnorrKeyId, SchnorrPublicKey, SchnorrPublicKeyReply, SignWithSchnorr,
+        SignWithSchnorrReply,
     },
     utils,
 };

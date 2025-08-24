@@ -1,4 +1,3 @@
-pub mod errors;
 pub mod inscription;
 pub mod runes;
 pub mod schnorr;

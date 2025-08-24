@@ -1,11 +1,13 @@
-use ic_cdk::api::management_canister::ecdsa::{
-    ecdsa_public_key, sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgument,
-    SignWithEcdsaArgument,
-};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::model::{types::errors::Result, utils};
+use ic_cdk::api::management_canister::ecdsa::{
+    EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgument, SignWithEcdsaArgument, ecdsa_public_key,
+    sign_with_ecdsa,
+};
+use icramp_types::bitcoin::errors::Result;
+
+use crate::model::utils;
 
 // stores the ecdsa to maintain state across different calls to the canister (not across updates)
 thread_local! {

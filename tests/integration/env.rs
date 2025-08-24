@@ -3,7 +3,8 @@ use lazy_static::lazy_static;
 use pocket_ic::PocketIc;
 use std::sync::Mutex;
 
-use bitcoin_backend::types::{errors::Result, RuneID, TransactionType};
+use bitcoin_backend::types::{RuneID, TransactionType};
+use icramp_types::bitcoin::errors::Result;
 
 use crate::common::{helpers::update_call, setup::setup_bitcoin_backend};
 

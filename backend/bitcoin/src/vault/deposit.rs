@@ -1,12 +1,8 @@
 use crate::{
     memory::stable::vault::OFFRAMPER_VAULTS,
-    model::types::{
-        errors::{Result, VaultError},
-        runes::RuneID,
-        vault::VaultEntry,
-        Address,
-    },
+    model::types::{Address, runes::RuneID, vault::VaultEntry},
 };
+use icramp_types::bitcoin::errors::{Result, VaultError};
 
 pub fn deposit_to_vault(
     offramper_address: Address,

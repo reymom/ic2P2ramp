@@ -1,23 +1,20 @@
 use std::collections::HashMap;
 
 use bitcoin::{
-    absolute::LockTime, hashes::Hash, transaction::Version, Address, Amount, Network, OutPoint,
-    ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness,
+    Address, Amount, Network, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
+    Witness, absolute::LockTime, hashes::Hash, transaction::Version,
 };
 use candid::Principal;
 use ic_btc_interface::{Network as BitcoinNetwork, Utxo};
+use icramp_types::bitcoin::errors::{BitcoinError, InsufficientBalanceError, Result};
 
 use crate::{
-    api,
-    model::types::{
-        errors::{BitcoinError, InsufficientBalanceError, Result},
-        transfer::TaprootUseCase,
-    },
+    RuneID, RuneUTXOEntry, TransactionType, api,
+    model::types::transfer::TaprootUseCase,
     ordinals::{
         inscription::build_ordinal_inscription,
         runes::{build_runestone_edict, build_runestone_etching},
     },
-    RuneID, RuneUTXOEntry, TransactionType,
 };
 
 const DUST_THRESHOLD: u64 = 546;
@@ -115,7 +112,7 @@ pub fn build_transaction_with_fee(
             outputs.extend(btc_outputs);
         }
         _ => {
-            return build_btc_transaction_with_fee(btc_utxos, own_address, dst_address, amount, fee)
+            return build_btc_transaction_with_fee(btc_utxos, own_address, dst_address, amount, fee);
         }
     }
 

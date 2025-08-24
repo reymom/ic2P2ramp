@@ -1,15 +1,12 @@
 use bitcoin::{
-    opcodes,
+    ScriptBuf, Txid, opcodes,
     script::{Builder, PushBytesBuf},
-    ScriptBuf, Txid,
 };
 use ic_btc_interface::Satoshi;
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 use crate::model::types::{
-    errors::{BitcoinError, Result},
-    inscription::Inscription,
-    transfer::TransactionType,
-    wallet::WalletConfig,
+    inscription::Inscription, transfer::TransactionType, wallet::WalletConfig,
 };
 
 pub fn build_ordinal_inscription(inscription: &Inscription) -> Result<ScriptBuf> {

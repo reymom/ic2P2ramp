@@ -5,8 +5,7 @@ use ic_btc_interface::{
     Network, Page, Satoshi, SendTransactionRequest, Utxo, UtxosFilterInRequest,
 };
 use ic_cdk::api::call::call_with_payment128;
-
-use crate::model::types::errors::{BitcoinError, Result};
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 const GET_UTXO_MAINNET: u128 = 10_000_000_000;
 const GET_UTXO_TESTNET: u128 = 4_000_000_000;

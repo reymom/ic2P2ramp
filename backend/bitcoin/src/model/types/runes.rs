@@ -3,8 +3,7 @@ use std::str::FromStr;
 
 use candid::{CandidType, Deserialize};
 use ic_stable_structures::{Storable, storable::Bound};
-
-use crate::model::types::errors::{BitcoinError, Result};
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuneMetadata {

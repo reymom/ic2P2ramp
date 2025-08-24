@@ -16,8 +16,8 @@ mod wallet;
 #[cfg(feature = "canister")]
 use ic_btc_interface::{GetBlockHeadersResponse, Network, Utxo};
 
-#[cfg(feature = "canister")]
-use crate::types::errors::{BitcoinError, Result, VaultError};
+use icramp_types::bitcoin::errors::{BitcoinError, Result, VaultError};
+
 #[cfg(feature = "canister")]
 use crate::types::{
     Address, Inscription, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType, VaultEntry,
@@ -27,9 +27,10 @@ use api::unisat::fetch_rune_utxos;
 #[cfg(feature = "canister")]
 use memory::{
     heap::{
-        config::{get_network, set_network, KEY_NAME},
-        state::{get_state, initialize_state, read_state, State},
-        upgrade, InstallArg,
+        InstallArg,
+        config::{KEY_NAME, get_network, set_network},
+        state::{State, get_state, initialize_state, read_state},
+        upgrade,
     },
     stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
 };

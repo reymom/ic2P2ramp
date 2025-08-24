@@ -285,6 +285,7 @@ dependencies = [
  "ic-cdk 0.17.2",
  "ic-cdk-timers",
  "ic-stable-structures 0.7.0",
+ "icramp_types",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -299,6 +300,7 @@ dependencies = [
  "candid",
  "ic-btc-interface",
  "ic-cdk 0.17.2",
+ "icramp_types",
  "lazy_static",
  "pocket-ic",
  "serde",
@@ -1947,10 +1949,14 @@ dependencies = [
 name = "icramp_types"
 version = "0.1.0"
 dependencies = [
+ "bitcoin",
+ "bs58",
  "candid",
  "ic-cdk 0.17.2",
+ "ic-ed25519",
  "ic-stable-structures 0.7.0",
  "serde",
+ "serde_json",
  "sol_rpc_types",
  "solana-pubkey",
  "thiserror 2.0.12",

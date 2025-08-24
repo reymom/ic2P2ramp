@@ -1,23 +1,17 @@
+use std::str::FromStr;
+
 use bitcoin::{
+    Address, EcdsaSighashType, PublicKey, Transaction, Txid,
     consensus::serialize,
     hashes::Hash,
     script::{Builder, PushBytesBuf},
     sighash::SighashCache,
-    Address, EcdsaSighashType, PublicKey, Transaction, Txid,
 };
 use ic_btc_interface::{MillisatoshiPerByte, Network, Satoshi, Utxo};
-use std::str::FromStr;
-
-use crate::{
-    api,
-    model::types::{
-        errors::{BitcoinError, Result},
-        wallet::WalletConfig,
-    },
-    TransactionType,
-};
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 use super::helpers::transform_network;
+use crate::{TransactionType, api, model::types::wallet::WalletConfig};
 
 const ECDSA_SIG_HASH_TYPE: EcdsaSighashType = EcdsaSighashType::All;
 

@@ -1,12 +1,9 @@
 use bitcoin::Txid;
 use ic_btc_interface::Satoshi;
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 use crate::{
-    model::types::{
-        errors::{BitcoinError, Result},
-        transfer::TransactionType,
-        wallet::WalletConfig,
-    },
+    model::types::{transfer::TransactionType, wallet::WalletConfig},
     types::RuneUTXOEntry,
 };
 

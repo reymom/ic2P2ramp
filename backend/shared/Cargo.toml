@@ -4,10 +4,14 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bitcoin = { workspace = true }
+bs58 = { workspace = true }
 candid = { workspace = true }
 ic-cdk = { workspace = true }
+ic-ed25519 = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sol_rpc_types  = { workspace = true }
 solana-pubkey = { workspace = true }
 thiserror = { workspace = true }

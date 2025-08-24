@@ -4,11 +4,9 @@ use std::{
 };
 
 use ic_btc_interface::Network;
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
-use crate::model::types::{
-    errors::{BitcoinError, Result},
-    runes::{RuneID, RuneMetadata},
-};
+use crate::model::types::runes::{RuneID, RuneMetadata};
 
 use super::state::State;
 

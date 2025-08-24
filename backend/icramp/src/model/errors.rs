@@ -1,9 +1,7 @@
-use std::num::{ParseFloatError, ParseIntError};
-
-use bitcoin_backend::types::errors::BitcoinError;
 use candid::CandidType;
 use ic_cdk::api::call::RejectionCode;
-use icramp_types::solana::errors::SolanaError;
+use icramp_types::{bitcoin::errors::BitcoinError, solana::errors::SolanaError};
+use std::num::{ParseFloatError, ParseIntError};
 use thiserror::Error;
 
 use crate::types::{AddressType, PaymentProviderType};

@@ -1,11 +1,8 @@
 use crate::{
     memory::stable::vault::ONRAMPER_VAULTS,
-    model::types::{
-        errors::{Result, VaultError},
-        runes::RuneID,
-        Address,
-    },
+    model::types::{Address, runes::RuneID},
 };
+use icramp_types::bitcoin::errors::{Result, VaultError};
 
 pub fn complete_order(onramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
     ONRAMPER_VAULTS.with_borrow_mut(|vaults| {

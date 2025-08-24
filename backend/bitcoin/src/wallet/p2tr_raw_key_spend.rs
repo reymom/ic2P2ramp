@@ -1,23 +1,22 @@
+use std::{collections::HashMap, str::FromStr};
+
 use bitcoin::{
+    Address, AddressType, ScriptBuf, Sequence, TapSighashType, Transaction, TxOut, Txid, Witness,
     consensus::serialize,
     hashes::Hash,
     key::TweakedPublicKey,
-    secp256k1::{schnorr::Signature, PublicKey},
+    secp256k1::{PublicKey, schnorr::Signature},
     sighash::SighashCache,
-    Address, AddressType, ScriptBuf, Sequence, TapSighashType, Transaction, TxOut, Txid, Witness,
 };
 use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
-use std::{collections::HashMap, str::FromStr};
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
-use crate::model::types::{
-    errors::{BitcoinError, Result},
-    wallet::WalletConfig,
-};
-use crate::{api, TransactionType};
+use crate::model::types::wallet::WalletConfig;
 use crate::{
-    wallet::{get_fee_per_byte, transform_network, utxos::get_tx_utxos},
     RuneUTXOEntry,
+    wallet::{get_fee_per_byte, transform_network, utxos::get_tx_utxos},
 };
+use crate::{TransactionType, api};
 
 /// Returns the P2TR raw key spend address of this canister at the given derivation path.
 pub async fn get_address(config: WalletConfig) -> Result<Address> {

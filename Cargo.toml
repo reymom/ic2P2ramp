@@ -15,11 +15,13 @@ edition = "2024"
 [workspace.dependencies]
 base64 = "0.22"
 bitcoin = "0.32"
-bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types", "canister"] }
+bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types"] }
+bs58 = "0.5"
 candid = "0.10"
 ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
+ic-ed25519 = { version = "0.2.0", optional = false }
 ic-stable-structures = "0.7"
 icramp_types = { path = "backend/shared" }
 num-traits = "0.2.19"

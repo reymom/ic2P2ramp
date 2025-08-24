@@ -16,6 +16,7 @@ ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
 ic-stable-structures = { workspace = true }
 ic-btc-interface = { workspace = true }
+icramp_types = { workspace = true }
 thiserror = "2.0"
 
 [features]

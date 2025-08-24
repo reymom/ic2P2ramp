@@ -608,6 +608,7 @@ async fn generate_auth_message(login_address: LoginAddress) -> Result<String> {
     let address = match login_address.clone() {
         LoginAddress::EVM { address } => Ok(address),
         LoginAddress::Bitcoin { address } => Ok(address),
+        LoginAddress::Solana { address } => Ok(address),
         _ => Err(SystemError::InvalidInput(
             "Login address is not of type EVM or Bitcoin".to_string(),
         )),

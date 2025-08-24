@@ -1,28 +1,26 @@
+use std::str::FromStr;
+
 use bitcoin::{
+    Address, AddressType, ScriptBuf, Sequence, TapLeafHash, TapSighashType, Transaction, TxOut,
+    Txid, Witness, XOnlyPublicKey,
     consensus::serialize,
     hashes::Hash,
     key::Secp256k1,
     opcodes,
     script::{Builder, PushBytesBuf},
-    secp256k1::{schnorr::Signature, PublicKey},
+    secp256k1::{PublicKey, schnorr::Signature},
     sighash::SighashCache,
     taproot::{ControlBlock, LeafVersion, TaprootBuilder, TaprootSpendInfo},
-    Address, AddressType, ScriptBuf, Sequence, TapLeafHash, TapSighashType, Transaction, TxOut,
-    Txid, Witness, XOnlyPublicKey,
 };
 use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
-use std::str::FromStr;
+use icramp_types::bitcoin::errors::{BitcoinError, Result};
 
 use crate::{
+    TransactionType,
     api::schnorr::schnorr_public_key,
-    model::types::{
-        errors::{BitcoinError, Result},
-        transfer::TaprootUseCase,
-        wallet::WalletConfig,
-    },
+    model::types::{transfer::TaprootUseCase, wallet::WalletConfig},
     ordinals::{inscription::build_ordinal_inscription, runes::build_runestone_etching},
     wallet::utxos::get_tx_utxos,
-    TransactionType,
 };
 
 pub fn build_script_for_use_case(

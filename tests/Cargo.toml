@@ -13,6 +13,7 @@ bitcoincore-rpc = "0.19"
 candid = { workspace = true }
 ic-cdk = { workspace = true }
 ic-btc-interface = { workspace = true }
+icramp_types = { workspace = true }
 lazy_static = "1.5"
 pocket-ic = "6.0"
 serde = { workspace = true }

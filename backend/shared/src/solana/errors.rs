@@ -30,6 +30,9 @@ pub enum SolanaError {
 
     #[error("Estimate blockhash errors: {0}")]
     BlockhashErrors(String),
+
+    #[error("Signature is invalid")]
+    InvalidSignature,
 }
 
 #[derive(Error, Debug, Clone, CandidType, Deserialize)]
@@ -52,9 +55,6 @@ pub enum TransactionError {
     MetaError(String),
 }
 
-#[derive(Error, Debug)]
-pub enum InternalError {}
-
 #[derive(Error, Debug, Clone, CandidType, Deserialize)]
 pub enum SystemError {
     #[error("HTTP request failed. RejectionCode: {0:?}, Error: {1}")]
@@ -65,6 +65,9 @@ pub enum SystemError {
 
     #[error("Response is not UTF-8 encoded.")]
     Utf8Error,
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 impl From<RpcError> for SolanaError {

@@ -2,12 +2,12 @@ use hex::FromHex;
 use std::collections::HashMap;
 
 use ic_btc_interface::Utxo;
+use icramp_types::bitcoin::errors::Result;
 
 use crate::{
+    RuneUTXOEntry, WalletConfig,
     api::{self, unisat::fetch_rune_utxos},
     get_registered_runes,
-    types::errors::Result,
-    RuneUTXOEntry, WalletConfig,
 };
 
 pub async fn get_tx_utxos(
