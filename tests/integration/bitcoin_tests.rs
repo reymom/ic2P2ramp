@@ -7,8 +7,12 @@ use crate::common::{
 };
 use crate::integration::env::get_bitcoin_env;
 
-use bitcoin_backend::types::{Etching, Inscription, RuneID, RuneMetadata, TransactionType};
-use icramp_types::bitcoin::errors::{BitcoinError, Result};
+use icramp_types::bitcoin::{
+    errors::{BitcoinError, Result},
+    inscription::Inscription,
+    runes::{Etching, RuneID, RuneMetadata},
+    transfer::TransactionType,
+};
 
 #[test]
 fn test_bitcoin_canister_init() {

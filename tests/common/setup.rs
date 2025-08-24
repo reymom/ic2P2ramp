@@ -6,9 +6,8 @@ use std::{
 
 use candid::{Encode, Principal};
 use ic_btc_interface::{Config, Network};
+use icramp_types::bitcoin::setup::{InitArg, InstallArg, UnisatConfig};
 use pocket_ic::{PocketIc, PocketIcBuilder};
-
-use bitcoin_backend::memory::heap::{init::UnisatConfig, InitArg, InstallArg};
 
 pub const BTC_RPC_URL: &str = "http://127.0.0.1:18443";
 pub const RPC_USER: &str = "icp";

@@ -1,5 +1,7 @@
-use bitcoin_backend::types::{RuneID, RuneMetadata};
-use icramp_types::bitcoin::errors::Result;
+use icramp_types::bitcoin::{
+    errors::Result,
+    runes::{RuneID, RuneMetadata},
+};
 
 use super::env::get_bitcoin_env;
 use crate::common::helpers::{query_call, update_call};

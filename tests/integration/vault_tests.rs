@@ -1,5 +1,4 @@
-use bitcoin_backend::types::{RuneID, VaultEntry};
-use icramp_types::bitcoin::errors::Result;
+use icramp_types::bitcoin::{errors::Result, runes::RuneID, vault::VaultEntry};
 
 use crate::{
     common::helpers::{query_call, update_call},
