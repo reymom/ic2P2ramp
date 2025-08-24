@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
-use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
+use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use bitcoin::{

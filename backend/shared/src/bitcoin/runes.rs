@@ -3,7 +3,16 @@ use std::str::FromStr;
 
 use candid::{CandidType, Deserialize};
 use ic_stable_structures::{Storable, storable::Bound};
-use icramp_types::bitcoin::errors::{BitcoinError, Result};
+
+use super::errors::{BitcoinError, Result};
+
+#[derive(CandidType, Deserialize, Hash, PartialEq, Eq, Clone, Debug)]
+pub struct RuneUTXOEntry {
+    pub txid: String,
+    pub vout: u32,
+    pub rune_amount: u64,
+    pub script_pubkey: String,
+}
 
 #[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuneMetadata {

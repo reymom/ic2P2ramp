@@ -1,10 +1,9 @@
 use std::cell::RefCell;
 
-use ic_stable_structures::{memory_manager::MemoryId, StableBTreeMap};
+use ic_stable_structures::{StableBTreeMap, memory_manager::MemoryId};
+use icramp_types::bitcoin::{Address, vault::VaultEntry};
 
-use crate::model::types::{vault::VaultEntry, Address};
-
-use super::{Memory, MEMORY_MANAGER};
+use super::{MEMORY_MANAGER, Memory};
 
 thread_local! {
     pub static OFFRAMPER_VAULTS: RefCell<StableBTreeMap<Address, VaultEntry, Memory>> = RefCell::new(

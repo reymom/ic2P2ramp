@@ -1,5 +1,5 @@
-use bitcoin_backend::types::{RuneID, RuneUTXOEntry};
 use candid::{CandidType, Deserialize, Principal};
+use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
 
 use crate::{
     errors::{BlockchainError, Result, SystemError},

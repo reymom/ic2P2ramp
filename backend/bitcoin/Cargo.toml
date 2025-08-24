@@ -18,8 +18,3 @@ ic-stable-structures = { workspace = true }
 ic-btc-interface = { workspace = true }
 icramp_types = { workspace = true }
 thiserror = "2.0"
-
-[features]
-types = []
-canister = []
-default=["canister", "types"]

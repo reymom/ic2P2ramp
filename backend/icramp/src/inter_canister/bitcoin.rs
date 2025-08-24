@@ -1,13 +1,16 @@
 use std::str::FromStr;
 
 use ic_cdk::api::call::call;
-use icramp_types::bitcoin::errors::Result as BitcoinResult;
+use icramp_types::bitcoin::{
+    errors::Result as BitcoinResult,
+    runes::{RuneID, RuneMetadata, RuneUTXOEntry},
+    transfer::TransactionType,
+};
 
 use crate::{
     Result,
     model::{errors::SystemError, memory::heap::read_state},
 };
-use bitcoin_backend::types::{RuneID, RuneMetadata, RuneUTXOEntry, TransactionType};
 
 pub async fn bitcoin_backend_transfer(
     dst_address: String,

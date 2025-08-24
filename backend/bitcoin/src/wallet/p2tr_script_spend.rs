@@ -13,12 +13,15 @@ use bitcoin::{
     taproot::{ControlBlock, LeafVersion, TaprootBuilder, TaprootSpendInfo},
 };
 use ic_btc_interface::{MillisatoshiPerByte, Satoshi, Utxo};
-use icramp_types::bitcoin::errors::{BitcoinError, Result};
+use icramp_types::bitcoin::{
+    errors::{BitcoinError, Result},
+    transfer::TaprootUseCase,
+};
 
 use crate::{
     TransactionType,
     api::schnorr::schnorr_public_key,
-    model::types::{transfer::TaprootUseCase, wallet::WalletConfig},
+    model::types::wallet::WalletConfig,
     ordinals::{inscription::build_ordinal_inscription, runes::build_runestone_etching},
     wallet::utxos::get_tx_utxos,
 };

@@ -1,10 +1,13 @@
-use bitcoin_backend::types::{RuneUTXOEntry, TransactionType};
+use std::collections::HashMap;
+
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
-use icramp_types::solana::errors::{SolanaError, TransactionError};
+use icramp_types::{
+    bitcoin::{runes::RuneUTXOEntry, transfer::TransactionType},
+    solana::errors::{SolanaError, TransactionError},
+};
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
-use std::collections::HashMap;
 
 use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
 use crate::evm::{

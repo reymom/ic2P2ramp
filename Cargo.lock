@@ -295,7 +295,6 @@ dependencies = [
 name = "bitcoin_backend_tests"
 version = "0.1.0"
 dependencies = [
- "bitcoin_backend",
  "bitcoincore-rpc",
  "candid",
  "ic-btc-interface",
@@ -1920,7 +1919,6 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bitcoin",
- "bitcoin_backend",
  "candid",
  "email_address",
  "ethers-core",
@@ -1952,6 +1950,7 @@ dependencies = [
  "bitcoin",
  "bs58",
  "candid",
+ "ic-btc-interface",
  "ic-cdk 0.17.2",
  "ic-ed25519",
  "ic-stable-structures 0.7.0",

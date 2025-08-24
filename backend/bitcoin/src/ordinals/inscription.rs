@@ -4,10 +4,9 @@ use bitcoin::{
 };
 use ic_btc_interface::Satoshi;
 use icramp_types::bitcoin::errors::{BitcoinError, Result};
+use icramp_types::bitcoin::{inscription::Inscription, transfer::TransactionType};
 
-use crate::model::types::{
-    inscription::Inscription, transfer::TransactionType, wallet::WalletConfig,
-};
+use crate::model::types::wallet::WalletConfig;
 
 pub fn build_ordinal_inscription(inscription: &Inscription) -> Result<ScriptBuf> {
     let inscription_data = format!(

@@ -1,10 +1,13 @@
 use ic_cdk::api::management_canister::http_request::{
     CanisterHttpRequestArgument, HttpHeader, HttpMethod, http_request,
 };
-use icramp_types::bitcoin::errors::{Result, SystemError};
+use icramp_types::bitcoin::{
+    errors::{Result, SystemError},
+    runes::{RuneID, RuneUTXOEntry},
+};
 
 use crate::memory::heap::state::read_state;
-use crate::model::types::{runes::RuneID, unisat::UnisatRuneUTXOsResponse, utxo::RuneUTXOEntry};
+use crate::model::types::unisat::UnisatRuneUTXOsResponse;
 
 pub async fn fetch_rune_utxos(address: &str, rune_id: RuneID) -> Result<Vec<RuneUTXOEntry>> {
     let (api_url, api_key, proxy_url) = read_state(|s| {

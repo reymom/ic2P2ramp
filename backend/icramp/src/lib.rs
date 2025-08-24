@@ -8,10 +8,10 @@ mod outcalls;
 use std::collections::{HashMap, HashSet};
 use std::u64;
 
-use bitcoin_backend::types::RuneID;
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
+use icramp_types::bitcoin::runes::RuneID;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use evm::{fees, transaction, vault::Ic2P2ramp};

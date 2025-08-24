@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use bitcoin_backend::types::TransactionType;
 use candid::Principal;
+use icramp_types::bitcoin::transfer::TransactionType;
 use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use crate::{

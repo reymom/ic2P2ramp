@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use bitcoin_backend::types::RuneUTXOEntry;
 use candid::{CandidType, Deserialize};
+use icramp_types::bitcoin::runes::RuneUTXOEntry;
 
 use super::locked_order::{LockedOrder, Onramper, RevolutConsent};
 use crate::{

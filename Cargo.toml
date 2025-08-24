@@ -15,7 +15,6 @@ edition = "2024"
 [workspace.dependencies]
 base64 = "0.22"
 bitcoin = "0.32"
-bitcoin_backend = { path = "backend/bitcoin", default-features = false, features = ["types"] }
 bs58 = "0.5"
 candid = "0.10"
 ic-cdk = "0.17"

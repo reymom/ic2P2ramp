@@ -1,6 +1,6 @@
 use candid::Deserialize;
 
-use super::utxo::RuneUTXOEntry;
+use icramp_types::bitcoin::runes::RuneUTXOEntry;
 
 #[derive(Deserialize, Debug)]
 pub struct UnisatRune {

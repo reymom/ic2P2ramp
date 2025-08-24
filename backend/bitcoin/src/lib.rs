@@ -1,51 +1,38 @@
-#[cfg(feature = "canister")]
 mod api;
-#[cfg(feature = "canister")]
 pub mod memory;
-#[cfg(feature = "types")]
 mod model;
-#[cfg(feature = "canister")]
 mod ordinals;
-#[cfg(feature = "types")]
-pub mod types;
-#[cfg(feature = "canister")]
 mod vault;
-#[cfg(feature = "canister")]
 mod wallet;
 
-#[cfg(feature = "canister")]
 use ic_btc_interface::{GetBlockHeadersResponse, Network, Utxo};
-
-use icramp_types::bitcoin::errors::{BitcoinError, Result, VaultError};
-
-#[cfg(feature = "canister")]
-use crate::types::{
-    Address, Inscription, RuneID, RuneMetadata, RuneUTXOEntry, TransactionType, VaultEntry,
+use icramp_types::bitcoin::{
+    Address,
+    errors::{BitcoinError, Result, VaultError},
+    inscription::Inscription,
+    runes::{RuneID, RuneMetadata, RuneUTXOEntry},
+    setup::InstallArg,
+    transfer::TransactionType,
+    vault::VaultEntry,
 };
-#[cfg(feature = "canister")]
+
 use api::unisat::fetch_rune_utxos;
-#[cfg(feature = "canister")]
 use memory::{
     heap::{
-        InstallArg,
         config::{KEY_NAME, get_network, set_network},
         state::{State, get_state, initialize_state, read_state},
         upgrade,
     },
     stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS},
 };
-#[cfg(feature = "canister")]
 use model::types::wallet::WalletConfig;
-#[cfg(feature = "canister")]
 use ordinals::inscription;
 
-#[cfg(feature = "canister")]
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
     upgrade::pre_upgrade()
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::post_upgrade]
 fn post_upgrade(install_arg: InstallArg) {
     ic_cdk::println!(
@@ -64,7 +51,6 @@ fn post_upgrade(install_arg: InstallArg) {
     ic_cdk::println!("[post_upgrade]: state = {:?}", state);
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::init]
 pub fn init(install_arg: InstallArg) {
     match install_arg {
@@ -94,7 +80,6 @@ pub fn init(install_arg: InstallArg) {
 }
 
 /// Returns the balance of the given bitcoin address.
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_btc_balance(address: String) -> Result<u64> {
     let network = get_network();
@@ -102,7 +87,6 @@ pub async fn get_btc_balance(address: String) -> Result<u64> {
     api::bitcoin::get_balance(network, btc_principal, address).await
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_btc_block_headers() -> Result<GetBlockHeadersResponse> {
     let network = get_network();
@@ -110,7 +94,6 @@ pub async fn get_btc_block_headers() -> Result<GetBlockHeadersResponse> {
     api::bitcoin::get_block_headers(network, btc_principal, 0, Some(u32::MAX)).await
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn transfer(
     dst_address: String,
@@ -156,7 +139,6 @@ pub async fn transfer(
     Ok(tx_id.to_string())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_utxos(address: String) -> Result<Vec<Utxo>> {
     let btc_principal = read_state(|s| s.btc_principal.clone());
@@ -164,7 +146,6 @@ pub async fn get_utxos(address: String) -> Result<Vec<Utxo>> {
     api::bitcoin::get_utxos(network, btc_principal, address.to_string()).await
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub async fn get_canister_rune_utxos(rune_id: RuneID) -> Result<Vec<RuneUTXOEntry>> {
     let address = wallet::p2tr_raw_key_spend::get_address(WalletConfig::for_p2tr_raw_key())
@@ -174,7 +155,6 @@ pub async fn get_canister_rune_utxos(rune_id: RuneID) -> Result<Vec<RuneUTXOEntr
     fetch_rune_utxos(&address, rune_id).await
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub async fn get_canister_rune_amount(rune_id: RuneID) -> Result<u64> {
     let address = wallet::p2tr_raw_key_spend::get_address(WalletConfig::for_p2tr_raw_key())
@@ -192,7 +172,6 @@ pub async fn get_canister_rune_amount(rune_id: RuneID) -> Result<u64> {
 // END TEST
 // --------
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn estimate_bitcoin_transaction_fee() -> Result<u64> {
     let fee_per_byte =
@@ -215,7 +194,6 @@ pub async fn estimate_bitcoin_transaction_fee() -> Result<u64> {
 // ---------
 
 /// Returns the P2PKH address of this canister at a specific derivation path.
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_p2pkh_address() -> Result<String> {
     wallet::p2pkh::get_address(WalletConfig::for_p2pkh())
@@ -224,7 +202,6 @@ pub async fn get_p2pkh_address() -> Result<String> {
 }
 
 /// Returns the P2TR address of this canister at a specific derivation path.
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_p2tr_raw_key_spend_address() -> Result<String> {
     wallet::p2tr_raw_key_spend::get_address(WalletConfig::for_p2tr_raw_key())
@@ -234,7 +211,6 @@ pub async fn get_p2tr_raw_key_spend_address() -> Result<String> {
 
 /// Returns the P2TR address of this canister at a specific derivation path.
 /// Necessary for sending and receiving runes.
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn get_p2tr_script_spend_address(tx_type: TransactionType) -> Result<String> {
     wallet::p2tr_script_spend::get_address(WalletConfig::for_p2tr_script(), tx_type)
@@ -246,7 +222,6 @@ pub async fn get_p2tr_script_spend_address(tx_type: TransactionType) -> Result<S
 // CONFIGS
 // -------
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 async fn withdraw_bitcoin_fees(destination_address: Address, amount: u64) -> Result<String> {
     ic_cdk::println!(
@@ -282,19 +257,16 @@ async fn withdraw_bitcoin_fees(destination_address: Address, amount: u64) -> Res
     Ok(tx_id.to_string())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub fn get_registered_runes() -> Result<Vec<RuneMetadata>> {
     memory::heap::config::get_registered_runes()
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub fn register_runes(runes: Vec<RuneMetadata>) -> Result<()> {
     memory::heap::config::register_runes(runes)
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub fn get_serialized_rune_metadata(rune_id: RuneID) -> Result<(RuneMetadata, String)> {
     let rune_metadata = memory::heap::config::get_rune_metadata(&rune_id)?;
@@ -302,7 +274,6 @@ pub fn get_serialized_rune_metadata(rune_id: RuneID) -> Result<(RuneMetadata, St
     Ok((rune_metadata, serialized_metadata))
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub fn validate_rune(rune_id: RuneID) -> Result<()> {
     memory::heap::config::is_rune_supported(&rune_id)?;
@@ -314,7 +285,6 @@ pub fn validate_rune(rune_id: RuneID) -> Result<()> {
 // VAULT
 // -----
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub fn get_offramper_deposits(offramper: Address) -> Result<VaultEntry> {
     OFFRAMPER_VAULTS
@@ -322,7 +292,6 @@ pub fn get_offramper_deposits(offramper: Address) -> Result<VaultEntry> {
         .ok_or_else(|| VaultError::AddressVaultNotFound.into())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::query]
 pub fn get_onramper_deposits(onramper: Address) -> Result<VaultEntry> {
     ONRAMPER_VAULTS
@@ -330,7 +299,6 @@ pub fn get_onramper_deposits(onramper: Address) -> Result<VaultEntry> {
         .ok_or_else(|| VaultError::AddressVaultNotFound.into())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub fn deposit_to_address_vault(
     offramper: Address,
@@ -346,7 +314,6 @@ pub fn deposit_to_address_vault(
     Ok(())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn cancel_deposit(offramper: Address, amount: u64, rune: Option<RuneID>) -> Result<()> {
     if let Some(ref rune_id) = rune {
@@ -358,7 +325,6 @@ pub async fn cancel_deposit(offramper: Address, amount: u64, rune: Option<RuneID
     Ok(())
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub fn lock_funds(
     offramper: Address,
@@ -373,7 +339,6 @@ pub fn lock_funds(
     vault::lock::lock_funds(offramper, onramper, amount, rune)
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub fn unlock_funds(
     offramper: Address,
@@ -388,7 +353,6 @@ pub fn unlock_funds(
     vault::lock::unlock_funds(offramper, onramper, amount, rune)
 }
 
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn complete_order(
     onramper_address: Address,
@@ -407,7 +371,6 @@ pub async fn complete_order(
 // -----------
 // INSCRIPTION
 // -----------
-#[cfg(feature = "canister")]
 #[ic_cdk::update]
 pub async fn inscribe_ordinals_inscription(
     content: String,
@@ -432,11 +395,9 @@ pub async fn inscribe_ordinals_inscription(
     Ok(tx_id.to_string())
 }
 
-#[cfg(feature = "canister")]
 pub async fn send_ordinals_inscription(dst_address: String, amount: u64) -> Result<bitcoin::Txid> {
     wallet::send::send_btc_or_ordinal(dst_address, amount, TransactionType::OrdinalTransfer, None)
         .await
 }
 
-#[cfg(feature = "canister")]
 ic_cdk::export_candid!();

@@ -1,8 +1,5 @@
-use crate::{
-    memory::stable::vault::ONRAMPER_VAULTS,
-    model::types::{Address, runes::RuneID, vault::VaultEntry},
-};
-use icramp_types::bitcoin::errors::Result;
+use crate::memory::stable::vault::ONRAMPER_VAULTS;
+use icramp_types::bitcoin::{Address, errors::Result, runes::RuneID, vault::VaultEntry};
 
 pub fn lock_funds(
     offramper_address: Address,

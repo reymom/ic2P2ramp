@@ -1,11 +1,12 @@
 use bitcoin::Txid;
 use ic_btc_interface::Satoshi;
-use icramp_types::bitcoin::errors::{BitcoinError, Result};
-
-use crate::{
-    model::types::{transfer::TransactionType, wallet::WalletConfig},
-    types::RuneUTXOEntry,
+use icramp_types::bitcoin::{
+    errors::{BitcoinError, Result},
+    runes::RuneUTXOEntry,
+    transfer::TransactionType,
 };
+
+use crate::model::types::wallet::WalletConfig;
 
 pub async fn send_btc_or_ordinal(
     dst_address: String,

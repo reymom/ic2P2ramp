@@ -1,8 +1,9 @@
 use candid::{CandidType, Deserialize};
 
-use crate::types::RuneID;
-
-use super::{inscription::Inscription, runes::Etching};
+use super::{
+    inscription::Inscription,
+    runes::{Etching, RuneID},
+};
 
 #[derive(Deserialize, CandidType, Clone)]
 pub enum TransactionType {

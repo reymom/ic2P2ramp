@@ -1,32 +1,24 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use candid::{CandidType, Decode, Deserialize, Encode, Principal};
+use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_btc_interface::Network;
 use ic_stable_structures::{Storable, storable::Bound};
-
-use crate::{
-    memory::stable::HEAP_STATE,
-    types::{RuneID, RuneMetadata},
+use icramp_types::bitcoin::{
+    runes::{RuneID, RuneMetadata},
+    setup::UpdateArg,
 };
+
+use crate::memory::stable::HEAP_STATE;
 
 use super::{
     config::{
         get_derivation_path, get_key_name, get_network, get_runes, set_derivation_path,
         set_key_name, set_network, set_runes,
     },
-    init::UnisatConfig,
     state::{State, get_state, initialize_state},
 };
 
 const MAX_STATE_SIZE: u32 = 64 * 1024; // 64KB
-
-#[derive(CandidType, Deserialize, Debug, Clone)]
-pub struct UpdateArg {
-    pub network: Option<Network>,
-    pub btc_principal: Option<Principal>,
-    pub unisat: Option<UnisatConfig>,
-    pub proxy_url: Option<String>,
-}
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct SerializableHeap {

@@ -1,7 +1,7 @@
 use candid::{CandidType, Deserialize, Principal};
+use icramp_types::bitcoin::setup::UnisatConfig;
 
 use super::config::STATE;
-use super::init::UnisatConfig;
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct State {
