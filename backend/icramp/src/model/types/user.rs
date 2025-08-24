@@ -147,7 +147,22 @@ impl User {
 
                 bitcoin::verify_signature(address, message, &signature, &pubkey)?
             }
-            _ => return Err(UserError::UnauthorizedPrincipal.into()),
+            LoginAddress::Solana { address } => {
+                let signature = auth_data
+                    .clone()
+                    .ok_or(UserError::SignatureRequired)?
+                    .signature
+                    .ok_or(UserError::SignatureRequired)?;
+                let pubkey = auth_data
+                    .ok_or(UserError::PublicKeyRequired)?
+                    .pubkey
+                    .ok_or(UserError::PublicKeyRequired)?;
+                let message = self.auth_message.as_ref().ok_or_else(|| {
+                    SystemError::InternalError("solana auth message not in user".to_string())
+                })?;
+
+                icramp_types::solana::verify_signature(address, message, &signature, &pubkey)?
+            }
         }
 
         Ok(())
