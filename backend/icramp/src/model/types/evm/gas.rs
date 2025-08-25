@@ -61,10 +61,7 @@ impl GasUsage {
         current_block: Option<u128>,
         max_blocks_in_past: u64,
     ) -> Option<(u64, u128)> {
-        let current_block = match current_block {
-            None => return None,
-            Some(block) => block,
-        };
+        let current_block = current_block?;
 
         let relevant_records: Vec<_> = self
             .records

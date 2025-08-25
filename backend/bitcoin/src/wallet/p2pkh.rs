@@ -31,7 +31,7 @@ pub async fn get_address(config: WalletConfig) -> Result<Address> {
 // Converts a public key to a P2PKH address.
 fn public_key_to_p2pkh_address(network: Network, public_key: &[u8]) -> Result<Address> {
     Ok(Address::p2pkh(
-        &PublicKey::from_slice(public_key).map_err(BitcoinError::from)?,
+        PublicKey::from_slice(public_key).map_err(BitcoinError::from)?,
         transform_network(network),
     ))
 }

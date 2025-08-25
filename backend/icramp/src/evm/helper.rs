@@ -19,7 +19,7 @@ pub fn get_vault_and_data(
         load_contract_data(
             transaction_type.abi(),
             transaction_type.function_name(),
-            &inputs,
+            inputs,
         )?,
     ))
 }

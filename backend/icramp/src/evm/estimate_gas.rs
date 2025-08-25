@@ -4,7 +4,7 @@ use std::str::FromStr;
 use candid::Nat;
 use evm_rpc_canister_types::RpcServices;
 use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+    CanisterHttpRequestArgument, HttpHeader, HttpMethod, http_request,
 };
 use num_traits::ToPrimitive;
 use serde::Serialize;
@@ -48,7 +48,7 @@ pub async fn estimate_gas(chain_id: u64, params: EstimateGasParams) -> Result<Op
     }
     .replace("https://", "");
     let (base_url, endpoint) = if let Some((domain, path)) = rpc_provider_url.split_once('/') {
-        (domain, format!("{}", path))
+        (domain, path.to_string())
     } else {
         (rpc_provider_url.as_str(), "/".to_string())
     };

@@ -41,9 +41,8 @@ pub async fn get_tx_utxos(
         })
         .collect();
 
-    let rune_utxo_map: HashMap<Utxo, RuneUTXOEntry> = if rune_utxos.is_some() {
-        rune_utxos
-            .unwrap()
+    let rune_utxo_map: HashMap<Utxo, RuneUTXOEntry> = if let Some(utxos) = rune_utxos {
+        utxos
             .into_iter()
             .filter_map(|entry| {
                 all_utxos

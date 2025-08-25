@@ -1,4 +1,3 @@
-pub mod listeners;
 pub mod memory;
 pub mod model;
 pub mod solana;
@@ -494,8 +493,7 @@ fn get_registered_tokens() -> HashMap<String, TokenInfo> {
 fn get_token_info(mint: String) -> Result<TokenInfo> {
     validate_token_mint(mint.clone())?;
 
-    let dec = memory::heap::config::get_token(&mint)
-        .ok_or_else(|| SolanaError::UnsupportedToken(mint))?;
+    let dec = memory::heap::config::get_token(&mint).ok_or(SolanaError::UnsupportedToken(mint))?;
     Ok(dec)
 }
 

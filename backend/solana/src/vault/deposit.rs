@@ -11,9 +11,7 @@ pub fn deposit_to_vault(
 ) -> Result<()> {
     OFFRAMPER_VAULTS.with(|vaults_cell| {
         let mut vaults = vaults_cell.borrow_mut();
-        let mut entry = vaults
-            .get(&offramper_address)
-            .unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults.get(&offramper_address).unwrap_or_default();
 
         if let Some(mint) = token_mint {
             // Increment token balance

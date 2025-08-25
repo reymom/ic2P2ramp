@@ -1,5 +1,5 @@
 use crate::memory::stable::vault::ONRAMPER_VAULTS;
-use icramp_types::bitcoin::{Address, errors::Result, runes::RuneID, vault::VaultEntry};
+use icramp_types::bitcoin::{Address, errors::Result, runes::RuneID};
 
 pub fn lock_funds(
     offramper_address: Address,
@@ -10,7 +10,7 @@ pub fn lock_funds(
     super::deposit::cancel_deposit(offramper_address, amount, rune.clone())?;
 
     ONRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let mut entry = vaults.get(&onramper).unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults.get(&onramper).unwrap_or_default();
 
         if let Some(rune_id) = rune {
             let rune_balance = entry.runes.entry(rune_id).or_insert(0);

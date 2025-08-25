@@ -203,7 +203,7 @@ pub fn spawn_bitcoin_tx_listener(
                         } => {
                             match bitcoin_backend_complete_order(
                                 onramper_address,
-                                amount as u64,
+                                amount,
                                 rune_id.clone(),
                             )
                             .await
@@ -240,7 +240,7 @@ pub fn spawn_bitcoin_tx_listener(
                         } => {
                             match bitcoin_backend_cancel_deposit(
                                 offramper_address,
-                                amount as u64,
+                                amount,
                                 rune_id.clone(),
                             )
                             .await
@@ -410,10 +410,7 @@ pub fn verify_signature(
     // Use magic hash for message hashing
     let magic_hashed_message = compute_magic_hash(message);
     let msg = Message::from_digest_slice(magic_hashed_message.as_ref()).map_err(|e| {
-        SystemError::ParseError(format!(
-            "Failed to parse signature's message hash: {}",
-            e.to_string()
-        ))
+        SystemError::ParseError(format!("Failed to parse signature's message hash: {}", e))
     })?;
 
     let provided_pubkey =
@@ -423,7 +420,7 @@ pub fn verify_signature(
             "Failed to recover public key from signature: {}",
             e.to_string()
         );
-        return UserError::InvalidSignature;
+        UserError::InvalidSignature
     })?;
     if recovered_pubkey != provided_pubkey {
         return Err(UserError::InvalidSignature.into());
@@ -578,7 +575,7 @@ fn encode_varint(value: u64) -> Vec<u8> {
         buf.extend_from_slice(&(value as u32).to_le_bytes());
     } else {
         buf.push(0xFF);
-        buf.extend_from_slice(&(value as u64).to_le_bytes());
+        buf.extend_from_slice(&(value).to_le_bytes());
     }
     buf
 }

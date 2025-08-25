@@ -83,14 +83,14 @@ pub fn init(install_arg: InstallArg) {
 #[ic_cdk::update]
 pub async fn get_btc_balance(address: String) -> Result<u64> {
     let network = get_network();
-    let btc_principal: candid::Principal = read_state(|s| s.btc_principal.clone());
+    let btc_principal: candid::Principal = read_state(|s| s.btc_principal);
     api::bitcoin::get_balance(network, btc_principal, address).await
 }
 
 #[ic_cdk::update]
 pub async fn get_btc_block_headers() -> Result<GetBlockHeadersResponse> {
     let network = get_network();
-    let btc_principal = read_state(|s| s.btc_principal.clone());
+    let btc_principal = read_state(|s| s.btc_principal);
     api::bitcoin::get_block_headers(network, btc_principal, 0, Some(u32::MAX)).await
 }
 
@@ -109,12 +109,11 @@ pub async fn transfer(
             .as_ref()
             .ok_or_else(|| BitcoinError::InvalidInput("Missing rune UTXOs".to_string()))?;
         let total_runes: u64 = utxos.iter().map(|u| u.rune_amount).sum();
-        if total_runes != amount as u64 {
+        if total_runes != amount {
             return Err(BitcoinError::InvalidInput(format!(
                 "Rune UTXOs total {} does not equal expected amount {}",
                 total_runes, amount
-            ))
-            .into());
+            )));
         }
 
         let address = wallet::p2tr_raw_key_spend::get_address(WalletConfig::for_p2tr_raw_key())
@@ -130,8 +129,7 @@ pub async fn transfer(
         if !provided_set.is_subset(&fetched_set) {
             return Err(BitcoinError::InvalidInput(
                 "Provided rune UTXOs are not a subset of fetched UTXOs".to_string(),
-            )
-            .into());
+            ));
         }
     }
 
@@ -141,7 +139,7 @@ pub async fn transfer(
 
 #[ic_cdk::update]
 pub async fn get_utxos(address: String) -> Result<Vec<Utxo>> {
-    let btc_principal = read_state(|s| s.btc_principal.clone());
+    let btc_principal = read_state(|s| s.btc_principal);
     let network = get_network();
     api::bitcoin::get_utxos(network, btc_principal, address.to_string()).await
 }
@@ -175,7 +173,7 @@ pub async fn get_canister_rune_amount(rune_id: RuneID) -> Result<u64> {
 #[ic_cdk::update]
 pub async fn estimate_bitcoin_transaction_fee() -> Result<u64> {
     let fee_per_byte =
-        wallet::get_fee_per_byte(get_network(), read_state(|s| s.btc_principal.clone())).await?;
+        wallet::get_fee_per_byte(get_network(), read_state(|s| s.btc_principal)).await?;
 
     // Estimate transaction size in vBytes
     let estimated_size = 200; // max cut for P2TR spend transaction in vBytes
@@ -231,14 +229,16 @@ async fn withdraw_bitcoin_fees(destination_address: Address, amount: u64) -> Res
     );
 
     let fee_per_byte =
-        wallet::get_fee_per_byte(get_network(), read_state(|s| s.btc_principal.clone())).await?;
+        wallet::get_fee_per_byte(get_network(), read_state(|s| s.btc_principal)).await?;
 
     let estimated_size = 140;
     let estimated_fee = estimated_size as u64 * fee_per_byte / 1000;
 
     let net_amount = amount.saturating_sub(estimated_fee);
     if net_amount == 0 {
-        return Err(BitcoinError::InvalidInput("Fees greater than amount".to_string()).into());
+        return Err(BitcoinError::InvalidInput(
+            "Fees greater than amount".to_string(),
+        ));
     }
 
     let tx_id = wallet::send::send_btc_or_ordinal(

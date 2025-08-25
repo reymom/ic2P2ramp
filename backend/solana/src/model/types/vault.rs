@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub type Address = String; // we store Solana addresses in text form.
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
+#[derive(CandidType, Deserialize, Clone, Debug, Default)]
 pub struct VaultEntry {
     pub lamports: u64,
     /// Mapping token‐mint → token‐balance (in smallest units)
@@ -12,15 +12,6 @@ pub struct VaultEntry {
 }
 
 const MAX_VAULT_ENTRY_SIZE: u32 = 2048;
-
-impl VaultEntry {
-    pub fn new() -> Self {
-        Self {
-            lamports: 0,
-            tokens: HashMap::new(),
-        }
-    }
-}
 
 impl Storable for VaultEntry {
     fn to_bytes(&self) -> std::borrow::Cow<[u8]> {

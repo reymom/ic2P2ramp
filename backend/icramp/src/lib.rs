@@ -6,7 +6,6 @@ mod model;
 mod outcalls;
 
 use std::collections::{HashMap, HashSet};
-use std::u64;
 
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
@@ -888,7 +887,7 @@ async fn freeze_order(order_id: u64, user_id: u64, session_token: String) -> Res
     orders::set_processing_order(&order_id)
 }
 
-#[ic_cdk::query]
+#[ic_cdk::update]
 async fn top_up_order(
     order_id: u64,
     user_id: u64,
@@ -900,7 +899,7 @@ async fn top_up_order(
     order.is_processing()?;
     let user = memory::stable::users::get_user(&user_id)?;
     user.validate_session(&session_token)?;
-    if !order.offramper_user_id == user_id {
+    if order.offramper_user_id != user_id {
         return Err(UserError::Unauthorized.into());
     }
 
@@ -911,9 +910,8 @@ async fn top_up_order(
         amount,
     )
     .await
-    .map_err(|e| {
+    .inspect_err(|_e| {
         let _ = orders::unset_processing_order(&order_id);
-        e
     })?;
 
     let (gas_lock, gas_withdraw) = match deposit_input {

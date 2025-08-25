@@ -30,7 +30,7 @@ impl WalletConfig {
                 get_derivation_path().push(b"script_spend".to_vec());
             }
         }
-        let btc_principal = read_state(|s| s.btc_principal.clone());
+        let btc_principal = read_state(|s| s.btc_principal);
 
         Self {
             key_name: get_key_name(),

@@ -239,7 +239,7 @@ fn build_btc_inputs_and_outputs(
         total_btc += utxo.value;
         inputs.push(TxIn {
             previous_output: OutPoint {
-                txid: Txid::from_raw_hash(Hash::from_slice(&utxo.outpoint.txid.as_ref()).unwrap()),
+                txid: Txid::from_raw_hash(Hash::from_slice(utxo.outpoint.txid.as_ref()).unwrap()),
                 vout: utxo.outpoint.vout,
             },
             sequence: Sequence::MAX,

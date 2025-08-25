@@ -3,7 +3,6 @@ use icramp_types::bitcoin::{
     Address,
     errors::{Result, VaultError},
     runes::RuneID,
-    vault::VaultEntry,
 };
 
 pub fn deposit_to_vault(
@@ -12,9 +11,7 @@ pub fn deposit_to_vault(
     rune: Option<RuneID>,
 ) -> Result<()> {
     OFFRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let mut entry = vaults
-            .get(&offramper_address)
-            .unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults.get(&offramper_address).unwrap_or_default();
 
         if let Some(rune_id) = rune {
             let mut rune_balances = entry.runes.clone();

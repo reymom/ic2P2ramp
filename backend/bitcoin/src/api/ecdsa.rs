@@ -11,7 +11,8 @@ use crate::model::utils;
 
 // stores the ecdsa to maintain state across different calls to the canister (not across updates)
 thread_local! {
-    /* flexible */ static ECDSA: RefCell<Option<HashMap<Vec<Vec<u8>> /*derivation path*/, Vec<u8> /*public key*/>>> = RefCell::default();
+    // (derivation path, public key)
+    static ECDSA: RefCell<Option<HashMap<Vec<Vec<u8>>, Vec<u8>>>> = RefCell::default();
 }
 
 /// Returns the ECDSA public key of this canister at the given derivation path.

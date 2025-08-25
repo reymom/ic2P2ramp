@@ -14,7 +14,7 @@ pub async fn get_account_owner(account: &Pubkey) -> Result<Pubkey> {
         .await
         .expect_consistent()
         .map_err(SolanaError::from)?
-        .ok_or_else(|| SolanaError::AccountNotFound)?
+        .ok_or(SolanaError::AccountNotFound)?
         .owner;
     Pubkey::from_str(&owner).map_err(SolanaError::from)
 }

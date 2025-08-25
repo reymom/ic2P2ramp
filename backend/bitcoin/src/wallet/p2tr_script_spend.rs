@@ -146,7 +146,7 @@ pub async fn send_script_spend(
         fee_per_byte,
         &btc_utxos,
         &control_block,
-        &leaf_script,
+        leaf_script,
     )
     .await?;
     ic_cdk::println!(
@@ -159,7 +159,7 @@ pub async fn send_script_spend(
         &prevouts,
         &address,
         &control_block,
-        &leaf_script,
+        leaf_script,
         config.key_name,
         config.derivation_path,
         crate::api::schnorr::sign_with_schnorr,

@@ -5,7 +5,7 @@ use ic_stable_structures::{Storable, storable::Bound};
 
 use super::runes::RuneID;
 
-#[derive(CandidType, Deserialize, Clone, Debug)]
+#[derive(CandidType, Deserialize, Clone, Debug, Default)]
 pub struct VaultEntry {
     pub bitcoin_balance: u64,        // BTC balance in Satoshi
     pub runes: HashMap<RuneID, u64>, // Mapping of RuneID to balance
@@ -30,13 +30,4 @@ impl Storable for VaultEntry {
         max_size: MAX_VAULT_ENTRY_SIZE,
         is_fixed_size: false,
     };
-}
-
-impl VaultEntry {
-    pub fn new() -> Self {
-        Self {
-            bitcoin_balance: 0,
-            runes: HashMap::new(),
-        }
-    }
 }

@@ -1,9 +1,6 @@
 use icramp_types::solana::errors::Result;
 
-use crate::{
-    memory::stable::vault::ONRAMPER_VAULTS,
-    model::types::{Address, vault::VaultEntry},
-};
+use crate::{memory::stable::vault::ONRAMPER_VAULTS, model::types::Address};
 
 pub fn lock_funds(
     offramper_address: Address,
@@ -14,7 +11,7 @@ pub fn lock_funds(
     super::deposit::cancel_deposit(offramper_address, amount, token_mint.clone())?;
 
     ONRAMPER_VAULTS.with_borrow_mut(|vaults| {
-        let mut entry = vaults.get(&onramper).unwrap_or_else(VaultEntry::new);
+        let mut entry = vaults.get(&onramper).unwrap_or_default();
 
         if let Some(mint) = token_mint {
             let mut tokens = entry.tokens.clone();
