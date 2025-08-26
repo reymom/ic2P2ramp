@@ -8,7 +8,7 @@ import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 
 import { config, getChains } from '@/wagmi';
-import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/backend/backend.did';
+import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/icramp_backend/icramp_backend.did';
 import { backend, createActor } from '@/model/backendProxy';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
@@ -242,6 +242,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!login) throw new Error("Login method is not defined");
         if ('Email' in login && (!authData || !authData.password)) throw new Error("Password is required");
         if ('EVM' in login && (!authData || !authData.signature)) throw new Error("EVM Signature is required");
+        if ('Solana' in login && (!authData || !authData.signature || !authData.pubkey))
+            throw new Error("Solana Signature and Public Key are required");
         if ('Bitcoin' in login && (!authData || !authData.signature || !authData.pubkey)) throw new Error("Bitcoin Signature and Public Key are required");
 
         console.log("[authenticateUser] authData = ", authData);

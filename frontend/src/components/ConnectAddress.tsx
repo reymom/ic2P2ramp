@@ -3,9 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
+import bs58 from 'bs58'
 
 import { backend, createActor } from '@/model/backendProxy';
-import { AuthenticationData, LoginAddress } from '@/declarations/backend/backend.did';
+import { AuthenticationData, LoginAddress } from '@/declarations/icramp_backend/icramp_backend.did';
 import { validatePassword } from '@/utils/helper';
 import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/utils/error';
 import { handleWeb3Error } from '@/model/blockchain/evm';
@@ -16,6 +17,7 @@ import DynamicDots from './ui/DynamicDots';
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
+import solanaLogo from "@/assets/blockchains/solana-logo.png";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faKey, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 
@@ -29,10 +31,12 @@ const ConnectAddress: React.FC = () => {
     const [loadingEvm, setLoadingEvm] = useState(false);
     const [loadingIcp, setLoadingIcp] = useState(false);
     const [loadingBitcoin, setLoadingBitcoin] = useState(false);
+    const [loadingSolana, setLoadingSolana] = useState(false);
     const [emailMessage, setEmailMessage] = useState<string | null>(null);
     const [evmMessage, setEvmMessage] = useState<string | null>(null);
     const [iIMessage, setIIMessage] = useState<string | null>(null);
     const [bitcoinMessage, setBitcoinMessage] = useState<string | null>(null);
+    const [solanaMessage, setSolanaMessage] = useState<string | null>(null);
 
     const [searchParams] = useSearchParams();
     const { isConnected, address } = useAccount();
@@ -224,6 +228,73 @@ const ConnectAddress: React.FC = () => {
         }
     };
 
+    const handleSolanaLogin = async () => {
+        const clean = () => { setSolanaMessage(null); setLoadingSolana(false); };
+        setSolanaMessage(null);
+        setLoadingSolana(true);
+
+        try {
+            // Try Wallet Standard provider first (Phantom exposes window.solana)
+            const anyWindow = window as any;
+            const provider =
+                anyWindow?.solana ?? anyWindow?.solflare;
+
+            if (!provider) throw new Error('No Solana wallet found. Install Phantom or Solflare.');
+
+            // Connect (both Phantom/Solflare support .connect())
+            const connRes = await provider.connect?.();
+            const pkObj = provider.publicKey ?? connRes?.publicKey;
+            const pubkey = pkObj?.toBase58 ? pkObj.toBase58() : pkObj?.toString?.();
+            if (!pubkey) throw new Error('Could not read Solana public key');
+
+            const loginAddress: LoginAddress = { Solana: { address: pubkey } };
+            setLoginMethod(loginAddress);
+
+            const res = await backend.generate_auth_message(loginAddress);
+            if (!('Ok' in res)) {
+                setLoginMethod(null);
+                throw new Error(`Internal error when generating solana auth message`);
+            }
+            const msg = res.Ok as string;
+            const msgBytes = new TextEncoder().encode(msg);
+
+            // Wallet-standard signMessage if available, else wallet-specific
+            let rawSig: Uint8Array | string;
+            if (provider.signMessage) {
+                const signed = await provider.signMessage(msgBytes, 'utf8');
+                rawSig = signed.signature ?? signed; // some wallets return {signature}
+            } else if (provider.sign) {
+                // solflare legacy (rare)
+                const signed = await provider.sign(msgBytes, 'utf8');
+                rawSig = signed.signature ?? signed;
+            } else {
+                throw new Error('Wallet does not support signMessage');
+            }
+
+            const signatureB58 =
+                rawSig instanceof Uint8Array ? bs58.encode(rawSig) :
+                    Array.isArray(rawSig) ? bs58.encode(Uint8Array.from(rawSig)) :
+                        (typeof rawSig === 'string' ? rawSig : (() => { throw new Error('Unknown signature format'); })());
+
+            const result = await authenticateUser(
+                loginAddress,
+                { signature: [signatureB58], pubkey: [pubkey], password: [] }
+            );
+
+            if ('Ok' in result) {
+                navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
+            } else {
+                setSolanaMessage(`Failed to authenticate user`);
+                setLoginMethod(null);
+            }
+        } catch (e: any) {
+            setSolanaMessage(e?.message || 'Solana login failed');
+            setLoginMethod(null);
+        } finally {
+            setLoadingSolana(false);
+        }
+    };
+
     const handleEmailLogin = async (loginEmail: string, loginPassword: string) => {
         cleanMessages();
 
@@ -405,6 +476,27 @@ const ConnectAddress: React.FC = () => {
                 {loadingBitcoin && <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin ml-3"></div>}
             </div>
             {bitcoinMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{bitcoinMessage}</p>}
+
+            {/* Solana Login */}
+            <div
+                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md
+            ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin || loadingSolana
+                        ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
+                onClick={() => !(loadingEmail || loadingEvm || loadingIcp || loadingBitcoin || loadingSolana)
+                    ? handleSolanaLogin()
+                    : undefined}
+            >
+                <div className="flex items-center space-x-3">
+                    <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6 mr-2" />
+                    <span className="text-lg">
+                        {loadingSolana
+                            ? <span>Checking Solana Address<DynamicDots isLoading={loadingSolana} /></span>
+                            : <span>Sign in with Solana</span>}
+                    </span>
+                </div>
+                {loadingSolana && <div className="w-4 h-4 border-t-2 border-b-2 border-indigo-400 rounded-full animate-spin ml-3"></div>}
+            </div>
+            {solanaMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{solanaMessage}</p>}
 
             <hr className="border-t border-gray-400 dark:border-gray-500 w-full my-6" />
 
