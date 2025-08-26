@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# ./init_bitcoind.sh
-
 # dfx stop
 # dfx=$(lsof -t -i:4943)
 # # Check if any PIDs were found
@@ -23,13 +21,43 @@ source "$DIR/../.env" || {
   exit
 }
 
-cargo build --release --target wasm32-unknown-unknown --package backend
-
-candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
+# ---------
+# Deploy our Bitcoin and Solana backend canisters
+# ---------
 
 cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
+candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > backend/bitcoin/bitcoin_backend.did
 
-candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bitcoin_backend/bitcoin_backend.did
+cargo build --release --target wasm32-unknown-unknown --package solana_backend
+candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > backend/solana/solana_backend.did
+
+dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument "(
+    variant { 
+        Reinstall = record { 
+            network = variant { regtest }; 
+            proxy_url = \"https://ic2p2ramp.xyz\";
+            unisat = record {
+                api_url = \"open-api-testnet4.unisat.io\";
+                api_key = \"${UNISAT_API_KEY}\";
+            }; 
+        }
+    }
+)"
+
+dfx deploy solana_backend --specified-id uzt4z-lp777-77774-qaabq-cai --argument "(
+    variant { 
+        Reinstall = record {
+            sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
+            ed25519_key_name = variant { LocalDevelopment };
+            network = variant { Devnet }; 
+            proxy_url = \"https://ic2p2ramp.xyz\";
+        }
+    }
+)"
+
+# --------
+# Deploy icramp backend canister dependencies 
+# --------
 
 dfx identity use minter
 export MINTER_ACCOUNT_ID=$(dfx ledger account-id)
@@ -81,28 +109,26 @@ dfx deploy ckbtc_ledger_canister_testnet --argument "
   })
 "
 
-dfx deploy internet_identity
-
+dfx deps pull
 dfx deps deploy xrc
-
-dfx generate bitcoin_backend
-
-dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument '(variant { regtest })'
-
-dfx deps pull && dfx deps init evm_rpc --argument '(record {})' && dfx deps deploy
-
+dfx deps init evm_rpc --argument '(record {})' && dfx deps deploy
 dfx deps deploy evm_rpc
 
-dfx generate icramp
+# --------------------------
+# Deploy icramp main backend
+# --------------------------
+
+cargo build --release --target wasm32-unknown-unknown --package icramp_backend
+candid-extractor target/wasm32-unknown-unknown/release/icramp_backend.wasm > backend/icramp/icramp_backend.did
 
 # dfx_test_key, test_key_1
 # api-m.paypal.com, api-m.sandbox.paypal.com
-dfx deploy icramp --argument "(
+dfx deploy icramp_backend --argument "(
   variant { 
     Reinstall = record {
       canister_ids = record {
-        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
-        bitcoin_backend_id = \"ng6kh-iaaaa-aaaap-qp2fa-cai\";
+        bitcoin_backend_id = \"zhuzm-wqaaa-aaaap-qpk2q-cai\";
+        solana_backend_id = \"uzt4z-lp777-77774-qaabq-cai\";
       };
       ecdsa_key_id = record {
         name = \"dfx_test_key\";
@@ -194,22 +220,26 @@ dfx deploy icramp --argument "(
   }
 )"
 
-dfx canister call backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
-dfx canister call backend register_evm_tokens '(11155111 : nat64, vec {
+dfx canister call icramp_backend register_icp_tokens '(vec { "ryjl3-tyaaa-aaaaa-aaaba-cai"; "mc6ru-gyaaa-aaaar-qaaaq-cai" })'
+dfx canister call icramp_backend register_evm_tokens '(11155111 : nat64, vec {
     record { "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"; 6 : nat8; "USD"; opt "Sepolia Official USDC" };
     record { "0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4"; 6 : nat8; "EUR"; opt "Sepolia Official EURC" };
     record { "0x878bfCfbB8EAFA8A2189fd616F282E1637E06bcF"; 18 : nat8; "USD"; opt "Custom USDT deployed by me" };
 })'
-dfx canister call backend register_evm_tokens '(84532 : nat64, vec {
+dfx canister call icramp_backend register_evm_tokens '(84532 : nat64, vec {
     record { "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; 6 : nat8; "USD"; opt "Base Sepolia Official USDC" };
     record { "0x808456652fdb597867f38412077A9182bf77359F"; 6 : nat8; "EUR"; opt "Sepolia Official EURC" };
 })'
-dfx canister call backend register_evm_tokens '(11155420 : nat64, vec {
+dfx canister call icramp_backend register_evm_tokens '(11155420 : nat64, vec {
     record { "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"; 6 : nat8; "USD"; opt "Optimism Sepolia Official USDC" };
 })'
-dfx canister call backend register_evm_tokens '(421614 : nat64, vec {
+dfx canister call icramp_backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })'
+
+dfx generate icramp_backend
+dfx generate bitcoin_backend
+dfx generate solana_backend
 
 cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall
 

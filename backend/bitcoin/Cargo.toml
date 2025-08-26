@@ -18,3 +18,11 @@ ic-stable-structures = { workspace = true }
 ic-btc-interface = { workspace = true }
 icramp_types = { workspace = true }
 thiserror = "2.0"
+
+[dependencies.getrandom]
+version = "0.2.16"
+default-features = false
+features = ["custom"]
+
+[features]
+default = []

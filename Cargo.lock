@@ -280,6 +280,7 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "candid",
+ "getrandom 0.2.16",
  "hex",
  "ic-btc-interface",
  "ic-cdk 0.17.2",
@@ -4017,35 +4018,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "bs58",
- "candid",
- "getrandom 0.2.16",
- "ic-cdk 0.17.2",
- "ic-cdk-timers",
- "ic-ed25519",
- "ic-stable-structures 0.7.0",
- "icramp_types",
- "num-traits",
- "serde",
- "serde_json",
- "sol_rpc_client",
- "sol_rpc_types",
- "solana-instruction",
- "solana-message",
- "solana-program",
- "solana-pubkey",
- "solana-signature",
- "solana-system-interface",
- "solana-transaction",
- "solana-transaction-status-client-types",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "solana-account"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
@@ -5061,6 +5033,35 @@ dependencies = [
  "solana-serialize-utils 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-short-vec",
  "solana-system-interface",
+]
+
+[[package]]
+name = "solana_backend"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bs58",
+ "candid",
+ "getrandom 0.2.16",
+ "ic-cdk 0.17.2",
+ "ic-cdk-timers",
+ "ic-ed25519",
+ "ic-stable-structures 0.7.0",
+ "icramp_types",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "sol_rpc_client",
+ "sol_rpc_types",
+ "solana-instruction",
+ "solana-message",
+ "solana-program",
+ "solana-pubkey",
+ "solana-signature",
+ "solana-system-interface",
+ "solana-transaction",
+ "solana-transaction-status-client-types",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

@@ -8,11 +8,12 @@ type BitcoinOrderInput = record { tx_id : text; canister_address : text };
 type BlockchainAsset = variant {
   EVM : record { token_address : opt text; chain_id : nat64 };
   ICP : record { ledger_principal : principal };
-  Solana;
+  Solana : record { spl_token : opt text };
   Bitcoin : record { rune_id : opt text };
 };
 type BlockchainError = variant {
   InvalidAddress : AddressType;
+  SolanaBackendError : SolanaError;
   TransactionTimeout;
   ReplacementUnderpriced;
   UnsupportedBlockchain;
@@ -20,6 +21,7 @@ type BlockchainError = variant {
   BitcoinBackendError : text;
   EvmExecutionReverted : record { int64; text };
   EvmLogError : text;
+  TransactionAlreadyProcessed;
   EthersAbiError : text;
   ChainIdNotFound : nat64;
   FundsTooLow;
@@ -39,6 +41,10 @@ type BlockchainError = variant {
   RpcProviderNotFound;
 };
 type BlockchainType = variant { EVM; ICP; Solana; Bitcion };
+type CanisterIdsConfig = record {
+  solana_backend_id : text;
+  bitcoin_backend_id : text;
+};
 type ChainConfig = record {
   currency_symbol : text;
   chain_id : nat64;
@@ -66,6 +72,11 @@ type Crypto = record {
   asset : BlockchainAsset;
   rune_utxos : opt vec RuneUTXOEntry;
   amount : nat;
+};
+type DepositInput = variant {
+  Evm : EvmOrderInput;
+  Solana : SolanaOrderInput;
+  Bitcoin : BitcoinOrderInput;
 };
 type EcdsaCurve = variant { secp256k1 };
 type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
@@ -127,6 +138,7 @@ type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
   ordiscan : UnisatConfig;
   revolut : RevolutConfig;
+  canister_ids : CanisterIdsConfig;
   unisat : UnisatConfig;
   proxy_url : text;
   chains : vec ChainConfig;
@@ -182,6 +194,7 @@ type OrderError = variant {
   OrderProcessing;
   OrderInLockTime;
   PaymentVerificationFailed;
+  InvalidInput : text;
   InvalidOnramperProvider;
   OrderTimerNotFound;
   OrderNotProcessing;
@@ -286,6 +299,18 @@ type SignRequestCandid = record {
   chain_id : nat64;
   nonce : opt nat;
 };
+type SolanaError = variant {
+  RpcError : text;
+  AccountNotFound;
+  BlockhashErrors : text;
+  TransactionError : TransactionError;
+  ParsePubkeyError : text;
+  SystemError : SystemError_1;
+  InvalidSignature;
+  VaultError : VaultError;
+  UnsupportedToken : text;
+};
+type SolanaOrderInput = record { signature : text; mint : opt text };
 type SystemError = variant {
   HttpRequestError : record { nat64; text };
   RpcError : text;
@@ -302,6 +327,12 @@ type SystemError = variant {
   InternalError : text;
   Utf8Error;
 };
+type SystemError_1 = variant {
+  HttpRequestError : record { nat64; text };
+  InvalidInput : text;
+  ParseError : text;
+  Utf8Error;
+};
 type Token = record { decimals : nat8; address : text; rate_symbol : text };
 type TransactionAction = variant {
   Release : TransactionVariant;
@@ -311,6 +342,11 @@ type TransactionAction = variant {
   Commit;
 };
 type TransactionAddress = record { address_type : AddressType; address : text };
+type TransactionError = variant {
+  Unconfirmed : text;
+  NotFound : text;
+  MetaError : text;
+};
 type TransactionReceipt = record {
   to : opt text;
   status : opt nat;
@@ -337,15 +373,12 @@ type TransactionStatus = variant {
 };
 type TransactionVariant = variant { Native; Token };
 type TransformArgs = record { context : blob; response : HttpResponse };
-type TransformContext = record {
-  function : func (TransformArgs) -> (HttpResponse) query;
-  context : blob;
-};
 type UnisatConfig = record { api_key : text; api_url : text };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
   ordiscan : opt UnisatConfig;
   revolut : opt RevolutConfig;
+  canister_ids : opt CanisterIdsConfig;
   unisat : opt UnisatConfig;
   proxy_url : opt text;
   chains : opt vec ChainConfig;
@@ -383,6 +416,7 @@ type UserError = variant {
   InvalidPassword;
 };
 type UserType = variant { Offramper; Onramper };
+type VaultError = variant { InsufficientBalance; AddressVaultNotFound };
 service : (InstallArg) -> {
   add_user_payment_provider : (nat64, text, PaymentProvider) -> (Result);
   add_user_transaction_address : (nat64, text, TransactionAddress) -> (Result);
@@ -419,8 +453,7 @@ service : (InstallArg) -> {
       nat,
       TransactionAddress,
       nat64,
-      opt EvmOrderInput,
-      opt BitcoinOrderInput,
+      opt DepositInput,
     ) -> (Result_5);
   execute_revolut_payment : (nat64, text) -> (Result_6) query;
   freeze_order : (nat64, nat64, text) -> (Result);
@@ -465,19 +498,9 @@ service : (InstallArg) -> {
   test_get_revolut_payment_details : (text) -> (Result);
   test_get_revolut_payment_token : (text) -> (Result_6);
   test_paypal : () -> (Result_6);
-  top_up_order : (
-      nat64,
-      nat64,
-      text,
-      nat,
-      opt EvmOrderInput,
-      opt nat64,
-      opt nat64,
-      opt BitcoinOrderInput,
-    ) -> (Result) query;
+  top_up_order : (nat64, nat64, text, nat, opt DepositInput) -> (Result);
   transfer_canister_funds : (principal, principal, nat) -> (Result);
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);
-  transform : (TransformContext, HttpResponse) -> (HttpResponse) query;
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
   unprocess_order : (nat64) -> (Result);

@@ -5,7 +5,7 @@ candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > bi
 dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument "(
     variant { 
         Reinstall = record { 
-            network = variant { tegtest }; 
+            network = variant { regtest }; 
             proxy_url = \"https://ic2p2ramp.xyz\";
             unisat = record {
                 api_url = \"open-api-testnet4.unisat.io\";

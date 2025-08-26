@@ -1,5 +1,5 @@
 [package]
-name = "solana"
+name = "solana_backend"
 version.workspace = true
 edition.workspace = true
 

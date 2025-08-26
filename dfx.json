@@ -31,38 +31,38 @@
         "output": "frontend/src/declarations/xrc"
       }
     },
-    "icramp": {
+    "icramp_backend": {
       "dependencies": ["evm_rpc", "xrc"],
-      "candid": "backend/icramp/icramp.did",
+      "candid": "backend/icramp/icramp_backend.did",
       "package": "icramp_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/icramp"
+        "output": "frontend/src/declarations/icramp_backend"
       }
     },
-    "frontend": {
-      "dependencies": ["icramp"],
-      "type": "assets",
-      "source": ["frontend/dist/"],
-      "workspace": "frontend"
-    },
-    "bitcoin": {
+    "bitcoin_backend": {
       "dependencies": [],
-      "candid": "backend/bitcoin/bitcoin.did",
+      "candid": "backend/bitcoin/bitcoin_backend.did",
       "package": "bitcoin_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/bitcoin"
+        "output": "frontend/src/declarations/bitcoin_backend"
       }
     },
-    "solana": {
+    "solana_backend": {
       "dependencies": [],
-      "candid": "backend/solana/solana.did",
+      "candid": "backend/solana/solana_backend.did",
       "package": "solana_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/solana"
+        "output": "frontend/src/declarations/solana_backend"
       }
+    },
+    "frontend": {
+      "dependencies": ["icramp_backend"],
+      "type": "assets",
+      "source": ["frontend/dist/"],
+      "workspace": "frontend"
     },
     "ramp_prod": {
       "dependencies": ["evm_rpc", "xrc"],
