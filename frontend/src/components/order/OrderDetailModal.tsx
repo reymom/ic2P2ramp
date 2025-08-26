@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes } from '@fortawesome/free-solid-svg-icons';
-import { OrderState } from '@/declarations/backend/backend.did';
+import { OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
 import OrderCard from './OrderCard';
 
 interface OrderDetailModalProps {

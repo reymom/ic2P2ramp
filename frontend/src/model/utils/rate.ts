@@ -1,5 +1,5 @@
 import { backend } from '@/model/backendProxy';
-import { Crypto } from '@/declarations/backend/backend.did';
+import { Crypto } from '@/declarations/icramp_backend/icramp_backend.did';
 import { rampErrorToString } from '@/model/utils/error';
 
 export const fetchOrderPrice = async (

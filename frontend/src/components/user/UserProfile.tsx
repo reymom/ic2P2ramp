@@ -4,7 +4,7 @@ import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider, TransactionAddress } from '@/declarations/backend/backend.did';
+import { PaymentProvider, TransactionAddress } from '@/declarations/icramp_backend/icramp_backend.did';
 import { userTypeToString } from '@/model/utils/utils';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '@/model/types';
 import { truncate } from '@/utils/helper';

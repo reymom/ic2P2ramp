@@ -3,7 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
-import { OrderFilter } from '@/declarations/backend/backend.did';
+import { OrderFilter } from '@/declarations/icramp_backend/icramp_backend.did';
 import { userTypeToString } from './model/utils/utils';
 import ProtectedRoute from './components/ProtectedRoute';
 import Menu from './components/Menu';

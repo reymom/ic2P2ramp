@@ -8,7 +8,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider, PaymentProviderType, BlockchainAsset, EvmOrderInput, BitcoinOrderInput } from '@/declarations/backend/backend.did';
+import {
+    PaymentProvider,
+    PaymentProviderType,
+    BlockchainAsset,
+    EvmOrderInput,
+    BitcoinOrderInput,
+    DepositInput
+} from '@/declarations/icramp_backend/icramp_backend.did';
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
@@ -130,7 +137,7 @@ const CreateOrder: React.FC = () => {
         } else if (blockchainName === "ICP") {
             setSelectedBlockchainAsset({ ICP: { ledger_principal: Principal.fromText(ICP_TOKENS[0].address) } });
         } else if (blockchainName === "Solana") {
-            setSelectedBlockchainAsset({ Solana: null });
+            setSelectedBlockchainAsset({ Solana: { spl_token: [] } });
         } else if (blockchainName === 'Bitcoin') {
             setSelectedBlockchainAsset({ Bitcoin: { rune_id: [] } });
         }
@@ -292,8 +299,7 @@ const CreateOrder: React.FC = () => {
                 return;
             }
 
-            let evmOrderInput: [EvmOrderInput] | [] = []
-            let bitcoinOrderInput: [BitcoinOrderInput] | [] = []
+            let depositInput: [DepositInput] | [] = []
             const blockchain = blockchainAssetToBlockchainType(selectedBlockchainAsset);
             if (blockchain === 'EVM') {
                 if (!chainId) throw new Error('Chain id is not available');
@@ -335,11 +341,13 @@ const CreateOrder: React.FC = () => {
                     setTxHash(receipt.hash);
                     console.log('Transaction receipt: ', receipt);
 
-                    evmOrderInput = [{
-                        estimated_gas_lock: gasForCommit[0],
-                        estimated_gas_withdraw: gasForRelease[0],
-                        tx_hash: receipt.hash
-                    } as EvmOrderInput]
+                    depositInput = [{
+                        'Evm': {
+                            estimated_gas_lock: gasForCommit[0],
+                            estimated_gas_withdraw: gasForRelease[0],
+                            tx_hash: receipt.hash
+                        } as EvmOrderInput
+                    }]
                 } catch (e: any) {
                     setMessage(`${e.message || e}`);
                     setIsLoading(false);
@@ -414,16 +422,20 @@ const CreateOrder: React.FC = () => {
                             return;
                         }
                     }
-                    bitcoinOrderInput = [{
-                        tx_id: txid,
-                        canister_address: bitcoinBackendAddress,
-                    } as BitcoinOrderInput]
+                    depositInput = [{
+                        'Bitcoin': {
+                            tx_id: txid,
+                            canister_address: bitcoinBackendAddress,
+                        } as BitcoinOrderInput
+                    }]
                     setLoadingMessage("Transaction sent, awaiting confirmation");
                 } catch (error) {
                     setMessage(`Error creating Bitcoin order, error: ${error}`);
                     setIsLoading(false);
                     return;
                 }
+            } else if (blockchain === 'Solana') {
+                // TODO: send solana funds to solana backend canister address
             } else {
                 setIsLoading(false);
                 throw new Error('Unsupported blockchain selected');
@@ -438,8 +450,7 @@ const CreateOrder: React.FC = () => {
                 cryptoAmountUnits,
                 selectedAddress,
                 user.id,
-                evmOrderInput,
-                bitcoinOrderInput,
+                depositInput,
             );
 
             if ('Ok' in result) {

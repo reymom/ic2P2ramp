@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FilterX } from "lucide-react";
 import clsx from 'clsx';
 
-import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter, BlockchainType, Order } from '@/declarations/backend/backend.did';
+import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter, BlockchainType, Order } from '@/declarations/icramp_backend/icramp_backend.did';
 import { OrderFilterTypes } from '@/model/types';
 import { useUser } from '@/components/user/UserContext';
 import { truncate } from '@/utils/helper';

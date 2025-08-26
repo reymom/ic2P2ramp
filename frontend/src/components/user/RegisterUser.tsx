@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider } from '@/declarations/backend/backend.did';
+import { PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
 import { stringToUserType } from '@/model/utils/utils';
 import { rampErrorToString } from '@/model/utils/error';

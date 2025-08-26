@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import { backend } from '@/model/backendProxy';
-import { OrderState, PaymentProvider, PaymentProviderType } from '@/declarations/backend/backend.did';
+import { OrderState, PaymentProvider, PaymentProviderType } from '@/declarations/icramp_backend/icramp_backend.did';
 import { useUser } from '@/components/user/UserContext';
 import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { getEvmTokens } from '@/constants/evm_tokens';

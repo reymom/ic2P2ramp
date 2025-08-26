@@ -1,4 +1,4 @@
-import { User } from '@/declarations/backend/backend.did';
+import { User } from '@/declarations/icramp_backend/icramp_backend.did';
 import { UserTypes } from '@/model/types';
 import { userTypeToString } from '@/model/utils/utils';
 

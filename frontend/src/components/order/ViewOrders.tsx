@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faArrowRight, faTh, faList } from '@fortawesome/free-solid-svg-icons';
 
 import { backend } from '@/model/backendProxy';
-import { OrderFilter, OrderState } from '@/declarations/backend/backend.did';
+import { OrderFilter, OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
 import { parseBigIntFields } from '@/model/utils/mock';
 import OrderFilters from '@/components/order/OrderFilters';
 import Order from '@/components/order/Order';

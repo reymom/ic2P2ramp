@@ -1,11 +1,11 @@
 import {
   createActor as createDevActor,
-  backend as devBackend,
-} from '@/declarations/backend';
+  icramp_backend as devBackend,
+} from '@/declarations/icramp_backend';
 import {
   createActor as createProdActor,
-  backend_prod as prodBackend,
-} from '@/declarations/backend_prod';
+  icramp_backend_prod as prodBackend,
+} from '@/declarations/icramp_backend_prod';
 
 const isProduction = process.env.FRONTEND_EVM_ENV === 'production';
 

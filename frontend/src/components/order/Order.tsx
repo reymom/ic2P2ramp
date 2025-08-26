@@ -2,7 +2,7 @@ import React from "react";
 
 import OrderCard from "./OrderCard";
 import OrderRow from "./OrderRow";
-import { OrderState } from "@/declarations/backend/backend.did";
+import { OrderState } from "@/declarations/icramp_backend/icramp_backend.did";
 
 interface OrderProps {
     order: OrderState;

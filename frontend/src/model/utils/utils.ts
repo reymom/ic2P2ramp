@@ -3,7 +3,7 @@ import {
   PaymentProvider,
   PaymentProviderType,
   UserType,
-} from '@/declarations/backend/backend.did';
+} from '@/declarations/icramp_backend/icramp_backend.did';
 import {
   UserTypes,
   PaymentProviderTypes,

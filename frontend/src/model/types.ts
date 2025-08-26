@@ -4,7 +4,7 @@ import {
   OrderFilter,
   PaymentProviderType,
   UserType,
-} from '@/declarations/backend/backend.did';
+} from '@/declarations/icramp_backend/icramp_backend.did';
 import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
 
 export interface TokenOption {
