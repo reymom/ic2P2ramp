@@ -70,8 +70,8 @@ dfx canister call solana_backend get_balance '("<solana-pubkey>")'
 ### Token Registry (allowlist)
 
 ```bash
-# Register by mint; decimals resolved on-chain
-dfx canister call solana_backend register_tokens '(vec { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE" })'
+# Register by mint, symbol and rate symbol; decimals resolved on-chain
+dfx canister call solana_backend register_tokens '(vec { record { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"; "KONG"; "KONG" } })'
 
 # Inspect registry
 dfx canister call solana_backend get_registered_tokens '()'

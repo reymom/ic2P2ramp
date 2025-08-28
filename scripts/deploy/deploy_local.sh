@@ -28,9 +28,6 @@ source "$DIR/../.env" || {
 cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
 candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > backend/bitcoin/bitcoin_backend.did
 
-cargo build --release --target wasm32-unknown-unknown --package solana_backend
-candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > backend/solana/solana_backend.did
-
 dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument "(
     variant { 
         Reinstall = record { 
@@ -44,7 +41,17 @@ dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument
     }
 )"
 
-dfx deploy solana_backend --specified-id uzt4z-lp777-77774-qaabq-cai --argument "(
+dfx deploy sol_rpc
+
+dfx canister call sol_rpc updateApiKeys "(vec {
+  record { variant { AlchemyDevnet }; opt \"$ALCHEMY_KEY\" };
+  record { variant { AnkrDevnet }; opt \"$ANKR_KEY\" };
+})"
+
+cargo build --release --target wasm32-unknown-unknown --package solana_backend
+candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > backend/solana/solana_backend.did
+
+dfx deploy solana_backend --specified-id u6s2n-gx777-77774-qaaba-cai --argument "(
     variant { 
         Reinstall = record {
             sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
@@ -111,8 +118,7 @@ dfx deploy ckbtc_ledger_canister_testnet --argument "
 
 dfx deps pull
 dfx deps deploy xrc
-dfx deps init evm_rpc --argument '(record {})' && dfx deps deploy
-dfx deps deploy evm_rpc
+dfx deps init evm_rpc --argument '(record {})' && dfx deps deploy evm_rpc
 
 # --------------------------
 # Deploy icramp main backend
@@ -128,7 +134,7 @@ dfx deploy icramp_backend --argument "(
     Reinstall = record {
       canister_ids = record {
         bitcoin_backend_id = \"zhuzm-wqaaa-aaaap-qpk2q-cai\";
-        solana_backend_id = \"uzt4z-lp777-77774-qaabq-cai\";
+        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
       };
       ecdsa_key_id = record {
         name = \"dfx_test_key\";
@@ -236,12 +242,19 @@ dfx canister call icramp_backend register_evm_tokens '(11155420 : nat64, vec {
 dfx canister call icramp_backend register_evm_tokens '(421614 : nat64, vec {
     record { "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"; 6 : nat8; "USD"; opt "Arbitrum Sepolia Official USDC" };
 })'
+dfx canister call bitcoin_backend register_runes '(vec {
+    record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
+    record { id = "73393:191"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
+})'
+dfx canister call solana_backend register_tokens '(vec { record { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"; "KONG"; "KONG" } })'
 
 dfx generate icramp_backend
 dfx generate bitcoin_backend
 dfx generate solana_backend
 
 cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall
+
+# Fund the frontend's II with some of our locally deployed tokens
 
 export TO_PRINCIPAL="dvbrj-gc3mc-56aem-lxs4s-yq2sj-5xryx-zgkrd-zk3xu-glhtj-wpotk-tae"
 export TO_SUBACCOUNT="null"
@@ -275,9 +288,4 @@ dfx canister call mc6ru-gyaaa-aaaar-qaaaq-cai icrc1_transfer \
     from_subaccount = null;
     created_at_time = null;
     amount = '$AMOUNT';
-})'
-
-dfx canister call bitcoin_backend register_runes '(vec {
-    record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
-    record { id = "73393:191"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
 })'
