@@ -5,6 +5,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import bs58 from 'bs58'
 
+import { getBackendCanisterId } from '@/constants/canisters';
 import { backend, createActor } from '@/model/backendProxy';
 import { AuthenticationData, LoginAddress } from '@/declarations/icramp_backend/icramp_backend.did';
 import { validatePassword } from '@/utils/helper';
@@ -75,6 +76,8 @@ const ConnectAddress: React.FC = () => {
                     await handleEvmLogin();
                 } else if (loginMethod && 'Bitcoin' in loginMethod) {
                     await handleBitcoinLogin();
+                } else if (loginMethod && 'Solana' in loginMethod) {
+                    await handleSolanaLogin();
                 } else if (loginMethod && 'ICP' in loginMethod) {
                     await handleInternetIdentityLogin(true);
                 } else if (pwd && email) {
@@ -101,22 +104,27 @@ const ConnectAddress: React.FC = () => {
     const cleanMessages = () => {
         setEmailMessage(null);
         setEvmMessage(null);
+        setBitcoinMessage(null);
+        setSolanaMessage(null);
         setIIMessage(null);
         setLoadingEmail(false);
         setLoadingEvm(false);
+        setLoadingBitcoin(false);
+        setLoadingSolana(false);
         setLoadingIcp(false);
     };
+
+    const isLoading =
+        loadingEmail || loadingEvm || loadingIcp || loadingBitcoin || loadingSolana;
 
     const handleEvmLogin = async () => {
         cleanMessages();
 
         if (!window.ethereum) throw new Error('No crypto wallet found.');
-
         if (!address) {
             setEvmMessage("Undefined evm address. Please connect your wallet.");
             return;
         }
-
         if (!isConnected) {
             setEvmMessage("Connect address to login");
             return;
@@ -170,7 +178,6 @@ const ConnectAddress: React.FC = () => {
     }
 
     const handleBitcoinLogin = async () => {
-        console.log("handleBitcoinLogin")
         cleanMessages();
 
         if (!window.unisat) throw new Error('Unisat not found.');
@@ -185,14 +192,14 @@ const ConnectAddress: React.FC = () => {
             return;
         }
 
-        console.log("address = ", btcAddress)
+        console.log("bitcoin address = ", btcAddress);
         const loginAddress: LoginAddress = { Bitcoin: { address: btcAddress } };
         setLoginMethod(loginAddress)
 
         setLoadingBitcoin(true);
         try {
             const result = await backend.generate_auth_message(loginAddress);
-            console.log("result = ", result);
+            console.log("generate_auth_message res = ", JSON.stringify(result));
 
             if ('Ok' in result) {
                 const signature = await window.unisat.signMessage(result.Ok);
@@ -229,62 +236,63 @@ const ConnectAddress: React.FC = () => {
     };
 
     const handleSolanaLogin = async () => {
-        const clean = () => { setSolanaMessage(null); setLoadingSolana(false); };
-        setSolanaMessage(null);
-        setLoadingSolana(true);
+        cleanMessages();
 
         try {
-            // Try Wallet Standard provider first (Phantom exposes window.solana)
             const anyWindow = window as any;
             const provider =
                 anyWindow?.solana ?? anyWindow?.solflare;
-
             if (!provider) throw new Error('No Solana wallet found. Install Phantom or Solflare.');
 
-            // Connect (both Phantom/Solflare support .connect())
+            setLoadingSolana(true);
             const connRes = await provider.connect?.();
             const pkObj = provider.publicKey ?? connRes?.publicKey;
             const pubkey = pkObj?.toBase58 ? pkObj.toBase58() : pkObj?.toString?.();
             if (!pubkey) throw new Error('Could not read Solana public key');
 
+            console.log("solana address = ", pubkey);
             const loginAddress: LoginAddress = { Solana: { address: pubkey } };
             setLoginMethod(loginAddress);
 
-            const res = await backend.generate_auth_message(loginAddress);
-            if (!('Ok' in res)) {
-                setLoginMethod(null);
-                throw new Error(`Internal error when generating solana auth message`);
-            }
-            const msg = res.Ok as string;
-            const msgBytes = new TextEncoder().encode(msg);
+            const authRes = await backend.generate_auth_message(loginAddress);
+            console.log("[generate_auth_message] res = ", JSON.stringify(authRes));
 
-            // Wallet-standard signMessage if available, else wallet-specific
-            let rawSig: Uint8Array | string;
-            if (provider.signMessage) {
-                const signed = await provider.signMessage(msgBytes, 'utf8');
-                rawSig = signed.signature ?? signed; // some wallets return {signature}
-            } else if (provider.sign) {
-                // solflare legacy (rare)
-                const signed = await provider.sign(msgBytes, 'utf8');
-                rawSig = signed.signature ?? signed;
+            if ('Ok' in authRes) {
+                const msg = authRes.Ok as string;
+                const msgBytes = new TextEncoder().encode(msg);
+
+                // Wallet-standard signMessage if available, else wallet-specific
+                let rawSig: Uint8Array | string;
+                if (provider.signMessage) {
+                    const signed = await provider.signMessage(msgBytes, 'utf8');
+                    rawSig = signed.signature ?? signed; // some wallets return {signature}
+                } else if (provider.sign) {
+                    // solflare legacy (rare)
+                    const signed = await provider.sign(msgBytes, 'utf8');
+                    rawSig = signed.signature ?? signed;
+                } else {
+                    throw new Error('Wallet does not support signMessage');
+                }
+
+                const signatureB58 =
+                    rawSig instanceof Uint8Array ? bs58.encode(rawSig) :
+                        Array.isArray(rawSig) ? bs58.encode(Uint8Array.from(rawSig)) :
+                            (typeof rawSig === 'string' ? rawSig : (() => { throw new Error('Unknown signature format'); })());
+
+                const result = await authenticateUser(
+                    loginAddress,
+                    { signature: [signatureB58], pubkey: [pubkey], password: [] }
+                );
+                if ('Ok' in result) {
+                    navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
+                } else {
+                    setSolanaMessage(`Failed to authenticate user`);
+                    setLoginMethod(null);
+                }
+            } else if (isUserNotFoundError(authRes.Err)) {
+                navigate("/register");
             } else {
-                throw new Error('Wallet does not support signMessage');
-            }
-
-            const signatureB58 =
-                rawSig instanceof Uint8Array ? bs58.encode(rawSig) :
-                    Array.isArray(rawSig) ? bs58.encode(Uint8Array.from(rawSig)) :
-                        (typeof rawSig === 'string' ? rawSig : (() => { throw new Error('Unknown signature format'); })());
-
-            const result = await authenticateUser(
-                loginAddress,
-                { signature: [signatureB58], pubkey: [pubkey], password: [] }
-            );
-
-            if ('Ok' in result) {
-                navigate('Offramper' in result.Ok.user_type ? "/create" : "/view");
-            } else {
-                setSolanaMessage(`Failed to authenticate user`);
+                setSolanaMessage(`Internal error when generating solana auth session message: ${rampErrorToString(authRes.Err)}`)
                 setLoginMethod(null);
             }
         } catch (e: any) {
@@ -349,12 +357,9 @@ const ConnectAddress: React.FC = () => {
     const handleInternetIdentityLogin = async (autoLogin?: boolean) => {
         cleanMessages();
 
-        let canisterId = process.env.CANISTER_ID_BACKEND;
-        if (process.env.FRONTEND_BTC_ENV === "mainnet") {
-            canisterId = process.env.CANISTER_ID_BACKEND_PROD
-        }
-        if (!canisterId) throw new Error("Backend Canister ID not in env file");
         try {
+            const canisterId = getBackendCanisterId();
+
             setLoadingIcp(true);
 
             let loginPrincipal = principal;
@@ -400,12 +405,11 @@ const ConnectAddress: React.FC = () => {
                 <h2 className="text-2xl font-semibold">Sign in to icRamp</h2>
             </div>
 
-            {/* <div className="space-y-4"> */}
             {/* Internet Identity Login */}
             <div
                 className={`flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md 
-                        ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
-                onClick={() => !(loadingEmail || loadingEvm || loadingIcp) ? handleInternetIdentityLogin(false) : undefined}
+                        ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
+                onClick={() => !isLoading ? handleInternetIdentityLogin(false) : undefined}
             >
                 <div className="flex items-center space-x-3">
                     <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 mr-2" />
@@ -426,10 +430,10 @@ const ConnectAddress: React.FC = () => {
                 {({ openConnectModal }) => (
                     <div
                         className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md 
-                                ${loadingEmail || loadingEvm || loadingIcp ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}
+                                ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}
                             `}
                         onClick={() => {
-                            if (!(loadingEmail || loadingEvm || loadingIcp)) {
+                            if (!isLoading) {
                                 if (isConnected) {
                                     handleEvmLogin()
                                 } else {
@@ -455,13 +459,12 @@ const ConnectAddress: React.FC = () => {
                 )}
             </ConnectButton.Custom>
             {evmMessage && <p className="mt-1 text-sm font-medium text-red-500 break-all">{evmMessage}</p>}
-            {/* </div > */}
 
             {/* Bitcoin Login */}
             <div
                 className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md
-                        ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
-                onClick={() => !(loadingEmail || loadingEvm || loadingIcp || loadingBitcoin) ? handleBitcoinLogin() : undefined}
+                        ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
+                onClick={() => !isLoading ? handleBitcoinLogin() : undefined}
             >
                 <div className="flex items-center space-x-3">
                     <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6 mr-2" />
@@ -479,12 +482,9 @@ const ConnectAddress: React.FC = () => {
 
             {/* Solana Login */}
             <div
-                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md
-            ${loadingEmail || loadingEvm || loadingIcp || loadingBitcoin || loadingSolana
-                        ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
-                onClick={() => !(loadingEmail || loadingEvm || loadingIcp || loadingBitcoin || loadingSolana)
-                    ? handleSolanaLogin()
-                    : undefined}
+                className={`mt-4 flex items-center justify-between px-3 py-3 bg-gray-300 dark:bg-gray-600 rounded-md 
+                    ${isLoading ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-gray-400 dark:hover:bg-gray-500'}`}
+                onClick={() => !isLoading ? handleSolanaLogin() : undefined}
             >
                 <div className="flex items-center space-x-3">
                     <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6 mr-2" />
@@ -504,7 +504,7 @@ const ConnectAddress: React.FC = () => {
             <form
                 onSubmit={(event) => {
                     event.preventDefault();
-                    !(loadingEmail || loadingEvm || loadingIcp) && password ? handleEmailLogin(email, password) : undefined
+                    !isLoading && password ? handleEmailLogin(email, password) : undefined
                 }}
             >
                 <div className="space-y-4">
@@ -552,11 +552,9 @@ const ConnectAddress: React.FC = () => {
                     </div>
                     <button
                         type="submit"
-                        disabled={loadingEmail || loadingEvm || loadingIcp}
+                        disabled={isLoading}
                         className={`w-full py-3 bg-blue-600 dark:bg-blue-700 rounded-md hover:bg-blue-700 dark:hover:bg-blue-800 focus:outline-none focus:ring focus:ring-amber-400 
-                        ${loadingEmail || loadingEvm || loadingIcp
-                                ? 'cursor-not-allowed' : ''
-                            }`}>
+                            ${isLoading ? 'cursor-not-allowed' : ''}`}>
                         {loadingEmail ? (
                             <div className="flex items-center justify-center space-x-2 relative text-base">
                                 <span>Checking email<DynamicDots isLoading={loadingEmail} /></span>
@@ -570,7 +568,7 @@ const ConnectAddress: React.FC = () => {
                 <div className="text-center mt-2">
                     <a
                         href="#"
-                        onClick={() => !(loadingEmail || loadingEvm || loadingIcp) && navigate('/forgot-password')}
+                        onClick={() => !isLoading && navigate('/forgot-password')}
                         className="text-sm text-gray-400 hover:underline"
                     >
                         Forgot your password?

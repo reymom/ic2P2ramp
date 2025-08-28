@@ -10,6 +10,7 @@ import { AuthClient } from '@dfinity/auth-client';
 import { config, getChains } from '@/wagmi';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/icramp_backend/icramp_backend.did';
 import { backend, createActor } from '@/model/backendProxy';
+import { getBackendCanisterId } from '@/constants/canisters';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { supportedRuneIds } from '@/constants/runes';
@@ -207,11 +208,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                             }
                             setIcpAgent(agent);
 
-                            let canisterId = process.env.CANISTER_ID_BACKEND;
-                            if (process.env.FRONTEND_BTC_ENV === "mainnet") {
-                                canisterId = process.env.CANISTER_ID_BACKEND_PROD
-                            }
-                            if (!canisterId) throw new Error("Backend Canister ID not in env file");
+                            const canisterId = getBackendCanisterId();
                             const actor = createActor(canisterId, { agent });
                             setBackendActor(actor)
 

@@ -4,6 +4,7 @@ import { Principal } from '@dfinity/principal';
 
 import { backend } from '@/model/backendProxy';
 import { rampErrorToString } from '@/model/utils/error';
+import { getBackendCanisterId } from '@/constants/canisters';
 
 console.log('FRONTEND_ICP_ENV = ', process.env.FRONTEND_ICP_ENV);
 
@@ -37,15 +38,12 @@ export const transferICPTokensToCanister = async (
   amount: bigint,
   fee: bigint,
 ) => {
-  if (!process.env.CANISTER_ID_BACKEND) {
-    throw new Error('Backend Canister ID not defined in env variables');
-  }
-
   const ledger = IcrcLedgerCanister.create({ agent, canisterId });
   try {
+    const backendId = getBackendCanisterId();
     const result = await ledger.transfer({
       to: {
-        owner: Principal.fromText(process.env.CANISTER_ID_BACKEND),
+        owner: Principal.fromText(backendId),
         subaccount: [],
       },
       amount: amount + fee,
