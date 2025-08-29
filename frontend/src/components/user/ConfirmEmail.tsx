@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { backend } from '@/model/backendProxy';
 import { getTempUserData, clearTempUserData } from '@/model/emailConfirmation';
-import { rampErrorToString } from '@/model/utils/error';
-import { stringToUserType } from '@/model/utils/utils';
+import { rampErrorToString } from '@/model/helpers/error';
+import { stringToUserType } from '@/model/helpers/types';
 
 const ConfirmEmail: React.FC = () => {
     const [message, setMessage] = useState('');

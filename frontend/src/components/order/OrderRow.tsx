@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye } from '@fortawesome/free-solid-svg-icons';
 import { OrderState } from "@/declarations/icramp_backend/icramp_backend.did";
-import { formatPrice, truncate, formatTimeLeft } from "@/utils/helper";
+import { formatPrice, truncate, formatTimeLeft } from "@/utils/formatters";
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { useOrderLogic } from './useOrderLogic';
 import OrderDetailModal from './OrderDetailModal';

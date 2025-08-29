@@ -26,9 +26,9 @@ import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import solanaLogo from "@/assets/blockchains/solana-logo.png";
 
 import { useUser } from './user/UserContext';
-import { truncate, formatTimeLeft } from '@/utils/helper';
+import { truncate, formatTimeLeft } from '@/utils/formatters';
 import { sessionMarginMilisec } from '@/model/session';
-import { getExplorerUrls } from '@/model/utils/blockchain';
+import { getExplorerUrls } from '@/utils/explorers';
 
 const Menu: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);

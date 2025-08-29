@@ -3,10 +3,10 @@ import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 import { OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
-import { useUser } from '@/components/user/UserContext';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
-import { paymentProviderTypeToString } from '@/model/utils/utils';
-import { formatPrice, formatTimeLeft, truncate } from '@/utils/helper';
+import { paymentProviderTypeToString } from '@/model/helpers/types';
+import { formatPrice, formatTimeLeft, truncate } from '@/utils/formatters';
+import { useUser } from '@/components/user/UserContext';
 import PayPalButton from '@/components/ui/PaypalButton';
 import DynamicDots from '@/components/ui/DynamicDots';
 import { useOrderLogic } from './useOrderLogic';

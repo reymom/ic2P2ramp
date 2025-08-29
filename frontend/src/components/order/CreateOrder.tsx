@@ -7,7 +7,6 @@ import { Principal } from '@dfinity/principal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import { backend } from '@/model/backendProxy';
 import {
     PaymentProvider,
     PaymentProviderType,
@@ -19,27 +18,29 @@ import {
 import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
-import { NetworkIds, NetworkProps } from '@/constants/networks';
-import { rampErrorToString } from '@/model/utils/error';
+import { NetworkIds } from '@/constants/networks';
+import { backend } from '@/model/backendProxy';
+import { rampErrorToString } from '@/model/helpers/error';
 import { BlockchainTypes, TokenOption } from '@/model/types';
-import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/utils/utils';
+import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/helpers/types';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
-import { Balance, useUser } from '@/components/user/UserContext';
 import { isSessionExpired } from '@/model/session';
-import { getExchangeRate } from '@/model/utils/rate';
-import { formatPrice, truncate } from '@/utils/helper';
-import DynamicDots from '@/components/ui/DynamicDots';
-import CurrencySelect from '@/components/ui/CurrencySelect';
-import TokenSelect from '@/components/ui/TokenSelect';
-import BlockchainSelect from '@/components/ui/BlockchainSelect';
 import {
     fetchBitcoinCanisterAddress,
     fetchBitcoinTokenOptions,
     transferBitcoinToCanister,
     transferRuneToCanister
 } from '@/model/blockchain/bitcoin';
-import { getExplorerUrls } from '@/model/utils/blockchain';
+import { getExchangeRate } from '@/utils/rates';
+import { formatPrice, truncate } from '@/utils/formatters';
+import { getExplorerUrls } from '@/utils/explorers';
+
+import { Balance, useUser } from '@/components/user/UserContext';
+import DynamicDots from '@/components/ui/DynamicDots';
+import CurrencySelect from '@/components/ui/CurrencySelect';
+import TokenSelect from '@/components/ui/TokenSelect';
+import BlockchainSelect from '@/components/ui/BlockchainSelect';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);

@@ -7,7 +7,7 @@ import { faArrowLeft, faArrowRight, faTh, faList } from '@fortawesome/free-solid
 
 import { backend } from '@/model/backendProxy';
 import { OrderFilter, OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
-import { parseBigIntFields } from '@/model/utils/mock';
+import { parseBigIntFields } from '@/model/helpers/mock';
 import OrderFilters from '@/components/order/OrderFilters';
 import Order from '@/components/order/Order';
 import { useUser } from '@/components/user/UserContext';

@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { backend } from '@/model/backendProxy';
 import { PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
-import { stringToUserType } from '@/model/utils/utils';
-import { rampErrorToString } from '@/model/utils/error';
-import { truncate } from '@/utils/helper';
 import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '@/model/emailConfirmation';
+import { stringToUserType } from '@/model/helpers/types';
+import { rampErrorToString } from '@/model/helpers/error';
+import { truncate } from '@/utils/formatters';
 import { useUser } from './UserContext';
 import DynamicDots from '@/components/ui/DynamicDots';
 

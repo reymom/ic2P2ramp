@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useUser } from './user/UserContext';
-import { userTypeToString } from '@/model/utils/utils';
+import { userTypeToString } from '@/model/helpers/types';
 
 export type ProtectedRouteProps = {
     allowedUserTypes: string[];

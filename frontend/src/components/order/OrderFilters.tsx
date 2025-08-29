@@ -7,7 +7,7 @@ import clsx from 'clsx';
 import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter, BlockchainType, Order } from '@/declarations/icramp_backend/icramp_backend.did';
 import { OrderFilterTypes } from '@/model/types';
 import { useUser } from '@/components/user/UserContext';
-import { truncate } from '@/utils/helper';
+import { truncate } from '@/utils/formatters';
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';

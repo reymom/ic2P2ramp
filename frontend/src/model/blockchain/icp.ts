@@ -3,7 +3,7 @@ import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 
 import { backend } from '@/model/backendProxy';
-import { rampErrorToString } from '@/model/utils/error';
+import { rampErrorToString } from '@/model/helpers/error';
 import { getBackendCanisterId } from '@/constants/canisters';
 
 console.log('FRONTEND_ICP_ENV = ', process.env.FRONTEND_ICP_ENV);

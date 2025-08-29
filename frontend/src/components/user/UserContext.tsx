@@ -28,7 +28,7 @@ import {
 import { UserTypes } from '@/model/types';
 import { icpHost, iiUrl } from '@/model/blockchain/icp';
 import { fetchRuneBalances, isCorrectUnisatChain, switchUnisatChain } from '@/model/blockchain/unisat';
-import { formatCryptoUnits } from '@/utils/helper';
+import { formatCryptoUnits } from '@/utils/formatters';
 
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import solanaLogo from '@/assets/blockchains/solana-logo.png';

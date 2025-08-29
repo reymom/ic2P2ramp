@@ -4,7 +4,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import 'react-json-view-lite/dist/index.css'; // JSON viewer component
 
 import { OrderFilter } from '@/declarations/icramp_backend/icramp_backend.did';
-import { userTypeToString } from './model/utils/utils';
+import { userTypeToString } from './model/helpers/types';
 import ProtectedRoute from './components/ProtectedRoute';
 import Menu from './components/Menu';
 import ConnectAddress from './components/ConnectAddress';

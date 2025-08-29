@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 import { LoginAddress } from '@/declarations/icramp_backend/icramp_backend.did';
 import { generateConfirmationToken, sendRecoverPassword, storeTempResetPasswordData } from '@/model/emailConfirmation';
-import { isInvalidPasswordError } from '@/model/utils/error';
+import { isInvalidPasswordError } from '@/model/helpers/error';
 import { useUser } from './UserContext';
 
 const ForgotPassword: React.FC = () => {

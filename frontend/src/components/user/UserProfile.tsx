@@ -1,32 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
+import clsx from 'clsx';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
-import { backend } from '@/model/backendProxy';
 import { PaymentProvider, TransactionAddress } from '@/declarations/icramp_backend/icramp_backend.did';
-import { userTypeToString } from '@/model/utils/utils';
+import { backend } from '@/model/backendProxy';
 import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '@/model/types';
-import { truncate } from '@/utils/helper';
 import { isSessionExpired } from '@/model/session';
-import { rampErrorToString } from '@/model/utils/error';
-import { useUser } from './UserContext';
-import CurrencySelect from '@/components/ui/CurrencySelect';
+import { userTypeToString } from '@/model/helpers/types';
+import { rampErrorToString } from '@/model/helpers/error';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
+import { truncate } from '@/utils/formatters';
+import { getExplorerUrls } from '@/utils/explorers';
+import CurrencySelect from '@/components/ui/CurrencySelect';
+import BalancesDashboard from './BalanceDashboard';
+import { useUser } from './UserContext';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRemove, faSpinner, faSync, faCopy, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
-import BalancesDashboard from './BalanceDashboard';
-import clsx from 'clsx';
-import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
     const [providerId, setProviderId] = useState('');
-    const [selectedAddressType, setSelectedAddressType] = useState<'ICP' | 'EVM' | 'Bitcoin'>('Bitcoin');
+    const [selectedAddressType, setSelectedAddressType] = useState<'ICP' | 'EVM' | 'Bitcoin' | 'Solana'>('Bitcoin');
     const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
     const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>('UK.OBIE.SortCodeAccountNumber');
     const [revolutName, setRevolutName] = useState('');
@@ -46,7 +46,9 @@ const UserProfile: React.FC = () => {
         sessionToken,
         principal,
         bitcoinAddress,
+        solanaPubkey,
         connectUnisat,
+        connectSolana,
         loginInternetIdentity,
         refetchUser,
         setCurrency,
@@ -99,7 +101,7 @@ const UserProfile: React.FC = () => {
         setTimeout(() => setIsClicked(false), 1000);
     };
 
-    const handleAddressSelectOption = (addressType: 'ICP' | 'EVM' | 'Bitcoin') => {
+    const handleAddressSelectOption = (addressType: 'ICP' | 'EVM' | 'Bitcoin' | 'Solana') => {
         setSelectedAddressType(addressType);
         setAddressDropdownOpen(false);
     };

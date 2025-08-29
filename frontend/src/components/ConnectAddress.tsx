@@ -8,8 +8,8 @@ import bs58 from 'bs58'
 import { getBackendCanisterId } from '@/constants/canisters';
 import { backend, createActor } from '@/model/backendProxy';
 import { AuthenticationData, LoginAddress } from '@/declarations/icramp_backend/icramp_backend.did';
-import { validatePassword } from '@/utils/helper';
-import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/utils/error';
+import { validatePassword } from '@/utils/formatters';
+import { isInvalidPasswordError, isUnauthorizedPrincipalError, isUserNotFoundError, rampErrorToString } from '@/model/helpers/error';
 import { handleWeb3Error } from '@/model/blockchain/evm';
 import { useUser } from './user/UserContext';
 import DynamicDots from './ui/DynamicDots';

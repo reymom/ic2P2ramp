@@ -2,21 +2,22 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
-import { backend } from '@/model/backendProxy';
 import { OrderState, PaymentProvider, PaymentProviderType } from '@/declarations/icramp_backend/icramp_backend.did';
 import { useUser } from '@/components/user/UserContext';
 import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
-import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/utils/utils';
-import { formatCryptoUnits, formatPrice } from '@/utils/helper';
-import { rampErrorToString } from '@/model/utils/error';
+import { backend } from '@/model/backendProxy';
 import { PaymentProviderTypes, TokenOption } from '@/model/types';
-import { fetchOrderPrice } from '@/model/utils/rate';
+import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
+import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/helpers/types';
+import { rampErrorToString } from '@/model/helpers/error';
+import { getExplorerUrls } from '@/utils/explorers';
+import { formatCryptoUnits, formatPrice } from '@/utils/formatters';
+import { fetchOrderPrice } from '@/utils/rates';
+
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
-import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
-import { getExplorerUrls } from '@/model/utils/blockchain';
 
 const defaultLoadingMessage = "Processing Transaction";
 const PRICE_DIFFERENCE_THRESHOLD = 0.025;

@@ -1,4 +1,4 @@
-import { formatCryptoUnits } from '@/utils/helper';
+import { formatCryptoUnits } from '@/utils/formatters';
 
 const UNISAT_API_TOKEN = process.env.FRONTEND_UNISAT_API_TOKEN || '';
 const FRONTEND_BTC_ENV = process.env.FRONTEND_BTC_ENV || 'mainnet';
