@@ -12,7 +12,7 @@ const isProductionBTC = process.env.FRONTEND_BTC_ENV === 'mainnet';
 
 console.log('isProductionBTC', isProductionBTC);
 
-export const bitcoin_backend = isProductionBTC
+export const bitcoinBackend = isProductionBTC
   ? prodBitcoinBackend
   : devBitcoinBackend;
 export const createBitcoinActor = isProductionBTC

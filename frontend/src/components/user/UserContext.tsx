@@ -6,6 +6,7 @@ import { ActorSubclass, HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 import { config, getChains } from '@/wagmi';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/icramp_backend/icramp_backend.did';
@@ -28,35 +29,42 @@ import { UserTypes } from '@/model/types';
 import { icpHost, iiUrl } from '@/model/blockchain/icp';
 import { fetchRuneBalances, isCorrectUnisatChain, switchUnisatChain } from '@/model/blockchain/unisat';
 import { formatCryptoUnits } from '@/utils/helper';
+
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import solanaLogo from '@/assets/blockchains/solana-logo.png';
+import { getRegisteredSolanaTokens, SOLANA_RPC_URL } from '@/model/blockchain/solana';
 
 export interface Balance {
-    raw: bigint;
+    raw: bigint | number;
     formatted: string;
     logo: string;
 }
 
 export interface BitcoinBalance {
-    raw: bigint;
-    formatted: string;
-    logo: string;
-    runes: { [runeId: string]: { raw: bigint; formatted: string; symbol: string, logo: string, name: string } };
+    balance: Balance;
+    runes: { [runeId: string]: Balance & { symbol: string, name: string } };
 }
 
+export interface SolanaBalance {
+    balance: Balance;
+    splTokens: {
+        [mint: string]: Balance & { symbol?: string; decimals?: number; }
+    }
+};
+
 interface UserContextProps {
-    refetchUser: () => Promise<void>;
-    setUser: (user: User | null) => void;
-    setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
-    setCurrency: (currency: string) => void;
     user: User | null;
     userType: UserTypes;
+    refetchUser: () => Promise<void>;
+    setUser: (user: User | null) => void;
     loginMethod: LoginAddress | null;
+    setLoginMethod: (login: LoginAddress | null, pwd?: string) => void;
+
     currency: string;
+    setCurrency: (currency: string) => void;
+
     sessionToken: string | null;
     password: string | null;
-    bitcoinAddress: string | null;
-    connectUnisat: () => Promise<string | null>;
-    loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
     authenticateUser: (
         login: LoginAddress | null,
         authData?: AuthenticationData,
@@ -67,10 +75,19 @@ interface UserContextProps {
     icpAgent: HttpAgent | null;
     backendActor: ActorSubclass<_SERVICE> | null,
     principal: Principal | null;
+    loginInternetIdentity: () => Promise<[Principal, HttpAgent]>;
+
     icpBalances: { [tokenName: string]: Balance } | null;
     evmBalances: { [tokenAddress: string]: Balance } | null;
+    solanaBalance: SolanaBalance | null;
     bitcoinBalance: BitcoinBalance | null;
     fetchBalances: () => Promise<void>;
+
+    bitcoinAddress: string | null;
+    connectUnisat: () => Promise<string | null>;
+
+    solanaPubkey: string | null;
+    connectSolana: () => Promise<string | null>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -85,13 +102,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [currency, setCurrency] = useState<string>(getPreferredCurrency() ?? 'USD');
 
-    const [bitcoinAddress, setBitcoinAddress] = useState<string | null>(null);
-    const [unisatInstalled, setUnisatInstalled] = useState(false);
 
     const { address, chainId, isConnected } = useAccount();
     const [icpBalances, setIcpBalances] = useState<{ [tokenName: string]: Balance } | null>(null);
     const [evmBalances, setEvmBalances] = useState<{ [tokenAddress: string]: Balance } | null>(null);
+    const [bitcoinAddress, setBitcoinAddress] = useState<string | null>(null);
+    const [unisatInstalled, setUnisatInstalled] = useState(false);
     const [bitcoinBalance, setBitcoinBalance] = useState<BitcoinBalance | null>(null);
+    const [solanaPubkey, setSolanaPubkey] = useState<string | null>(null);
+    const [solanaBalance, setSolanaBalance] = useState<SolanaBalance | null>(null);
 
     const userType = getUserType(user);
 
@@ -130,6 +149,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [unisatInstalled, bitcoinAddress])
 
+    useEffect(() => {
+        if (solanaPubkey) { fetchSolanaBalances() }
+    }, [solanaPubkey]);
+
     const connectUnisat = async (): Promise<string | null> => {
         if (unisatInstalled) {
             try {
@@ -159,6 +182,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             }
         }
         return null;
+    };
+
+    const connectSolana = async (): Promise<string> => {
+        const anyWindow = window as any;
+        const provider = anyWindow?.solana ?? anyWindow?.solflare;
+        if (!provider) throw new Error('No Solana wallet found');
+
+        const res = await provider.connect?.();
+        const pkObj = provider.publicKey ?? res?.publicKey;
+        const pubkey = pkObj?.toBase58 ? pkObj.toBase58() : pkObj?.toString?.();
+        if (!pubkey) throw new Error('Could not read Solana public key');
+
+        setSolanaPubkey(pubkey);
+        return pubkey;
     };
 
     const checkInternetIdentity = async () => {
@@ -331,6 +368,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         await fetchIcpBalances();
         await fetchEvmBalances();
         await fetchBitcoinBalance();
+        await fetchSolanaBalances();
     };
 
     const fetchIcpBalances = async () => {
@@ -367,9 +405,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         try {
             let res = await (window as any).unisat.getBalance();
             const bitcoinBalances: BitcoinBalance = {
-                raw: BigInt(res.total),
-                formatted: formatCryptoUnits(res.total / 10 ** 8),
-                logo: bitcoinLogo,
+                balance: {
+                    raw: BigInt(res.total),
+                    formatted: formatCryptoUnits(res.total / 10 ** 8),
+                    logo: bitcoinLogo,
+                },
                 runes: {}
             };
 
@@ -417,36 +457,118 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const fetchSolanaBalances = async () => {
+        if (!solanaPubkey) return;
+
+        try {
+            console.log("SOL RPC = ", SOLANA_RPC_URL);
+            const conn = new Connection(SOLANA_RPC_URL, 'confirmed');
+            const owner = new PublicKey(solanaPubkey);
+
+            // ---- SOL (native) ----
+            const lamports = await conn.getBalance(owner, 'confirmed');
+            console.log("lamports = ", lamports);
+
+            const SOL_DECIMALS = 9;
+            const solBalance: Balance = {
+                raw: lamports,
+                formatted: (lamports / 10 ** SOL_DECIMALS).toLocaleString(undefined, {
+                    maximumFractionDigits: 6,
+                }),
+                logo: solanaLogo,
+            };
+
+            // ---- SPL (only those approved in backend registry) ----
+            const registry = await getRegisteredSolanaTokens(); // Record<mint, TokenInfo>
+            const approvedMints = new Set(Object.keys(registry));
+
+            // query both Token Program v1 and Token-2022
+            const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+            const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+
+            const [tokAccsV1, tokAccs22] = await Promise.all([
+                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
+                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, 'confirmed'),
+            ]);
+
+            const splBalances: {
+                [mint: string]: Balance & { symbol?: string; decimals?: number };
+            } = {};
+
+            for (const { account } of [...tokAccsV1.value, ...tokAccs22.value]) {
+                const parsed: any = account.data.parsed;
+                const info = parsed?.info;
+                if (!info) continue;
+
+                const mint: string = info.mint;
+                if (!approvedMints.has(mint)) continue;
+
+                const amountStr: string = info.tokenAmount?.amount ?? '0';
+                const parsedDecimals: number = info.tokenAmount?.decimals ?? 0;
+
+                // prefer decimals from registry (fetched on-chain when registered)
+                const decimals = registry[mint]?.decimals ?? parsedDecimals;
+                const uiAmount = Number(amountStr) / 10 ** decimals;
+
+                const meta = registry[mint];
+
+                splBalances[mint] = {
+                    raw: BigInt(amountStr),
+                    formatted: uiAmount.toLocaleString(undefined, {
+                        maximumFractionDigits: Math.min(6, decimals),
+                    }),
+                    logo: '/spl-generic.svg',
+                    symbol: meta?.symbol,
+                    decimals,
+                };
+            }
+
+            setSolanaBalance({ balance: solBalance, splTokens: splBalances });
+        } catch (e) {
+            console.error('Failed to fetch Solana balances:', e);
+            setSolanaBalance(null);
+        }
+    };
+
     return (
         <UserContext.Provider value={{
             user,
             userType,
-            currency,
-            loginMethod,
-            sessionToken,
-            password,
-            icpAgent,
-            backendActor,
-            principal,
-            icpBalances,
-            evmBalances,
-            bitcoinBalance,
-            bitcoinAddress,
-            connectUnisat,
+            refetchUser,
             setUser,
+            loginMethod,
             setLoginMethod: (login: LoginAddress | null, pwd?: string) => {
                 setLoginMethod(login);
                 setPassword(pwd || null);
             },
+
+            currency,
             setCurrency: (currency: string) => {
                 savePreferredCurrency(currency);
                 setCurrency(currency);
             },
-            loginInternetIdentity,
+
+            sessionToken,
+            password,
             authenticateUser,
-            refetchUser,
-            fetchBalances,
             logout,
+
+            icpAgent,
+            backendActor,
+            principal,
+            loginInternetIdentity,
+
+            icpBalances,
+            evmBalances,
+            solanaBalance,
+            bitcoinBalance,
+            fetchBalances,
+
+            bitcoinAddress,
+            connectUnisat,
+
+            solanaPubkey,
+            connectSolana,
         }}>
             {children}
         </UserContext.Provider>

@@ -2,6 +2,7 @@ import { NetworkIds } from '@/constants/networks';
 
 const FRONTEND_ICP_ENV = process.env.FRONTEND_ICP_ENV || 'test';
 const FRONTEND_BTC_ENV = process.env.FRONTEND_BTC_ENV || 'mainnet';
+const FRONTEND_SOL_ENV = process.env.FRONTEND_SOL_ENV || 'mainnet';
 
 interface ExplorerUrls {
   address: string;
@@ -54,9 +55,12 @@ export const getExplorerUrls = (
     }
 
     case 'Solana': {
+      const devnet = FRONTEND_SOL_ENV === 'devnet' ? '?cluster=devnet' : '';
       return {
-        address: `https://solscan.io/address/${address}`,
-        transaction: txHash ? `https://solscan.io/tx/${txHash}` : undefined,
+        address: `https://solscan.io/address/${address}${devnet}`,
+        transaction: txHash
+          ? `https://solscan.io/tx/${txHash}${devnet}`
+          : undefined,
       };
     }
     default:

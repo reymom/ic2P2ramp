@@ -1,4 +1,4 @@
-import { bitcoin_backend } from '@/model/bitcoinBackendProxy';
+import { bitcoinBackend } from '@/model/bitcoinBackendProxy';
 import { RuneMetadata } from '@/declarations/bitcoin_backend/bitcoin_backend.did';
 import { TokenOption } from '@/model/types';
 import { supportedRuneIds } from '@/constants/runes';
@@ -9,9 +9,9 @@ export const fetchBitcoinCanisterAddress = async (useTaproot: boolean) => {
     let response;
 
     if (useTaproot) {
-      response = await bitcoin_backend.get_p2tr_raw_key_spend_address();
+      response = await bitcoinBackend.get_p2tr_raw_key_spend_address();
     } else {
-      response = await bitcoin_backend.get_p2pkh_address();
+      response = await bitcoinBackend.get_p2pkh_address();
     }
 
     if ('Ok' in response) {
@@ -65,7 +65,7 @@ const fetchRuneMetadata = async (
   runeId: string,
 ): Promise<{ metadata: RuneMetadata; serialized: string }> => {
   try {
-    const response = await bitcoin_backend.get_serialized_rune_metadata(runeId);
+    const response = await bitcoinBackend.get_serialized_rune_metadata(runeId);
     console.log('[fetchRuneMetadata] response = ', response);
     if ('Ok' in response && response.Ok.length === 2) {
       return { metadata: response.Ok[0], serialized: response.Ok[1] };

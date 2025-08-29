@@ -84,11 +84,11 @@
     },
     "solana_backend_prod": {
       "dependencies": [],
-      "candid": "backend/solana/solana.did",
+      "candid": "backend/solana/solana_backend.did",
       "package": "solana_backend",
       "type": "rust",
       "declarations": {
-        "output": "frontend/src/declarations/solana_prod"
+        "output": "frontend/src/declarations/solana_backend_prod"
       }
     },
     "frontend_prod": {
@@ -163,6 +163,6 @@
       }
     }
   },
-  "output_env_file": ".env.production",
+  "output_env_file": ".env",
   "version": 1
 }

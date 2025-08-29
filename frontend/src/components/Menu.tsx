@@ -23,6 +23,7 @@ import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import logo from '@/assets/icR-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import solanaLogo from "@/assets/blockchains/solana-logo.png";
 
 import { useUser } from './user/UserContext';
 import { truncate, formatTimeLeft } from '@/utils/helper';
@@ -39,7 +40,18 @@ const Menu: React.FC = () => {
     );
 
     const { isConnected, chainId } = useAccount();
-    const { user, icpBalances, bitcoinAddress, bitcoinBalance, connectUnisat, loginInternetIdentity, logout } = useUser();
+    const {
+        user,
+        icpBalances,
+        bitcoinAddress,
+        bitcoinBalance,
+        solanaPubkey,
+        solanaBalance,
+        connectUnisat,
+        connectSolana,
+        loginInternetIdentity,
+        logout
+    } = useUser();
     const navigate = useNavigate();
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -364,7 +376,7 @@ const Menu: React.FC = () => {
                                     </div>
 
                                     <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
-                                    {/* <div className="items-center text-center"> */}
+
                                     {icpBalances && icpBalances['ICP'] ? (
                                         <div className="relative flex justify-center items-center border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-green-800 dark:text-green-400 text-center font-medium">
                                             <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 absolute left-3" />
@@ -379,9 +391,9 @@ const Menu: React.FC = () => {
                                             <span className="text-black dark:text-white text-lg">Connect ICP</span>
                                         </div>
                                     )}
-                                    {/* </div> */}
 
                                     <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
+
                                     {!isConnected ? (
                                         <div className="relative flex justify-center items-center px-3 py-2 bg-amber-400 dark:bg-amber-700 rounded-md hover:bg-amber-300 dark:hover:bg-amber-800 cursor-pointer">
                                             <img src={ethereumLogo} alt="Ethereum Logo" className="h-6 w-6 absolute left-3" />
@@ -411,7 +423,7 @@ const Menu: React.FC = () => {
                                     {bitcoinAddress && bitcoinBalance ? (
                                         <div className="relative flex justify-center items-center border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-green-800 dark:text-green-400 text-center font-medium">
                                             <img src={bitcoinLogo} alt="Bitocoin Logo" className="h-6 w-6 absolute left-3" />
-                                            <span className="text-lg">{bitcoinBalance.formatted} BTC</span>
+                                            <span className="text-lg">{bitcoinBalance.balance.formatted} BTC</span>
                                         </div>
                                     ) : (
                                         <div
@@ -421,6 +433,24 @@ const Menu: React.FC = () => {
                                             <span className="text-black dark:text-white text-lg">Connect Unisat</span>
                                         </div>
                                     )}
+
+                                    <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-2" />
+
+                                    {solanaPubkey && solanaBalance?.balance ? (
+                                        <div className="relative flex justify-center items-center border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-green-800 dark:text-green-400 text-center font-medium">
+                                            <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-lg">{solanaBalance.balance.formatted} SOL</span>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="relative flex justify-center items-center px-3 py-2 bg-amber-400 dark:bg-amber-700 rounded-md hover:bg-amber-300 dark:hover:bg-amber-800 cursor-pointer"
+                                            onClick={connectSolana}
+                                        >
+                                            <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6 absolute left-3" />
+                                            <span className="text-black dark:text-white text-lg">Connect Solana</span>
+                                        </div>
+                                    )}
+
                                 </div>
 
                                 <Link to="/profile" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">

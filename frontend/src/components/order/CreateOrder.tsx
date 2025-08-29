@@ -25,7 +25,7 @@ import { BlockchainTypes, TokenOption } from '@/model/types';
 import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/utils/utils';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
-import { useUser } from '@/components/user/UserContext';
+import { Balance, useUser } from '@/components/user/UserContext';
 import { isSessionExpired } from '@/model/session';
 import { getExchangeRate } from '@/model/utils/rate';
 import { formatPrice, truncate } from '@/utils/helper';
@@ -515,7 +515,7 @@ const CreateOrder: React.FC = () => {
         }
     }
 
-    const getAvailableBalance = () => {
+    const getAvailableBalance = (): Balance | null => {
         if (blockchainType === 'ICP' && selectedToken && icpBalances) {
             return icpBalances[selectedToken.name];
         } else if (blockchainType === 'EVM' && selectedToken && evmBalances) {
@@ -525,7 +525,7 @@ const CreateOrder: React.FC = () => {
             if (selectedToken?.runeMetadata && bitcoinBalance) {
                 return bitcoinBalance?.runes[selectedToken.runeMetadata.id];
             }
-            return bitcoinBalance;
+            return bitcoinBalance?.balance ?? null;
         }
         return null
     };

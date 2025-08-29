@@ -44,11 +44,13 @@ const ConnectAddress: React.FC = () => {
     const {
         userType,
         loginMethod,
+        solanaPubkey,
         bitcoinAddress,
         icpAgent,
         principal,
         setLoginMethod,
         setUser,
+        connectSolana,
         connectUnisat,
         loginInternetIdentity,
         authenticateUser
@@ -244,14 +246,12 @@ const ConnectAddress: React.FC = () => {
                 anyWindow?.solana ?? anyWindow?.solflare;
             if (!provider) throw new Error('No Solana wallet found. Install Phantom or Solflare.');
 
-            setLoadingSolana(true);
-            const connRes = await provider.connect?.();
-            const pkObj = provider.publicKey ?? connRes?.publicKey;
-            const pubkey = pkObj?.toBase58 ? pkObj.toBase58() : pkObj?.toString?.();
+            const pubkey = solanaPubkey ?? (await connectSolana());
             if (!pubkey) throw new Error('Could not read Solana public key');
-
             console.log("solana address = ", pubkey);
+
             const loginAddress: LoginAddress = { Solana: { address: pubkey } };
+            setLoadingSolana(true);
             setLoginMethod(loginAddress);
 
             const authRes = await backend.generate_auth_message(loginAddress);
