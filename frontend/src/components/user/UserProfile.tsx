@@ -22,6 +22,7 @@ import { faRemove, faSpinner, faSync, faCopy, faCheckCircle } from '@fortawesome
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
+import solanaLogo from "@/assets/blockchains/solana-logo.png"
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -203,6 +204,8 @@ const UserProfile: React.FC = () => {
             return user.login.EVM.address === addr.address;
         } else if ('ICP' in user.login && 'ICP' in addr.address_type) {
             return user.login.ICP.principal_id === addr.address;
+        } else if ('Bitcoin' in user.login && 'Bitcoin' in addr.address_type) {
+            return user.login.Bitcoin.address === addr.address;
         } else if ('Solana' in user.login && 'Solana' in addr.address_type) {
             return user.login.Solana.address === addr.address;
         }
@@ -361,7 +364,9 @@ const UserProfile: React.FC = () => {
                                             <img src={icpLogo} alt="ICP Logo" className="h-6 w-6 inline" />
                                         ) : selectedAddressType === 'Bitcoin' ? (
                                             <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6 inline" />
-                                        ) : <span>Select Address Type'</span>}
+                                        ) : selectedAddressType === 'Solana' ? (
+                                            <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6 inline" />
+                                        ) : <span>Select Address Type</span>}
                                         <svg
                                             className={`w-3 h-3 transition-transform ${addressDropdownOpen ? 'rotate-180' : ''}`}
                                             fill="none"
@@ -402,6 +407,15 @@ const UserProfile: React.FC = () => {
                                                     onClick={() => handleAddressSelectOption('Bitcoin')}
                                                 >
                                                     <img src={bitcoinLogo} alt="Bitcoin Logo" className="h-6 w-6" />
+                                                </div>
+                                                <div
+                                                    className={clsx(
+                                                        optionClass,
+                                                        selectedAddressType === 'Solana' ? 'bg-gray-300 dark:bg-gray-500' : ''
+                                                    )}
+                                                    onClick={() => handleAddressSelectOption('Solana')}
+                                                >
+                                                    <img src={solanaLogo} alt="Solana Logo" className="h-6 w-6" />
                                                 </div>
                                             </div>
                                         );
@@ -508,6 +522,40 @@ const UserProfile: React.FC = () => {
                                                         : 'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800'
                                                 )}>
                                                 {loadingUnisat ? "Connecting..." : "Connect Unisat"}
+                                            </button>
+                                        </div>
+                                    )
+                                ) : selectedAddressType === 'Solana' ? (
+                                    solanaPubkey ? (
+                                        <div className="flex-grow flex items-center">
+                                            <input
+                                                type="text"
+                                                value={solanaPubkey}
+                                                readOnly
+                                                className="px-3 py-2 border border-gray-400 dark:border-gray-500 w-full rounded-md bg-gray-300 dark:bg-gray-600"
+                                            />
+                                            <button
+                                                disabled={isAddressInUserAddresses(solanaPubkey) || loadingAddAddress}
+                                                onClick={() => handleAddAddress(solanaPubkey)}
+                                                className={clsx(
+                                                    "ml-2 px-4 py-2  w-1/4 font-semibold rounded-md flex justify-center items-center",
+                                                    !solanaPubkey || isAddressInUserAddresses(solanaPubkey)
+                                                        ? 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed'
+                                                        : 'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800',
+                                                    loadingAddAddress ? 'cursor-not-allowed' : ''
+                                                )}>
+                                                {addButtonContent(loadingAddAddress)}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-grow">
+                                            <button
+                                                onClick={connectSolana}
+                                                className={clsx(
+                                                    "px-4 py-2 font-bold rounded-md w-full cursor-pointer text-lg",
+                                                    'bg-indigo-200 dark:bg-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800'
+                                                )}>
+                                                Connect Solana
                                             </button>
                                         </div>
                                     )

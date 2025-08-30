@@ -1,12 +1,43 @@
-import { Balance, useUser } from "./UserContext";
+import { Balance, BitcoinBalance, SolanaBalance, useUser } from "./UserContext";
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import solanaLogo from '@/assets/blockchains/solana-logo.png';
+
+const toBtcBalanceMap = (bb: BitcoinBalance | null) =>
+    bb
+        ? {
+            BTC: bb.balance,
+            ...Object.fromEntries(
+                Object.entries(bb.runes).map(([runeId, b]) => [
+                    runeId, // keep runeId as the row key
+                    { raw: b.raw, formatted: `${b.formatted} ${b.symbol}`, logo: b.logo } as Balance,
+                ])
+            ),
+        }
+        : null;
+
+const toSolBalanceMap = (sb: SolanaBalance | null) =>
+    sb
+        ? {
+            SOL: sb.balance,
+            ...Object.fromEntries(
+                Object.entries(sb.splTokens).map(([mint, b]) => [
+                    mint, // mint address as the row key
+                    {
+                        raw: b.raw,
+                        formatted: b.symbol ? `${b.formatted} ${b.symbol}` : b.formatted,
+                        logo: b.logo,
+                    } as Balance,
+                ])
+            ),
+        }
+        : null;
 
 const BalancesDashboard: React.FC = () => {
-    const { icpBalances, evmBalances, bitcoinBalance } = useUser();
+    const { icpBalances, evmBalances, bitcoinBalance, solanaBalance } = useUser();
 
-    const renderBalances = (balances: { [key: string]: Balance | any }, logo: string, title: string) => (
+    const renderBalances = (balances: { [key: string]: Balance }, logo: string, title: string) => (
         <>
             <h3 className="text-lg font-semibold mb-2 flex items-center">
                 <img src={logo} alt={title} className="h-6 w-6 mr-2" /> {title}
@@ -36,9 +67,10 @@ const BalancesDashboard: React.FC = () => {
         <div className="p-4">
             <h2 className="text-2xl font-semibold mb-4">Balances</h2>
             <div className="space-y-6">
-                {bitcoinBalance && renderBalances({ BTC: bitcoinBalance, ...bitcoinBalance.runes }, bitcoinLogo, 'Bitcoin')}
+                {bitcoinBalance && renderBalances(toBtcBalanceMap(bitcoinBalance)!, bitcoinLogo, 'Bitcoin')}
                 {icpBalances && renderBalances(icpBalances, icpLogo, 'ICP')}
                 {evmBalances && renderBalances(evmBalances, ethereumLogo, 'EVM')}
+                {solanaBalance && renderBalances(toSolBalanceMap(solanaBalance)!, solanaLogo, 'Solana')}
             </div>
         </div>
     );

@@ -15,6 +15,7 @@ import { getBackendCanisterId } from '@/constants/canisters';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { supportedRuneIds } from '@/constants/runes';
+import { SPL_TOKEN_LOGOS } from '@/constants/solana_logos';
 import {
     saveUserSession,
     getUserSession,
@@ -27,12 +28,13 @@ import {
 } from '@/model/session';
 import { UserTypes } from '@/model/types';
 import { icpHost, iiUrl } from '@/model/blockchain/icp';
+import { getRegisteredSolanaTokens, SOLANA_RPC_URL } from '@/model/blockchain/solana';
 import { fetchRuneBalances, isCorrectUnisatChain, switchUnisatChain } from '@/model/blockchain/unisat';
 import { formatCryptoUnits } from '@/utils/formatters';
 
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import solanaLogo from '@/assets/blockchains/solana-logo.png';
-import { getRegisteredSolanaTokens, SOLANA_RPC_URL } from '@/model/blockchain/solana';
+import splGenericIcon from '@/assets/spl_tokens/spl-generic-icon.png';
 
 export interface Balance {
     raw: bigint | number;
@@ -461,13 +463,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!solanaPubkey) return;
 
         try {
-            console.log("SOL RPC = ", SOLANA_RPC_URL);
             const conn = new Connection(SOLANA_RPC_URL, 'confirmed');
             const owner = new PublicKey(solanaPubkey);
 
             // ---- SOL (native) ----
             const lamports = await conn.getBalance(owner, 'confirmed');
-            console.log("lamports = ", lamports);
 
             const SOL_DECIMALS = 9;
             const solBalance: Balance = {
@@ -481,6 +481,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // ---- SPL (only those approved in backend registry) ----
             const registry = await getRegisteredSolanaTokens(); // Record<mint, TokenInfo>
             const approvedMints = new Set(Object.keys(registry));
+
+            console.log("approvedMints = ", approvedMints);
 
             // query both Token Program v1 and Token-2022
             const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -512,12 +514,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
                 const meta = registry[mint];
 
+                const logo = SPL_TOKEN_LOGOS[meta?.symbol || ""] || splGenericIcon;
+                console.log("symbol = ", meta?.symbol);
+                console.log("logo = ", logo);
                 splBalances[mint] = {
                     raw: BigInt(amountStr),
                     formatted: uiAmount.toLocaleString(undefined, {
                         maximumFractionDigits: Math.min(6, decimals),
                     }),
-                    logo: '/spl-generic.svg',
+                    logo,
                     symbol: meta?.symbol,
                     decimals,
                 };
