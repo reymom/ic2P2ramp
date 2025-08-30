@@ -15,7 +15,6 @@ import App from './App';
 import { UserProvider } from './components/user/UserContext';
 import PageTitleUpdater from './components/PageTitleUpdater';
 
-
 declare global {
     interface Window {
         Telegram?: any;

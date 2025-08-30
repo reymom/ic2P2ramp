@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import clsx from 'clsx';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
-import clsx from 'clsx';
+import solanaLogo from '@/assets/blockchains/solana-logo.png';
 
 interface BlockchainSelectProps {
     selectedBlockchain: string | undefined;
@@ -21,7 +22,8 @@ const BlockchainSelect: React.FC<BlockchainSelectProps> = ({ selectedBlockchain,
     const blockchainOptions = [
         { name: 'EVM', logo: ethereumLogo },
         { name: 'ICP', logo: icpLogo },
-        { name: 'Bitcoin', logo: bitcoinLogo }
+        { name: 'Bitcoin', logo: bitcoinLogo },
+        { name: 'Solana', logo: solanaLogo }
     ];
 
     const handleOptionSelect = (blockchain: string) => {

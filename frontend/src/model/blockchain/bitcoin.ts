@@ -103,7 +103,7 @@ export const fetchBitcoinTokenOptions = async (): Promise<
       tokens.push({
         name: rune.name,
         address: serialized,
-        decimals: metadata.divisibility,
+        decimals: Number(metadata?.divisibility ?? 0),
         isNative: false,
         rateSymbol: metadata.name,
         logo: rune.logo,

@@ -25,6 +25,7 @@ import { BlockchainTypes, TokenOption } from '@/model/types';
 import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/helpers/types';
 import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
 import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
+import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
 import { isSessionExpired } from '@/model/session';
 import {
     fetchBitcoinCanisterAddress,
@@ -71,6 +72,8 @@ const CreateOrder: React.FC = () => {
         evmBalances,
         bitcoinBalance,
         bitcoinAddress,
+        solanaBalance,
+        solanaPubkey,
         fetchBalances,
         refetchUser,
         logout
@@ -110,11 +113,11 @@ const CreateOrder: React.FC = () => {
     useEffect(() => {
         setSelectedToken(null);
         if (blockchainType === 'Bitcoin') {
-            fetchBitcoinTokenOptions().then((bitcoinTokens) => {
-                setTokenOptions(bitcoinTokens);
-            }).catch((error) => {
-                console.error("Error fetching bitcoin tokens:", error);
-            });
+            fetchBitcoinTokenOptions().then(t => setTokenOptions(t))
+                .catch((error) => console.error("Error fetching bitcoin tokens:", error));
+        } else if (blockchainType === 'Solana') {
+            fetchSolanaTokenOptions().then(t => setTokenOptions(t))
+                .catch((err) => console.error("Error fetching solana tokens:", err))
         } else if (blockchainType === 'ICP') {
             setTokenOptions(ICP_TOKENS);
         } else if (blockchainType === 'EVM') {
@@ -155,15 +158,15 @@ const CreateOrder: React.FC = () => {
                     setSelectedBlockchainAsset({ ICP: { ledger_principal: Principal.fromText(token.address) } });
                 case "Bitcoin":
                     let rune_id: [string] | [] = [];
-                    if (!token.isNative) {
-                        rune_id = [token.runeMetadata?.id!]
-                    }
+                    if (!token.isNative) rune_id = [token.runeMetadata?.id!]
                     setSelectedBlockchainAsset({ Bitcoin: { rune_id } })
+                case "Solana":
+                    let spl_token: [string] | [] = [];
+                    if (!token.isNative) spl_token = [token.address]
+                    setSelectedBlockchainAsset({ Solana: { spl_token } })
                 case "EVM":
                     let token_address: [string] | [] = [];
-                    if (!token?.isNative) {
-                        token_address = [token.address]
-                    }
+                    if (!token?.isNative) token_address = [token.address]
                     "EVM" in selectedBlockchainAsset &&
                         setSelectedBlockchainAsset({
                             EVM: {
@@ -199,9 +202,7 @@ const CreateOrder: React.FC = () => {
             setLoadingRate(false);
         }
 
-        if (selectedToken) {
-            fetchPriceRate();
-        }
+        if (selectedToken) fetchPriceRate()
     }, [selectedToken, currency]);
 
     useEffect(() => {
@@ -213,25 +214,13 @@ const CreateOrder: React.FC = () => {
     }, [exchangeRate, cryptoAmount]);
 
     useEffect(() => {
-        if (selectedBlockchainAsset && selectedToken && cryptoAmount > 0) {
-            const roundedCryptoAmount = cryptoAmount.toFixed(selectedToken.decimals);
-            if ('EVM' in selectedBlockchainAsset) {
-                setCryptoAmountUnits(
-                    selectedToken.isNative ? ethers.parseEther(roundedCryptoAmount)
-                        : ethers.parseUnits(roundedCryptoAmount, selectedToken.decimals)
-                );
-            } else if ('ICP' in selectedBlockchainAsset) {
-                setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
-            } else if ('Bitcoin' in selectedBlockchainAsset) {
-                console.log("roundedCryptoAmoun = ", roundedCryptoAmount);
-                if (selectedToken.isNative) {
-                    setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
-                    console.log("cryptoAmountUnits = ", BigInt(Math.round(Number(roundedCryptoAmount) * 10 ** selectedToken.decimals)));
-                } else {
-                    setCryptoAmountUnits(BigInt(Math.round(Number(roundedCryptoAmount))));
-                    console.log("cryptoAmountUnits = ", BigInt(Math.round(Number(roundedCryptoAmount))))
-                }
-            }
+        if (!selectedToken || !selectedBlockchainAsset || cryptoAmount <= 0) return;
+        try {
+            const s = cryptoAmount.toFixed(selectedToken.decimals);
+            setCryptoAmountUnits(ethers.parseUnits(s, selectedToken.decimals));
+        } catch (e) {
+            console.error("parseUnits failed:", e);
+            setCryptoAmountUnits(null);
         }
     }, [cryptoAmount, selectedBlockchainAsset, selectedToken])
 
@@ -480,64 +469,61 @@ const CreateOrder: React.FC = () => {
     };
 
     const isValidAddressMessage = () => {
-        if (blockchainType === 'EVM') {
-            if (!chainId || !address) return (
-                <div className="my-2 text-red-400">
-                    Please connect your Ethereum Wallet.
-                </div>
-            );
-            return address && user?.addresses.some(
-                addr => 'EVM' in addr.address_type && addr.address !== address) &&
-                <div className="my-2 text-red-400">
-                    Wallet address is not registered in your profile.
-                </div>
-        } else if (blockchainType === 'ICP') {
-            if (!icpAgent || !principal) return (
-                <div className="my-2 text-red-400">
-                    Please connect your Internet Identity.
-                </div>
-            );
-            return principal && user?.addresses.some(
-                addr => 'ICP' in addr.address_type && addr.address !== principal?.toString()) &&
-                <div className="my-2 text-red-400">
-                    Principal connected is not registered in your profile.
-                </div>
-        } else if (blockchainType === 'Bitcoin') {
-            if (!bitcoinAddress || !bitcoinBalance) return (
-                <div className="my-2 text-red-400">
-                    Please connect your Bitcoin wallet.
-                </div>
-            );
-            return bitcoinAddress && user?.addresses.some(
-                addr => 'Bitcoin' in addr.address_type && addr.address !== bitcoinAddress) &&
-                <div className="my-2 text-red-400">
-                    Please connect a bitcoin address in your profile.
-                </div>
+        const mismatch = (
+            variant: 'EVM' | 'ICP' | 'Bitcoin' | 'Solana',
+            current?: string | null
+        ) => !!current && !!user?.addresses?.some(a => (variant in a.address_type) && a.address !== current);
+
+        const cfg = {
+            EVM: { ok: !!chainId && !!address, cur: address, miss: 'Please connect your Ethereum Wallet.', notReg: 'Wallet address is not registered in your profile.' },
+            ICP: { ok: !!icpAgent && !!principal, cur: principal?.toString(), miss: 'Please connect your Internet Identity.', notReg: 'Principal connected is not registered in your profile.' },
+            Bitcoin: { ok: !!bitcoinAddress && !!bitcoinBalance, cur: bitcoinAddress, miss: 'Please connect your Bitcoin wallet.', notReg: 'Please connect a bitcoin address in your profile.' },
+            Solana: { ok: !!solanaPubkey && !!solanaBalance, cur: solanaPubkey, miss: 'Please connect your Solana wallet', notReg: 'Please link a solana account in your profile.' },
+        } as const;
+
+        const c = cfg[blockchainType as keyof typeof cfg];
+        if (!c) return null;
+        if (!c.ok) return <div className="my-2 text-red-400">{c.miss}</div>;
+        if (mismatch(blockchainType as any, c.cur)) {
+            return <div className="my-2 text-red-400">{c.notReg}</div>;
         }
+        return null;
     }
 
     const getAvailableBalance = (): Balance | null => {
         if (blockchainType === 'ICP' && selectedToken && icpBalances) {
-            return icpBalances[selectedToken.name];
+            return icpBalances[selectedToken.name] ?? null;
         } else if (blockchainType === 'EVM' && selectedToken && evmBalances) {
-            if (selectedToken.isNative) return evmBalances[selectedToken.name] || '0';
-            return evmBalances[selectedToken.address];
+            if (selectedToken.isNative) return evmBalances[selectedToken.name] ?? null;
+            return evmBalances[selectedToken.address] ?? null;
         } else if (blockchainType === 'Bitcoin') {
-            if (selectedToken?.runeMetadata && bitcoinBalance) {
-                return bitcoinBalance?.runes[selectedToken.runeMetadata.id];
-            }
+            if (selectedToken?.runeMetadata && bitcoinBalance)
+                return bitcoinBalance.runes[selectedToken.runeMetadata.id] ?? null;
             return bitcoinBalance?.balance ?? null;
+        } else if (blockchainType === 'Solana') {
+            if (selectedToken?.isNative) return solanaBalance?.balance ?? null;
+            return selectedToken?.address
+                ? (solanaBalance?.splTokens[selectedToken.address] ?? null)
+                : null;
         }
         return null
     };
 
+    const addrMsg = isValidAddressMessage();
     const validInputs = user !== null
         && selectedBlockchainAsset !== undefined
-        && (isValidAddressMessage() === undefined || isValidAddressMessage() === false)
+        && (addrMsg == null)
         && selectedProviders.length > 0
         && selectedToken !== null
         && cryptoAmountUnits && cryptoAmountUnits > 0
-        && (getAvailableBalance() ? cryptoAmountUnits <= getAvailableBalance()!.raw : true);
+        && (() => {
+            const bal = getAvailableBalance();
+            if (!bal) return true;
+            const balRaw = typeof bal.raw === 'bigint' ? bal.raw : BigInt(bal.raw);
+            return typeof cryptoAmountUnits === 'bigint'
+                ? cryptoAmountUnits <= balRaw
+                : Number(cryptoAmountUnits) <= Number(balRaw);
+        })();
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-auto p-6">
@@ -655,7 +641,7 @@ const CreateOrder: React.FC = () => {
                     </div>
                 )}
 
-                {isValidAddressMessage()}
+                {addrMsg}
 
                 {chainId && selectedBlockchainAsset && Object.keys(selectedBlockchainAsset)[0] === "EVM" && (
                     <div className={`my-2 text-sm font-medium ${isValidChainId(chainId) ? 'text-green-600' : 'text-red-600'}`}>

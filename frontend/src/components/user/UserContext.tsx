@@ -54,6 +54,9 @@ export interface SolanaBalance {
     }
 };
 
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+
 interface UserContextProps {
     user: User | null;
     userType: UserTypes;
@@ -466,8 +469,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             const conn = new Connection(SOLANA_RPC_URL, 'confirmed');
             const owner = new PublicKey(solanaPubkey);
 
-            // ---- SOL (native) ----
-            const lamports = await conn.getBalance(owner, 'confirmed');
+            const [registry, lamports, tokAccsV1, tokAccs22] = await Promise.all([
+                getRegisteredSolanaTokens(),
+                conn.getBalance(owner, 'confirmed'),
+                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
+                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, 'confirmed'),
+            ]);
 
             const SOL_DECIMALS = 9;
             const solBalance: Balance = {
@@ -478,51 +485,35 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 logo: solanaLogo,
             };
 
-            // ---- SPL (only those approved in backend registry) ----
-            const registry = await getRegisteredSolanaTokens(); // Record<mint, TokenInfo>
             const approvedMints = new Set(Object.keys(registry));
-
             console.log("approvedMints = ", approvedMints);
+            const all = tokAccsV1.value.concat(tokAccs22.value);
+            if (all.length === 0) {
+                setSolanaBalance({ balance: solBalance, splTokens: {} });
+                return;
+            }
 
-            // query both Token Program v1 and Token-2022
-            const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-            const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+            const splBalances: Record<string, Balance & { symbol?: string; decimals?: number }> = Object.create(null);
 
-            const [tokAccsV1, tokAccs22] = await Promise.all([
-                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, 'confirmed'),
-                conn.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, 'confirmed'),
-            ]);
-
-            const splBalances: {
-                [mint: string]: Balance & { symbol?: string; decimals?: number };
-            } = {};
-
-            for (const { account } of [...tokAccsV1.value, ...tokAccs22.value]) {
-                const parsed: any = account.data.parsed;
-                const info = parsed?.info;
+            for (const acc of all) {
+                const info = (acc.account.data as any)?.parsed?.info;
                 if (!info) continue;
 
                 const mint: string = info.mint;
                 if (!approvedMints.has(mint)) continue;
 
                 const amountStr: string = info.tokenAmount?.amount ?? '0';
-                const parsedDecimals: number = info.tokenAmount?.decimals ?? 0;
-
-                // prefer decimals from registry (fetched on-chain when registered)
-                const decimals = registry[mint]?.decimals ?? parsedDecimals;
+                const meta = registry[mint];
+                const decimals: number =
+                    Number.isInteger(meta?.decimals) ? meta!.decimals : (info.tokenAmount?.decimals ?? 0);
                 const uiAmount = Number(amountStr) / 10 ** decimals;
 
-                const meta = registry[mint];
-
-                const logo = SPL_TOKEN_LOGOS[meta?.symbol || ""] || splGenericIcon;
-                console.log("symbol = ", meta?.symbol);
-                console.log("logo = ", logo);
                 splBalances[mint] = {
                     raw: BigInt(amountStr),
                     formatted: uiAmount.toLocaleString(undefined, {
                         maximumFractionDigits: Math.min(6, decimals),
                     }),
-                    logo,
+                    logo: SPL_TOKEN_LOGOS[meta?.symbol ?? ''] || splGenericIcon,
                     symbol: meta?.symbol,
                     decimals,
                 };
