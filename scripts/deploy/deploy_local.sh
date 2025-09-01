@@ -252,7 +252,7 @@ dfx generate icramp_backend
 dfx generate bitcoin_backend
 dfx generate solana_backend
 
-cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall
+cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall --yes
 
 # Fund the frontend's II with some of our locally deployed tokens
 

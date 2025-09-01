@@ -8,12 +8,16 @@ import {
     QueryClient,
 } from "@tanstack/react-query";
 
-import './index.css';
-import { config } from './wagmi';
-
 import App from './App';
-import { UserProvider } from './components/user/UserContext';
 import PageTitleUpdater from './components/PageTitleUpdater';
+import { UserProvider } from './components/user/UserContext';
+import { SolanaProvider } from './components/SolanaProvider';
+import { SOLANA_RPC_URL } from './model/blockchain/solana';
+
+import './index.css';
+import process from 'process';
+import { Buffer } from 'buffer';
+import { config } from './wagmi';
 
 declare global {
     interface Window {
@@ -22,9 +26,15 @@ declare global {
     }
 }
 
+(window as any).global ||= window;
+(window as any).process ||= process;
+(window as any).Buffer ||= Buffer;
+
+
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
     document.documentElement.classList.add('dark')
 }
+
 
 const queryClient = new QueryClient();
 
@@ -33,12 +43,14 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
                 <RainbowKitProvider>
-                    <UserProvider>
-                        <BrowserRouter>
-                            <PageTitleUpdater />
-                            <App />
-                        </BrowserRouter>
-                    </UserProvider>
+                    <SolanaProvider rpcUrl={SOLANA_RPC_URL}>
+                        <UserProvider>
+                            <BrowserRouter>
+                                <PageTitleUpdater />
+                                <App />
+                            </BrowserRouter>
+                        </UserProvider>
+                    </SolanaProvider>
                 </RainbowKitProvider>
             </QueryClientProvider>
         </WagmiProvider>

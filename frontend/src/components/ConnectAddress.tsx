@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import bs58 from 'bs58'
 
 import { getBackendCanisterId } from '@/constants/canisters';
@@ -51,6 +51,7 @@ const ConnectAddress: React.FC = () => {
         setLoginMethod,
         setUser,
         connectSolana,
+        getSolanaMessageSigner,
         connectUnisat,
         loginInternetIdentity,
         authenticateUser
@@ -241,11 +242,6 @@ const ConnectAddress: React.FC = () => {
         cleanMessages();
 
         try {
-            const anyWindow = window as any;
-            const provider =
-                anyWindow?.solana ?? anyWindow?.solflare;
-            if (!provider) throw new Error('No Solana wallet found. Install Phantom or Solflare.');
-
             const pubkey = solanaPubkey ?? (await connectSolana());
             if (!pubkey) throw new Error('Could not read Solana public key');
             console.log("solana address = ", pubkey);
@@ -258,26 +254,10 @@ const ConnectAddress: React.FC = () => {
             console.log("[generate_auth_message] res = ", JSON.stringify(authRes));
 
             if ('Ok' in authRes) {
-                const msg = authRes.Ok as string;
-                const msgBytes = new TextEncoder().encode(msg);
-
-                // Wallet-standard signMessage if available, else wallet-specific
-                let rawSig: Uint8Array | string;
-                if (provider.signMessage) {
-                    const signed = await provider.signMessage(msgBytes, 'utf8');
-                    rawSig = signed.signature ?? signed; // some wallets return {signature}
-                } else if (provider.sign) {
-                    // solflare legacy (rare)
-                    const signed = await provider.sign(msgBytes, 'utf8');
-                    rawSig = signed.signature ?? signed;
-                } else {
-                    throw new Error('Wallet does not support signMessage');
-                }
-
-                const signatureB58 =
-                    rawSig instanceof Uint8Array ? bs58.encode(rawSig) :
-                        Array.isArray(rawSig) ? bs58.encode(Uint8Array.from(rawSig)) :
-                            (typeof rawSig === 'string' ? rawSig : (() => { throw new Error('Unknown signature format'); })());
+                const msgBytes = new TextEncoder().encode(authRes.Ok as string);
+                const signer = await getSolanaMessageSigner();
+                const rawSig = await signer(msgBytes);
+                const signatureB58 = bs58.encode(rawSig as Uint8Array);
 
                 const result = await authenticateUser(
                     loginAddress,

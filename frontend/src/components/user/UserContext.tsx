@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
 import { useAccount } from 'wagmi';
 import { disconnect } from '@wagmi/core';
@@ -7,15 +7,18 @@ import { IcrcLedgerCanister, BalanceParams } from '@dfinity/ledger-icrc';
 import { Principal } from '@dfinity/principal';
 import { AuthClient } from '@dfinity/auth-client';
 import { Connection, PublicKey } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import type { Adapter, MessageSignerWalletAdapter } from '@solana/wallet-adapter-base';
 
 import { config, getChains } from '@/wagmi';
 import { AuthenticationData, LoginAddress, Result_1, User, _SERVICE } from '@/declarations/icramp_backend/icramp_backend.did';
-import { backend, createActor } from '@/model/backendProxy';
 import { getBackendCanisterId } from '@/constants/canisters';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { supportedRuneIds } from '@/constants/runes';
 import { SPL_TOKEN_LOGOS } from '@/constants/solana_logos';
+import { backend, createActor } from '@/model/backendProxy';
 import {
     saveUserSession,
     getUserSession,
@@ -92,7 +95,8 @@ interface UserContextProps {
     connectUnisat: () => Promise<string | null>;
 
     solanaPubkey: string | null;
-    connectSolana: () => Promise<string | null>;
+    connectSolana: () => Promise<string>;
+    getSolanaMessageSigner: () => Promise<(msg: Uint8Array) => Promise<Uint8Array>>;
 }
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
@@ -107,7 +111,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [principal, setPrincipal] = useState<Principal | null>(null);
     const [currency, setCurrency] = useState<string>(getPreferredCurrency() ?? 'USD');
 
-
     const { address, chainId, isConnected } = useAccount();
     const [icpBalances, setIcpBalances] = useState<{ [tokenName: string]: Balance } | null>(null);
     const [evmBalances, setEvmBalances] = useState<{ [tokenAddress: string]: Balance } | null>(null);
@@ -116,6 +119,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const [bitcoinBalance, setBitcoinBalance] = useState<BitcoinBalance | null>(null);
     const [solanaPubkey, setSolanaPubkey] = useState<string | null>(null);
     const [solanaBalance, setSolanaBalance] = useState<SolanaBalance | null>(null);
+
+    const { wallet, disconnect: disconnectSol } = useWallet();
+    const { setVisible } = useWalletModal();
+    const walletRef = useRef(wallet);
+    useEffect(() => { walletRef.current = wallet; }, [wallet]);
 
     const userType = getUserType(user);
 
@@ -155,6 +163,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [unisatInstalled, bitcoinAddress])
 
     useEffect(() => {
+        const pk = walletRef.current?.adapter.publicKey?.toBase58?.();
+        if (pk && pk !== solanaPubkey) setSolanaPubkey(pk);
+    }, [wallet]);
+
+    useEffect(() => {
         if (solanaPubkey) { fetchSolanaBalances() }
     }, [solanaPubkey]);
 
@@ -189,18 +202,56 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         return null;
     };
 
+    const hasSignMessage = (a: Adapter): a is MessageSignerWalletAdapter =>
+        typeof (a as any)?.signMessage === 'function';
+
+    const getSolanaMessageSigner = async () => {
+        // ensure a wallet is selected & connected
+        const pk = solanaPubkey ?? (await connectSolana());
+        if (!pk || !walletRef.current) throw new Error('No Solana wallet selected');
+        const adapter = walletRef.current.adapter;
+        if (!adapter.connected) await adapter.connect();
+
+        // wait until wallet exposes signMessage (e.g., after unlock)
+        const start = Date.now();
+        while (!hasSignMessage(adapter)) {
+            await new Promise(r => setTimeout(r, 50));
+            if (Date.now() - start > 60000) throw new Error('Selected wallet cannot sign messages');
+        }
+        return adapter.signMessage!.bind(adapter);
+    };
+
+    const waitForWalletPick = () =>
+        new Promise<void>((resolve, reject) => {
+            const start = Date.now();
+            const id = setInterval(() => {
+                if (walletRef.current) { clearInterval(id); resolve(); }
+                if (Date.now() - start > 60000) { clearInterval(id); reject(new Error('Wallet selection cancelled')); }
+            }, 100);
+        });
+
     const connectSolana = async (): Promise<string> => {
-        const anyWindow = window as any;
-        const provider = anyWindow?.solana ?? anyWindow?.solflare;
-        if (!provider) throw new Error('No Solana wallet found');
+        // if no wallet selected, open modal and wait for user choice
+        if (!walletRef.current) {
+            setVisible(true);
+            await waitForWalletPick();
+        }
+        const adapter = walletRef.current!.adapter;
 
-        const res = await provider.connect?.();
-        const pkObj = provider.publicKey ?? res?.publicKey;
-        const pubkey = pkObj?.toBase58 ? pkObj.toBase58() : pkObj?.toString?.();
-        if (!pubkey) throw new Error('Could not read Solana public key');
+        try { await adapter.connect(); } catch (e) {
+            throw e;
+        }
 
-        setSolanaPubkey(pubkey);
-        return pubkey;
+        const start = Date.now();
+        let pk = adapter.publicKey?.toBase58?.();
+        while (!pk) {
+            await new Promise(r => setTimeout(r, 50));
+            pk = adapter.publicKey?.toBase58?.();
+            if (Date.now() - start > 60000) throw new Error('Wallet connect timed out');
+        }
+
+        setSolanaPubkey(pk);
+        return pk;
     };
 
     const checkInternetIdentity = async () => {
@@ -353,8 +404,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             if (address && chainId) {
                 await disconnect(config);
             }
+
+            try { await disconnectSol(); } catch { }
         } catch (error) {
-            console.error("Error logging out from Internet Identity:", error);
+            console.error("Error logging out", error);
         } finally {
             setUser(null);
             setLoginMethod(null);
@@ -366,6 +419,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             setIcpBalances(null);
             setEvmBalances(null);
             setBitcoinBalance(null);
+            setSolanaBalance(null);
+            setSolanaPubkey(null);
         }
     };
 
@@ -565,6 +620,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
             solanaPubkey,
             connectSolana,
+            getSolanaMessageSigner,
         }}>
             {children}
         </UserContext.Provider>
