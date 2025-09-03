@@ -38,6 +38,7 @@ import { formatCryptoUnits } from '@/utils/formatters';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import solanaLogo from '@/assets/blockchains/solana-logo.png';
 import splGenericIcon from '@/assets/spl_tokens/spl-generic-icon.png';
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export interface Balance {
     raw: bigint | number;
@@ -56,9 +57,6 @@ export interface SolanaBalance {
         [mint: string]: Balance & { symbol?: string; decimals?: number; }
     }
 };
-
-const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
 interface UserContextProps {
     user: User | null;

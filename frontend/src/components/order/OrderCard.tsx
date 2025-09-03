@@ -9,7 +9,7 @@ import { formatPrice, formatTimeLeft, truncate } from '@/utils/formatters';
 import { useUser } from '@/components/user/UserContext';
 import PayPalButton from '@/components/ui/PaypalButton';
 import DynamicDots from '@/components/ui/DynamicDots';
-import { useOrderLogic } from './useOrderLogic';
+import { useOrderLogic } from './hooks/useOrderLogic';
 
 interface OrderProps {
     order: OrderState;

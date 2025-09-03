@@ -3,19 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
 import { Principal } from '@dfinity/principal';
-
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import {
-    PaymentProvider,
-    PaymentProviderType,
-    BlockchainAsset,
-    EvmOrderInput,
-    BitcoinOrderInput,
-    DepositInput
-} from '@/declarations/icramp_backend/icramp_backend.did';
-import { defaultReleaseEvmGas, getEvmTokens, defaultCommitEvmGas } from '@/constants/evm_tokens';
+import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput } from '@/declarations/icramp_backend/icramp_backend.did';
+import { getEvmTokens } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { NetworkIds } from '@/constants/networks';
@@ -23,25 +15,26 @@ import { backend } from '@/model/backendProxy';
 import { rampErrorToString } from '@/model/helpers/error';
 import { BlockchainTypes, TokenOption } from '@/model/types';
 import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/helpers/types';
-import { fetchIcpTransactionFee, transferICPTokensToCanister } from '@/model/blockchain/icp';
-import { depositInVault, estimateGasAndGasPrice, estimateOrderFees } from '@/model/blockchain/evm';
 import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
 import { isSessionExpired } from '@/model/session';
-import {
-    fetchBitcoinCanisterAddress,
-    fetchBitcoinTokenOptions,
-    transferBitcoinToCanister,
-    transferRuneToCanister
-} from '@/model/blockchain/bitcoin';
+import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
 import { getExchangeRate } from '@/utils/rates';
 import { formatPrice, truncate } from '@/utils/formatters';
 import { getExplorerUrls } from '@/utils/explorers';
 
-import { Balance, useUser } from '@/components/user/UserContext';
 import DynamicDots from '@/components/ui/DynamicDots';
 import CurrencySelect from '@/components/ui/CurrencySelect';
 import TokenSelect from '@/components/ui/TokenSelect';
 import BlockchainSelect from '@/components/ui/BlockchainSelect';
+import { Balance, useUser } from '@/components/user/UserContext';
+import {
+    useOrderEvm,
+    useOrderSolana,
+    useOrderBitcoin,
+    useOrderIcp,
+    useParsedAmount,
+    useAutoClearMessage,
+} from '@/components/order/hooks';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -80,21 +73,23 @@ const CreateOrder: React.FC = () => {
     } = useUser();
     const [currency, setCurrency] = useState<string>(initialCurrency ?? 'USD');
     const navigate = useNavigate();
+    const { makeSolanaDeposit, solanaNetworkLabel } = useOrderSolana();
+    const { makeEvmDeposit } = useOrderEvm();
+    const { makeBitcoinDeposit } = useOrderBitcoin();
+    const { makeIcpDeposit } = useOrderIcp();
 
     useEffect(() => {
         if (!user) navigate('/');
     }, [user, navigate]);
 
-    if (!user) {
+    if (!user || isSessionExpired(user)) {
+        logout();
         navigate('/');
         return;
     }
 
-    if (isSessionExpired(user)) {
-        logout();
-        navigate("/");
-        return;
-    }
+    useAutoClearMessage(message, () => { setMessage(null); setTxHash(null); });
+    useParsedAmount(cryptoAmount, selectedToken, selectedBlockchainAsset, setCryptoAmountUnits);
 
     useEffect(() => {
         if (blockchainType && blockchainType === 'EVM') {
@@ -116,6 +111,7 @@ const CreateOrder: React.FC = () => {
             fetchBitcoinTokenOptions().then(t => setTokenOptions(t))
                 .catch((error) => console.error("Error fetching bitcoin tokens:", error));
         } else if (blockchainType === 'Solana') {
+            setSelectedBlockchainAsset({ Solana: { spl_token: [] } });
             fetchSolanaTokenOptions().then(t => setTokenOptions(t))
                 .catch((err) => console.error("Error fetching solana tokens:", err))
         } else if (blockchainType === 'ICP') {
@@ -156,14 +152,17 @@ const CreateOrder: React.FC = () => {
             switch (blockchainAssetToBlockchainType(selectedBlockchainAsset)) {
                 case "ICP":
                     setSelectedBlockchainAsset({ ICP: { ledger_principal: Principal.fromText(token.address) } });
+                    break;
                 case "Bitcoin":
                     let rune_id: [string] | [] = [];
                     if (!token.isNative) rune_id = [token.runeMetadata?.id!]
-                    setSelectedBlockchainAsset({ Bitcoin: { rune_id } })
+                    setSelectedBlockchainAsset({ Bitcoin: { rune_id } });
+                    break;
                 case "Solana":
                     let spl_token: [string] | [] = [];
                     if (!token.isNative) spl_token = [token.address]
-                    setSelectedBlockchainAsset({ Solana: { spl_token } })
+                    setSelectedBlockchainAsset({ Solana: { spl_token } });
+                    break;
                 case "EVM":
                     let token_address: [string] | [] = [];
                     if (!token?.isNative) token_address = [token.address]
@@ -173,7 +172,8 @@ const CreateOrder: React.FC = () => {
                                 chain_id: selectedBlockchainAsset.EVM.chain_id,
                                 token_address
                             }
-                        })
+                        });
+                    break;
             }
         }
     };
@@ -213,17 +213,6 @@ const CreateOrder: React.FC = () => {
         }
     }, [exchangeRate, cryptoAmount]);
 
-    useEffect(() => {
-        if (!selectedToken || !selectedBlockchainAsset || cryptoAmount <= 0) return;
-        try {
-            const s = cryptoAmount.toFixed(selectedToken.decimals);
-            setCryptoAmountUnits(ethers.parseUnits(s, selectedToken.decimals));
-        } catch (e) {
-            console.error("parseUnits failed:", e);
-            setCryptoAmountUnits(null);
-        }
-    }, [cryptoAmount, selectedBlockchainAsset, selectedToken])
-
     const handleProviderSelection = (provider: PaymentProvider) => {
         if (selectedProviders.length === 0) {
             setSelectedProviders([provider]);
@@ -241,17 +230,6 @@ const CreateOrder: React.FC = () => {
             }
         });
     };
-
-    useEffect(() => {
-        if (message) {
-            const timer = setTimeout(() => {
-                setMessage(null);
-                setTxHash(null);
-            }, 20000);
-
-            return () => clearTimeout(timer);
-        }
-    }, [message]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -293,139 +271,55 @@ const CreateOrder: React.FC = () => {
             const blockchain = blockchainAssetToBlockchainType(selectedBlockchainAsset);
             if (blockchain === 'EVM') {
                 if (!chainId) throw new Error('Chain id is not available');
-                setLoadingMessage("Estimating order gas");
+                setLoadingMessage('Estimating order gas & depositing');
                 try {
-                    const gasForCommit = await estimateGasAndGasPrice(
-                        chainId,
-                        { Commit: null },
-                        defaultCommitEvmGas,
-                    );
-                    let tx_variant = selectedToken.isNative ? { Native: null } : { Token: null };
-                    const gasForRelease = await estimateGasAndGasPrice(
-                        chainId,
-                        { 'Release': tx_variant },
-                        defaultReleaseEvmGas,
-                    );
-                    console.log(`[createOrder] gasCommitEstimate: ${gasForCommit}, gasReleaseEstimate: ${gasForRelease}`);
-
-                    const cryptoFee = await estimateOrderFees(
-                        BigInt(chainId),
-                        cryptoAmountUnits,
-                        selectedToken.isNative ? [] : [selectedToken.address],
-                        gasForCommit[0],
-                        gasForRelease[0],
-                    );
-                    console.log(
-                        `[estimateOrderFees] Offramper fee = ${offramperFeeCents}, Crypto fee = ${cryptoFee}`,
-                    );
-
-                    if (cryptoFee * BigInt(3) >= cryptoAmountUnits) {
-                        console.error('[validateOrderFees] Total fees exceed crypto amount');
-                        setMessage("Blockchain network gas prices will probably exceed the crypto amount.");
-                        setIsLoading(false);
-                        return;
-                    }
-
-                    setLoadingMessage("Depositing funds to vault")
-                    const receipt = await depositInVault(chainId, selectedToken, cryptoAmountUnits);
-                    setTxHash(receipt.hash);
-                    console.log('Transaction receipt: ', receipt);
-
-                    depositInput = [{
-                        'Evm': {
-                            estimated_gas_lock: gasForCommit[0],
-                            estimated_gas_withdraw: gasForRelease[0],
-                            tx_hash: receipt.hash
-                        } as EvmOrderInput
-                    }]
+                    const { depositInput: evmDep, txHash } =
+                        await makeEvmDeposit(chainId, selectedToken, cryptoAmountUnits);
+                    setTxHash(txHash);
+                    depositInput = evmDep;
                 } catch (e: any) {
-                    setMessage(`${e.message || e}`);
+                    setMessage(e.message || String(e));
                     setIsLoading(false);
                     return;
                 }
             } else if (blockchain === 'ICP') {
                 try {
-                    if (!icpAgent) {
-                        setMessage("ICP Agent not found");
-                        setIsLoading(false);
-                        return;
-                    }
-
-                    setLoadingMessage("Transfering funds to vault");
-                    const ledgerCanister = Principal.fromText(selectedToken.address);
-                    const fees = await fetchIcpTransactionFee(ledgerCanister);
-
-                    const result = await transferICPTokensToCanister(icpAgent!, ledgerCanister, cryptoAmountUnits, fees);
-                    console.log('Transaction result:', result);
-
+                    if (!icpAgent) { setMessage('ICP Agent not found'); setIsLoading(false); return; }
+                    setLoadingMessage('Transferring funds to vault');
+                    await makeIcpDeposit(icpAgent, selectedToken, cryptoAmountUnits);
                     fetchBalances();
                 } catch (e: any) {
-                    setMessage(`${e.message || e}`);
+                    setMessage(e.message || String(e));
                     setIsLoading(false);
                     return;
                 }
             } else if (blockchain === 'Bitcoin') {
                 try {
-                    if (!(window as any).unisat) {
-                        setMessage("Unisat wallet not detected. Please install it to proceed.");
-                        setIsLoading(false);
-                        return;
-                    }
-                    setLoadingMessage("Fetching bitcoin canister address");
-
-                    const bitcoinBackendAddress = await fetchBitcoinCanisterAddress(true);
-                    if (!bitcoinBackendAddress) {
-                        setMessage("Failed to retrieve Bitcoin canister address.");
-                        setIsLoading(false);
-                        return;
-                    }
-                    console.log("bitcoinBackendAddress = ", bitcoinBackendAddress);
-
-                    let txid = "";
-                    if (selectedToken.runeMetadata) {
-                        setLoadingMessage("Sending Rune to canister");
-                        try {
-                            txid = await transferRuneToCanister(
-                                cryptoAmountUnits,
-                                bitcoinBackendAddress,
-                                selectedToken.runeMetadata.id
-                            );
-                            setTxHash(txid);
-                        } catch (e: any) {
-                            setMessage(`Failed to send Rune`);
-                            console.error(e);
-                            setIsLoading(false);
-                            return;
-                        }
-                    } else {
-                        setLoadingMessage("Sending Bitcoin to canister");
-                        try {
-                            txid = await transferBitcoinToCanister(
-                                cryptoAmountUnits,
-                                bitcoinBackendAddress
-                            );
-                            setTxHash(txid);
-                        } catch (e: any) {
-                            setMessage(`Failed to send Bitcoin`);
-                            console.error(e);
-                            setIsLoading(false);
-                            return;
-                        }
-                    }
-                    depositInput = [{
-                        'Bitcoin': {
-                            tx_id: txid,
-                            canister_address: bitcoinBackendAddress,
-                        } as BitcoinOrderInput
-                    }]
-                    setLoadingMessage("Transaction sent, awaiting confirmation");
-                } catch (error) {
-                    setMessage(`Error creating Bitcoin order, error: ${error}`);
+                    setLoadingMessage('Sending funds to Bitcoin vault');
+                    const { depositInput: btcDep, txid } =
+                        await makeBitcoinDeposit(cryptoAmountUnits, selectedToken);
+                    setTxHash(txid);
+                    depositInput = btcDep;
+                    setLoadingMessage('Transaction sent, awaiting confirmation');
+                } catch (e: any) {
+                    setMessage(`Error creating Bitcoin order, error: ${e?.message || e}`);
                     setIsLoading(false);
                     return;
                 }
             } else if (blockchain === 'Solana') {
-                // TODO: send solana funds to solana backend canister address
+                try {
+                    setLoadingMessage("Sending funds to Solana vault");
+                    const { depositInput: solDeposit, txSig } =
+                        await makeSolanaDeposit(cryptoAmountUnits, selectedToken);
+                    setTxHash(txSig);
+                    depositInput = solDeposit;
+                    fetchBalances();
+                    setLoadingMessage("Transaction sent, awaiting confirmation");
+                } catch (e: any) {
+                    setMessage(`Error creating Solana order: ${e?.message || e}`);
+                    setIsLoading(false);
+                    return;
+                }
             } else {
                 setIsLoading(false);
                 throw new Error('Unsupported blockchain selected');
@@ -647,6 +541,10 @@ const CreateOrder: React.FC = () => {
                     <div className={`my-2 text-sm font-medium ${isValidChainId(chainId) ? 'text-green-600' : 'text-red-600'}`}>
                         {isValidChainId(chainId) ? `On chain: ${chain?.name}` : 'Please connect to a valid network'}
                     </div>
+                )}
+
+                {selectedBlockchainAsset && Object.keys(selectedBlockchainAsset)[0] === "Solana" && (
+                    <div className="my-2 text-sm font-medium text-green-600">Using Solana {solanaNetworkLabel}</div>
                 )}
 
                 <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-4" />

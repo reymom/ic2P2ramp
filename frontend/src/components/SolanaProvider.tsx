@@ -13,7 +13,7 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import { clusterApiUrl } from "@solana/web3.js";
 
 const SOL_ENV = process.env.FRONTEND_SOL_ENV === "mainnet" ? "mainnet" : "devnet";
-const NETWORK: WalletAdapterNetwork = SOL_ENV === "mainnet" ? WalletAdapterNetwork.Mainnet : WalletAdapterNetwork.Devnet;
+export const NETWORK: WalletAdapterNetwork = SOL_ENV === "mainnet" ? WalletAdapterNetwork.Mainnet : WalletAdapterNetwork.Devnet;
 
 export const SolanaProvider: FC<{ children: ReactNode; rpcUrl?: string }> = ({ children, rpcUrl }) => {
     const endpoint = useMemo(() => rpcUrl || clusterApiUrl(NETWORK), [rpcUrl]);
