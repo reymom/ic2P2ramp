@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import {
@@ -9,13 +10,14 @@ import {
 } from '@solana/spl-token';
 
 import { fetchSolanaCanisterAddress } from '@/model/blockchain/solana';
-import type { TokenOption } from '@/model/types';
 import type { DepositInput } from '@/declarations/icramp_backend/icramp_backend.did';
-import { NETWORK } from '../SolanaProvider';
+import type { TokenOption } from '@/model/types';
+import { NETWORK } from '@/components/SolanaProvider';
 
 export const useOrderSolana = () => {
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, wallet } = useWallet();
+  const [solflareMismatch, setSolflareMismatch] = useState(false);
 
   const getMintProgramId = async (mintStr: string) => {
     const mint = new PublicKey(mintStr);
@@ -96,16 +98,22 @@ export const useOrderSolana = () => {
       );
     }
 
-    const { blockhash, lastValidBlockHeight } =
-      await connection.getLatestBlockhash('finalized');
+    const { blockhash } = await connection.getLatestBlockhash('processed');
     tx.recentBlockhash = blockhash;
     tx.feePayer = publicKey;
 
-    const sig = await sendTransaction(tx, connection, { skipPreflight: false });
-    await connection.confirmTransaction(
-      { signature: sig, blockhash, lastValidBlockHeight },
-      'confirmed',
-    );
+    let sig: string;
+    try {
+      sig = await sendTransaction(tx, connection, {
+        skipPreflight: false,
+        maxRetries: 0,
+      });
+      setSolflareMismatch(false);
+    } catch (e: any) {
+      if (/network mismatch/i.test(String(e?.message ?? e)))
+        setSolflareMismatch(true);
+      throw e;
+    }
 
     const depositInput: [DepositInput] = [
       {
@@ -120,6 +128,14 @@ export const useOrderSolana = () => {
   };
 
   const solanaNetworkLabel = NETWORK.toString();
+  const isSolflare = (wallet?.adapter?.name ?? '')
+    .toLowerCase()
+    .includes('solflare');
 
-  return { makeSolanaDeposit, solanaNetworkLabel };
+  return {
+    makeSolanaDeposit,
+    solanaNetworkLabel,
+    isSolflare,
+    solflareMismatch,
+  };
 };
