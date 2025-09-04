@@ -30,19 +30,18 @@ use crate::management::bitcoin as bitcoin_management;
 use crate::management::solana::{SolanaTransactionAction, spawn_solana_tx_listener};
 use crate::management::user as user_management;
 
-use crate::model::types::orders::DepositInput;
 use crate::model::{
     guards, helpers,
     memory::{self, stable::spent_transactions},
 };
-use crate::outcalls::pricing::rates::get_cached_exchange_rate;
+use crate::outcalls::pricing::rates::get_exchange_rate;
 use crate::types::{
     self, BlockchainAsset, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
     evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
-    exchange_rate::{Asset, AssetClass},
+    exchange_rate::RateAsset,
     icp::{get_icp_token, is_icp_token_supported},
     orders::{
-        LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+        DepositInput, LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
         fees::{get_crypto_fee, get_fiat_fee},
     },
 };
@@ -50,20 +49,13 @@ use crate::types::{
 use super::payment;
 
 pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
-    let asset_class = match crypto.asset.clone() {
-        BlockchainAsset::Bitcoin { rune_id } if rune_id.is_some() => AssetClass::Rune,
-        _ => AssetClass::Cryptocurrency,
-    };
-    let base_asset = Asset {
-        class: asset_class,
-        symbol: crypto.asset.get_symbol().await?,
-    };
-    let quote_asset = Asset {
-        class: AssetClass::FiatCurrency,
+    let base_symbol = crypto.asset.get_symbol().await?;
+    let base_asset = crypto.asset.to_rate_asset(&base_symbol);
+    let quote_asset = RateAsset::Fiat {
         symbol: currency.to_string(),
     };
-    let exchange_rate = get_cached_exchange_rate(base_asset, quote_asset).await?;
 
+    let exchange_rate = get_exchange_rate(base_asset, quote_asset).await?;
     let fiat_amount = (crypto.to_whole_units().await? * exchange_rate * 100.) as u64;
 
     Ok((fiat_amount, get_fiat_fee(fiat_amount)))
@@ -118,7 +110,7 @@ async fn order_crypto_fee(
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u128> {
-    match asset {
+    match asset.clone() {
         BlockchainAsset::EVM {
             chain_id,
             token_address,
@@ -179,27 +171,13 @@ async fn order_crypto_fee(
 
             // SPL: convert SOL fees (lamports) → token base units, using SOL→token rate and token decimals.
             let mint = spl_token.clone().unwrap();
-            let meta = solana_backend_get_token_info(mint.clone()).await?;
-
-            // Rate: how many TOKEN per 1 SOL
-            let sol_to_token = get_cached_exchange_rate(
-                Asset {
-                    class: AssetClass::Cryptocurrency,
-                    symbol: "SOL".into(),
-                },
-                Asset {
-                    class: AssetClass::Cryptocurrency,
-                    symbol: meta.rate_symbol.clone(),
-                },
-            )
-            .await?;
-
-            // lamports → SOL
-            let sol_fees = (lamports_total as f64) / 1_000_000_000f64;
+            let info = solana_backend_get_token_info(mint.clone()).await?;
 
             // SOL → TOKEN (human units), then → base units by decimals
-            let token_fees_human = sol_fees * sol_to_token;
-            let scale = 10u128.pow(meta.decimals as u32) as f64;
+            let rate = helpers::get_sol_token_rate(info.rate_symbol, spl_token).await?;
+            let sol_fees = (lamports_total as f64) / 1_000_000_000f64;
+            let token_fees_human = sol_fees * rate;
+            let scale = 10u128.pow(info.decimals as u32) as f64;
 
             // ceil to avoid undercharging
             let token_fees_base: u128 = (token_fees_human * scale).ceil() as u128;

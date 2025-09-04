@@ -1,20 +1,20 @@
-use crate::model::types::exchange_rate::{Asset, ExchangeRateCache};
+use crate::model::types::exchange_rate::ExchangeRateCache;
 
 use super::storage::EXCHANGE_RATE_CACHE;
 
-pub fn cache_exchange_rate(base_asset: Asset, quote_asset: Asset, rate: f64) {
+pub fn cache_exchange_rate(base_symbol: &str, quote_symbol: &str, rate: f64) {
     EXCHANGE_RATE_CACHE.with_borrow_mut(|rates| {
         rates.insert(
-            (base_asset.symbol, quote_asset.symbol),
+            (base_symbol.to_string(), quote_symbol.to_string()),
             ExchangeRateCache::new(rate),
         )
     });
 }
 
-pub fn get_cached_rate(base_asset: Asset, quote_asset: Asset) -> Option<f64> {
+pub fn get_cached_rate(base_symbol: &str, quote_symbol: &str) -> Option<f64> {
     EXCHANGE_RATE_CACHE.with_borrow(|rates| {
         rates
-            .get(&(base_asset.symbol, quote_asset.symbol))
+            .get(&(base_symbol.to_string(), quote_symbol.to_string()))
             .and_then(|rate| rate.get_cached_rate())
     })
 }

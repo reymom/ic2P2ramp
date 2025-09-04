@@ -1,3 +1,4 @@
+pub mod jupiter;
 pub mod ordiscan;
 pub mod paypal;
 pub mod pricing;

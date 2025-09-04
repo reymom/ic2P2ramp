@@ -2,99 +2,126 @@ use crate::{
     model::{
         errors::Result,
         memory::heap,
-        types::exchange_rate::{Asset, AssetClass},
+        types::exchange_rate::{Asset, AssetClass, RateAsset},
     },
-    outcalls::ordiscan::price::fetch_rune_price,
-    outcalls::pricing::xrc_rates::get_xrc_exchange_rate,
+    outcalls::{
+        jupiter::price::get_usd_price_by_mint, ordiscan::price::fetch_rune_price,
+        pricing::xrc_rates::get_xrc_exchange_rate,
+    },
 };
 
-pub async fn get_cached_exchange_rate(
-    mut base_asset: Asset,
-    mut quote_asset: Asset,
+pub async fn get_exchange_rate(
+    mut base_asset: RateAsset,
+    mut quote_asset: RateAsset,
 ) -> Result<f64> {
-    if let Some(predefined_rate) =
-        get_predefined_rate_if_stablecoin(&base_asset.symbol, &quote_asset.symbol)
-    {
-        Ok(predefined_rate)
-    } else {
-        match heap::get_cached_rate(base_asset.clone(), quote_asset.clone()) {
-            Some(cache) => Ok(cache),
-            None => {
-                ic_cdk::println!("[get_cached_exchange_rate] Recalculating cache.");
+    base_asset.normalize();
+    quote_asset.normalize();
 
-                base_asset.normalize();
-                quote_asset.normalize();
-                let rate = match (base_asset.clone().class, quote_asset.clone().class) {
-                    (AssetClass::Rune, _) => {
-                        ic_cdk::println!(
-                            "[get_cached_exchange_rate] for (Rune, _) base_asset = {}, quote_asset = {}",
-                            base_asset.symbol,
-                            quote_asset.symbol
-                        );
-                        let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
-                            .await?
-                            .data
-                            .price_in_usd;
-                        ic_cdk::println!(
-                            "[get_cached_exchange_rate] rune_price_in_usd: {}",
-                            rune_price_in_usd
-                        );
-                        if quote_asset.symbol == "USD" {
-                            rune_price_in_usd
-                        } else {
-                            let conversion_rate = get_xrc_exchange_rate(
-                                Asset {
-                                    symbol: "USD".to_string(),
-                                    class: AssetClass::FiatCurrency,
-                                },
-                                quote_asset.clone(),
-                            )
-                            .await?;
-                            rune_price_in_usd * conversion_rate
-                        }
-                    }
-                    (_, AssetClass::Rune) => {
-                        ic_cdk::println!(
-                            "[get_cached_exchange_rate] for (_, Rune): base_asset = {}, quote_asset = {}",
-                            base_asset.symbol,
-                            quote_asset.symbol
-                        );
-                        let rune_price_in_usd = fetch_rune_price(&base_asset.symbol)
-                            .await?
-                            .data
-                            .price_in_usd;
-                        ic_cdk::println!(
-                            "[get_cached_exchange_rate] rune_price_in_usd: {}",
-                            rune_price_in_usd
-                        );
-                        if base_asset.symbol == "USD" {
-                            1.0 / rune_price_in_usd
-                        } else {
-                            let conversion_rate = get_xrc_exchange_rate(
-                                Asset {
-                                    symbol: "USD".to_string(),
-                                    class: AssetClass::FiatCurrency,
-                                },
-                                base_asset.clone(),
-                            )
-                            .await?;
-                            conversion_rate / rune_price_in_usd
-                        }
-                    }
-                    _ => get_xrc_exchange_rate(base_asset.clone(), quote_asset.clone()).await?,
-                };
+    let base_symbol = base_asset.key_symbol();
+    let quote_symbol = quote_asset.key_symbol();
 
-                heap::cache_exchange_rate(base_asset, quote_asset, rate);
-                Ok(rate)
+    // Trivial stable pairs
+    if let Some(pre) = predefined_stablecoin(&base_symbol, &quote_symbol) {
+        return Ok(pre);
+    }
+
+    // Cache
+    if let Some(cached) = heap::get_cached_rate(&base_symbol, &quote_symbol) {
+        return Ok(cached);
+    }
+
+    ic_cdk::println!(
+        "[get_exchange_rate] miss -> computing {} / {}",
+        base_symbol,
+        quote_symbol
+    );
+
+    // Helper: USD → quote via XRC (works for fiat/crypto quotes known to XRC)
+    let usd = || Asset {
+        symbol: "USD".into(),
+        class: AssetClass::FiatCurrency,
+    };
+    let usd_to_quote = |q: Asset| async {
+        if q.symbol == "USD" {
+            Ok(1.0)
+        } else {
+            get_xrc_exchange_rate(usd(), q).await
+        }
+    };
+
+    let rate = match (&base_asset, &quote_asset) {
+        // Rune → *
+        (RateAsset::Rune { name }, _) => {
+            let rune_usd = fetch_rune_price(name).await?.data.price_in_usd;
+            if quote_symbol == "USD" {
+                rune_usd
+            } else {
+                rune_usd * usd_to_quote(quote_asset.to_xrc_asset()).await?
             }
         }
-    }
+
+        // --- * → Rune (quote) ---
+        (_, RateAsset::Rune { name }) => {
+            let rune_usd = fetch_rune_price(name).await?.data.price_in_usd;
+            let base_usd = if base_symbol == "USD" {
+                1.0
+            } else {
+                get_xrc_exchange_rate(base_asset.to_xrc_asset(), usd()).await?
+            };
+            base_usd / rune_usd
+        }
+
+        // --- Everything else: XRC first; SPL-mint (Solana) fallback to Jupiter ---
+        _ => {
+            match get_xrc_exchange_rate(base_asset.to_xrc_asset(), quote_asset.to_xrc_asset()).await
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    ic_cdk::println!("[get_exchange_rate] get_xrc_exchange_rate failed: {}", e);
+
+                    // Fallback in Solana asset with mint present
+                    match (&base_asset, &quote_asset) {
+                        (
+                            RateAsset::Solana {
+                                mint: Some(mint), ..
+                            },
+                            _,
+                        ) => {
+                            let base_usd = get_usd_price_by_mint(mint).await?;
+                            if quote_symbol == "USD" {
+                                base_usd
+                            } else {
+                                base_usd * usd_to_quote(quote_asset.to_xrc_asset()).await?
+                            }
+                        }
+                        (
+                            _,
+                            RateAsset::Solana {
+                                mint: Some(mint), ..
+                            },
+                        ) => {
+                            let quote_usd = get_usd_price_by_mint(mint).await?;
+                            let base_usd = if base_symbol == "USD" {
+                                1.0
+                            } else {
+                                get_xrc_exchange_rate(base_asset.to_xrc_asset(), usd()).await?
+                            };
+                            base_usd / quote_usd
+                        }
+                        _ => return Err(e.into()),
+                    }
+                }
+            }
+        }
+    };
+
+    heap::cache_exchange_rate(&base_symbol, &quote_symbol, rate);
+    Ok(rate)
 }
 
-fn get_predefined_rate_if_stablecoin(base_symbol: &str, quote_symbol: &str) -> Option<f64> {
-    match (base_symbol, quote_symbol) {
-        ("USD", "USD") => Some(1.0),
-        ("EUR", "EUR") => Some(1.0),
+fn predefined_stablecoin(base: &str, quote: &str) -> Option<f64> {
+    match (base, quote) {
+        ("USD", "USD") | ("EUR", "EUR") => Some(1.0),
         _ => None,
     }
 }

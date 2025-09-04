@@ -12,10 +12,7 @@ use crate::{
 
 use super::{
     errors::UserError,
-    types::{
-        exchange_rate::{Asset, AssetClass},
-        AddressType,
-    },
+    types::{AddressType, exchange_rate::RateAsset},
 };
 
 /// Introduces an asynchronous delay for the specified duration.
@@ -88,33 +85,39 @@ pub fn validate_solana_address(_solana_address: &str) -> Result<()> {
 }
 
 pub async fn get_eth_token_rate(token_symbol: String) -> Result<f64> {
-    let base_asset = Asset {
-        class: AssetClass::Cryptocurrency,
+    let base_asset = RateAsset::Crypto {
         symbol: "ETH".to_string(),
     };
-    let quote_asset = Asset {
-        class: AssetClass::Cryptocurrency,
-        symbol: token_symbol.to_string(),
+    let quote_asset = RateAsset::Crypto {
+        symbol: token_symbol,
     };
 
-    match rates::get_cached_exchange_rate(base_asset, quote_asset).await {
+    match rates::get_exchange_rate(base_asset, quote_asset).await {
         Ok(rate) => Ok(rate),
         Err(err) => Err(err),
     }
 }
 
 pub async fn get_btc_token_rate(rune_id: String) -> Result<f64> {
-    let base_asset = Asset {
-        class: AssetClass::Rune,
-        symbol: rune_id.to_string(),
-    };
-    let quote_asset = Asset {
-        class: AssetClass::Cryptocurrency,
+    let base_asset = RateAsset::Rune { name: rune_id };
+    let quote_asset = RateAsset::Crypto {
         symbol: "BTC".to_string(),
     };
 
-    match rates::get_cached_exchange_rate(base_asset, quote_asset).await {
+    match rates::get_exchange_rate(base_asset, quote_asset).await {
         Ok(rate) => Ok(rate),
         Err(err) => Err(err),
     }
+}
+
+pub async fn get_sol_token_rate(symbol: String, mint: Option<String>) -> Result<f64> {
+    rates::get_exchange_rate(
+        RateAsset::Solana {
+            symbol: "SOL".to_string(),
+            mint: None,
+        },
+        RateAsset::Solana { symbol, mint },
+    )
+    .await
+    .map(Ok)?
 }

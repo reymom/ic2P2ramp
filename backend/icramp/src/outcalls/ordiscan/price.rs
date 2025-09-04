@@ -4,7 +4,7 @@ use crate::model::{
     types::ordiscan::OrdiscanRunePrice,
 };
 use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+    CanisterHttpRequestArgument, HttpHeader, HttpMethod, http_request,
 };
 
 pub async fn fetch_rune_price(rune_name: &str) -> Result<OrdiscanRunePrice> {
@@ -38,10 +38,10 @@ pub async fn fetch_rune_price(rune_name: &str) -> Result<OrdiscanRunePrice> {
     let request = CanisterHttpRequestArgument {
         url: format!("{}/v1/rune/{}/market", proxy_url, rune_name),
         method: HttpMethod::GET,
+        headers: request_headers,
         body: None,
         max_response_bytes: Some(8_000),
         transform: None,
-        headers: request_headers,
     };
 
     let cycles = 10_000_000_000;

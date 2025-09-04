@@ -32,7 +32,7 @@ use model::types::{
         token::{self, Token, TokenManager},
         transaction::{TransactionAction, TransactionVariant},
     },
-    exchange_rate::{Asset, AssetClass, CACHE_DURATION, ExchangeRateCache},
+    exchange_rate::{CACHE_DURATION, ExchangeRateCache},
     icp::{IcpToken, get_icp_token},
     orders::{
         BitcoinOrderInput, DepositInput, EvmOrderInput, OrderFilter, OrderState, SolanaOrderInput,
@@ -56,6 +56,8 @@ use outcalls::{
     pricing::rates,
     revolut::{self, token as revolut_token},
 };
+
+use crate::model::types::exchange_rate::RateAsset;
 
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
@@ -373,6 +375,7 @@ pub async fn create_bitcoin_order_with_tx(
 // ------------------
 // Solana Management
 // ------------------
+#[ic_cdk::update]
 pub async fn create_solana_order_with_tx(
     signature: String,
     user: u64,
@@ -676,28 +679,12 @@ fn remove_user_payment_provider(
 // ------------
 
 #[ic_cdk::update]
-async fn get_exchange_rate(
-    fiat_symbol: String,
-    crypto_symbol: String,
-    is_rune: bool,
-) -> Result<f64> {
-    let base_asset = if is_rune {
-        Asset {
-            class: AssetClass::Rune,
-            symbol: crypto_symbol,
-        }
-    } else {
-        Asset {
-            class: AssetClass::Cryptocurrency,
-            symbol: crypto_symbol.to_string(),
-        }
-    };
-    let quote_asset = Asset {
-        class: AssetClass::FiatCurrency,
-        symbol: fiat_symbol.to_string(),
+async fn get_exchange_rate(fiat_symbol: String, base_asset: RateAsset) -> Result<f64> {
+    let quote_asset = RateAsset::Fiat {
+        symbol: fiat_symbol,
     };
 
-    rates::get_cached_exchange_rate(base_asset, quote_asset).await
+    rates::get_exchange_rate(base_asset, quote_asset).await
 }
 
 // <gas, gas_price>

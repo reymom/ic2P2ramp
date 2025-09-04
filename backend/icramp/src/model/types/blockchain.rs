@@ -3,7 +3,8 @@ use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
 
 use crate::{
     errors::{BlockchainError, Result, SystemError},
-    inter_canister::bitcoin,
+    inter_canister::{bitcoin, solana},
+    model::types::exchange_rate::RateAsset,
 };
 
 use super::{
@@ -112,7 +113,12 @@ impl BlockchainAsset {
                 .name),
                 None => Ok("BTC".to_string()),
             },
-            _ => Err(BlockchainError::UnsupportedBlockchain.into()),
+            Self::Solana { spl_token } => match spl_token {
+                Some(mint) => Ok(solana::solana_backend_get_token_info(mint.to_string())
+                    .await?
+                    .rate_symbol),
+                None => Ok("SOL".to_string()),
+            },
         }
     }
 
@@ -141,6 +147,21 @@ impl BlockchainAsset {
                 }
             }
             _ => Err(BlockchainError::UnsupportedBlockchain.into()),
+        }
+    }
+
+    pub fn to_rate_asset(&self, symbol: &str) -> RateAsset {
+        match &self {
+            Self::Bitcoin { .. } => RateAsset::Rune {
+                name: symbol.to_string(),
+            },
+            Self::Solana { spl_token } => RateAsset::Solana {
+                symbol: symbol.to_string(),
+                mint: spl_token.clone(),
+            },
+            _ => RateAsset::Crypto {
+                symbol: symbol.to_string(),
+            },
         }
     }
 }
