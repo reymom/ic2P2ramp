@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
-import { ethers } from 'ethers';
 import { Principal } from '@dfinity/principal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput } from '@/declarations/icramp_backend/icramp_backend.did';
+import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput, RateAsset } from '@/declarations/icramp_backend/icramp_backend.did';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
@@ -73,7 +72,7 @@ const CreateOrder: React.FC = () => {
     } = useUser();
     const [currency, setCurrency] = useState<string>(initialCurrency ?? 'USD');
     const navigate = useNavigate();
-    const { makeSolanaDeposit, solanaNetworkLabel } = useOrderSolana();
+    const { makeSolanaDeposit, solanaNetworkLabel, isSolflare, solflareMismatch } = useOrderSolana();
     const { makeEvmDeposit } = useOrderEvm();
     const { makeBitcoinDeposit } = useOrderBitcoin();
     const { makeIcpDeposit } = useOrderIcp();
@@ -189,10 +188,24 @@ const CreateOrder: React.FC = () => {
 
     useEffect(() => {
         const fetchPriceRate = async () => {
+            if (!selectedBlockchainAsset || !selectedToken) return;
+
             setMessage(null);
             setLoadingRate(true);
-            const isRune = selectedToken !== null && selectedToken.runeMetadata !== undefined;
-            let priceRate = await getExchangeRate(currency, selectedToken!.rateSymbol, isRune);
+
+            let asset: RateAsset;
+            switch (blockchainAssetToBlockchainType(selectedBlockchainAsset)) {
+                case "Bitcoin":
+                    asset = { Rune: { name: selectedToken.rateSymbol } };
+                    break;
+                case "Solana":
+                    asset = { Solana: { symbol: selectedToken.rateSymbol, mint: [selectedToken.address] } };
+                    break;
+                default:
+                    asset = { Crypto: { symbol: selectedToken.rateSymbol } };
+            };
+
+            let priceRate = await getExchangeRate(currency, asset);
             if (priceRate) {
                 setExchangeRate(Number(priceRate))
             } else {
@@ -202,8 +215,8 @@ const CreateOrder: React.FC = () => {
             setLoadingRate(false);
         }
 
-        if (selectedToken) fetchPriceRate()
-    }, [selectedToken, currency]);
+        fetchPriceRate();
+    }, [selectedBlockchainAsset, selectedToken, currency]);
 
     useEffect(() => {
         if (exchangeRate) {
@@ -544,7 +557,14 @@ const CreateOrder: React.FC = () => {
                 )}
 
                 {selectedBlockchainAsset && Object.keys(selectedBlockchainAsset)[0] === "Solana" && (
-                    <div className="my-2 text-sm font-medium text-green-600">Using Solana {solanaNetworkLabel}</div>
+                    <div className="my-2 text-sm font-medium">
+                        <span className="text-green-600">dApp cluster: {solanaNetworkLabel}</span>
+                        {isSolflare && solflareMismatch && (
+                            <span className="block text-xs text-red-500 mt-1">
+                                Solflare is on a different cluster → Settings → General → Network → {solanaNetworkLabel}
+                            </span>
+                        )}
+                    </div>
                 )}
 
                 <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-4" />

@@ -1,6 +1,9 @@
 import { backend } from '@/model/backendProxy';
 import { rampErrorToString } from '@/model/helpers/error';
-import { Crypto } from '@/declarations/icramp_backend/icramp_backend.did';
+import {
+  Crypto,
+  RateAsset,
+} from '@/declarations/icramp_backend/icramp_backend.did';
 
 export const fetchOrderPrice = async (
   currency: string,
@@ -26,11 +29,10 @@ export const fetchOrderPrice = async (
 
 export const getExchangeRate = async (
   currency: string,
-  crypto: string,
-  isRune: boolean,
+  cryptoAsset: RateAsset,
 ): Promise<number | null> => {
   try {
-    const result = await backend.get_exchange_rate(currency, crypto, isRune);
+    const result = await backend.get_exchange_rate(currency, cryptoAsset);
     if ('Ok' in result) {
       console.log('[getExchangeRate] rate = ', result.Ok);
       return result.Ok;

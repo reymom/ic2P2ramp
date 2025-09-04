@@ -238,6 +238,12 @@ type RampError = variant {
   UserError : UserError;
   BlockchainError : BlockchainError;
 };
+type RateAsset = variant {
+  Fiat : record { symbol : text };
+  Rune : record { name : text };
+  Solana : record { mint : opt text; symbol : text };
+  Crypto : record { symbol : text };
+};
 type RejectionCode = variant {
   NoError;
   CanisterError;
@@ -455,13 +461,22 @@ service : (InstallArg) -> {
       nat64,
       opt DepositInput,
     ) -> (Result_5);
+  create_solana_order_with_tx : (
+      text,
+      nat64,
+      text,
+      vec record { PaymentProviderType; PaymentProvider },
+      text,
+      nat,
+      opt text,
+    ) -> (Result_4);
   execute_revolut_payment : (nat64, text) -> (Result_6) query;
   freeze_order : (nat64, nat64, text) -> (Result);
   generate_auth_message : (LoginAddress) -> (Result_6);
   get_average_gas_prices : (nat64, nat64, TransactionAction) -> (Result_7);
   get_evm_address : () -> (text) query;
   get_evm_tokens : (nat64) -> (Result_8) query;
-  get_exchange_rate : (text, text, bool) -> (Result_9);
+  get_exchange_rate : (text, RateAsset) -> (Result_9);
   get_icp_token_info : (principal) -> (Result_10) query;
   get_offramper_fee : (nat64) -> (nat64) query;
   get_order : (nat64) -> (Result_11) query;
