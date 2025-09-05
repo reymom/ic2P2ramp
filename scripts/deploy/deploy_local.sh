@@ -51,7 +51,7 @@ dfx canister call sol_rpc updateApiKeys "(vec {
 cargo build --release --target wasm32-unknown-unknown --package solana_backend
 candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > backend/solana/solana_backend.did
 
-dfx deploy solana_backend --specified-id u6s2n-gx777-77774-qaaba-cai --argument "(
+dfx deploy solana_backend --argument "(
     variant { 
         Reinstall = record {
             sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
@@ -246,7 +246,10 @@ dfx canister call bitcoin_backend register_runes '(vec {
     record { id = "66593:594"; name = "DOG•GO•TO•THE•MOON"; symbol = "🐕"; divisibility = 6 : nat8; cap = 0 : nat; premine = 1_000_000_000 : nat };
     record { id = "73393:191"; name = "UNCOMMON•GOODS"; symbol = "⧉"; divisibility = 0 : nat8; cap = 10_000 : nat; premine = 0 : nat };
 })'
-dfx canister call solana_backend register_tokens '(vec { record { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"; "KONG"; "KONG" } })'
+dfx canister call solana_backend register_tokens '(vec {
+  record { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"; "KONGSWAP"; "KONG" };
+  record { "HbA6BgBmA3X6X8jtts5X2ZiJXXxZQKDbQR4s5XCD82pr"; "BONK"; "BONK"};
+})'
 
 dfx generate icramp_backend
 dfx generate bitcoin_backend

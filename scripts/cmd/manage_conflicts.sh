@@ -1,4 +1,4 @@
-dfx canister call backend create_evm_order_with_tx '(
+dfx canister call icramp_backend create_evm_order_with_tx '(
     84532 : nat64,
     "0x94b2397eb80a6515ece027efe296b05a78f134446951aa2ea15d13baeeeffb4c",
     1 : nat64,
@@ -14,14 +14,14 @@ dfx canister call backend create_evm_order_with_tx '(
     opt "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 )'
 
-dfx canister call backend test_estimate_gas_commit '(
+dfx canister call icramp_backend test_estimate_gas_commit '(
     84532,
     "0x632b39E5Fe4EAAFDF21601b2Bc206ca0f602C85A",
     null,
     10000000000000000
 )'
 
-dfx canister call backend create_bitcoin_order_with_tx '(
+dfx canister call icramp_backend create_bitcoin_order_with_tx '(
     "aecdee36f22d61ec57888149ece3c01d4d0596ad054cc0595aeba929e0a19256",
     "tb1pz4w8rd9xuxltaec8n0wvtsafh33xyyhzmx3302n7h54zlev99egsnugs9h",
     1 : nat64,
@@ -37,4 +37,19 @@ dfx canister call backend create_bitcoin_order_with_tx '(
     opt "73393:191"
 )' --ic
 
-dfx canister call backend retry_order_completion '(1: nat64)' --ic
+dfx canister call icramp_backend retry_order_completion '(1: nat64)' --ic
+
+dfx canister call icramp_backend create_solana_order_with_tx '(
+    "4z6D7HWpqcTUb7oBnbP4fkPdTyfDDSm1myHBMNjvsgrcxDdFZkP5no25UF9i6b8R4zZvAWKCuCTfhABqsbBhcVwe",
+    1 : nat64,
+    "CnzUv9EqfVv5yiYWugHiVzmvuBBzRxHYK64DkLhSWsUj",
+    vec {
+        record {
+            variant { PayPal };
+            variant { PayPal = record { id = "dummy@test.com" : text } };
+        }
+    },
+    "USD",
+    20_000_000 : nat,
+    null
+)'
