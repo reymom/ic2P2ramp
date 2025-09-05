@@ -470,12 +470,12 @@ async fn withdraw_solana_fees(_destination_address: Address, _amount: u64) -> Re
     ic_cdk::trap("TO DO")
 }
 
-#[query]
+#[update]
 async fn get_tx(signature_b58: String) -> Result<TxInfo> {
     solana::transaction::get_tx(signature_b58).await
 }
 
-#[query]
+#[update]
 async fn get_tx_metadata(signature_b58: String) -> Result<TxMetadata> {
     solana::transaction::get_tx_metadata(signature_b58).await
 }

@@ -1,11 +1,15 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use bincode::{config::standard, serde::decode_from_slice};
 use icramp_types::solana::{
     errors::{Result, SolanaError, TransactionError},
     transaction::{TxInfo, TxMetadata},
 };
-use sol_rpc_types::TransactionStatusMeta;
+use sol_rpc_types::{GetTransactionEncoding, TransactionStatusMeta};
 use solana_signature::Signature;
+use solana_transaction::versioned::VersionedTransaction;
 use solana_transaction_status_client_types::{
-    EncodedConfirmedTransactionWithStatusMeta, UiTransactionStatusMeta,
+    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiLoadedAddresses,
+    UiTransactionStatusMeta,
 };
 use std::str::FromStr;
 
@@ -37,13 +41,16 @@ pub async fn get_tx_metadata(signature_b58: String) -> Result<TxMetadata> {
 
     let sig = Signature::from_str(&signature_b58)
         .map_err(|e| SolanaError::ParsePubkeyError(e.to_string()))?;
-    // 2) Detailed fetch (meta + encoded tx) only after confirmed
+
+    // Detailed fetch (meta + encoded tx) only after confirmed
     let EncodedConfirmedTransactionWithStatusMeta {
         slot,
         transaction,
         block_time: _,
     } = client()
         .get_transaction(sig)
+        .with_encoding(GetTransactionEncoding::Base64)
+        .with_max_supported_transaction_version(0)
         .with_cycles(4_000_000_000)
         .send()
         .await
@@ -53,18 +60,60 @@ pub async fn get_tx_metadata(signature_b58: String) -> Result<TxMetadata> {
             TransactionError::MetaError("encoded confirmation transaction not found".to_string())
         })?;
 
+    ic_cdk::println!(
+        "[get_tx_metadata] slot: {}, transaction: {:?}",
+        slot,
+        transaction
+    );
     let ui_meta: UiTransactionStatusMeta = transaction
         .meta
+        .clone()
         .ok_or_else(|| TransactionError::MetaError("missing meta".into()))?;
 
     let meta: TransactionStatusMeta = ui_meta
         .try_into()
         .map_err(|e| TransactionError::MetaError(format!("meta convert: {e:?}")))?;
 
+    // --- ACCOUNT KEYS (decode Base64 once) ---
+    let tx_b64 = match &transaction.transaction {
+        EncodedTransaction::LegacyBinary(s) => s.as_str(),
+        EncodedTransaction::Binary(s, _) => s.as_str(),
+        _ => return Err(TransactionError::MetaError("unsupported tx encoding".into()).into()),
+    };
+    let tx_bytes = STANDARD
+        .decode(tx_b64)
+        .map_err(|e| TransactionError::MetaError(format!("base64 decode: {e}")))?;
+    let (vtx, _): (VersionedTransaction, usize) = decode_from_slice(&tx_bytes, standard())
+        .map_err(|e| TransactionError::MetaError(format!("bincode v2 decode: {e}")))?;
+
+    let mut account_keys: Vec<String> = vtx
+        .message
+        .static_account_keys()
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
+
+    // append loaded addresses (writable then readonly)
+    if let Some(la) = transaction.meta.as_ref().and_then(|m| {
+        let os = m.loaded_addresses.as_ref();
+        Into::<Option<&UiLoadedAddresses>>::into(os)
+    }) {
+        for k in &la.writable {
+            account_keys.push(k.clone());
+        }
+        for k in &la.readonly {
+            account_keys.push(k.clone());
+        }
+    }
+
+    ic_cdk::println!("account keys length = {}", account_keys.len());
+    ic_cdk::println!("account keys = {:?}", account_keys);
+
     Ok(TxMetadata {
         signature: signature_b58,
         slot,
         meta,
+        account_keys,
     })
 }
 
@@ -83,6 +132,7 @@ async fn fetch_status(
 
     let status = client()
         .get_signature_statuses([&sig])?
+        .with_search_transaction_history(true)
         .with_cycles(3_000_000_000)
         .send()
         .await
@@ -91,6 +141,8 @@ async fn fetch_status(
         .into_iter()
         .next()
         .flatten();
+
+    ic_cdk::println!("[fetch_status], status: {:?}", status);
 
     if let Some(s) = status {
         let confs = s.confirmations.map(|c| c as u64);

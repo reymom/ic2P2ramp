@@ -14,6 +14,7 @@ edition = "2024"
 
 [workspace.dependencies]
 base64 = "0.22"
+bincode = { version = "2.0", features = ["serde"] }
 bitcoin = "0.32"
 bs58 = "0.5"
 candid = "0.10"
