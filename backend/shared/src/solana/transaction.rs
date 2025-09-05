@@ -19,5 +19,9 @@ pub struct TxInfo {
 pub struct TxMetadata {
     pub signature: String,
     pub slot: u64,
-    pub meta: TransactionStatusMeta, // Candid-ready mirror type from sol-rpc-types
+    pub meta: TransactionStatusMeta,
+
+    /// Message account keys used to index pre/post balances:
+    /// static_account_keys() || loaded_addresses.writable || loaded_addresses.readonly
+    pub account_keys: Vec<String>,
 }

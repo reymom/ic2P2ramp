@@ -304,7 +304,7 @@ pub async fn validate_deposit_tx(
 
             // Optional local input sanity vs asset
             match (&expected_mint, &sol_input.mint) {
-                (Some(exp), Some(got)) if !exp.eq_ignore_ascii_case(got) => {
+                (Some(exp), Some(got)) if exp != got => {
                     return Err(OrderError::InvalidInput("SPL mint mismatch".to_string()).into());
                 }
                 (None, Some(_)) => {
@@ -316,87 +316,130 @@ pub async fn validate_deposit_tx(
                 _ => {}
             }
 
-            let meta = solana_backend_get_tx_metadata(sol_input.signature.clone())
-                .await?
-                .meta;
+            let txm = solana_backend_get_tx_metadata(sol_input.signature.clone()).await?;
+            if !txm.meta.status.is_ok() {
+                return Err(SolanaError::from(TransactionError::MetaError(
+                    "tx meta status != Ok".into(),
+                ))
+                .into());
+            }
+
+            let keys = &txm.account_keys;
+            let pre = &txm.meta.pre_balances;
+            let post = &txm.meta.post_balances;
+            if pre.len() != post.len() || pre.len() != keys.len() {
+                return Err(SolanaError::from(TransactionError::MetaError(
+                    "invalid lamport vectors / keys".into(),
+                ))
+                .into());
+            }
 
             if let Some(exp_mint) = expected_mint {
-                let mut pre: HashMap<(u8, String), u128> = HashMap::new();
-                if let Some(pre_tbs) = meta.pre_token_balances.as_ref() {
+                // -------- SPL TOKEN VALIDATION (owner must be offramper) --------
+                let mut pre: HashMap<u8, u128> = HashMap::new();
+                if let Some(pre_tbs) = txm.meta.pre_token_balances.as_ref() {
                     for tb in pre_tbs {
-                        if tb.mint.eq_ignore_ascii_case(exp_mint) {
+                        if tb.mint == *exp_mint {
                             if let (i, Some(a)) = (
                                 tb.account_index,
                                 tb.ui_token_amount.amount.parse::<u128>().ok(),
                             ) {
-                                pre.insert((i, tb.mint.clone()), a);
+                                pre.insert(i, a);
                             }
                         }
                     }
                 }
-
                 let mut hits = 0usize;
-                if let Some(post_tbs) = meta.post_token_balances.as_ref() {
+                if let Some(post_tbs) = txm.meta.post_token_balances.as_ref() {
                     for tb in post_tbs {
-                        if tb.mint.eq_ignore_ascii_case(exp_mint) {
+                        if tb.mint == *exp_mint {
                             if let (i, Some(post_amt)) = (
                                 tb.account_index,
                                 tb.ui_token_amount.amount.parse::<u128>().ok(),
                             ) {
-                                let k = (i, tb.mint.clone());
-                                let pre_amt = pre.get(&k).copied().unwrap_or(0);
+                                let pre_amt = *pre.get(&i).unwrap_or(&0);
                                 let delta = post_amt.saturating_sub(pre_amt);
-                                if delta == order_amount {
-                                    hits += 1;
-                                } else if delta > 0 {
-                                    return Err(SolanaError::from(TransactionError::MetaError(
-                                        "ambiguous SPL credits in tx".to_string(),
-                                    ))
-                                    .into());
+                                ic_cdk::println!("[validate_deposit_tx] solana delta: {}", delta);
+                                if delta > 0 {
+                                    // owner: Option<Pubkey> -> String, compare EXACT (base58 is case-sensitive)
+                                    let owner_ok = tb
+                                        .owner
+                                        .as_ref()
+                                        .map(|o| o.to_string() == order_offramper)
+                                        .unwrap_or(false);
+                                    if !owner_ok {
+                                        return Err(SolanaError::from(
+                                            TransactionError::MetaError(
+                                                "SPL credit not to offramper".into(),
+                                            ),
+                                        )
+                                        .into());
+                                    }
+                                    if delta == order_amount {
+                                        hits += 1;
+                                    } else {
+                                        return Err(SolanaError::from(
+                                            TransactionError::MetaError(
+                                                "ambiguous SPL credits in tx".into(),
+                                            ),
+                                        )
+                                        .into());
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
                 if hits != 1 {
                     return Err(SolanaError::from(TransactionError::MetaError(
-                        "SPL deposit not found / ambiguous".to_string(),
+                        "SPL deposit not found / ambiguous".into(),
                     ))
                     .into());
                 }
             } else {
-                // -------- SOL VALIDATION (best-effort without account keys) --------
-                // We can’t map indices→addresses here without parsed keys. Validate that there exists
-                // a **single** positive lamports delta equal to order_amount.
-                let pre = &meta.pre_balances;
-                let post = &meta.post_balances;
-                if pre.len() != post.len() {
+                // -------- SOL (lamports) VALIDATION with address binding --------
+                let keys = &txm.account_keys;
+                let pre = &txm.meta.pre_balances;
+                let post = &txm.meta.post_balances;
+
+                if pre.len() != post.len() || pre.len() != keys.len() {
                     return Err(SolanaError::from(TransactionError::MetaError(
-                        "invalid lamport vectors".to_string(),
+                        "invalid lamport vectors / keys".into(),
                     ))
                     .into());
                 }
 
-                let mut matches = 0usize;
-                for (a, b) in pre.iter().zip(post.iter()) {
+                let mut hits = 0usize;
+                for ((a, b), addr) in pre.iter().zip(post.iter()).zip(keys.iter()) {
                     let delta = b.saturating_sub(*a) as u128;
-                    if delta == order_amount {
-                        matches += 1;
-                    } else if delta > 0 && delta != order_amount {
-                        // Another credit in same tx → ambiguous
-                        return Err(SolanaError::from(TransactionError::MetaError(
-                            "ambiguous SOL credits in tx".to_string(),
-                        ))
-                        .into());
+                    ic_cdk::println!("[validate_deposit_tx] solana delta: {}", delta);
+                    if delta > 0 {
+                        if addr != &order_offramper {
+                            return Err(SolanaError::from(TransactionError::MetaError(
+                                "lamports credit not to offramper".into(),
+                            ))
+                            .into());
+                        }
+                        if delta == order_amount {
+                            hits += 1;
+                        } else {
+                            return Err(SolanaError::from(TransactionError::MetaError(
+                                "ambiguous SOL credits in tx".into(),
+                            ))
+                            .into());
+                        }
                     }
                 }
-                if matches != 1 {
+                if hits != 1 {
                     return Err(SolanaError::from(TransactionError::MetaError(
-                        "SOL deposit not found / ambiguous".to_string(),
+                        "SOL deposit not found / ambiguous".into(),
                     ))
                     .into());
                 }
+            }
+
+            if order_amount > u64::MAX as u128 {
+                return Err(OrderError::InvalidInput("order amount too large".into()).into());
             }
 
             Ok(Some(sol_input.signature))
