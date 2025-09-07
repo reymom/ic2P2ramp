@@ -12,6 +12,16 @@ use icramp_types::solana::{
     transaction::{TxInfo, TxMetadata},
 };
 
+pub async fn solana_backend_solana_account() -> Result<String> {
+    let can_id = read_state(|s| s.canister_ids.solana_backend_id);
+    let (account,): (String,) = (call::<(), (String,)>(can_id, "canister_solana_account", ())
+        .await
+        .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?
+        .0,);
+
+    Ok(account)
+}
+
 pub async fn solana_backend_send_sol(dst: String, lamports: Nat) -> Result<String> {
     let can_id = read_state(|s| s.canister_ids.solana_backend_id);
     let (tx_id,): (SolanaResult<String>,) = (call::<

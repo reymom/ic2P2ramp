@@ -9,7 +9,6 @@ use icramp_types::{
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
-use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
 use crate::evm::{
     event::{self, LogEvent},
     fees::{eth_get_latest_block, get_fee_estimates},
@@ -29,6 +28,10 @@ use crate::inter_canister::solana::{
 use crate::management::bitcoin as bitcoin_management;
 use crate::management::solana::{SolanaTransactionAction, spawn_solana_tx_listener};
 use crate::management::user as user_management;
+use crate::{
+    errors::{BlockchainError, OrderError, Result, SystemError, UserError},
+    inter_canister::solana::solana_backend_solana_account,
+};
 
 use crate::model::{
     guards, helpers,
@@ -297,6 +300,7 @@ pub async fn validate_deposit_tx(
                     "Missing solana order input".to_string(),
                 )),
             }?;
+            let vault_addr = solana_backend_solana_account().await?;
 
             if spent_transactions::is_tx_hash_processed(&sol_input.signature) {
                 return Err(BlockchainError::TransactionAlreadyProcessed.into());
@@ -317,6 +321,7 @@ pub async fn validate_deposit_tx(
             }
 
             let txm = solana_backend_get_tx_metadata(sol_input.signature.clone()).await?;
+            ic_cdk::println!("[validate_deposit_tx] TxMetadata: {:?}", txm);
             if !txm.meta.status.is_ok() {
                 return Err(SolanaError::from(TransactionError::MetaError(
                     "tx meta status != Ok".into(),
@@ -349,6 +354,7 @@ pub async fn validate_deposit_tx(
                         }
                     }
                 }
+
                 let mut hits = 0usize;
                 if let Some(post_tbs) = txm.meta.post_token_balances.as_ref() {
                     for tb in post_tbs {
@@ -365,7 +371,7 @@ pub async fn validate_deposit_tx(
                                     let owner_ok = tb
                                         .owner
                                         .as_ref()
-                                        .map(|o| o.to_string() == order_offramper)
+                                        .map(|o| o.to_string() == vault_addr)
                                         .unwrap_or(false);
                                     if !owner_ok {
                                         return Err(SolanaError::from(
@@ -412,11 +418,10 @@ pub async fn validate_deposit_tx(
                 let mut hits = 0usize;
                 for ((a, b), addr) in pre.iter().zip(post.iter()).zip(keys.iter()) {
                     let delta = b.saturating_sub(*a) as u128;
-                    ic_cdk::println!("[validate_deposit_tx] solana delta: {}", delta);
                     if delta > 0 {
-                        if addr != &order_offramper {
+                        if addr != &vault_addr {
                             return Err(SolanaError::from(TransactionError::MetaError(
-                                "lamports credit not to offramper".into(),
+                                "lamports credit not to solana canister vault".into(),
                             ))
                             .into());
                         }
