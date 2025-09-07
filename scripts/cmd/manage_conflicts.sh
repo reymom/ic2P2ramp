@@ -46,7 +46,7 @@ dfx canister call icramp_backend create_solana_order_with_tx '(
     vec {
         record {
             variant { PayPal };
-            variant { PayPal = record { id = "dummy@test.com" : text } };
+            variant { PayPal = record { id = "sb-ioze230588840@personal.example.com" : text } };
         }
     },
     "USD",

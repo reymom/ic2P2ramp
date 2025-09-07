@@ -1,8 +1,8 @@
 # Update with no changes
-dfx deploy backend --argument "( variant { Upgrade = null } )" --upgrade-unchanged
+dfx deploy icramp_backend --argument "( variant { Upgrade = null } )" --upgrade-unchanged
 
 # Update with new canister ids
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant { 
     Upgrade = opt record {
       canister_ids = opt record {
@@ -21,7 +21,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )"
 
 # Update with new ecdsa key
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant { 
     Upgrade = opt record {
       ecdsa_key_id = opt record {
@@ -39,7 +39,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )"
 
 # Modify a chain
-dfx deploy backend_prod --upgrade-unchanged --argument "(
+dfx deploy icramp_backend_prod --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
       ecdsa_key_id = null;
@@ -86,7 +86,7 @@ dfx deploy backend_prod --upgrade-unchanged --argument "(
   }
 )" --ic
 
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
       ecdsa_key_id = null;
@@ -139,7 +139,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
   }
 )" --ic
 
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
       ecdsa_key_id = null;
@@ -168,7 +168,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )" --ic
 
 # Deploy a new chain
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
   Upgrade = opt record {
     ecdsa_key_id = null;
@@ -196,7 +196,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )"
 
 # Change paypal config
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
         ecdsa_key_id = null;
@@ -215,7 +215,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )" --ic
 
 # Change revolut config
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
   Upgrade = opt record {
     ecdsa_key_id = null;
@@ -236,7 +236,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )"
 
 # Change proxy url
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
       ecdsa_key_id = null;
@@ -251,7 +251,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
 )" --ic
 
 # Change ordiscan config
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
         ecdsa_key_id = null;
@@ -268,7 +268,7 @@ dfx deploy backend --upgrade-unchanged --argument "(
   }
 )"
 
-dfx deploy backend --upgrade-unchanged --argument "(
+dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
         ecdsa_key_id = null;
