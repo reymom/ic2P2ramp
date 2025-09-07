@@ -12,7 +12,6 @@ use icramp_types::solana::{
     transaction::{TxInfo, TxMetadata},
 };
 use num_traits::cast::ToPrimitive;
-use serde_json::json;
 use sol_rpc_types::{GetAccountInfoEncoding, TokenAmount};
 use solana_message::Message;
 use solana_pubkey::Pubkey;
@@ -35,6 +34,8 @@ use model::types::{
     vault::VaultEntry,
 };
 use solana::{account::get_account_owner, client::client, spl, wallet::SolanaWallet};
+
+use crate::solana::fees;
 
 #[pre_upgrade]
 fn pre_upgrade() {
@@ -94,49 +95,9 @@ fn init(install_arg: InstallArg) {
 /// Heuristic fee estimates used by icramp for pricing:
 /// - lock: payout to onramper (may require creating ATA if SPL)
 /// - withdraw: refund back to offramper (assume ATA already exists)
-#[query]
+#[update]
 async fn estimate_fees(token_mint: Option<String>) -> Result<SolanaFeeEstimates> {
-    // lamports per signature via JSON-RPC getFees
-    let lps = {
-        let s = client()
-            .json_request(json!({"jsonrpc":"2.0","id":1,"method":"getFees"}))
-            .send()
-            .await
-            .expect_consistent()
-            .map_err(SolanaError::from)?;
-        let v: serde_json::Value = serde_json::from_str(&s)
-            .map_err(|e| SolanaError::SystemError(SystemError::ParseError(e.to_string())))?;
-        v.get("result")
-            .and_then(|r| r.get("value"))
-            .and_then(|v| v.get("feeCalculator"))
-            .and_then(|fc| fc.get("lamportsPerSignature"))
-            .and_then(|n| n.as_u64())
-            .unwrap_or(5_000)
-    };
-
-    // ATA rent (only on payout path) via JSON-RPC getMinimumBalanceForRentExemption(165)
-    let ata_rent = if token_mint.is_some() {
-        let s = client()
-            .json_request(json!({
-                "jsonrpc":"2.0","id":1,
-                "method":"getMinimumBalanceForRentExemption",
-                "params":[165]
-            }))
-            .send()
-            .await
-            .expect_consistent()
-            .map_err(SolanaError::from)?;
-        let v: serde_json::Value = serde_json::from_str(&s)
-            .map_err(|e| SolanaError::SystemError(SystemError::ParseError(e.to_string())))?;
-        v.get("result").and_then(|n| n.as_u64()).unwrap_or(0)
-    } else {
-        0
-    };
-
-    Ok(SolanaFeeEstimates {
-        lock_lamports: lps + ata_rent, // payout might need ATA
-        withdraw_lamports: lps,        // refund: ATA presumed to exist
-    })
+    fees::estimate_fees(token_mint).await
 }
 
 // ----------------------------------------

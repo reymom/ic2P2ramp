@@ -106,8 +106,7 @@ pub async fn get_tx_metadata(signature_b58: String) -> Result<TxMetadata> {
         }
     }
 
-    ic_cdk::println!("account keys length = {}", account_keys.len());
-    ic_cdk::println!("account keys = {:?}", account_keys);
+    ic_cdk::println!("[get_tx_metadata] account keys = {:?}", account_keys);
 
     Ok(TxMetadata {
         signature: signature_b58,

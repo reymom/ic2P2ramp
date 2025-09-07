@@ -1978,7 +1978,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sol_rpc_types",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "thiserror 2.0.12",
 ]
 
@@ -3991,13 +3991,13 @@ dependencies = [
  "serde_json",
  "sol_rpc_types",
  "solana-account-decoder-client-types",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
  "solana-keypair",
  "solana-message",
  "solana-nonce",
  "solana-program",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-reward-info",
  "solana-sdk-ids 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-signature",
@@ -4024,9 +4024,9 @@ dependencies = [
  "serde_json",
  "solana-account-decoder-client-types",
  "solana-commitment-config",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-reward-info",
  "solana-signature",
  "solana-transaction",
@@ -4049,7 +4049,7 @@ dependencies = [
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-clock 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sysvar",
 ]
@@ -4066,7 +4066,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "zstd",
 ]
 
@@ -4076,9 +4076,9 @@ version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8f5152a288ef1912300fc6efa6c2d1f9bb55d9398eb6c72326360b8063987da"
 dependencies = [
- "solana-program-error",
+ "solana-program-error 2.2.2",
  "solana-program-memory 2.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4088,9 +4088,24 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "bincode 1.3.3",
  "serde",
- "solana-program-error",
+ "solana-program-error 2.2.2",
  "solana-program-memory 2.3.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
+]
+
+[[package]]
+name = "solana-address"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a7a457086457ea9db9a5199d719dc8734dc2d0342fad0d8f77633c31eb62f19"
+dependencies = [
+ "five8",
+ "five8_const",
+ "solana-atomic-u64 3.0.0",
+ "solana-define-syscall 3.0.0",
+ "solana-program-error 3.0.0",
+ "solana-sanitize 3.0.1",
+ "solana-sha256-hasher 3.0.0",
 ]
 
 [[package]]
@@ -4104,7 +4119,7 @@ dependencies = [
  "serde_derive",
  "solana-clock 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-slot-hashes",
 ]
@@ -4113,6 +4128,15 @@ dependencies = [
 name = "solana-atomic-u64"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
+dependencies = [
+ "parking_lot",
+]
+
+[[package]]
+name = "solana-atomic-u64"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a933ff1e50aff72d02173cfcd7511bd8540b027ee720b75f353f594f834216d0"
 dependencies = [
  "parking_lot",
 ]
@@ -4144,7 +4168,7 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "blake3",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4193,8 +4217,8 @@ dependencies = [
  "solana-account-info 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-define-syscall 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-stable-layout 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4206,8 +4230,8 @@ dependencies = [
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-stable-layout 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4240,13 +4264,19 @@ version = "2.3.0"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 
 [[package]]
+name = "solana-define-syscall"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9697086a4e102d28a156b8d6b521730335d6951bd39a5e766512bbe09007cee"
+
+[[package]]
 name = "solana-epoch-rewards"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
  "serde",
  "serde_derive",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-macro 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sysvar-id",
@@ -4273,12 +4303,12 @@ dependencies = [
  "serde_derive",
  "solana-address-lookup-table-interface",
  "solana-clock 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
  "solana-keccak-hasher",
  "solana-message",
  "solana-nonce",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-system-interface",
  "thiserror 2.0.12",
@@ -4295,8 +4325,8 @@ dependencies = [
  "solana-account",
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-rent 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-system-interface",
@@ -4323,8 +4353,19 @@ dependencies = [
  "five8",
  "serde",
  "serde_derive",
- "solana-atomic-u64",
+ "solana-atomic-u64 2.2.1",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
+]
+
+[[package]]
+name = "solana-hash"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a063723b9e84c14d8c0d2cdf0268207dc7adecf546e31251f9e07c7b00b566c"
+dependencies = [
+ "five8",
+ "solana-atomic-u64 3.0.0",
+ "solana-sanitize 3.0.1",
 ]
 
 [[package]]
@@ -4338,7 +4379,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4350,8 +4391,8 @@ dependencies = [
  "bitflags",
  "solana-account-info 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk-ids 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-serialize-utils 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4366,8 +4407,8 @@ dependencies = [
  "bitflags",
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-serialize-utils 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
@@ -4381,7 +4422,7 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "sha3",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4393,7 +4434,7 @@ dependencies = [
  "ed25519-dalek 1.0.1",
  "five8",
  "rand 0.7.3",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-seed-phrase",
  "solana-signature",
  "solana-signer",
@@ -4420,7 +4461,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4433,7 +4474,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-system-interface",
 ]
@@ -4447,7 +4488,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-system-interface",
 ]
@@ -4463,9 +4504,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-bincode",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-short-vec",
@@ -4494,9 +4535,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-fee-calculator",
- "solana-hash",
- "solana-pubkey",
- "solana-sha256-hasher",
+ "solana-hash 2.3.0",
+ "solana-pubkey 2.4.0",
+ "solana-sha256-hasher 2.2.1",
 ]
 
 [[package]]
@@ -4525,7 +4566,7 @@ dependencies = [
  "serde_derive",
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-address-lookup-table-interface",
- "solana-atomic-u64",
+ "solana-atomic-u64 2.2.1",
  "solana-big-mod-exp",
  "solana-bincode",
  "solana-blake3-hasher",
@@ -4539,7 +4580,7 @@ dependencies = [
  "solana-example-mocks",
  "solana-feature-gate-interface",
  "solana-fee-calculator",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
  "solana-instructions-sysvar 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-keccak-hasher",
@@ -4552,11 +4593,11 @@ dependencies = [
  "solana-native-token",
  "solana-nonce",
  "solana-program-entrypoint",
- "solana-program-error",
+ "solana-program-error 2.2.2",
  "solana-program-memory 2.3.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-program-option",
  "solana-program-pack",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-rent 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
@@ -4564,7 +4605,7 @@ dependencies = [
  "solana-secp256k1-recover",
  "solana-serde-varint",
  "solana-serialize-utils 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-sha256-hasher",
+ "solana-sha256-hasher 2.2.1",
  "solana-short-vec",
  "solana-slot-hashes",
  "solana-slot-history",
@@ -4584,8 +4625,8 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "solana-account-info 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-msg",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4600,8 +4641,14 @@ dependencies = [
  "solana-decode-error 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-instruction",
  "solana-msg",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
+
+[[package]]
+name = "solana-program-error"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1af32c995a7b692a915bb7414d5f8e838450cf7c70414e763d8abcae7b51f28"
 
 [[package]]
 name = "solana-program-memory"
@@ -4630,7 +4677,7 @@ name = "solana-program-pack"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
- "solana-program-error",
+ "solana-program-error 2.2.2",
 ]
 
 [[package]]
@@ -4648,11 +4695,20 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_derive",
- "solana-atomic-u64",
+ "solana-atomic-u64 2.2.1",
  "solana-decode-error 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-sha256-hasher",
+ "solana-sha256-hasher 2.2.1",
+]
+
+[[package]]
+name = "solana-pubkey"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8909d399deb0851aa524420beeb5646b115fd253ef446e35fe4504c904da3941"
+dependencies = [
+ "solana-address",
 ]
 
 [[package]]
@@ -4698,12 +4754,18 @@ version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 
 [[package]]
+name = "solana-sanitize"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf09694a0fc14e5ffb18f9b7b7c0f15ecb6eac5b5610bf76a1853459d19daf9"
+
+[[package]]
 name = "solana-sdk-ids"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c5d8b9cc68d5c88b062a33e23a6466722467dde0035152d8fb1afbcdf350a5f"
 dependencies = [
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4711,7 +4773,16 @@ name = "solana-sdk-ids"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
+]
+
+[[package]]
+name = "solana-sdk-ids"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1b6d6aaf60669c592838d382266b173881c65fb1cdec83b37cb8ce7cb89f9ad"
+dependencies = [
+ "solana-pubkey 3.0.0",
 ]
 
 [[package]]
@@ -4772,7 +4843,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "817a284b63197d2b27afdba829c5ab34231da4a9b4e763466a003c40ca4f535e"
 dependencies = [
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4782,7 +4853,7 @@ version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4793,7 +4864,18 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "sha2 0.10.9",
  "solana-define-syscall 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-hash",
+ "solana-hash 2.3.0",
+]
+
+[[package]]
+name = "solana-sha256-hasher"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9b912ba6f71cb202c0c3773ec77bf898fa9fe0c78691a2d6859b3b5b8954719"
+dependencies = [
+ "sha2 0.10.9",
+ "solana-define-syscall 3.0.0",
+ "solana-hash 3.0.0",
 ]
 
 [[package]]
@@ -4822,7 +4904,7 @@ name = "solana-signer"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-signature",
  "solana-transaction-error 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
@@ -4834,7 +4916,7 @@ source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#
 dependencies = [
  "serde",
  "serde_derive",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sysvar-id",
 ]
@@ -4858,7 +4940,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f14f7d02af8f2bc1b5efeeae71bc1c2b7f0f65cd75bcc7d8180f2c762a57f54"
 dependencies = [
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4867,7 +4949,7 @@ version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4885,8 +4967,8 @@ dependencies = [
  "solana-cpi 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-decode-error 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-instruction",
- "solana-program-error",
- "solana-pubkey",
+ "solana-program-error 2.2.2",
+ "solana-pubkey 2.4.0",
  "solana-system-interface",
  "solana-sysvar-id",
 ]
@@ -4901,7 +4983,7 @@ dependencies = [
  "serde_derive",
  "solana-decode-error 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
 ]
 
 [[package]]
@@ -4922,14 +5004,14 @@ dependencies = [
  "solana-epoch-rewards",
  "solana-epoch-schedule",
  "solana-fee-calculator",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
  "solana-instructions-sysvar 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-last-restart-slot",
  "solana-program-entrypoint",
- "solana-program-error",
+ "solana-program-error 2.2.2",
  "solana-program-memory 2.3.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-rent 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
@@ -4945,7 +5027,7 @@ name = "solana-sysvar-id"
 version = "2.2.1"
 source = "git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag#46ca4e22a312a418cbbf14296305f750ec122d9d"
 dependencies = [
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
 ]
 
@@ -4958,10 +5040,10 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-bincode",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
  "solana-message",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-sanitize 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-short-vec",
@@ -4983,7 +5065,7 @@ dependencies = [
  "solana-account",
  "solana-instruction",
  "solana-instructions-sysvar 2.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-rent 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk-ids 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -5044,9 +5126,9 @@ dependencies = [
  "serde_derive",
  "solana-clock 2.2.2 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-decode-error 2.3.0 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
- "solana-hash",
+ "solana-hash 2.3.0",
  "solana-instruction",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
  "solana-rent 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-sdk-ids 2.2.1 (git+https://github.com/dfinity/solana-sdk?tag=46ca4e2-js-feature-flag)",
  "solana-serde-varint",
@@ -5077,7 +5159,8 @@ dependencies = [
  "solana-instruction",
  "solana-message",
  "solana-program",
- "solana-pubkey",
+ "solana-pubkey 2.4.0",
+ "solana-sdk-ids 3.0.0",
  "solana-signature",
  "solana-system-interface",
  "solana-transaction",
