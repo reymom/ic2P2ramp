@@ -24,6 +24,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant { 
     Upgrade = opt record {
+      canister_ids = null;
       ecdsa_key_id = opt record {
       name = \"test_key_1\";
         curve = variant { secp256k1 };
@@ -42,6 +43,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend_prod --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
+      canister_ids = null;
       ecdsa_key_id = null;
       chains = opt vec {
         record {
@@ -89,6 +91,7 @@ dfx deploy icramp_backend_prod --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
+      canister_ids = null;
       ecdsa_key_id = null;
       chains = opt vec {
         record {
@@ -142,6 +145,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
+      canister_ids = null;
       ecdsa_key_id = null;
       chains = opt vec {
         record {
@@ -171,6 +175,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
   Upgrade = opt record {
+    canister_ids = null;
     ecdsa_key_id = null;
     chains = opt vec {
       record {
@@ -199,17 +204,18 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
-        ecdsa_key_id = null;
-        chains = null;
-        paypal = opt record {
-          client_id = \"${PAYPAL_CLIENT_ID}\";
-          client_secret = \"${PAYPAL_CLIENT_SECRET}\";
-          api_url = \"api-m.paypal.com\";
-        };
-        revolut = null;
-        proxy_url = null;
-        ordiscan = null;
-        unisat = null;
+      canister_ids = null;
+      ecdsa_key_id = null;
+      chains = null;
+      paypal = opt record {
+        client_id = \"${PAYPAL_CLIENT_ID}\";
+        client_secret = \"${PAYPAL_CLIENT_SECRET}\";
+        api_url = \"api-m.paypal.com\";
+      };
+      revolut = null;
+      proxy_url = null;
+      ordiscan = null;
+      unisat = null;
     }
   }
 )" --ic
@@ -218,6 +224,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
   Upgrade = opt record {
+    canister_ids = null;
     ecdsa_key_id = null;
     chains = null;
     paypal = null;
@@ -239,11 +246,12 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
+      canister_ids = null;
       ecdsa_key_id = null;
       chains = null;
       paypal = null;
       revolut = null;
-      proxy_url = opt \"testing\";
+      proxy_url = opt \"https://icramp.info\";
       ordiscan = null;
       unisat = null;
     }
@@ -254,16 +262,17 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
-        ecdsa_key_id = null;
-        chains = null;
-        paypal = null;
-        revolut = null;
-        proxy_url = null;
-        ordiscan = opt record {
-          api_url = \"api.ordiscan.com\";
-          api_key = \"${ORDISCAN_API_KEY}\";
-        };
-        unisat = null;
+      canister_ids = null;
+      ecdsa_key_id = null;
+      chains = null;
+      paypal = null;
+      revolut = null;
+      proxy_url = null;
+      ordiscan = opt record {
+        api_url = \"api.ordiscan.com\";
+        api_key = \"${ORDISCAN_API_KEY}\";
+      };
+      unisat = null;
     }
   }
 )"
@@ -271,16 +280,17 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
 dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant {
     Upgrade = opt record {
-        ecdsa_key_id = null;
-        chains = null;
-        paypal = null;
-        revolut = null;
-        proxy_url = null;
-        ordiscan = null;
-        unisat = opt record {
-          api_url = \"open-api-testnet4.unisat.io\";
-          api_key = \"${UNISAT_API_KEY}\";
-        };
+      canister_ids = null;
+      ecdsa_key_id = null;
+      chains = null;
+      paypal = null;
+      revolut = null;
+      proxy_url = null;
+      ordiscan = null;
+      unisat = opt record {
+        api_url = \"open-api-testnet4.unisat.io\";
+        api_key = \"${UNISAT_API_KEY}\";
+      };
     }
   }
 )"

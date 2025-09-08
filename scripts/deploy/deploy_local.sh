@@ -213,7 +213,7 @@ dfx deploy icramp_backend --argument "(
         kid = \"kid_0\";
         tan = \"test-jwk.s3.eu-west-3.amazonaws.com\";
       };
-      proxy_url = \"https://ic2p2ramp.xyz\";
+      proxy_url = \"https://icramp.info\";
       ordiscan = record {
         api_url = \"api.ordiscan.com\";
         api_key = \"${ORDISCAN_API_KEY}\";
