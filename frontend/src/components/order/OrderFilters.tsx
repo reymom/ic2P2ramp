@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FilterX } from "lucide-react";
 import clsx from 'clsx';
 
+
 import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter, BlockchainType, Order } from '@/declarations/icramp_backend/icramp_backend.did';
 import { OrderFilterTypes } from '@/model/types';
-import { useUser } from '@/components/user/UserContext';
 import { truncate } from '@/utils/formatters';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUser } from '@/components/user/UserContext';
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import ethereumLogo from '@/assets/blockchains/ethereum-logo.png';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
+import solanaLogo from '@/assets/blockchains/solana-logo.png';
 
 interface OrderFiltersProps {
     setFilter: (filter: OrderFilter | null) => void;
@@ -160,6 +161,13 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
                 >
                     <img src={bitcoinLogo} alt="Bitcoin" className="w-8 h-8" />
                 </button>
+                <button
+                    onClick={() => handleFilterTypeChange("ByBlockchain:Solana")}
+                    className={`w-12 h-10 rounded-md border flex items-center justify-center
+                        ${selectedBlockchainType && 'Solana' in selectedBlockchainType ? "bg-blue-700" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                >
+                    <img src={solanaLogo} alt="Solana" className="w-8 h-8" />
+                </button>
             </div>
 
             {/* Middle Filters */}
@@ -255,7 +263,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
                 </button>
 
             </div>
-        </div >
+        </div>
     );
 }
 

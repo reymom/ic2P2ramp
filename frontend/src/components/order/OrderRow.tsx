@@ -5,7 +5,7 @@ import { faEye } from '@fortawesome/free-solid-svg-icons';
 import { OrderState } from "@/declarations/icramp_backend/icramp_backend.did";
 import { formatPrice, truncate, formatTimeLeft } from "@/utils/formatters";
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
-import { useOrderLogic } from './useOrderLogic';
+import { useOrderLogic } from "./hooks/useOrderLogic";
 import OrderDetailModal from './OrderDetailModal';
 
 interface OrderRowProps {
@@ -19,7 +19,6 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {
     const {
         orderState,
         baseOrder,
-        orderBlockchainAsset,
         token,
         cryptoAmount,
         currentPrice,
