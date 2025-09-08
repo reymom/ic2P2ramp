@@ -52,14 +52,17 @@ use crate::types::{
 use super::payment;
 
 pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
-    let base_symbol = crypto.asset.get_symbol().await?;
-    let base_asset = crypto.asset.to_rate_asset(&base_symbol);
+    let (symbol, decimals) = crypto.asset.get_symbol_and_decimals().await?;
+
+    let base_asset = crypto.asset.to_rate_asset(&symbol);
     let quote_asset = RateAsset::Fiat {
         symbol: currency.to_string(),
     };
 
     let exchange_rate = get_exchange_rate(base_asset, quote_asset).await?;
-    let fiat_amount = (crypto.to_whole_units().await? * exchange_rate * 100.) as u64;
+
+    let crypto_units = (crypto.amount as f64) / (10u128.pow(decimals as u32) as f64);
+    let fiat_amount = (crypto_units * exchange_rate * 100.) as u64;
 
     Ok((fiat_amount, get_fiat_fee(fiat_amount)))
 }

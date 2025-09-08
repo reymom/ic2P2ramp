@@ -2,7 +2,7 @@ use candid::{CandidType, Deserialize, Principal};
 use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
 
 use crate::{
-    errors::{BlockchainError, Result, SystemError},
+    errors::{Result, SystemError},
     inter_canister::{bitcoin, solana},
     model::types::exchange_rate::RateAsset,
 };
@@ -75,12 +75,6 @@ impl Crypto {
             rune_utxos,
         })
     }
-
-    pub async fn to_whole_units(&self) -> Result<f64> {
-        let decimals = self.asset.get_decimals().await?;
-        let divisor = 10u128.pow(decimals as u32);
-        Ok((self.amount as f64) / (divisor as f64))
-    }
 }
 
 impl BlockchainAsset {
@@ -93,60 +87,37 @@ impl BlockchainAsset {
         }
     }
 
-    pub async fn get_symbol(&self) -> Result<String> {
+    pub async fn get_symbol_and_decimals(&self) -> Result<(String, u8)> {
         match &self {
             Self::EVM {
                 chain_id,
                 token_address,
             } => match token_address {
                 Some(token_address) => {
-                    Ok(token::get_evm_token(*chain_id, token_address)?.rate_symbol)
+                    let token = token::get_evm_token(*chain_id, token_address)?;
+                    Ok((token.rate_symbol, token.decimals))
                 }
-                None => Ok(chains::get_native_currency_symbol(*chain_id)?),
+                None => Ok((chains::get_native_currency_symbol(*chain_id)?, 18)),
             },
-            Self::ICP { ledger_principal } => Ok(icp::get_icp_token(ledger_principal)?.symbol),
+            Self::ICP { ledger_principal } => {
+                let token = icp::get_icp_token(ledger_principal)?;
+                Ok((token.symbol, token.decimals))
+            }
             Self::Bitcoin { rune_id } => match rune_id {
-                Some(rune_id) => Ok(bitcoin::bitcoin_backend_get_rune_metadata(
-                    rune_id.to_string(),
-                )
-                .await?
-                .name),
-                None => Ok("BTC".to_string()),
+                Some(rune_id) => {
+                    let token =
+                        bitcoin::bitcoin_backend_get_rune_metadata(rune_id.to_string()).await?;
+                    Ok((token.name, token.divisibility))
+                }
+                None => Ok(("BTC".to_string(), 8)),
             },
             Self::Solana { spl_token } => match spl_token {
-                Some(mint) => Ok(solana::solana_backend_get_token_info(mint.to_string())
-                    .await?
-                    .rate_symbol),
-                None => Ok("SOL".to_string()),
+                Some(mint) => {
+                    let token = solana::solana_backend_get_token_info(mint.to_string()).await?;
+                    Ok((token.rate_symbol, token.decimals))
+                }
+                None => Ok(("SOL".to_string(), 9)),
             },
-        }
-    }
-
-    async fn get_decimals(&self) -> Result<u8> {
-        match &self {
-            Self::EVM {
-                chain_id,
-                token_address,
-            } => {
-                if let Some(token_address) = token_address {
-                    Ok(token::get_evm_token(*chain_id, token_address)?.decimals)
-                } else {
-                    Ok(18)
-                }
-            }
-            Self::ICP { ledger_principal } => Ok(icp::get_icp_token(ledger_principal)?.decimals),
-            Self::Bitcoin { rune_id } => {
-                if let Some(rune_id) = rune_id {
-                    Ok(
-                        bitcoin::bitcoin_backend_get_rune_metadata(rune_id.to_string())
-                            .await?
-                            .divisibility,
-                    )
-                } else {
-                    Ok(8)
-                }
-            }
-            _ => Err(BlockchainError::UnsupportedBlockchain.into()),
         }
     }
 
