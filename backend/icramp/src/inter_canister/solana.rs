@@ -28,9 +28,7 @@ pub async fn solana_backend_send_sol(dst: String, lamports: Nat) -> Result<Strin
         (Option<Principal>, String, Nat),
         (SolanaResult<String>,),
     >(
-        can_id,
-        "send_sol",
-        (Some(ic_cdk::id()), dst, lamports),
+        can_id, "send_sol", (Some(can_id), dst, lamports)
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?

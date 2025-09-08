@@ -159,7 +159,6 @@ pub async fn handle_payment_completion(order: &LockedOrder) -> Result<()> {
                 Some(rune_id) => TransactionType::RuneTransfer(rune_id),
                 None => TransactionType::TaprootBitcoin,
             };
-            ic_cdk::println!("[handle_payment_completion] Bitcoin");
             let tx_id = bitcoin::bitcoin_backend_transfer(
                 dst_address.clone(),
                 order.base.crypto.amount as u64,

@@ -44,6 +44,11 @@ pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionActi
             match solana_backend_get_tx(signature.clone()).await {
                 Ok(info) => {
                     let confs: u64 = info.confirmations.unwrap_or(u64::MAX);
+                    ic_cdk::println!(
+                        "[spawn_solana_tx_listener] attempt: {}, txInfo: {:?}",
+                        attempt,
+                        info
+                    );
 
                     if confs >= MIN_SOL_CONF {
                         match action.clone() {
