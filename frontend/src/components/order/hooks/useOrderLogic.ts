@@ -720,7 +720,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
   };
 
   const getExplorerLinks = (orderAddress: string, txHash?: string) => {
-    if (!orderBlockchainAsset || !baseOrder) return null;
+    if (!orderBlockchainAsset) return null;
 
     const blockchainType = Object.keys(orderBlockchainAsset)[0];
 
