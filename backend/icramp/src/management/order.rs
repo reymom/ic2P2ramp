@@ -110,7 +110,7 @@ pub async fn calculate_order_evm_fees(
     Ok(get_crypto_fee(crypto_amount, blockchain_fees))
 }
 
-async fn order_crypto_fee(
+pub async fn order_crypto_fee(
     asset: BlockchainAsset,
     crypto_amount: u128,
     estimated_gas_lock: Option<u64>,
@@ -164,7 +164,7 @@ async fn order_crypto_fee(
                 let scale_factor = 10u128.pow(metadata.divisibility as u32);
                 fee = (fee as f64 * rate * scale_factor as f64) as u64;
             }
-            Ok(get_crypto_fee(crypto_amount, fee as u128))
+            Ok(get_crypto_fee(crypto_amount, fee.saturating_mul(2) as u128))
         }
         BlockchainAsset::Solana { spl_token } => {
             let fees = solana_backend_estimate_fees(spl_token.clone()).await?;
@@ -188,6 +188,16 @@ async fn order_crypto_fee(
             // ceil to avoid undercharging
             let token_fees_base: u128 = (token_fees_human * scale).ceil() as u128;
 
+            ic_cdk::println!(
+                "[order_crypto_fee] sol-fees -> lock_lamports={}, withdraw_lamports={}, lamports_total={}, rate(tokens/SOL)≈{}, decimals={}, token_fee_human≈{}, token_fee_base={}",
+                fees.lock_lamports,
+                fees.withdraw_lamports,
+                lamports_total,
+                rate,
+                info.decimals,
+                token_fees_human,
+                token_fees_base
+            );
             Ok(get_crypto_fee(crypto_amount, token_fees_base))
         }
     }
@@ -480,7 +490,7 @@ pub async fn create_order(
         crypto_fee
     );
 
-    if 2 * crypto_fee >= crypto_amount {
+    if crypto_fee >= crypto_amount {
         return Err(BlockchainError::FundsTooLow)?;
     }
 

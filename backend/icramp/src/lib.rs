@@ -58,6 +58,7 @@ use outcalls::{
 };
 
 use crate::model::types::exchange_rate::RateAsset;
+use crate::model::types::orders::fees::{FeeQuote, get_admin_fee};
 
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
@@ -401,14 +402,12 @@ pub async fn create_solana_order_with_tx(
     )
     .await?;
 
-    solana_backend_deposit_funds(offramper.clone(), amount as u64, spl_token.clone()).await?;
-
     let order_id = order_management::create_order(
         &currency,
         user,
         TransactionAddress {
             address_type: AddressType::Solana,
-            address: offramper,
+            address: offramper.clone(),
         },
         providers,
         asset,
@@ -418,6 +417,8 @@ pub async fn create_solana_order_with_tx(
         None,
     )
     .await?;
+
+    solana_backend_deposit_funds(offramper, amount as u64, spl_token.clone()).await?;
 
     spent_transactions::mark_tx_hash_as_processed(signature);
 
@@ -701,23 +702,29 @@ async fn get_average_gas_prices(
     gas::get_average_gas(chain_id, block, Some(max_blocks_in_past), &method)
 }
 
-// <(offramper_fee, crypto_fee)>
 #[ic_cdk::update]
-async fn calculate_order_evm_fees(
-    chain_id: u64,
+async fn calculate_order_fees(
+    asset: BlockchainAsset,
     crypto_amount: u128,
-    token: Option<String>,
-    estimated_gas_lock: u64,
-    estimated_gas_withdraw: u64,
-) -> Result<u128> {
-    order_management::calculate_order_evm_fees(
-        chain_id,
+    estimated_gas_lock: Option<u64>,
+    estimated_gas_withdraw: Option<u64>,
+) -> Result<FeeQuote> {
+    let total_fee = order_management::order_crypto_fee(
+        asset.clone(),
         crypto_amount,
-        token.clone(),
         estimated_gas_lock,
         estimated_gas_withdraw,
     )
-    .await
+    .await?;
+
+    let admin_fee = get_admin_fee(crypto_amount);
+    let blockchain_fee = total_fee.saturating_sub(admin_fee);
+
+    Ok(FeeQuote {
+        blockchain_fee,
+        admin_fee,
+        total_fee,
+    })
 }
 
 #[ic_cdk::update]
@@ -805,24 +812,24 @@ async fn create_order(
             Ok(None)
         }
         BlockchainAsset::Solana { spl_token } => {
-            // Escrow-accounting only (no L1 tx): persist deposit in Solana backend
-            solana_backend_deposit_funds(
-                offramper_address.address.clone(),
-                crypto_amount as u64,
-                spl_token.clone(),
-            )
-            .await?;
-
             let order_id = order_management::create_order(
                 &currency,
                 offramper_user_id,
-                offramper_address,
+                offramper_address.clone(),
                 offramper_providers,
                 asset,
                 crypto_amount,
                 None,
                 None,
                 None,
+            )
+            .await?;
+
+            // Escrow-accounting only (no L1 tx): persist deposit in Solana backend
+            solana_backend_deposit_funds(
+                offramper_address.address,
+                crypto_amount as u64,
+                spl_token,
             )
             .await?;
 
