@@ -5,8 +5,8 @@ import { Principal } from '@dfinity/principal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput, RateAsset } from '@/declarations/icramp_backend/icramp_backend.did';
-import { getEvmTokens } from '@/constants/evm_tokens';
+import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput, RateAsset, FeeQuote } from '@/declarations/icramp_backend/icramp_backend.did';
+import { defaultCommitEvmGas, defaultReleaseEvmGas, getEvmTokens } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { NetworkIds } from '@/constants/networks';
@@ -34,6 +34,8 @@ import {
     useParsedAmount,
     useAutoClearMessage,
 } from '@/components/order/hooks';
+import { estimateGasAndGasPrice } from '@/model/blockchain/evm';
+import { getFeeQuote } from '@/model/blockchain/fees';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -52,6 +54,7 @@ const CreateOrder: React.FC = () => {
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [estimatedPrice, setEstimatedPrice] = useState<string | null>(null);
     const [offramperFeeCents, setOfframperFeeCents] = useState<number | null>(null);
+    const [feeQuote, setFeeQuote] = useState<FeeQuote | null>(null);
 
     const { chain, chainId, address } = useAccount();
     const {
@@ -72,7 +75,13 @@ const CreateOrder: React.FC = () => {
     } = useUser();
     const [currency, setCurrency] = useState<string>(initialCurrency ?? 'USD');
     const navigate = useNavigate();
-    const { makeSolanaDeposit, solanaNetworkLabel, isSolflare, solflareMismatch } = useOrderSolana();
+    const {
+        makeSolanaDeposit,
+        solanaNetworkLabel,
+        isSolflare,
+        solflareMismatch,
+        waitForSolanaConfirmation
+    } = useOrderSolana();
     const { makeEvmDeposit } = useOrderEvm();
     const { makeBitcoinDeposit } = useOrderBitcoin();
     const { makeIcpDeposit } = useOrderIcp();
@@ -219,6 +228,46 @@ const CreateOrder: React.FC = () => {
     }, [selectedBlockchainAsset, selectedToken, currency]);
 
     useEffect(() => {
+        let alive = true;
+
+        (async () => {
+            setFeeQuote(null);
+            if (!selectedBlockchainAsset || !selectedToken || !cryptoAmountUnits) return;
+
+            try {
+                if ('EVM' in selectedBlockchainAsset) {
+                    const gasLock = (await estimateGasAndGasPrice(
+                        Number(selectedBlockchainAsset.EVM.chain_id),
+                        { Commit: null },
+                        defaultCommitEvmGas
+                    ))[0];
+
+                    const txVariant = selectedToken.isNative ? { Native: null } : { Token: null };
+                    const gasWithdraw = (await estimateGasAndGasPrice(
+                        Number(selectedBlockchainAsset.EVM.chain_id),
+                        { Release: txVariant },
+                        defaultReleaseEvmGas
+                    ))[0];
+
+                    const q = await getFeeQuote(
+                        selectedBlockchainAsset,
+                        cryptoAmountUnits,
+                        { estimated_gas_lock: gasLock, estimated_gas_withdraw: gasWithdraw }
+                    );
+                    if (alive) setFeeQuote(q);
+                } else {
+                    const q = await getFeeQuote(selectedBlockchainAsset, cryptoAmountUnits);
+                    if (alive) setFeeQuote(q);
+                }
+            } catch (e) {
+                console.error('fee quote error', e);
+            }
+        })();
+
+        return () => { alive = false; };
+    }, [selectedBlockchainAsset, selectedToken, cryptoAmountUnits]);
+
+    useEffect(() => {
         if (exchangeRate) {
             let price = cryptoAmount * exchangeRate;
             setEstimatedPrice(price.toFixed(2));
@@ -261,6 +310,8 @@ const CreateOrder: React.FC = () => {
         if (!selectedBlockchainAsset) throw new Error('No blockchain selected');
         if (!selectedToken) throw new Error('No token selected');
         if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
+        if (!feeQuote) throw new Error('Could not compute fees');
+        if (cryptoAmountUnits - feeQuote?.total_fee < 0) throw new Error('Fees will probably be higher than crypto amount');
 
         const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
             const providerType: PaymentProviderType = providerToProviderType(provider);
@@ -325,6 +376,8 @@ const CreateOrder: React.FC = () => {
                     const { depositInput: solDeposit, txSig } =
                         await makeSolanaDeposit(cryptoAmountUnits, selectedToken);
                     setTxHash(txSig);
+                    await waitForSolanaConfirmation(txSig, { timeoutMs: 90_000, minConfirms: 1 });
+
                     depositInput = solDeposit;
                     fetchBalances();
                     setLoadingMessage("Transaction sent, awaiting confirmation");
@@ -422,7 +475,6 @@ const CreateOrder: React.FC = () => {
         && (addrMsg == null)
         && selectedProviders.length > 0
         && selectedToken !== null
-        && cryptoAmountUnits && cryptoAmountUnits > 0
         && (() => {
             const bal = getAvailableBalance();
             if (!bal) return true;

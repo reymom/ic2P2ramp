@@ -103,36 +103,6 @@ export const estimateGasAndGasPrice = async (
   return [defaultGas, BigInt(0)];
 };
 
-export const estimateOrderFees = async (
-  chainId: bigint,
-  cryptoAmount: bigint,
-  token: [] | [string],
-  gasForCommit: bigint,
-  gasForRelease: bigint,
-): Promise<bigint> => {
-  try {
-    const estimateOrderFees = await backend.calculate_order_evm_fees(
-      chainId,
-      cryptoAmount,
-      token,
-      gasForCommit,
-      gasForRelease,
-    );
-
-    if ('Ok' in estimateOrderFees) {
-      return estimateOrderFees.Ok;
-    } else {
-      console.error(
-        `[estimateOrderFees] Failed to calculate fees. Error: ${estimateOrderFees.Err}`,
-      );
-      throw new Error('Failed to calculate order fees');
-    }
-  } catch (error) {
-    console.error('[estimateOrderFees] Error:', error);
-    throw error;
-  }
-};
-
 export const handleWeb3Error = (error: any): string => {
   console.log('Web3 error:', error);
 

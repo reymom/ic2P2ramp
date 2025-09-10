@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  Commitment,
+} from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
@@ -127,6 +132,41 @@ export const useOrderSolana = () => {
     return { depositInput, txSig: sig };
   };
 
+  const waitForSolanaConfirmation = async (
+    sig: string,
+    {
+      timeoutMs = 60_000,
+      minConfirms = 1,
+      commitment = 'confirmed' as Commitment,
+    },
+  ) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const st = await connection.getSignatureStatuses([sig], {
+        searchTransactionHistory: true,
+      });
+      const v = st.value[0];
+
+      if (v?.err) {
+        throw new Error(
+          `Solana tx failed: ${
+            typeof v.err === 'string' ? v.err : JSON.stringify(v.err)
+          }`,
+        );
+      }
+
+      const okStatus =
+        v?.confirmationStatus === 'finalized' ||
+        (v?.confirmationStatus === 'confirmed' &&
+          (v.confirmations === null || v.confirmations >= minConfirms));
+
+      if (okStatus) return;
+
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    throw new Error('Timed out waiting for Solana confirmation');
+  };
+
   const solanaNetworkLabel = NETWORK.toString();
   const isSolflare = (wallet?.adapter?.name ?? '')
     .toLowerCase()
@@ -134,6 +174,7 @@ export const useOrderSolana = () => {
 
   return {
     makeSolanaDeposit,
+    waitForSolanaConfirmation,
     solanaNetworkLabel,
     isSolflare,
     solflareMismatch,
