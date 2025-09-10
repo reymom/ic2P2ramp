@@ -50,7 +50,7 @@ pub async fn solana_backend_send_spl_token(
     >(
         can_id,
         "send_spl_token",
-        (Some(ic_cdk::id()), mint_account, to, amount),
+        (Some(can_id), mint_account, to, amount),
     )
     .await
     .map_err(|(code, err)| SystemError::ICRejectionError(code, err))?
