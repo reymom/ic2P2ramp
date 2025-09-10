@@ -53,3 +53,19 @@ dfx canister call icramp_backend create_solana_order_with_tx '(
     20_000_000 : nat,
     null
 )'
+
+# Solana with spl token
+dfx canister call icramp_backend create_solana_order_with_tx '(
+    "3spZkKTBxq2soMoomHPornbGZna613j7eq54brUiRphyx7oJxk9Hd6QS2d8No1cUmXbr55EhtohwEHV6cHTa5cfD",
+    1 : nat64,
+    "CnzUv9EqfVv5yiYWugHiVzmvuBBzRxHYK64DkLhSWsUj",
+    vec {
+        record {
+            variant { PayPal };
+            variant { PayPal = record { id = "sb-ioze230588840@personal.example.com" : text } };
+        }
+    },
+    "USD",
+    3_000_000_000 : nat,
+    opt "HbA6BgBmA3X6X8jtts5X2ZiJXXxZQKDbQR4s5XCD82pr"
+)'
