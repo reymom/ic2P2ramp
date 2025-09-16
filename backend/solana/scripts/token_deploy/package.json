@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "token:create": "bash ./create_devnet_token.sh",
+    "token:meta": "node ./set_token_metadata.mjs",
+    "token:send": "bash ./mint_and_send.sh"
+  },
   "devDependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
     "@metaplex-foundation/umi": "^1.4.1",
