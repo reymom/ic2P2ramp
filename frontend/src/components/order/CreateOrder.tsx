@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { Principal } from '@dfinity/principal';
@@ -85,6 +85,8 @@ const CreateOrder: React.FC = () => {
     const { makeEvmDeposit } = useOrderEvm();
     const { makeBitcoinDeposit } = useOrderBitcoin();
     const { makeIcpDeposit } = useOrderIcp();
+
+    const feeReqRef = useRef(0);
 
     useEffect(() => {
         if (!user) navigate('/');
@@ -228,10 +230,12 @@ const CreateOrder: React.FC = () => {
     }, [selectedBlockchainAsset, selectedToken, currency]);
 
     useEffect(() => {
+        const myReq = ++feeReqRef.current;
         let alive = true;
 
         (async () => {
             setFeeQuote(null);
+            setMessage(null);
             if (!selectedBlockchainAsset || !selectedToken || !cryptoAmountUnits) return;
 
             try {
@@ -254,13 +258,17 @@ const CreateOrder: React.FC = () => {
                         cryptoAmountUnits,
                         { estimated_gas_lock: gasLock, estimated_gas_withdraw: gasWithdraw }
                     );
-                    if (alive) setFeeQuote(q);
+                    if (alive && feeReqRef.current === myReq) setFeeQuote(q);
                 } else {
                     const q = await getFeeQuote(selectedBlockchainAsset, cryptoAmountUnits);
-                    if (alive) setFeeQuote(q);
+                    if (alive && feeReqRef.current === myReq) setFeeQuote(q);
                 }
-            } catch (e) {
-                console.error('fee quote error', e);
+            } catch (e: unknown) {
+                console.error('fee quote error', (e as Error)?.message ?? String(e));
+                if (alive && feeReqRef.current === myReq) {
+                    setFeeQuote(null);
+                    setMessage((e as Error)?.message ?? 'Fee quote failed');
+                }
             }
         })();
 
@@ -376,7 +384,7 @@ const CreateOrder: React.FC = () => {
                     const { depositInput: solDeposit, txSig } =
                         await makeSolanaDeposit(cryptoAmountUnits, selectedToken);
                     setTxHash(txSig);
-                    await waitForSolanaConfirmation(txSig, { timeoutMs: 90_000, minConfirms: 1 });
+                    await waitForSolanaConfirmation(txSig, { timeoutMs: 90_000 });
 
                     depositInput = solDeposit;
                     fetchBalances();
