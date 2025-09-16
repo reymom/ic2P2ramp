@@ -32,7 +32,7 @@ dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument
     variant { 
         Reinstall = record { 
             network = variant { regtest }; 
-            proxy_url = \"https://ic2p2ramp.xyz\";
+            proxy_url = \"https://icramp.info\";
             unisat = record {
                 api_url = \"open-api-testnet4.unisat.io\";
                 api_key = \"${UNISAT_API_KEY}\";
@@ -44,8 +44,8 @@ dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument
 dfx deploy sol_rpc
 
 dfx canister call sol_rpc updateApiKeys "(vec {
-  record { variant { AlchemyDevnet }; opt \"$ALCHEMY_KEY\" };
-  record { variant { AnkrDevnet }; opt \"$ANKR_KEY\" };
+  record { variant { AlchemyDevnet }; opt \"$SOL_ALCHEMY_KEY\" };
+  record { variant { AnkrDevnet }; opt \"$SOL_ANKR_KEY\" };
 })"
 
 cargo build --release --target wasm32-unknown-unknown --package solana_backend
@@ -57,7 +57,7 @@ dfx deploy solana_backend --argument "(
             sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
             ed25519_key_name = variant { LocalDevelopment };
             network = variant { Devnet }; 
-            proxy_url = \"https://ic2p2ramp.xyz\";
+            proxy_url = \"https://icramp.info\";
         }
     }
 )"

@@ -226,7 +226,7 @@ service : (InstallArg) -> {
   complete_order : (text, nat64, opt text) -> (Result_1);
   create_associated_token_account : (opt principal, text) -> (Result);
   deposit_to_vault_canister : (text, nat64, opt text) -> (Result_1);
-  estimate_fees : (opt text) -> (Result_2) query;
+  estimate_fees : (opt text) -> (Result_2);
   get_balance : (text) -> (Result_3);
   get_offramper_deposits : (text) -> (Result_4) query;
   get_onramper_deposits : (text) -> (Result_4) query;
