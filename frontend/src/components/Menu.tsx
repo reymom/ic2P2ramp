@@ -17,7 +17,9 @@ import {
     faMoon,
     faCog,
     faTimeline,
-    IconDefinition
+    faBlackboard,
+    faChevronDown,
+    IconDefinition,
 } from '@fortawesome/free-solid-svg-icons';
 import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
@@ -108,16 +110,16 @@ const Menu: React.FC = () => {
     };
 
     const menuGroups: Record<string, { to: string; label: string; icon: IconDefinition }[]> = {
-        "ONRAMPING": [
+        ONRAMPING: [
             { to: "/view", label: "Orders", icon: faFileAlt },
             { to: "/create", label: "Create Order", icon: faPlusCircle }
         ],
-        "NFTs": [
-            { to: "#", label: "Coming Soon", icon: faTimeline }
+        GOVERNANCE: [
+            { to: "#", label: "Coming Soon", icon: faTimeline },
         ],
-        "STAKING": [
-            { to: "#", label: "Coming Soon", icon: faTimeline }
-        ]
+        ANALYTICS: [
+            { to: "#", label: "Coming Soon", icon: faBlackboard },
+        ],
     };
 
     const renderLinkGroup = (links: { to: string; label: string; icon: IconDefinition }[], isMobile: boolean) => {
@@ -160,19 +162,23 @@ const Menu: React.FC = () => {
                         <button
                             onClick={() => closeMenu()}
                             className={clsx(
-                                "px-4 py-2 text-lg font-semibold rounded-md bg-transparent",
+                                "px-4 py-2 text-lg font-semibold rounded-md bg-transparent inline-flex items-center gap-2",
                                 "hover:text-gray-500 hover:dark:text-white transition-all ease-in-out duration-300",
                                 isTitleActive ? 'text-gray-500 dark:text-white' : 'text-gray-800 dark:text-gray-300'
                             )}
                         >
-                            {title}
+                            <span>{title}</span>
+                            <FontAwesomeIcon icon={faChevronDown} className={clsx("transition-transform duration-150", "group-hover:rotate-180")} />
                         </button>
                         <div className={clsx(
-                            "z-50 absolute left-0 top-full mt-2 w-48 bg-gray-300 dark:bg-gray-800",
-                            "border border-gray-300 dark:border-gray-700 shadow-lg rounded-md opacity-0",
-                            "group-hover:opacity-100 group-hover:visible transition-all duration-300"
+                            "z-50 absolute left-0 top-full w-48 bg-gray-300 dark:bg-gray-800",
+                            "border border-gray-300 dark:border-gray-700 shadow-lg rounded-md",
+                            "opacity-0 invisible pointer-events-none",
+                            "group-hover:opacity-100 group-hover:visible group-hover:pointer-events-auto",
+                            "focus-within:opacity-100 focus-within:visible focus-within:pointer-events-auto",
+                            "transition ease-out duration-150"
                         )}>
-                            {renderLinkGroup(links, false)}
+                            <div className="py-2">{renderLinkGroup(links, false)}</div>
                         </div>
                     </div>
                 )
