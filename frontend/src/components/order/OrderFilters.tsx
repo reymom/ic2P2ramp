@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { FilterX } from "lucide-react";
 import clsx from 'clsx';
 
-
-import { TransactionAddress, OrderFilter, BlockchainAsset, OrderStateFilter, BlockchainType, Order } from '@/declarations/icramp_backend/icramp_backend.did';
+import {
+    TransactionAddress,
+    OrderFilter,
+    BlockchainAsset,
+    OrderStateFilter,
+    BlockchainType
+} from '@/declarations/icramp_backend/icramp_backend.did';
 import { OrderFilterTypes } from '@/model/types';
 import { truncate } from '@/utils/formatters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -57,78 +62,85 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
         }
     };
 
-    useEffect(() => {
-        constructFilter();
-    }, [filterType, selectedState, selectedBlockchainType, selectedBlockchainAsset, selectedAddress])
+    // useEffect(() => {
+    //     constructFilter();
+    // }, [filterType, selectedState, selectedBlockchainType, selectedBlockchainAsset, selectedAddress])
 
-    const constructFilter = () => {
-        if (!filterType) {
-            setFilter(null)
+    // const constructFilter = () => {
+    //     if (!filterType) {
+    //         setFilter(null)
+    //         return;
+    //     }
+
+    //     switch (filterType) {
+    //         case "ByState":
+    //             if (selectedState) {
+    //                 setFilter({ ByState: selectedState });
+    //             }
+    //             break;
+    //         case "ByOfframperAddress": case "LockedByOnramper":
+    //             if (selectedAddress) {
+    //                 setFilter({ [filterType]: selectedAddress } as OrderFilter)
+    //             }
+    //             break;
+    //         case "ByBlockchain":
+    //             if (selectedBlockchainType) {
+    //                 console.log("By Blockchain = ", selectedBlockchainType);
+    //                 setFilter({ ByBlockchain: selectedBlockchainType } as OrderFilter)
+    //             }
+    //             break;
+    //         case "ByBlockchainAsset":
+    //             if (selectedBlockchainAsset) {
+    //                 setFilter({ [filterType]: selectedBlockchainAsset } as OrderFilter);
+    //             }
+    //             break;
+    //         case "ByOfframperId": case "ByOnramperId":
+    //             if (user) {
+    //                 setFilter({ [filterType]: user.id } as OrderFilter)
+    //             }
+    //             break;
+    //         default:
+    //             setFilter(null);
+    //     }
+    // }
+
+    const handleFilterTypeChange = (value: string) => {
+        if (!value.startsWith("ByBlockchain:")) setSelectedBlockchainType(null);
+        if (!value.startsWith("ByEVMChain")) setSelectedBlockchainAsset(null);
+        if (!value.startsWith("ByState")) setSelectedState(null);
+        if (value !== "ByOfframperAddress" && value !== "LockedByOnramper") setSelectedAddress(null);
+
+        if (value === "all") { setFilterType(null); setFilter(null); return; }
+
+        if (value.startsWith("ByState:")) {
+            type StateKey = 'Created' | 'Locked' | 'Completed' | 'Cancelled';
+            const k = value.split(':')[1] as StateKey;
+            const nextState = { [k]: null } as unknown as OrderStateFilter;
+            setFilterType('ByState');
+            setSelectedState(nextState);
+            setFilter({ ByState: nextState });
             return;
         }
 
-        switch (filterType) {
-            case "ByState":
-                if (selectedState) {
-                    setFilter({ ByState: selectedState });
-                }
-                break;
-            case "ByOfframperAddress": case "LockedByOnramper":
-                if (selectedAddress) {
-                    setFilter({ [filterType]: selectedAddress } as OrderFilter)
-                }
-                break;
-            case "ByBlockchain":
-                if (selectedBlockchainType) {
-                    console.log("By Blockchain = ", selectedBlockchainType);
-                    setFilter({ ByBlockchain: selectedBlockchainType } as OrderFilter)
-                }
-                break;
-            case "ByBlockchainAsset":
-                if (selectedBlockchainAsset) {
-                    setFilter({ [filterType]: selectedBlockchainAsset } as OrderFilter);
-                }
-                break;
-            case "ByOfframperId": case "ByOnramperId":
-                if (user) {
-                    setFilter({ [filterType]: user.id } as OrderFilter)
-                }
-                break;
-            default:
-                setFilter(null);
-        }
-    }
-
-    const handleFilterTypeChange = (value: string) => {
-        if (!value.startsWith("ByBlockchain:")) {
-            setSelectedBlockchainType(null);
-        };
-        if (!value.startsWith("ByEVMChain")) {
-            setSelectedBlockchainAsset(null);
-        };
-        if (!value.startsWith('ByState')) setSelectedState(null);
-        if (value !== "ByOfframperAddress" && value !== "LockedByOnramper") {
-            setSelectedAddress(null);
+        if (value.startsWith("ByBlockchain:")) {
+            const kind = value.split(":")[1] as 'EVM' | 'ICP' | 'Bitcoin' | 'Solana';
+            const chain = { [kind]: null } as BlockchainType;
+            setFilterType("ByBlockchain"); setSelectedBlockchainType(chain);
+            setFilter({ ByBlockchain: chain });
+            return;
         }
 
-        if (value === "all") {
-            setFilterType(null);
-            setFilter(null);
-        } else if (value.startsWith('ByState')) {
-            const stateValue = value.split(':')[1];
-            setFilterType('ByState');
-            setSelectedState({ [stateValue]: null } as OrderStateFilter);
-        } else if (value.startsWith("ByBlockchain:")) {
-            const chain = { [value.split(":")[1]]: null } as BlockchainType;
-            console.log("chain = ", chain);
-            setFilterType("ByBlockchain");
-            setSelectedBlockchainType(chain);
-        } else {
-            setFilterType(value as OrderFilterTypes);
-            if (value === "ByOfframperAddress" || value === "LockedByOnramper") {
-                setSelectedAddress(user?.addresses.length ? user.addresses[0] : null);
-            }
+        setFilterType(value as OrderFilterTypes);
+
+        if ((value === "ByOfframperAddress" || value === "LockedByOnramper") && user?.addresses.length) {
+            const addr = user.addresses[0];
+            setSelectedAddress(addr);
+            setFilter({ [value]: addr } as OrderFilter);
+            return;
         }
+
+        if (value === "ByOfframperId" && user) { setFilter({ ByOfframperId: user.id }); return; }
+        if (value === "ByOnramperId" && user) { setFilter({ ByOnramperId: user.id }); return; }
     };
 
     const isSameState = (state1: OrderStateFilter | null, state2: OrderStateFilter | null) => {
@@ -224,17 +236,19 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
 
                 {user && (filterType === 'ByOfframperAddress' || filterType === 'LockedByOnramper') && (
                     <Select
-                        value={selectedAddress?.address || ''}
+                        value={selectedAddress?.address ?? undefined}
                         onValueChange={(value) => {
                             const address = user?.addresses.find(addr => addr.address === value);
                             setSelectedAddress(address || null);
+                            if (address && (filterType === 'ByOfframperAddress' || filterType === 'LockedByOnramper')) {
+                                setFilter({ [filterType]: address } as OrderFilter);
+                            }
                         }}
                     >
                         <SelectTrigger className="w-full md:w-[180px]">
                             <SelectValue placeholder="Select address" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Select Address</SelectItem>
                             {user?.addresses.map((addr, index) => (
                                 <SelectItem key={index} value={addr.address}>
                                     {truncate(addr.address, 10, 10)} ({Object.keys(addr.address_type)[0]})

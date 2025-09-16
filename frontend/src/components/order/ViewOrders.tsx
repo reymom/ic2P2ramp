@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -13,11 +13,20 @@ import Order from '@/components/order/Order';
 import { useUser } from '@/components/user/UserContext';
 import mockOrdersData from '@/assets/mocks/orders.json';
 
+const stableKey = (v: OrderFilter | null) =>
+    v == null ? 'null' : JSON.stringify(v, (_k, val) => (typeof val === 'bigint' ? `__bigint__${val}` : val));
+
 function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
     const [loading, setLoading] = useState(false);
     const [orders, setOrders] = useState<OrderState[]>([]);
     const [isListView, setIsListView] = useState(false);
-    const [filter, setFilter] = useState<OrderFilter | null>(initialFilter);
+    const [filter, _setFilter] = useState<OrderFilter | null>(initialFilter);
+
+    const setFilterSafe = useCallback((next: OrderFilter | null) => {
+        _setFilter(prev => (stableKey(prev) === stableKey(next) ? prev : next));
+    }, []);
+    const filterKey = useMemo(() => stableKey(filter), [filter]);
+
     const ordersRef = useRef<HTMLDivElement>(null);
     const [ordersHeight, setOrdersHeight] = useState<number | null>(null);
 
@@ -31,15 +40,10 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
     useEffect(() => {
         const updateHeight = () => {
-            if (ordersRef.current) {
-                setOrdersHeight(ordersRef.current.clientHeight);
-            }
+            if (ordersRef.current) setOrdersHeight(ordersRef.current.clientHeight);
         };
-
         updateHeight();
-
         window.addEventListener("resize", updateHeight);
-
         return () => {
             window.removeEventListener("resize", updateHeight);
         };
@@ -47,27 +51,43 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
 
     useEffect(() => {
         const offramperId = searchParams.get('offramperId');
-        if (offramperId) {
-            setFilter({ ByOfframperId: BigInt(offramperId) });
-            return;
-        }
-
+        if (offramperId) { setFilterSafe({ ByOfframperId: BigInt(offramperId) }); return; }
         const onramperId = searchParams.get('onramperId');
-        if (onramperId) {
-            setFilter({ ByOnramperId: BigInt(onramperId) });
-            return;
-        }
+        if (onramperId) { setFilterSafe({ ByOnramperId: BigInt(onramperId) }); return; }
+        const s = searchParams.get('status') as 'Created' | 'Locked' | 'Completed' | 'Cancelled' | null;
+        if (s) { setFilterSafe({ ByState: { [s]: null } } as OrderFilter); return; }
+        setFilterSafe(null);
+    }, [searchParams, setFilterSafe]);
 
-        const status = searchParams.get('status')
-        if (status) {
-            setFilter({ ByState: { [status]: null } } as OrderFilter);
-            return;
+    const normalizeFilter = (f: OrderFilter | null): OrderFilter | null => {
+        if (!f) return f;
+        const v = f as any;
+        // If someone accidentally sent a bare BlockchainType ({Bitcoin:null}), wrap it.
+        if (v && (v.EVM || v.ICP || v.Bitcoin || v.Solana)) {
+            return { ByBlockchain: v } as OrderFilter;
         }
-    }, [searchParams]);
-
+        return f;
+    };
+    const reqRef = useRef(0);
     useEffect(() => {
-        fetchOrders();
-    }, [filter, page]);
+        const run = async () => {
+            const myReq = ++reqRef.current;
+            try {
+                setLoading(true);
+                console.log("loading with filter = ", filter);
+                const f = normalizeFilter(filter);
+                const res = await backend.get_orders(f ? [f] : [], [page], [pageSize]);
+                if (reqRef.current !== myReq) return;
+                setOrders(res);
+            } catch (err) {
+                if (reqRef.current !== myReq) return;
+                console.error(err);
+            } finally {
+                if (reqRef.current === myReq) setLoading(false);
+            }
+        };
+        run();
+    }, [filterKey, page]);
 
     const fetchOrders = async () => {
         if (process.env.FRONTEND_USE_MOCKS === "true") {
@@ -108,7 +128,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             <div className="flex justify-between items-center gap-4 mb-6">
                 {/* Filters */}
                 <div className="flex flex-grow justify-between items-center">
-                    <OrderFilters setFilter={setFilter} currentFilter={filter} />
+                    <OrderFilters setFilter={setFilterSafe} currentFilter={filter} />
                     {/* List/Grid Toggle */}
                     <div className="flex gap-2">
                         <button
@@ -130,7 +150,7 @@ function ViewOrders({ initialFilter }: { initialFilter: OrderFilter | null }) {
             </div>
 
             {/* Left Pagination Button */}
-            {ordersHeight && orders.length && (
+            {!!ordersHeight && orders.length > 0 && (
                 <button
                     onClick={handlePreviousPage}
                     disabled={page === 1}

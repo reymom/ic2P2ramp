@@ -1,5 +1,4 @@
 import React from 'react';
-
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 import { OrderState } from '@/declarations/icramp_backend/icramp_backend.did';

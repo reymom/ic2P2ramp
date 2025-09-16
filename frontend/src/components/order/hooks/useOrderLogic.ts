@@ -677,7 +677,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
             refetchUser();
             setIsLoading(false);
             fetchBalances();
-            navigate('/view?completed');
+            navigate('/view?status=Completed');
           }, 2500);
         }
       } else {

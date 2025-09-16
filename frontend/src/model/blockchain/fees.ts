@@ -4,6 +4,11 @@ import {
 } from '@/declarations/icramp_backend/icramp_backend.did';
 import { backend } from '../backendProxy';
 
+const safeStringify = (v: unknown) =>
+  JSON.stringify(v, (_k, val) =>
+    typeof val === 'bigint' ? val.toString() : val,
+  );
+
 export async function getFeeQuote(
   asset: BlockchainAsset,
   cryptoAmountUnits: bigint,
@@ -15,13 +20,7 @@ export async function getFeeQuote(
     opts?.estimated_gas_lock ? [BigInt(opts.estimated_gas_lock)] : [],
     opts?.estimated_gas_withdraw ? [BigInt(opts.estimated_gas_withdraw)] : [],
   );
-  if ('Ok' in res) {
-    const q = res.Ok as any;
-    return {
-      blockchain_fee: BigInt(q.blockchain_fee),
-      admin_fee: BigInt(q.admin_fee),
-      total_fee: BigInt(q.total_fee),
-    };
-  }
-  throw new Error(`Fee quote failed: ${JSON.stringify(res.Err)}`);
+  console.log(`[getFeeQuote] res=${safeStringify(res)}`);
+  if ('Ok' in res) return res.Ok;
+  throw new Error(`Fee quote failed: ${safeStringify(res.Err)}`);
 }

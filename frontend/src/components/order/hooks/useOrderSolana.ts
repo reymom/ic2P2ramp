@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import {
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  Commitment,
-} from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
@@ -134,11 +129,7 @@ export const useOrderSolana = () => {
 
   const waitForSolanaConfirmation = async (
     sig: string,
-    {
-      timeoutMs = 60_000,
-      minConfirms = 1,
-      commitment = 'confirmed' as Commitment,
-    },
+    { timeoutMs = 60_000 },
   ) => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -155,11 +146,7 @@ export const useOrderSolana = () => {
         );
       }
 
-      const okStatus =
-        v?.confirmationStatus === 'finalized' ||
-        (v?.confirmationStatus === 'confirmed' &&
-          (v.confirmations === null || v.confirmations >= minConfirms));
-
+      const okStatus = v?.confirmationStatus === 'finalized';
       if (okStatus) return;
 
       await new Promise((r) => setTimeout(r, 1200));
