@@ -1,9 +1,7 @@
 use icramp_types::bitcoin::{errors::Result, runes::RuneID, vault::VaultEntry};
+use testkit::helpers::{query_call, update_call};
 
-use crate::{
-    common::helpers::{query_call, update_call},
-    integration::env::get_bitcoin_env,
-};
+use crate::env::get_bitcoin_env;
 
 #[test]
 fn test_btc_vault() {

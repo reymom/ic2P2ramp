@@ -1,18 +1,15 @@
 use std::{process::Command, str::FromStr};
 
-use bitcoincore_rpc::{bitcoin::Address, Auth, Client, RpcApi};
+use bitcoincore_rpc::{Auth, Client, RpcApi, bitcoin::Address};
 use candid::Principal;
-
 use ic_btc_interface::{
     GetBlockHeadersRequest, GetBlockHeadersResponse, GetUtxosRequest, GetUtxosResponse,
     NetworkInRequest,
 };
 use pocket_ic::PocketIc;
+use testkit::helpers::{query_call, update_call};
 
-use crate::common::{
-    helpers::{query_call, update_call},
-    setup::BTC_CANISTER_ID,
-};
+use crate::setup::BTC_CANISTER_ID;
 
 use super::setup::{BTC_RPC_URL, RPC_PASSWORD, RPC_USER};
 

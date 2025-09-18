@@ -1,11 +1,9 @@
-use crate::common::{
-    bitcoin::{
-        generate_new_bitcoin_address, get_ord_rune_balance, mine_blocks, send_runes_from_ord,
-        track_block_sync,
-    },
-    helpers::update_call,
+use crate::env::get_bitcoin_env;
+use crate::helpers::{
+    generate_new_bitcoin_address, get_ord_rune_balance, mine_blocks, send_runes_from_ord,
+    track_block_sync,
 };
-use crate::integration::env::get_bitcoin_env;
+use testkit::helpers::update_call;
 
 use icramp_types::bitcoin::{
     errors::{BitcoinError, Result},

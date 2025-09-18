@@ -1,7 +1,6 @@
 use std::{
     fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::SystemTime,
 };
 
 use candid::{Encode, Principal};
@@ -14,12 +13,13 @@ pub const RPC_USER: &str = "icp";
 pub const RPC_PASSWORD: &str = "test";
 pub const BTC_CANISTER_ID: &str = "g4xu7-jiaaa-aaaan-aaaaq-cai";
 
-const BITCOIN_BACKEND_WASM: &str = "../target/wasm32-unknown-unknown/release/bitcoin_backend.wasm";
-const _BACKEND_WASM: &str = "../target/wasm32-unknown-unknown/release/backend.wasm";
+const BITCOIN_BACKEND_WASM: &str =
+    "../..target/wasm32-unknown-unknown/release/bitcoin_backend.wasm";
+const IC_BTC_WASM_GZ: &str = "../fixtures/wasm/ic-btc-canister.wasm.gz";
 const INIT_CYCLES: u128 = 2_000_000_000_000;
 
 pub(crate) fn setup_bitcoin_backend() -> (PocketIc, Principal) {
-    std::env::set_var("POCKET_IC_BIN", "/usr/local/bin/pocket-ic");
+    unsafe { std::env::set_var("POCKET_IC_BIN", "/usr/local/bin/pocket-ic") };
     let pic = PocketIcBuilder::new()
         .with_bitcoin_subnet()
         .with_ii_subnet()
@@ -29,10 +29,10 @@ pub(crate) fn setup_bitcoin_backend() -> (PocketIc, Principal) {
             18444,
         ))
         .build();
-    pic.set_time(SystemTime::now());
 
     let bitcoin_backend_canister = pic.create_canister();
-    let wasm = fs::read(BITCOIN_BACKEND_WASM).expect("Wasm file not found, run 'dfx build'.");
+    let wasm =
+        fs::read(BITCOIN_BACKEND_WASM).expect("Bitcoin wasm file not found, run 'dfx build'.");
 
     let arg = InstallArg::Reinstall(InitArg {
         network: Network::Regtest,
@@ -52,7 +52,7 @@ pub(crate) fn setup_bitcoin_backend() -> (PocketIc, Principal) {
     (pic, bitcoin_backend_canister)
 }
 
-pub fn deploy_bitcoin_testnet_canister(pic: &PocketIc) {
+fn deploy_bitcoin_testnet_canister(pic: &PocketIc) {
     // The NNS root canister should be the controller of the bitcoin testnet canister.
     let nns_root_canister_id: Principal =
         Principal::from_text("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
@@ -62,8 +62,7 @@ pub fn deploy_bitcoin_testnet_canister(pic: &PocketIc) {
         .unwrap();
     assert_eq!(actual_canister_id, btc_canister_id);
 
-    let btc_wasm_path = "./wasms/ic-btc-canister.wasm.gz";
-    let btc_wasm = fs::read(btc_wasm_path).expect("Failed to read Bitcoin canister wasm file");
+    let btc_wasm = fs::read(IC_BTC_WASM_GZ).expect("Failed to read Bitcoin canister wasm file");
     let args = Config {
         network: Network::Regtest,
         ..Default::default()

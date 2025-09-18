@@ -1,11 +1,10 @@
 [package]
-name = "bitcoin_backend_tests"
-version = "0.1.0"
-edition = "2021"
+name = "bitcoin_tests"
+version.workspace = true
+edition.workspace = true
 
 [lib]
-name = "tests"
-path = "lib.rs"
+path = "src/lib.rs"
 
 [dev-dependencies]
 bitcoincore-rpc = "0.19"
@@ -13,7 +12,8 @@ candid = { workspace = true }
 ic-cdk = { workspace = true }
 ic-btc-interface = { workspace = true }
 icramp_types = { workspace = true }
-lazy_static = "1.5"
-pocket-ic = "6.0"
+lazy_static = { workspace = true }
+pocket-ic = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+testkit = { workspace = true }

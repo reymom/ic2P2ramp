@@ -3,9 +3,9 @@ use lazy_static::lazy_static;
 use pocket_ic::PocketIc;
 use std::sync::Mutex;
 
+use crate::setup::setup_bitcoin_backend;
 use icramp_types::bitcoin::{errors::Result, runes::RuneID, transfer::TransactionType};
-
-use crate::common::{helpers::update_call, setup::setup_bitcoin_backend};
+use testkit::helpers::update_call;
 
 lazy_static! {
     pub static ref BITCOIN_ENV: Mutex<Option<BitcoinTestEnv>> = Mutex::new(None);

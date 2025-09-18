@@ -4,7 +4,7 @@ use icramp_types::bitcoin::{
 };
 
 use super::env::get_bitcoin_env;
-use crate::common::helpers::{query_call, update_call};
+use testkit::helpers::{query_call, update_call};
 
 #[test]
 fn test_register_rune() {

@@ -1,0 +1,13 @@
+[package]
+name = "testkit"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+candid = { workspace = true }
+ic-cdk = { workspace = true }
+pocket-ic = { workspace = true }
+serde = { workspace = true }

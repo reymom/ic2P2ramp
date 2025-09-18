@@ -1,6 +1,7 @@
-use candid::{decode_one, encode_args, utils::ArgumentEncoder, CandidType, Principal};
+use candid::{CandidType, Principal, decode_one, encode_args, utils::ArgumentEncoder};
 
-use pocket_ic::{management_canister::CanisterId, PocketIc, WasmResult};
+use ic_cdk::api::management_canister::main::CanisterId;
+use pocket_ic::PocketIc;
 use serde::de::DeserializeOwned;
 
 /// Executes a query call on the specified canister and decodes the response into the expected type.
@@ -20,8 +21,7 @@ where
         method,
         encode_args(args).unwrap(),
     ) {
-        Ok(WasmResult::Reply(response)) => decode_one(&response).map_err(|e| e.to_string()),
-        Ok(WasmResult::Reject(err)) => Err(format!("Query rejected: {}", err)),
+        Ok(response) => decode_one(&response).map_err(|e| e.to_string()),
         Err(e) => Err(format!("Query call failed: {}", e)),
     }
 }
@@ -43,10 +43,7 @@ where
         method,
         encode_args(args).unwrap(),
     ) {
-        Ok(WasmResult::Reply(response)) => {
-            decode_one(&response).map_err(|e| format!("error decoding: {}", e))
-        }
-        Ok(WasmResult::Reject(err)) => Err(format!("Update rejected: {}", err)),
+        Ok(response) => decode_one(&response).map_err(|e| format!("error decoding: {}", e)),
         Err(e) => Err(format!("Update call failed: {}", e)),
     }
 }

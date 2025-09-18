@@ -1,0 +1,21 @@
+[package]
+name = "solana_tests"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+base64 = { workspace = true }
+candid = { workspace = true }
+canhttp = { workspace = true }
+dotenvy = "0.15"
+ic-cdk = { workspace = true }
+icramp_types = { workspace = true }
+lazy_static = { workspace = true }
+pocket-ic = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sol_rpc_types = { workspace = true }
+testkit = { workspace = true }
