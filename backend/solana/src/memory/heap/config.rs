@@ -1,9 +1,7 @@
 use candid::Principal;
-use icramp_types::solana::{errors::Result, token::TokenInfo};
+use icramp_types::solana::{ed25519::Ed25519KeyName, errors::Result, token::TokenInfo};
 use sol_rpc_types::SolanaCluster;
 use std::{cell::RefCell, collections::HashMap};
-
-use crate::model::types::ed25519::Ed25519KeyName;
 
 use super::state::State;
 

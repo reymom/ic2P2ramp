@@ -14,5 +14,6 @@ ic-stable-structures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sol_rpc_types  = { workspace = true }
+sol_rpc_client = { workspace = true }
 solana-pubkey = { workspace = true }
 thiserror = { workspace = true }

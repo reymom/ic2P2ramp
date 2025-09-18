@@ -1,6 +1,6 @@
-use icramp_types::solana::errors::Result;
+use icramp_types::solana::{errors::Result, vault::Address};
 
-use crate::{memory::stable::vault::ONRAMPER_VAULTS, model::types::Address};
+use crate::memory::stable::vault::ONRAMPER_VAULTS;
 
 pub fn lock_funds(
     offramper_address: Address,

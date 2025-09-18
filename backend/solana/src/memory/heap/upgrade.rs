@@ -1,9 +1,8 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use candid::{CandidType, Decode, Deserialize, Encode, Principal};
+use candid::{CandidType, Decode, Deserialize, Encode};
 use ic_stable_structures::{Storable, storable::Bound};
-use icramp_types::solana::token::TokenInfo;
-use sol_rpc_types::SolanaCluster;
+use icramp_types::solana::{setup::UpdateArg, token::TokenInfo};
 
 use crate::memory::{
     heap::{
@@ -14,13 +13,6 @@ use crate::memory::{
 };
 
 const MAX_STATE_SIZE: u32 = 64 * 1024; // 64KB
-
-#[derive(CandidType, Deserialize, Debug, Clone)]
-pub struct UpdateArg {
-    pub network: Option<SolanaCluster>,
-    pub sol_rpc_canister_id: Option<Principal>,
-    pub proxy_url: Option<String>,
-}
 
 #[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct SerializableHeap {

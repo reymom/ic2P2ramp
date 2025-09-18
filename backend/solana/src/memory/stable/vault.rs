@@ -1,8 +1,6 @@
-use crate::{
-    memory::stable::{MEMORY_MANAGER, Memory},
-    model::types::{Address, vault::VaultEntry},
-};
+use crate::memory::stable::{MEMORY_MANAGER, Memory};
 use ic_stable_structures::{StableBTreeMap, memory_manager::MemoryId};
+use icramp_types::solana::vault::{Address, VaultEntry};
 use std::cell::RefCell;
 
 thread_local! {

@@ -1,5 +1,8 @@
-use crate::{memory::stable::vault::ONRAMPER_VAULTS, model::types::Address};
-use icramp_types::solana::errors::{Result, VaultError};
+use crate::memory::stable::vault::ONRAMPER_VAULTS;
+use icramp_types::solana::{
+    errors::{Result, VaultError},
+    vault::Address,
+};
 
 pub fn complete_order(onramper: Address, amount: u64, token_mint: Option<String>) -> Result<()> {
     ONRAMPER_VAULTS.with_borrow_mut(|vaults| {

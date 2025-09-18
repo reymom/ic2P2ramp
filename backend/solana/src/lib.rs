@@ -8,8 +8,10 @@ use ic_cdk::{init, post_upgrade, pre_upgrade, query, update};
 use icramp_types::solana::{
     errors::{Result, SolanaError, SystemError, VaultError},
     fees::SolanaFeeEstimates,
+    setup::InstallArg,
     token::TokenInfo,
     transaction::{TxInfo, TxMetadata},
+    vault::{Address, VaultEntry},
 };
 use num_traits::cast::ToPrimitive;
 use sol_rpc_types::{GetAccountInfoEncoding, TokenAmount};
@@ -21,18 +23,13 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use memory::heap::{
-    InstallArg,
     config::{get_state, init_state, is_token_registered},
     state::State,
     upgrade,
 };
 use memory::stable::vault::{OFFRAMPER_VAULTS, ONRAMPER_VAULTS};
 use model::helpers::validate_caller_not_anonymous;
-use model::types::{
-    Address,
-    tokens::{fetch_mint_decimals, validate_token_mint},
-    vault::VaultEntry,
-};
+use model::types::tokens::{fetch_mint_decimals, validate_token_mint};
 use solana::{account::get_account_owner, client::client, spl, wallet::SolanaWallet};
 
 use crate::solana::fees;
@@ -574,18 +571,14 @@ fn unlock_funds(
 }
 
 #[update]
-async fn complete_order(
-    onramper_address: Address,
-    amount: u64,
-    token_mint: Option<String>,
-) -> Result<()> {
+async fn complete_order(onramper: Address, amount: u64, token_mint: Option<String>) -> Result<()> {
     if let Some(ref mint) = token_mint {
         if !is_token_registered(mint) {
             return Err(SolanaError::UnsupportedToken(mint.to_string()));
         }
     }
 
-    vault::complete::complete_order(onramper_address, amount, token_mint)?;
+    vault::complete::complete_order(onramper, amount, token_mint)?;
 
     Ok(())
 }

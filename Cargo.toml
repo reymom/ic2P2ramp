@@ -4,7 +4,10 @@ members = [
     "backend/bitcoin",
     "backend/solana",
     "backend/shared", 
-    "tests",
+
+    "tests/testkit",
+    "tests/bitcoin_tests",
+    "tests/solana_tests",
 ]
 resolver = "2"
 
@@ -18,17 +21,22 @@ bincode = { version = "2.0", features = ["serde"] }
 bitcoin = "0.32"
 bs58 = "0.5"
 candid = "0.10"
+canhttp = { version = "0.2.0", features = ["json"] }
 ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
 ic-btc-interface = "0.2"
 ic-ed25519 = { version = "0.2.0", optional = false }
 ic-stable-structures = "0.7"
 icramp_types = { path = "backend/shared" }
+lazy_static = "1.5"
 num-traits = "0.2.19"
+pocket-ic = "10.0"
 serde = "1.0"
 serde_json = "1.0"
+sol_rpc_client = { package = "sol_rpc_client", git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", features = ["ed25519"], default-features = false }
 sol_rpc_types  = { package = "sol_rpc_types",  git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", default-features = false }
 solana-pubkey = "=2.4.0"
+testkit = { path = "tests/testkit" }
 thiserror = "2.0"
 
 # Transitive dependency

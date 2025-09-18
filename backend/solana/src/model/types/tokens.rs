@@ -8,7 +8,7 @@ use std::str::FromStr;
 use crate::solana::{account::get_account_owner, client::client};
 
 const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-const TOKEN_2022_PROGRAM_ID: &str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnSLz2gjX3b";
+const TOKEN_2022_PROGRAM_ID: &str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 pub fn validate_token_mint(mint: String) -> Result<()> {
     Pubkey::from_str(&mint).map_err(SolanaError::from)?;

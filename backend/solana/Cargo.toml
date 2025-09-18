@@ -19,7 +19,7 @@ candid = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sol_rpc_client = { package = "sol_rpc_client", git = "https://github.com/dfinity/sol-rpc-canister", rev = "715f278", features = ["ed25519"], default-features = false }
+sol_rpc_client = { workspace = true }
 sol_rpc_types  = { workspace = true }
 solana-program = "=2.3.0"
 solana-sdk-ids = "3.0.0"

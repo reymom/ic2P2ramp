@@ -1,7 +1,6 @@
 use ic_ed25519::PublicKey;
+use icramp_types::solana::ed25519::Ed25519KeyName;
 use sol_rpc_client::{IcRuntime, ed25519::DerivationPath};
-
-use crate::model::types::ed25519::Ed25519KeyName;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ed25519ExtendedPublicKey {
