@@ -115,14 +115,19 @@ service : (InstallArg) -> {
   complete_order : (text, nat64, opt text) -> (Result);
   deposit_to_address_vault : (text, nat64, opt text) -> (Result);
   estimate_bitcoin_transaction_fee : () -> (Result_1);
+  // Returns the balance of the given bitcoin address.
   get_btc_balance : (text) -> (Result_1);
   get_btc_block_headers : () -> (Result_2);
   get_canister_rune_amount : (text) -> (Result_1) query;
   get_canister_rune_utxos : (text) -> (Result_3) query;
   get_offramper_deposits : (text) -> (Result_4) query;
   get_onramper_deposits : (text) -> (Result_4) query;
+  // Returns the P2PKH address of this canister at a specific derivation path.
   get_p2pkh_address : () -> (Result_5);
+  // Returns the P2TR address of this canister at a specific derivation path.
   get_p2tr_raw_key_spend_address : () -> (Result_5);
+  // Returns the P2TR address of this canister at a specific derivation path.
+  // Necessary for sending and receiving runes.
   get_p2tr_script_spend_address : (TransactionType) -> (Result_5);
   get_registered_runes : () -> (Result_6) query;
   get_serialized_rune_metadata : (text) -> (Result_7) query;

@@ -221,11 +221,17 @@ type VaultEntry = record {
 type VaultError = variant { InsufficientBalance; AddressVaultNotFound };
 service : (InstallArg) -> {
   associated_token_account : (text, text) -> (Result);
+  // Cancel (refund) a vault deposit.
   cancel_deposit : (text, nat64, opt text) -> (Result_1);
   canister_solana_account : () -> (text);
   complete_order : (text, nat64, opt text) -> (Result_1);
+  // Creates the token account for a given mint for the specified principal
   create_associated_token_account : (opt principal, text) -> (Result);
+  // Deposit lamports or an SPL‐token amount into the vault (offramper).
   deposit_to_vault_canister : (text, nat64, opt text) -> (Result_1);
+  // Heuristic fee estimates used by icramp for pricing:
+  // - lock: payout to onramper (may require creating ATA if SPL)
+  // - withdraw: refund back to offramper (assume ATA already exists)
   estimate_fees : (opt text) -> (Result_2);
   get_balance : (text) -> (Result_3);
   get_offramper_deposits : (text) -> (Result_4) query;
@@ -239,8 +245,11 @@ service : (InstallArg) -> {
   lock_funds : (text, text, nat64, opt text) -> (Result_1);
   owned_associated_token_account : (opt principal, text) -> (Result);
   owned_get_spl_token_balance : (opt text, text) -> (Result_5);
+  // Derive a Solana address (Pubkey) from the canister’s threshold‐Ed25519 key.
+  // If `caller` is `null`, use the caller's principal; otherwise use the provided one.
   owned_solana_account : (opt principal) -> (text);
   register_tokens : (vec record { text; text; text }) -> (Result_1);
+  // Send raw SOL (lamports) to `dst_address`. Returns `Ok(txid)` on success.
   send_sol : (opt principal, text, nat) -> (Result);
   send_spl_token : (opt principal, text, text, nat) -> (Result);
   unlock_funds : (text, text, nat64, opt text) -> (Result_1);

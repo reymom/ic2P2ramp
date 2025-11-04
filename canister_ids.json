@@ -6,15 +6,17 @@
     "ic": "nb7mt-fyaaa-aaaap-qp2fq-cai"
   },
   "bitcoin_backend": {
-    "ic": "viuz6-wyaaa-aaaap-qpy7q-cai"
+    "ic": "iwklo-tiaaa-aaaap-qqduq-cai"
   },
-  "bitcoin_backend_prod": {
-    "ic": "ng6kh-iaaaa-aaaap-qp2fa-cai"
-  },
+  "bitcoin_backend_prod": {},
   "frontend": {
-    "ic": "wkbeb-giaaa-aaaap-qpyuq-cai"
+    "ic": "inpxl-jqaaa-aaaap-qqdwa-cai"
   },
-  "frontend_prod": {
-    "ic": "nuy56-eqaaa-aaaap-qp2ga-cai"
+  "frontend_prod": {},
+  "icramp_backend": {
+    "ic": "iyigg-iyaaa-aaaap-qqdvq-cai"
+  },
+  "solana_backend": {
+    "ic": "i7jas-faaaa-aaaap-qqdva-cai"
   }
 }
