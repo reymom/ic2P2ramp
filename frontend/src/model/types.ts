@@ -33,7 +33,12 @@ export type OrderFilterTypes = ExtractKeys<OrderFilter>;
 
 export type BlockchainTypes = ExtractKeys<BlockchainAsset>;
 
-export const providerTypes: PaymentProviderTypes[] = ['PayPal', 'Revolut'];
+export const providerTypes: PaymentProviderTypes[] = [
+  'PayPal',
+  'Revolut',
+  'Stripe',
+  'Email',
+];
 
 export type revolutSchemeTypes =
   | 'UK.OBIE.IBAN'

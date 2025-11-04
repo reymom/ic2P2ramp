@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "deploy:sandbox": "./scripts/deploy_sandbox.sh",
-    "deploy:prod": "./scripts/delpoy_prod.sh",
+    "deploy:prod": "./scripts/deploy_prod.sh",
     "setup": "npm i && npm run setup:evm_rpc && npm run setup:backend",
     "setup:evm_rpc": "dfx deps pull && dfx deps init evm_rpc --argument '(record { nodesInSubnet = 28 })' && dfx deps deploy",
     "setup:backend": "dfx canister create backend && dfx generate backend && dfx deploy",
