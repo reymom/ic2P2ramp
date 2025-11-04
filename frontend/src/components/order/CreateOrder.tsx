@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
@@ -631,33 +632,69 @@ const CreateOrder: React.FC = () => {
 
                 <div className="my-4 mx-auto">
                     <label className="block text-gray-700 dark:text-gray-300 mb-2">Payment Providers:</label>
-                    {user?.payment_providers.map((provider, index) => {
-                        return (
-                            <div key={index} className="block mb-2">
-                                <input
-                                    type="checkbox"
-                                    id={`provider-${index}`}
-                                    className="mr-2"
-                                    checked={selectedProviders!.includes(provider)}
-                                    onChange={() => handleProviderSelection(provider)}
-                                />
-                                <label htmlFor={`provider-${index}`} className="text-gray-700 dark:text-gray-300">
-                                    {'PayPal' in provider &&
-                                        <>
-                                            <span className='font-semibold'>Paypal</span>
-                                            <div>{provider.PayPal.id}</div>
-                                        </>
-                                    }
-                                    {'Revolut' in provider &&
-                                        <>
-                                            <span className='font-semibold'>Revolut</span>
-                                            <div>{provider.Revolut.id} (Scheme): ${provider.Revolut.scheme}</div>
-                                        </>
-                                    }
-                                </label>
-                            </div>
-                        );
-                    })}
+                    {user?.payment_providers?.length ? (
+                        <div className="grid grid-cols-1 gap-3">
+                            {user.payment_providers.map((provider, index) => {
+                                const checked = selectedProviders!.includes(provider);
+                                const inputId = `provider-${index}`;
+
+                                const title =
+                                    'PayPal' in provider ? 'PayPal' :
+                                        'Revolut' in provider ? 'Revolut' : 'Stripe' in provider ? 'Stripe' : '';
+
+                                const desc =
+                                    'PayPal' in provider
+                                        ? truncate(provider.PayPal.id, 18, 6)
+                                        : 'Revolut' in provider
+                                            ? `${truncate(provider.Revolut.id, 18, 6)} • ${provider.Revolut.scheme}`
+                                            : 'Stripe' in provider ? truncate(provider.Stripe.account_id, 16, 10) : '';
+
+                                return (
+                                    <label key={index} htmlFor={inputId} className="block">
+                                        <input
+                                            id={inputId}
+                                            type="checkbox"
+                                            className="peer sr-only"
+                                            checked={checked}
+                                            onChange={() => handleProviderSelection(provider)}
+                                        />
+                                        <div
+                                            className={clsx("rounded-lg border p-3 transition",
+                                                "bg-gray-300/40 dark:bg-gray-800/60 border-gray-500/40",
+                                                "hover:border-indigo-400/60 hover:bg-indigo-400/10",
+                                                "peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10")}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="font-semibold">{title}</div>
+                                                {checked && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-600/20 text-indigo-300">
+                                                        selected
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-1 text-xs font-mono break-all text-gray-700 dark:text-gray-300">
+                                                {desc}
+                                            </div>
+
+                                            {'Stripe' in provider && (
+                                                <div className="mt-1 text-[10px] uppercase tracking-wide text-purple-300">
+                                                    Destination account
+                                                </div>
+                                            )}
+
+                                            {'Revolut' in provider && provider.Revolut.name?.[0] && (
+                                                <div className="mt-1 text-[10px] text-gray-400">
+                                                    Name: {provider.Revolut.name[0]}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500">No payment providers linked yet.</div>
+                    )}
                 </div>
 
                 <hr className="border-t border-gray-300 dark:border-gray-600 w-full my-4" />
@@ -681,7 +718,7 @@ const CreateOrder: React.FC = () => {
                         )}
                     </button>
                 </div>
-            </form>
+            </form >
 
             {txHash && blockchainType && (
                 <div className="text-blue-400 relative mt-4 text-sm font-medium flex items-center justify-center text-center z-50">
@@ -691,7 +728,7 @@ const CreateOrder: React.FC = () => {
                 </div>
             )}
             {!isLoading && message && <p className="mt-4 text-sm font-medium text-red-600">{message}</p>}
-        </div>
+        </div >
     );
 }
 
