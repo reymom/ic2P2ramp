@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import clsx from 'clsx';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 import { PaymentProvider, TransactionAddress } from '@/declarations/icramp_backend/icramp_backend.did';
 import { backend } from '@/model/backendProxy';
-import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes } from '@/model/types';
+import { PaymentProviderTypes, revolutSchemeTypes, revolutSchemes } from '@/model/types';
 import { isSessionExpired } from '@/model/session';
 import { userTypeToString } from '@/model/helpers/types';
 import { rampErrorToString } from '@/model/helpers/error';
@@ -16,6 +16,7 @@ import { getExplorerUrls } from '@/utils/explorers';
 import CurrencySelect from '@/components/ui/CurrencySelect';
 import BalancesDashboard from './BalanceDashboard';
 import { useUser } from './UserContext';
+import { startStripeKyc } from '@/hooks/useStripeKyc';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRemove, faSpinner, faSync, faCopy, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
@@ -23,6 +24,7 @@ import icpLogo from "@/assets/blockchains/icp-logo.svg";
 import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
 import solanaLogo from "@/assets/blockchains/solana-logo.png"
+import { mapCountryToPlatform } from '@/utils/stripe';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -31,6 +33,10 @@ const UserProfile: React.FC = () => {
     const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
     const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>('UK.OBIE.SortCodeAccountNumber');
     const [revolutName, setRevolutName] = useState('');
+    const [stripeCountry, setStripeCountry] = useState('ES');
+    const [loadingStripe, setLoadingStripe] = useState(false);
+    const [finalizingStripe, setFinalizingStripe] = useState(false);
+
     const [message, setMessage] = useState('');
     const [loadingUnisat, setLoadingUnisat] = useState(false);
     const [loadingAddAddress, setLoadingAddAddress] = useState(false);
@@ -44,10 +50,12 @@ const UserProfile: React.FC = () => {
     const {
         user,
         currency,
+        loginMethod,
         sessionToken,
         principal,
         bitcoinAddress,
         solanaPubkey,
+        backendActor,
         connectUnisat,
         connectSolana,
         loginInternetIdentity,
@@ -56,10 +64,16 @@ const UserProfile: React.FC = () => {
         logout
     } = useUser();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const processedStripeRef = useRef<string | null>(null);
+    const location = useLocation();
 
     useEffect(() => {
-        if (!user) navigate('/');
+        if (!user) {
+            navigate('/')
+            return;
+        };
     }, [user, navigate]);
 
     if (!user) {
@@ -117,9 +131,67 @@ const UserProfile: React.FC = () => {
         setLoadingUnisat(false);
     };
 
+    const visibleProviderTypes = useMemo<PaymentProviderTypes[]>(() => {
+        const t = userTypeToString(user.user_type);
+        return t === 'Offramper'
+            ? (['PayPal', 'Revolut', 'Stripe'] as PaymentProviderTypes[])
+            : (['PayPal', 'Revolut', 'Email'] as PaymentProviderTypes[]);
+    }, [user]);
+
+    useEffect(() => {
+        const acct = searchParams.get('stripe_acct');
+        const platform = searchParams.get('platform') ?? mapCountryToPlatform(stripeCountry);
+        if (!acct || !platform || !sessionToken) return;
+
+        if (processedStripeRef.current === acct) return;
+        processedStripeRef.current = acct;
+
+        setLoadingAddProvider(true);
+        (async () => {
+            try {
+                const provider = { Stripe: { account_id: acct, platform } };
+                const r = await backend.add_user_payment_provider(
+                    user.id,
+                    sessionToken,
+                    provider,
+                );
+                if ('Err' in r) {
+                    setMessage(`Failed to add Stripe: ${rampErrorToString(r.Err)}`);
+                    return;
+                }
+                await refetchUser();
+            } catch (e: any) {
+                setMessage(`Failed to finalize Stripe: ${e?.message ?? String(e)}`);
+            } finally {
+                setLoadingAddProvider(false);
+                navigate(location.pathname, { replace: true });
+            }
+        })();
+    }, [
+        searchParams,
+        stripeCountry,
+        user,
+        sessionToken,
+        backend,
+        refetchUser,
+        setMessage,
+    ]);
+
+    const startStripeOnboardingProfile = async () => {
+        await startStripeKyc({
+            userType: userTypeToString(user.user_type) as 'Offramper' | 'Onramper',
+            loginMethod: loginMethod ?? user.login,
+            backendActor,
+            email: providerId,
+            country: stripeCountry,
+            storeUserData: false,
+            setMessage,
+            setLoading: setLoadingStripe,
+        });
+    };
+
     const handleAddProvider = async () => {
         if (!sessionToken) throw new Error("Please authenticate to get a token session");
-
         if (!providerType) return;
         setLoadingAddProvider(true);
 
@@ -133,6 +205,30 @@ const UserProfile: React.FC = () => {
                 return;
             }
             newProvider = { Revolut: { id: providerId, scheme: revolutScheme, name: revolutName ? [revolutName] : [] } };
+        } else if (providerType === 'Stripe') {
+            if (userTypeToString(user.user_type) === 'Onramper') {
+                setMessage('Stripe is just needed for Offrampers');
+                return;
+            }
+            setMessage('Use "Start Stripe Onboarding" to add a Stripe provider.');
+            return;
+        } else if (providerType === 'Email') {
+            if (userTypeToString(user.user_type) === 'Offramper') {
+                setMessage('Email available just for Onrampers');
+                return;
+            }
+            const email = providerId.trim();
+            const ok =
+                email.length <= 254 &&
+                email.includes('@') &&
+                !email.includes(' ') &&
+                !email.startsWith('@') &&
+                !email.endsWith('@');
+            if (!ok) {
+                setMessage('Invalid email.');
+                return;
+            }
+            newProvider = { Email: { email } };
         } else {
             setMessage('Unknown payment provider');
             return;
@@ -568,75 +664,160 @@ const UserProfile: React.FC = () => {
                                 <div className="flex justify-between items-center">
                                     <span className="font-medium">Payment Providers:</span>
                                 </div>
-                                <ul className="pl-4 mt-2">
+
+                                <div className="mt-3 grid grid-cols-1 gap-3">
                                     {user.payment_providers
                                         .sort((_, b) => ('PayPal' in b ? 1 : -1))
                                         .map((provider, index) => {
-                                            if ('PayPal' in provider) {
+                                            const baseCard =
+                                                "relative rounded-xl border p-3 bg-gray-300/40 dark:bg-gray-800/60 border-gray-500/40";
+                                            const stripeCard =
+                                                "relative rounded-xl border p-3 bg-purple-500/10 border-purple-500/50";
+                                            const badgeBase =
+                                                "text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border";
+                                            const badgeGray = "border-gray-400/30 text-gray-400 bg-gray-400/10";
+                                            const badgePurple =
+                                                "border-purple-400/30 text-purple-300 bg-purple-400/10";
+                                            const badgeBlue =
+                                                "border-sky-400/30 text-sky-300 bg-sky-400/10";
+
+                                            // --- Render per type ---
+                                            if ("PayPal" in provider) {
                                                 return (
-                                                    <li key={index} className="py-1 relative items-center">
-                                                        <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">(PayPal)</span>
-                                                        <span className="ml-2 mr-6">{provider.PayPal.id}</span>
-                                                        <span className="absolute right-0 my-1">
+                                                    <div key={index} className={baseCard}>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <span className={`${badgeBase} ${badgeGray}`}>PayPal</span>
                                                             <button
-                                                                className="text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-white border-opacity-40 flex items-center justify-center flex-shrink-0 hover:text-red-600 transition duration-200 ease-in-out shadow-md"
+                                                                className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"
+                                                                aria-label="remove PayPal provider"
                                                                 onClick={() => handleRemoveProvider(provider)}
                                                                 disabled={removing}
                                                             >
-                                                                {removing ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRemove} />}
-                                                            </button>
-                                                        </span>
-                                                    </li>
-                                                );
-                                            } else if ('Revolut' in provider) {
-                                                return (
-                                                    <li key={index} className="py-1 relative items-center">
-                                                        <div className="flex-1">
-                                                            <span className="text-sm text-gray-700 dark:text-gray-300">(Revolut)</span>
-                                                            <span className="ml-2 mr-6">{provider.Revolut.id}</span>
-                                                        </div>
-                                                        <div>{provider.Revolut.scheme}</div>
-                                                        {provider.Revolut.name && provider.Revolut.name.length > 0 && (
-                                                            <div>Name: {provider.Revolut.name[0]}</div>
-                                                        )}
-                                                        <span className="absolute right-0 top-1/2 transform -translate-y-1/2">
-                                                            <button
-                                                                className={clsx(
-                                                                    "text-red-600 dark:text-red-400 text-sm ml-4 w-3 h-3 rounded-full p-2 border border-gray-600 dark:border-white border-opacity-40",
-                                                                    "flex items-center justify-center flex-shrink-0 dark:hover:text-red-500 transition duration-200 ease-in-out shadow-md"
+                                                                {removing ? (
+                                                                    <FontAwesomeIcon icon={faSpinner} spin />
+                                                                ) : (
+                                                                    <FontAwesomeIcon icon={faRemove} />
                                                                 )}
+                                                            </button>
+                                                        </div>
+                                                        <div className="mt-2 font-mono text-sm break-all text-gray-800 dark:text-gray-200">
+                                                            {provider.PayPal.id}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            if ("Revolut" in provider) {
+                                                return (
+                                                    <div key={index} className={baseCard}>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <span className={`${badgeBase} ${badgeBlue}`}>Revolut</span>
+                                                            <button
+                                                                className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"
+                                                                aria-label="remove Revolut provider"
                                                                 onClick={() => handleRemoveProvider(provider)}
                                                                 disabled={removing}
                                                             >
-                                                                {removing ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRemove} />}
+                                                                {removing ? (
+                                                                    <FontAwesomeIcon icon={faSpinner} spin />
+                                                                ) : (
+                                                                    <FontAwesomeIcon icon={faRemove} />
+                                                                )}
                                                             </button>
-                                                        </span>
-                                                    </li>
+                                                        </div>
+                                                        <div className="mt-2 font-mono text-sm break-all text-gray-800 dark:text-gray-200">
+                                                            {provider.Revolut.id}
+                                                        </div>
+                                                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                                                            Scheme: {provider.Revolut.scheme}
+                                                        </div>
+                                                        {provider.Revolut.name?.[0] && (
+                                                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                                                                Name: {provider.Revolut.name[0]}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
-                                            } else {
-                                                return null;
                                             }
+
+                                            if ("Stripe" in provider) {
+                                                return (
+                                                    <div key={index} className={stripeCard}>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <span className={`${badgeBase} ${badgePurple}`}>Stripe</span>
+                                                            <button
+                                                                className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/20 flex items-center justify-center hover:bg-red-500/10 transition"
+                                                                title="remove"
+                                                                aria-label="remove Stripe provider"
+                                                                onClick={() => handleRemoveProvider(provider)}
+                                                                disabled={removing}
+                                                            >
+                                                                {removing ? (
+                                                                    <FontAwesomeIcon icon={faSpinner} spin />
+                                                                ) : (
+                                                                    <FontAwesomeIcon icon={faRemove} />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                        <div className="mt-2 font-mono text-sm break-all text-purple-200">
+                                                            {provider.Stripe.account_id}
+                                                        </div>
+                                                        {"platform" in provider.Stripe && provider.Stripe.platform && (
+                                                            <div className="text-xs text-purple-300/80">
+                                                                Platform: {provider.Stripe.platform}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+
+                                            if ("Email" in provider) {
+                                                return (
+                                                    <div key={index} className={baseCard}>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <span className={`${badgeBase} ${badgeBlue}`}>Email</span>
+                                                            <button
+                                                                className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
+                                                                title="remove"
+                                                                aria-label="remove Email provider"
+                                                                onClick={() => handleRemoveProvider(provider)}
+                                                                disabled={removing}
+                                                            >
+                                                                {removing ? (
+                                                                    <FontAwesomeIcon icon={faSpinner} spin />
+                                                                ) : (
+                                                                    <FontAwesomeIcon icon={faRemove} />
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                        <div className="mt-2 font-mono text-sm break-all text-gray-800 dark:text-gray-200">
+                                                            {provider.Email.email}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return null;
                                         })}
-                                </ul>
+                                </div>
                             </div>
+
                             <div className="flex gap-2 text-black dark:text-white">
                                 <select
                                     value={providerType}
                                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
                                     className="w-1/2 px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                 >
-                                    <option value="" selected>Select Provider</option>
-                                    {providerTypes.map(type => (
-                                        <option value={type}>{type}</option>
-                                    ))}
+                                    <option value="" disabled selected>Select Provider</option>
+                                    {visibleProviderTypes.map(type => (<option key={type} value={type}>{type}</option>))}
                                 </select>
                                 <input
                                     type="text"
                                     value={providerId}
                                     onChange={(e) => setProviderId(e.target.value)}
-                                    placeholder="ID"
+                                    placeholder="Email"
                                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900"
                                 />
 
@@ -664,16 +845,42 @@ const UserProfile: React.FC = () => {
                                     </>
                                 )}
 
-                                <button
-                                    disabled={loadingAddProvider}
-                                    onClick={handleAddProvider}
-                                    className={clsx(
-                                        "px-4 py-2 font-medium rounded-md text-black dark:text-white",
-                                        "bg-indigo-300 dark:bg-indigo-700 hover:bg-indigo-200 dark:hover:bg-indigo-800",
-                                        loadingAddProvider ? 'cursor-not-allowed' : ''
-                                    )}>
-                                    {addButtonContent(loadingAddProvider)}
-                                </button>
+                                {providerType === 'Stripe' && userTypeToString(user.user_type) === 'Offramper' && (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={stripeCountry}
+                                            onChange={(e) => setStripeCountry(e.target.value.toUpperCase())}
+                                            placeholder="Country (ES, US, …)"
+                                            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-500 bg-gray-300 dark:bg-gray-600 rounded-md focus:outline-none"
+                                        />
+                                        <button
+                                            disabled={loadingStripe || !stripeCountry || !providerId}
+                                            onClick={startStripeOnboardingProfile}
+                                            className={clsx(
+                                                "px-4 py-2 font-medium rounded-md text-white",
+                                                "bg-purple-600 dark:bg-purple-800 hover:bg-purple-500 dark:hover:bg-purple-900",
+                                                (loadingStripe || !stripeCountry || !providerId) && "opacity-60 cursor-not-allowed"
+                                            )}
+                                        >
+                                            {loadingStripe ? 'Loading…' : 'Onboard'}
+                                        </button>
+                                    </>
+                                )}
+
+                                {providerType !== 'Stripe' && (
+                                    <button
+                                        disabled={loadingAddProvider}
+                                        onClick={handleAddProvider}
+                                        className={clsx(
+                                            "px-4 py-2 font-medium rounded-md text-black dark:text-white",
+                                            "bg-indigo-300 dark:bg-indigo-700 hover:bg-indigo-200 dark:hover:bg-indigo-800",
+                                            loadingAddProvider ? 'cursor-not-allowed' : ''
+                                        )}
+                                    >
+                                        {addButtonContent(loadingAddProvider)}
+                                    </button>
+                                )}
                             </div>
 
                             <hr className="border-t border-gray-300 dark:border-gray-500 w-full" />
