@@ -92,7 +92,7 @@
       }
     },
     "frontend_prod": {
-      "dependencies": ["ramp_prod"],
+      "dependencies": ["icramp_backend_prod"],
       "type": "assets",
       "source": ["frontend/dist/"],
       "workspace": "frontend"
