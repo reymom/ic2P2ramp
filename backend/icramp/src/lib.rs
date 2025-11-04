@@ -1,3 +1,4 @@
+mod debug;
 mod evm;
 mod icp;
 mod inter_canister;
@@ -32,8 +33,9 @@ use model::types::{
         token::{self, Token, TokenManager},
         transaction::{TransactionAction, TransactionVariant},
     },
-    exchange_rate::{CACHE_DURATION, ExchangeRateCache},
+    exchange_rate::{CACHE_DURATION, ExchangeRateCache, RateAsset},
     icp::{IcpToken, get_icp_token},
+    orders::fees::{FeeQuote, get_admin_fee},
     orders::{
         BitcoinOrderInput, DepositInput, EvmOrderInput, OrderFilter, OrderState, SolanaOrderInput,
     },
@@ -51,14 +53,12 @@ use model::{
         stable::{self, orders, spent_transactions},
     },
 };
-use outcalls::{
-    paypal,
-    pricing::rates,
-    revolut::{self, token as revolut_token},
-};
+use outcalls::{pricing::rates, revolut::token as revolut_token};
 
-use crate::model::types::exchange_rate::RateAsset;
-use crate::model::types::orders::fees::{FeeQuote, get_admin_fee};
+use crate::model::types::stripe::StripeAccountInfo;
+use crate::outcalls::stripe::account::{
+    create_account_link, create_express_account, get_account_info,
+};
 
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
@@ -116,92 +116,6 @@ fn init(install_arg: InstallArg) {
 #[ic_cdk::query]
 fn get_evm_address() -> String {
     read_state(|s| s.evm_address.clone()).expect("evm address should be initialized")
-}
-
-// -----
-// Tests
-// -----
-
-#[ic_cdk::update]
-async fn test_estimate_gas_commit(
-    chain_id: u64,
-    offramper: String,
-    token_address: Option<String>,
-    amount: u128,
-) -> Result<Option<u64>> {
-    let commit_inputs = Ic2P2ramp::commit_inputs(offramper, token_address, amount)?;
-    let transaction_type = TransactionAction::Commit;
-    let (vault, data) =
-        evm::helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
-
-    Ic2P2ramp::estimate_gas(chain_id, vault, data, None).await
-}
-
-#[ic_cdk::update]
-async fn test_get_fee_estimates(chain_id: u64) -> Result<(u128, u128)> {
-    fees::get_fee_estimates(9, chain_id).await.map(|fees| {
-        (
-            fees.max_fee_per_gas.as_u128(),
-            fees.max_priority_fee_per_gas.as_u128(),
-        )
-    })
-}
-
-#[ic_cdk::update]
-async fn test_get_latest_block(chain_id: u64) -> Result<candid::Nat> {
-    fees::eth_get_latest_block(chain_id, BlockTag::Latest)
-        .await
-        .map(|block| block.number)
-}
-
-#[ic_cdk::update]
-async fn test_get_latest_nonce(chain_id: u64) -> Result<candid::Nat> {
-    fees::eth_get_latest_block(chain_id, BlockTag::Latest)
-        .await
-        .map(|block| block.nonce)
-}
-
-#[ic_cdk::update]
-async fn test_paypal() -> Result<String> {
-    paypal::auth::get_paypal_access_token().await
-}
-
-#[ic_cdk::query]
-async fn test_get_gas_tracking(chain_id: u64) -> Result<ChainGasTracking> {
-    gas::get_gas_tracking(chain_id)
-}
-
-#[ic_cdk::query]
-async fn test_get_rates() -> HashMap<(String, String), ExchangeRateCache> {
-    heap::tmp_get_rate()
-}
-
-#[ic_cdk::update]
-async fn test_get_consent_url() -> Result<String> {
-    let consent_id = revolut::consent::create_account_access_consent(
-        "1.00",
-        "GBP",
-        "UK.OBIE.IBAN",
-        "GB14REVO04290956685580",
-        "UK.OBIE.SortCodeAccountNumber",
-        "04290956685580",
-        "Jan Smith",
-    )
-    .await?;
-
-    revolut::authorize::get_authorization_url(&consent_id).await
-}
-
-#[ic_cdk::update]
-async fn test_get_revolut_payment_token(consent_id: String) -> Result<String> {
-    revolut::token::get_revolut_access_token(consent_id).await
-}
-
-#[ic_cdk::update]
-async fn test_get_revolut_payment_details(payment_id: String) -> Result<()> {
-    let details = revolut::transaction::fetch_revolut_payment_details(&payment_id).await?;
-    ic_cdk::println!("details = {:?}", details);
-    Ok(())
 }
 
 // --------------
@@ -658,12 +572,12 @@ fn add_user_transaction_address(
 }
 
 #[ic_cdk::update]
-fn add_user_payment_provider(
+async fn add_user_payment_provider(
     user_id: u64,
     token: String,
     payment_provider: PaymentProvider,
 ) -> Result<()> {
-    user_management::add_payment_provider(user_id, &token, payment_provider)
+    user_management::add_payment_provider(user_id, &token, payment_provider).await
 }
 
 #[ic_cdk::update]
@@ -675,10 +589,39 @@ fn remove_user_payment_provider(
     user_management::remove_payment_provider(user_id, &token, &payment_provider)
 }
 
+// ------
+// Stripe
+// ------
+#[ic_cdk::update]
+async fn stripe_create_express_account(
+    email: String,
+    country: String,
+    platform_label: Option<String>,
+) -> Result<String> {
+    create_express_account(&email, &country, platform_label).await
+}
+
+#[ic_cdk::update]
+async fn stripe_get_account_info(
+    account_id: String,
+    platform_label: Option<String>,
+) -> Result<StripeAccountInfo> {
+    get_account_info(&account_id, platform_label).await
+}
+
+#[ic_cdk::update]
+async fn stripe_create_account_link(
+    account_id: String,
+    refresh_url: String,
+    return_url: String,
+    platform_label: Option<String>,
+) -> Result<String> {
+    create_account_link(&account_id, &refresh_url, &return_url, platform_label).await
+}
+
 // ------------
 // Order Prices
 // ------------
-
 #[ic_cdk::update]
 async fn get_exchange_rate(fiat_symbol: String, base_asset: RateAsset) -> Result<f64> {
     let quote_asset = RateAsset::Fiat {
@@ -1041,7 +984,8 @@ async fn process_transaction(
         PaymentProvider::PayPal { id: onramper_id } => {
             ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
 
-            payment_management::verify_paypal_payment(onramper_id, &transaction_id, &order).await?
+            payment_management::paypal::verify_paypal_payment(onramper_id, &transaction_id, &order)
+                .await?
         }
 
         PaymentProvider::Revolut {
@@ -1051,7 +995,7 @@ async fn process_transaction(
         } => {
             ic_cdk::println!("[verify_transaction] Handling Revolut payment verification");
 
-            payment_management::verify_revolut_payment(
+            payment_management::revolut::verify_revolut_payment(
                 onramper_id,
                 onramper_scheme,
                 &transaction_id,
@@ -1059,6 +1003,13 @@ async fn process_transaction(
             )
             .await?
         }
+
+        PaymentProvider::Stripe {
+            account_id,
+            platform,
+        } => todo!("onramper cannot have stripe"),
+
+        PaymentProvider::Email { email } => todo!("imple"),
     }
 
     payment_management::handle_payment_completion(&order).await

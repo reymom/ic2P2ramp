@@ -142,6 +142,7 @@ type IcpToken = record { fee : nat; decimals : nat8; symbol : text };
 type InitArg = record {
   ecdsa_key_id : EcdsaKeyId;
   ordiscan : UnisatConfig;
+  stripe : StripeConfig;
   revolut : RevolutConfig;
   canister_ids : CanisterIdsConfig;
   unisat : UnisatConfig;
@@ -228,10 +229,12 @@ type OrderState = variant {
 };
 type OrderStateFilter = variant { Locked; Cancelled; Created; Completed };
 type PaymentProvider = variant {
+  Email : record { email : text };
   PayPal : record { id : text };
+  Stripe : record { account_id : text; platform : text };
   Revolut : record { id : text; scheme : text; name : opt text };
 };
-type PaymentProviderType = variant { PayPal; Revolut };
+type PaymentProviderType = variant { Email; PayPal; Stripe; Revolut };
 type PaypalConfig = record {
   api_url : text;
   client_id : text;
@@ -263,10 +266,13 @@ type Result_1 = variant { Ok : User; Err : RampError };
 type Result_10 = variant { Ok : IcpToken; Err : RampError };
 type Result_11 = variant { Ok : OrderState; Err : RampError };
 type Result_12 = variant { Ok : opt EvmTransactionLog; Err : RampError };
-type Result_13 = variant { Ok : record { nat; nat }; Err : RampError };
-type Result_14 = variant { Ok : ChainGasTracking; Err : RampError };
-type Result_15 = variant { Ok : nat; Err : RampError };
-type Result_16 = variant { Ok : vec record { text; float64 }; Err : RampError };
+type Result_13 = variant { Ok : StripeAccountInfo; Err : RampError };
+type Result_14 = variant { Ok : record { text; text }; Err : RampError };
+type Result_15 = variant { Ok : bool; Err : RampError };
+type Result_16 = variant { Ok : record { nat; nat }; Err : RampError };
+type Result_17 = variant { Ok : ChainGasTracking; Err : RampError };
+type Result_18 = variant { Ok : nat; Err : RampError };
+type Result_19 = variant { Ok : vec record { text; float64 }; Err : RampError };
 type Result_2 = variant { Ok : FeeQuote; Err : RampError };
 type Result_3 = variant { Ok : record { nat64; nat64 }; Err : RampError };
 type Result_4 = variant { Ok : nat64; Err : RampError };
@@ -323,6 +329,28 @@ type SolanaError = variant {
   UnsupportedToken : text;
 };
 type SolanaOrderInput = record { signature : text; mint : opt text };
+type StripeAccountInfo = record {
+  id : text;
+  default_currency : opt text;
+  country : text;
+  capabilities : StripeCapabilities;
+  charges_enabled : bool;
+  details_submitted : bool;
+  payouts_enabled : bool;
+};
+type StripeCapabilities = record { transfers : text; card_payments : text };
+type StripeConfig = record {
+  platforms : vec StripePlatformConfig;
+  default_platform : text;
+};
+type StripePlatformConfig = record {
+  api_url : text;
+  success_url : text;
+  label : text;
+  secret_key : text;
+  publishable_key : text;
+  cancel_url : text;
+};
 type SystemError = variant {
   HttpRequestError : record { nat64; text };
   RpcError : text;
@@ -389,6 +417,7 @@ type UnisatConfig = record { api_key : text; api_url : text };
 type UpdateArg = record {
   ecdsa_key_id : opt EcdsaKeyId;
   ordiscan : opt UnisatConfig;
+  stripe : opt StripeConfig;
   revolut : opt RevolutConfig;
   canister_ids : opt CanisterIdsConfig;
   unisat : opt UnisatConfig;
@@ -509,12 +538,22 @@ service : (InstallArg) -> {
   resolve_tx_status : (nat64, text, nat64) -> ();
   retry_order_completion : (nat64) -> (Result);
   retry_order_unlock : (nat64) -> (Result);
+  stripe_create_account_link : (text, text, text, opt text) -> (Result_6);
+  stripe_create_express_account : (text, text, opt text) -> (Result_6);
+  stripe_get_account_info : (text, opt text) -> (Result_13);
+  stripe_test_create_login_link : (text, opt text) -> (Result_6);
+  stripe_test_create_session : (nat64, text, text, opt text) -> (Result_14);
+  stripe_test_get_raw_account : (text, opt text) -> (Result_6);
+  stripe_test_retrieve_session : (text, bool, opt text) -> (Result_6);
+  stripe_test_verify_session : (text, int64, text, text, opt text) -> (
+      Result_15,
+    );
   test_estimate_gas_commit : (nat64, text, opt text, nat) -> (Result_5);
   test_get_consent_url : () -> (Result_6);
-  test_get_fee_estimates : (nat64) -> (Result_13);
-  test_get_gas_tracking : (nat64) -> (Result_14) query;
-  test_get_latest_block : (nat64) -> (Result_15);
-  test_get_latest_nonce : (nat64) -> (Result_15);
+  test_get_fee_estimates : (nat64) -> (Result_16);
+  test_get_gas_tracking : (nat64) -> (Result_17) query;
+  test_get_latest_block : (nat64) -> (Result_18);
+  test_get_latest_nonce : (nat64) -> (Result_18);
   test_get_rates : () -> (
       vec record { record { text; text }; ExchangeRateCache },
     ) query;
@@ -530,6 +569,6 @@ service : (InstallArg) -> {
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, opt text, text) -> (Result);
-  view_canister_balances : () -> (Result_16) query;
+  view_canister_balances : () -> (Result_19) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }
