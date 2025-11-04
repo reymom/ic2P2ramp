@@ -3,11 +3,11 @@ use std::str::FromStr;
 use ethers_core::{
     abi::ethereum_types::{Address, U256},
     k256::ecdsa::{RecoveryId, Signature as K256Signature, VerifyingKey},
-    types::{transaction::eip1559::Eip1559TransactionRequest, Bytes, Signature},
+    types::{Bytes, Signature, transaction::eip1559::Eip1559TransactionRequest},
     utils::keccak256,
 };
 use ic_cdk::api::management_canister::ecdsa::{
-    ecdsa_public_key, sign_with_ecdsa, EcdsaPublicKeyArgument, SignWithEcdsaArgument,
+    EcdsaPublicKeyArgument, SignWithEcdsaArgument, ecdsa_public_key, sign_with_ecdsa,
 };
 
 use crate::model::memory::heap::read_state;
@@ -60,7 +60,7 @@ pub async fn sign_transaction(req: SignRequest) -> String {
     .0
     .signature;
 
-    let pubkey = read_state(|s| (s.ecdsa_pub_key.clone())).expect("public key should be set");
+    let pubkey = read_state(|s| s.ecdsa_pub_key.clone()).expect("public key should be set");
 
     let signature = Signature {
         v: y_parity(&txhash, &signature, &pubkey),
@@ -107,8 +107,8 @@ pub async fn get_public_key() -> Vec<u8> {
 }
 
 pub fn pubkey_bytes_to_address(pubkey_bytes: &[u8]) -> String {
-    use ethers_core::k256::elliptic_curve::sec1::ToEncodedPoint;
     use ethers_core::k256::PublicKey;
+    use ethers_core::k256::elliptic_curve::sec1::ToEncodedPoint;
 
     let key =
         PublicKey::from_sec1_bytes(pubkey_bytes).expect("failed to parse the public key as SEC1");
