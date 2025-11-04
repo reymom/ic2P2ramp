@@ -647,7 +647,7 @@ pub async fn lock_order(
 
     let (price, offramper_fee) = calculate_price_and_fee(&order.currency, &order.crypto).await?;
 
-    let revolut_consent = payment::get_revolut_consent(
+    let revolut_consent = payment::revolut::get_revolut_consent(
         order.offramper_providers,
         &(price as f64 / 100.).to_string(),
         &order.currency,

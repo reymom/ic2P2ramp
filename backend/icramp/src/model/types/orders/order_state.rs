@@ -54,7 +54,7 @@ impl fmt::Display for OrderState {
 }
 
 impl Storable for OrderState {
-    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
         Cow::Owned(Encode!(self).unwrap())
     }
 

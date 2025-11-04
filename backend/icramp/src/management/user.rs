@@ -7,9 +7,9 @@ use crate::{
         memory::stable::users,
     },
     types::{
+        LoginAddress, PaymentProvider, TransactionAddress,
         session::Session,
         user::{User, UserType},
-        LoginAddress, PaymentProvider, TransactionAddress,
     },
 };
 
@@ -41,10 +41,20 @@ pub async fn register_user(
             "Provider list is empty.".to_string(),
         ))?;
     }
-    payment_providers
-        .clone()
-        .into_iter()
-        .try_for_each(|p| p.validate())?;
+    // Enforce: Stripe for Offramper
+    if matches!(user_type, UserType::Onramper)
+        && payment_providers
+            .iter()
+            .any(|p| matches!(p, PaymentProvider::Stripe { .. }))
+    {
+        return Err(SystemError::InvalidInput(
+            "Stripe is only allowed for Offramper users.".into(),
+        ))?;
+    }
+
+    for p in &payment_providers {
+        p.validate().await?;
+    }
 
     let mut user = User::new(user_type, login_address, hashed_password?)?;
     user.payment_providers = payment_providers;
@@ -90,15 +100,24 @@ pub fn add_transaction_address(
     })?
 }
 
-pub fn add_payment_provider(
+pub async fn add_payment_provider(
     user_id: u64,
     token: &str,
     payment_provider: PaymentProvider,
 ) -> Result<()> {
-    payment_provider.validate()?;
+    payment_provider.validate().await?;
 
     users::mutate_user(user_id, |user| {
         user.validate_session(token)?;
+
+        if matches!(user.user_type, UserType::Onramper)
+            && matches!(payment_provider, PaymentProvider::Stripe { .. })
+        {
+            return Err(SystemError::InvalidInput(
+                "Stripe is only allowed for Offramper users.".into(),
+            )
+            .into());
+        }
 
         user.payment_providers.insert(payment_provider);
         Ok(())
