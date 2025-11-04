@@ -1,15 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import clsx from 'clsx';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { backend } from '@/model/backendProxy';
-import { PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
-import { PaymentProviderTypes, providerTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
-import { generateConfirmationToken, sendConfirmationEmail, storeTempUserData } from '@/model/emailConfirmation';
+import { PaymentProviderTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
+import { clearTempUserData, generateConfirmationToken, getTempUserData, sendConfirmationEmail, storeTempUserData } from '@/model/emailConfirmation';
 import { stringToUserType } from '@/model/helpers/types';
 import { rampErrorToString } from '@/model/helpers/error';
-import { truncate } from '@/utils/formatters';
-import { useUser } from './UserContext';
+import { LoginAddress, PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
 import DynamicDots from '@/components/ui/DynamicDots';
+import { useUser } from './UserContext';
+import { truncate } from '@/utils/formatters';
+import { startStripeKyc } from '@/hooks/useStripeKyc';
+import { mapCountryToPlatform } from '@/utils/stripe';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -18,25 +21,87 @@ const RegisterUser: React.FC = () => {
     const [providerId, setProviderId] = useState('');
     const [revolutScheme, setRevolutScheme] = useState<revolutSchemeTypes>();
     const [revolutName, setRevolutName] = useState('');
+    const [stripeCountry, setStripeCountry] = useState('ES');
+    const [stripeReady, setStripeReady] = useState(false);
+    const [stripeInfoMsg, setStripeInfoMsg] = useState('');
+
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingStripe, setLoadingStripe] = useState(false);
 
-    const { setUser: setGlobalUser, user, loginMethod, password, backendActor } = useUser();
+
+    const { setUser: setGlobalUser, user, loginMethod, setLoginMethod, password, backendActor } = useUser();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
+    const canRegister = providers.length > 0 && !isLoading;
+    const visibleProviderTypes = useMemo<PaymentProviderTypes[]>(() => {
+        // Offramper: Stripe/PayPal/Revolut (no Email)
+        // Onramper: only Email (no Stripe)
+        return userType === 'Offramper'
+            ? (['PayPal', 'Revolut', 'Stripe'] as PaymentProviderTypes[])
+            : (['PayPal', 'Revolut', 'Email'] as PaymentProviderTypes[]);
+    }, [userType]);
+
+    // Default the selector when switching user type
+    useEffect(() => {
+        if (userType === 'Onramper') {
+            setProviders((ps) => ps.filter((p) => !('Stripe' in p)));
+        }
+    }, [userType]);
 
     useEffect(() => {
         if (user) {
+            console.log(`user: ${user}`)
             navigate("/")
             return;
         }
     }, [user])
 
     useEffect(() => {
-        if (!loginMethod) {
+        if (!loginMethod && !getTempUserData()) {
             navigate("/")
             return;
         }
     }, [loginMethod])
+
+    const restoreTempData = () => {
+        const t = getTempUserData();
+        const acct = searchParams.get('stripe_acct');
+        if (t && acct) {
+            if (t.providers?.length) setProviders(t.providers);
+            if (t.userType) setUserType(t.userType);
+            if (t.loginMethod) setLoginMethod(t.loginMethod, t.password ?? null);
+            return true;
+        } else if (t && t.loginMethod && loginMethod && t.loginMethod !== loginMethod) {
+            clearTempUserData();
+        }
+        return false;
+    };
+
+    useEffect(() => {
+        restoreTempData();
+        const acct = searchParams.get('stripe_acct');
+        const platform = searchParams.get('platform');
+        if (!acct || !platform) return;
+
+        (async () => {
+            try {
+                setProviders((prev) => {
+                    const next = prev.some((p) => 'Stripe' in p && p.Stripe.account_id === acct)
+                        ? prev
+                        : [...prev, { Stripe: { account_id: acct, platform: mapCountryToPlatform(stripeCountry) } }];
+                    const t = getTempUserData();
+                    if (t) storeTempUserData({ ...t, providers: next });
+                    return next;
+                });
+                setStripeReady(true);
+                setStripeInfoMsg('Stripe account added.');
+            } catch (e) {
+                setMessage(`Failed to verify Stripe account: ${e}`);
+            }
+        })();
+    }, [searchParams]);
 
     const handleAddProvider = () => {
         let newProvider: PaymentProvider;
@@ -52,6 +117,30 @@ const RegisterUser: React.FC = () => {
                 return;
             }
             newProvider = { Revolut: { id: providerId, scheme: revolutScheme, name: revolutName ? [revolutName] : [] } };
+        } else if (providerType === 'Stripe') {
+            if (userType === 'Onramper') {
+                setMessage('Stripe is just needed for Offrampers');
+                return;
+            }
+            setMessage('Use "Start Stripe Onboarding" to add a Stripe provider.');
+            return;
+        } else if (providerType === 'Email') {
+            if (userType === 'Offramper') {
+                setMessage('Email available just for Onrampers');
+                return;
+            }
+            const email = providerId.trim();
+            const ok =
+                email.length <= 254 &&
+                email.includes('@') &&
+                !email.includes(' ') &&
+                !email.startsWith('@') &&
+                !email.endsWith('@');
+            if (!ok) {
+                setMessage('Invalid email.');
+                return;
+            }
+            newProvider = { Email: { email } };
         } else {
             setMessage('Unknown payment provider');
             return;
@@ -70,18 +159,27 @@ const RegisterUser: React.FC = () => {
             return;
         }
 
-        if (!loginMethod) {
+        let login: LoginAddress;
+        const t = getTempUserData();
+        const acct = searchParams.get('stripe_acct');
+        if (t && acct && !loginMethod) {
+            setLoginMethod(t.loginMethod, t.password ?? null);
+            login = t.loginMethod;
+        } else if (!loginMethod) {
+            console.log('no login method');
             navigate("/")
             return;
+        } else {
+            login = loginMethod;
         }
 
-        if ('Email' in loginMethod) {
+        if ('Email' in login) {
             await handleEmailConfirmation();
             return;
         }
 
         let tmpActor = backend;
-        if ('ICP' in loginMethod) {
+        if ('ICP' in login) {
             if (!backendActor) {
                 setMessage("Internet Identity not loaded with backend actor")
                 return;
@@ -91,7 +189,7 @@ const RegisterUser: React.FC = () => {
 
         setIsLoading(true);
         try {
-            let result = await tmpActor.register_user(stringToUserType(userType), providers, loginMethod, []);
+            let result = await tmpActor.register_user(stringToUserType(userType), providers, login, []);
             if ('Err' in result) {
                 setGlobalUser(null);
                 setMessage(`Could not register user: ${rampErrorToString(result.Err)}`)
@@ -103,7 +201,6 @@ const RegisterUser: React.FC = () => {
             setMessage(`Failed to register user: ${error}`);
         } finally {
             setIsLoading(false);
-            setMessage("");
         }
     };
 
@@ -129,6 +226,21 @@ const RegisterUser: React.FC = () => {
             return;
         }
         navigate("/confirm-email");
+    };
+
+    const startStripeOnboarding = async () => {
+        await startStripeKyc({
+            userType,
+            loginMethod,
+            backendActor,
+            email: providerId,
+            country: stripeCountry,
+            providers,
+            password: password ?? undefined,
+            storeUserData: true,
+            setMessage,
+            setLoading: setLoadingStripe,
+        });
     };
 
     return (
@@ -182,13 +294,14 @@ const RegisterUser: React.FC = () => {
                     onChange={(e) => setProviderType(e.target.value as PaymentProviderTypes)}
                     className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                 >
-                    {providerTypes.map(type => (
+                    {visibleProviderTypes.map(type => (
                         <option value={type}>{type}</option>
                     ))}
                 </select>
             </div>
+
             <div className="flex items-center">
-                <label className="block w-32">ID:</label>
+                <label className="block w-32">Email:</label>
                 <input
                     type="text"
                     value={providerId}
@@ -206,7 +319,7 @@ const RegisterUser: React.FC = () => {
                             onChange={(e) => setRevolutScheme(e.target.value as revolutSchemeTypes)}
                             className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
                         >
-                            <option value="" selected>Select Scheme</option>
+                            <option value="">Select Scheme</option>
                             {revolutSchemes.map(type => (
                                 <option value={type}>{type}</option>
                             ))}
@@ -225,40 +338,93 @@ const RegisterUser: React.FC = () => {
                     )}
                 </>
             )}
-            <button
+
+            {providerType === 'Stripe' && (
+                <>
+                    <div className="flex items-center">
+                        <label className="block w-32">Country:</label>
+                        <input
+                            type="text"
+                            value={stripeCountry}
+                            onChange={(e) => setStripeCountry(e.target.value.toUpperCase())}
+                            placeholder="ES, US, …"
+                            className="flex-grow w-full px-4 py-2 bg-gray-300 dark:bg-gray-600 border border-gray-500 outline-none rounded-md focus:ring focus:border-blue-900"
+                        />
+                    </div>
+
+                    <div
+                        className={clsx(
+                            "relative w-full flex items-center justify-center px-4 py-2",
+                            "bg-purple-600 dark:bg-purple-800 font-semibold rounded-md",
+                            (loadingStripe || stripeReady)
+                                ? "opacity-60 cursor-not-allowed"
+                                : "cursor-pointer hover:bg-purple-500 dark:hover:bg-purple-900",
+                            "focus:outline-none focus:ring focus:ring-purple-500"
+                        )}
+                        onClick={() => !isLoading ? startStripeOnboarding() : undefined}
+                    >
+                        <span className="text-lg pointer-events-none">
+                            {loadingStripe
+                                ? <>Setting up Stripe<DynamicDots isLoading={loadingStripe} /></>
+                                : stripeReady ? "Stripe Ready" : "Start Stripe Onboarding"}
+                        </span>
+                        {loadingStripe && (
+                            <div className="absolute right-3 w-4 h-4 border-t-2 border-b-2 border-purple-700 rounded-full animate-spin" />
+                        )}
+                    </div>
+                </>
+            )}
+
+            {providerType !== "Stripe" && <button
                 onClick={handleAddProvider}
-                className="w-full px-4 py-2 bg-indigo-600 dark:bg-indigo-800 font-semibold rounded-md hover:bg-indigo-500 dark:hover:bg-indigo-900 focus:outline-none focus:ring focus:ring-indigo-500"
-            >
+                className="w-full px-4 py-2 bg-indigo-600 dark:bg-indigo-800 font-semibold rounded-md hover:bg-indigo-500 dark:hover:bg-indigo-900 focus:outline-none focus:ring focus:ring-indigo-500">
                 Add Provider
             </button>
+            }
 
-            {providers.length > 0 && (
-                <div className="mt-4">
-                    <ul className="list-none p-4 rounded-md">
-                        {providers.map((provider, index) => {
-                            if ('PayPal' in provider) {
-                                return (
-                                    <li key={index} className="py-1">
-                                        <span className="text-gray-800 dark:text-white">(PayPal)</span>
-                                        <div>{provider.PayPal.id}</div>
-                                    </li>
-                                );
-                            } else if ('Revolut' in provider) {
-                                return (
-                                    <li key={index} className="py-1">
-                                        <span className="text-gray-800 dark:text-white">(Revolut)</span>
-                                        <div>{provider.Revolut.id}</div>
-                                        <div>Scheme: {provider.Revolut.scheme}</div>
-                                        {provider.Revolut.name && provider.Revolut.name.length > 0 && (
-                                            <div>Name: {provider.Revolut.name[0]}</div>
-                                        )}
-                                    </li>
-                                );
-                            } else {
-                                return null;
-                            }
-                        })}
-                    </ul>
+            {(providers.length > 0) && (
+                <div className="mt-4 grid grid-cols-1 gap-3">
+                    {providers.map((provider, index) => {
+                        if ('PayPal' in provider) {
+                            return (
+                                <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
+                                    <div className="text-sm text-gray-600 dark:text-gray-300">PayPal</div>
+                                    <div className="mt-1 font-mono text-sm break-all">{provider.PayPal.id}</div>
+                                </div>
+                            );
+                        } else if ('Revolut' in provider) {
+                            return (
+                                <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
+                                    <div className="text-sm text-gray-600 dark:text-gray-300">Revolut</div>
+                                    <div className="mt-1 font-mono text-sm break-all">{provider.Revolut.id}</div>
+                                    <div className="text-xs text-gray-500">Scheme: {provider.Revolut.scheme}</div>
+                                    {provider.Revolut.name?.[0] && (
+                                        <div className="text-xs text-gray-500">Name: {provider.Revolut.name[0]}</div>
+                                    )}
+                                </div>
+                            );
+                        } else if ('Stripe' in provider) {
+                            return (
+                                <div key={index} className="rounded-lg border border-purple-500/50 bg-purple-500/10 p-3">
+                                    <div className="text-sm text-purple-300">Stripe</div>
+                                    <div className="mt-1 font-mono text-sm break-all">{provider.Stripe.account_id}</div>
+                                </div>
+                            );
+                        } else if ('Email' in provider) {
+                            return (
+                                <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
+                                    <div className="text-sm text-gray-600 dark:text-gray-300">Email</div>
+                                    <div className="mt-1 font-mono text-sm break-all">{provider.Email.email}</div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })}
+
+                    {/* Success notice below cards, separate from error messages */}
+                    {stripeReady && stripeInfoMsg && (
+                        <div className="text-sm text-green-400">{stripeInfoMsg}</div>
+                    )}
                 </div>
             )}
 
@@ -279,7 +445,11 @@ const RegisterUser: React.FC = () => {
                     </div>
                 ) : null}
 
-                <button onClick={handleSubmit} className="px-4 py-2 bg-green-500 dark:bg-green-700 hover:bg-green-400 dark:hover:bg-green-800 rounded-md focus:outline-none focus:ring focus:ring-green-600">
+                <button
+                    onClick={handleSubmit}
+                    disabled={!canRegister}
+                    className="px-4 py-2 bg-green-500 dark:bg-green-700 hover:bg-green-400 dark:hover:bg-green-800 rounded-md focus:outline-none focus:ring focus:ring-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                     Register
                 </button>
             </div>

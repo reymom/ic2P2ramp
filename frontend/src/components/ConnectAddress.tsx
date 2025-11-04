@@ -338,7 +338,6 @@ const ConnectAddress: React.FC = () => {
         cleanMessages();
 
         try {
-            const canisterId = getBackendCanisterId();
 
             setLoadingIcp(true);
 
@@ -350,6 +349,7 @@ const ConnectAddress: React.FC = () => {
             if (!loginPrincipal) throw new Error("Principal not set after II login");
             if (!loginAgent) throw new Error("ICP Agent not set after II login");
 
+            const canisterId = getBackendCanisterId();
             const backendActor = createActor(canisterId, { agent: loginAgent });
             const loginAddress: LoginAddress = {
                 ICP: { principal_id: loginPrincipal.toText() }
