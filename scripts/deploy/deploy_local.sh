@@ -29,14 +29,14 @@ cargo build --release --target wasm32-unknown-unknown --package bitcoin_backend
 candid-extractor target/wasm32-unknown-unknown/release/bitcoin_backend.wasm > backend/bitcoin/bitcoin_backend.did
 
 dfx deploy bitcoin_backend --specified-id zhuzm-wqaaa-aaaap-qpk2q-cai --argument "(
-    variant { 
-        Reinstall = record { 
-            network = variant { regtest }; 
+    variant {
+        Reinstall = record {
+            network = variant { regtest };
             proxy_url = \"https://icramp.info\";
             unisat = record {
                 api_url = \"open-api-testnet4.unisat.io\";
                 api_key = \"${UNISAT_API_KEY}\";
-            }; 
+            };
         }
     }
 )"
@@ -52,18 +52,18 @@ cargo build --release --target wasm32-unknown-unknown --package solana_backend
 candid-extractor target/wasm32-unknown-unknown/release/solana_backend.wasm > backend/solana/solana_backend.did
 
 dfx deploy solana_backend --argument "(
-    variant { 
+    variant {
         Reinstall = record {
             sol_rpc_canister_id = opt principal \"tghme-zyaaa-aaaar-qarca-cai\";
             ed25519_key_name = variant { LocalDevelopment };
-            network = variant { Devnet }; 
+            network = variant { Devnet };
             proxy_url = \"https://icramp.info\";
         }
     }
 )"
 
 # --------
-# Deploy icramp backend canister dependencies 
+# Deploy icramp backend canister dependencies
 # --------
 
 dfx identity use minter
@@ -130,7 +130,7 @@ candid-extractor target/wasm32-unknown-unknown/release/icramp_backend.wasm > bac
 # dfx_test_key, test_key_1
 # api-m.paypal.com, api-m.sandbox.paypal.com
 dfx deploy icramp_backend --argument "(
-  variant { 
+  variant {
     Reinstall = record {
       canister_ids = record {
         bitcoin_backend_id = \"zhuzm-wqaaa-aaaap-qpk2q-cai\";
@@ -222,6 +222,19 @@ dfx deploy icramp_backend --argument "(
         api_url = \"open-api-testnet4.unisat.io\";
         api_key = \"${UNISAT_API_KEY}\";
       };
+      stripe = record {
+        default_platform = \"ES\";
+        platforms = vec {
+          record {
+            label = \"ES\";
+            api_url = \"api.stripe.com\";
+            publishable_key = \"${STRIPE_PK}\";
+            secret_key = \"${STRIPE_SK}\";
+            success_url = \"https://example.com\";
+            cancel_url = \"https://example.com\"
+          };
+        };
+      };
     }
   }
 )"
@@ -254,6 +267,8 @@ dfx canister call solana_backend register_tokens '(vec {
 dfx generate icramp_backend
 dfx generate bitcoin_backend
 dfx generate solana_backend
+
+dfx deploy internet_identity
 
 cd frontend && npm run build && cd .. && dfx deploy frontend --mode reinstall --yes
 
