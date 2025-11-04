@@ -37,6 +37,7 @@ dist-ssr
 .env.production
 .env.sandbox
 .public.env
+**/.mint
 
 # rust
 target
