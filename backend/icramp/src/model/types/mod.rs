@@ -7,18 +7,19 @@ pub mod orders;
 pub mod ordiscan;
 pub mod payment;
 pub mod session;
+pub mod stripe;
 pub mod unisat;
 pub mod user;
 
 pub use blockchain::{BlockchainAsset, Crypto};
 pub use common::{AddressType, AuthenticationData, LoginAddress, TransactionAddress};
-pub use payment::providers::{contains_provider_type, PaymentProvider, PaymentProviderType};
+pub use payment::providers::{PaymentProvider, PaymentProviderType, contains_provider_type};
 
 #[cfg(test)]
 mod tests {
     use crate::model::types::common::{LoginAddress, TransactionAddress};
     use crate::model::types::user::User;
-    use crate::types::{common::AddressType, user::UserType, PaymentProvider};
+    use crate::types::{PaymentProvider, common::AddressType, user::UserType};
 
     use candid::Principal;
     use ethers_core::types::Address as EthAddress;
@@ -83,9 +84,11 @@ mod tests {
         map.insert(updated_user.id, updated_user.clone());
 
         let retrieved_user_with_new_address = map.get(&updated_user.id).unwrap();
-        assert!(retrieved_user_with_new_address
-            .addresses
-            .contains(&new_address));
+        assert!(
+            retrieved_user_with_new_address
+                .addresses
+                .contains(&new_address)
+        );
     }
 
     #[test]

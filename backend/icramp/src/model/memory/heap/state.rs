@@ -7,7 +7,7 @@ use crate::model::types::{
     evm::chains::ChainState,
     icp::IcpToken,
     ordiscan::OrdiscanState,
-    payment::{paypal::PayPalState, revolut::RevolutState},
+    payment::{paypal::PayPalState, revolut::RevolutState, stripe::StripeState},
     unisat::UnisatState,
 };
 
@@ -28,6 +28,7 @@ pub struct State {
     pub ecdsa_key_id: EcdsaKeyId,
     pub evm_address: Option<String>,
     pub paypal: PayPalState,
+    pub stripe: StripeState,
     pub revolut: RevolutState,
     pub proxy_url: String,
     pub ordiscan: OrdiscanState,
@@ -53,6 +54,7 @@ impl std::fmt::Debug for State {
             .field("ecdsa_key_id", &self.ecdsa_key_id)
             .field("evm_address", &self.evm_address)
             .field("paypal", &self.paypal)
+            .field("stripe", &self.stripe)
             .field("revolut", &self.revolut)
             .field("proxy_url", &self.proxy_url)
             .field("ordiscan", &self.ordiscan)

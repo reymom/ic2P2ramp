@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
 
 use candid::{CandidType, Deserialize};
 use evm_rpc_canister_types::RpcServices;
@@ -7,6 +7,8 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaKeyId;
 
 use super::state::{InvalidStateError, State};
 use crate::model::memory::heap::CanisterIds;
+use crate::model::types::payment::revolut::RevolutConfig;
+use crate::model::types::payment::stripe::{StripeConfig, stripe_state_from_config};
 use crate::model::types::{
     evm::chains::ChainState,
     ordiscan::OrdiscanState,
@@ -27,16 +29,6 @@ pub struct PaypalConfig {
     pub client_id: String,
     pub client_secret: String,
     pub api_url: String,
-}
-
-#[derive(CandidType, Deserialize, Clone)]
-pub struct RevolutConfig {
-    pub client_id: String,
-    pub api_url: String,
-    pub proxy_url: String,
-    pub private_key_der: Vec<u8>,
-    pub kid: String,
-    pub tan: String,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -74,25 +66,13 @@ impl TryFrom<CanisterIdsConfig> for CanisterIds {
     }
 }
 
-impl fmt::Debug for RevolutConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RevolutConfig")
-            .field("client_id", &self.client_id)
-            .field("api_url", &self.api_url)
-            .field("proxy_url", &self.proxy_url)
-            .field("private_key_der", &"[REDACTED]")
-            .field("kid", &self.kid)
-            .field("tan", &self.tan)
-            .finish()
-    }
-}
-
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InitArg {
     pub canister_ids: CanisterIdsConfig,
     pub chains: Vec<ChainConfig>,
     pub ecdsa_key_id: EcdsaKeyId,
     pub paypal: PaypalConfig,
+    pub stripe: StripeConfig,
     pub revolut: RevolutConfig,
     pub proxy_url: String,
     pub ordiscan: OrdiscanConfig,
@@ -107,6 +87,7 @@ impl TryFrom<InitArg> for State {
             chains,
             ecdsa_key_id,
             paypal,
+            stripe,
             revolut,
             proxy_url,
             ordiscan,
@@ -143,6 +124,7 @@ impl TryFrom<InitArg> for State {
                 client_secret: paypal.client_secret,
                 api_url: paypal.api_url,
             },
+            stripe: stripe_state_from_config(stripe),
             revolut: RevolutState {
                 access_token: None,
                 token_expiration: None,

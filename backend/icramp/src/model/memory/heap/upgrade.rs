@@ -13,7 +13,11 @@ use crate::{
             evm::chains::ChainState,
             exchange_rate::ExchangeRateCache,
             ordiscan::OrdiscanState,
-            payment::{paypal::PayPalState, revolut::RevolutState},
+            payment::{
+                paypal::PayPalState,
+                revolut::{RevolutConfig, RevolutState},
+                stripe::{StripeConfig, stripe_state_from_config},
+            },
             unisat::UnisatState,
         },
     },
@@ -22,7 +26,7 @@ use crate::{
 use super::{
     LOCK_DURATION_TIME_SECONDS, State, clear_order_timer, get_exchange_rate_cache,
     get_locked_order_timers, get_order_id_counter, get_state, get_user_id_counter,
-    init::{ChainConfig, OrdiscanConfig, PaypalConfig, RevolutConfig, UnisatConfig},
+    init::{ChainConfig, OrdiscanConfig, PaypalConfig, UnisatConfig},
     initialize_state, set_exchange_rate_cache, set_order_id_counter, set_order_timer,
     set_user_id_counter,
 };
@@ -35,10 +39,11 @@ pub struct UpdateArg {
     pub chains: Option<Vec<ChainConfig>>, // Optional chain configuration updates
     pub ecdsa_key_id: Option<EcdsaKeyId>, // Optional ECDSA key update
     pub paypal: Option<PaypalConfig>,     // Optional PayPal configuration update
-    pub revolut: Option<RevolutConfig>,   // Optional Revolut configuration update
-    pub proxy_url: Option<String>,        // Optional proxy URL update
+    pub stripe: Option<StripeConfig>,
+    pub revolut: Option<RevolutConfig>, // Optional Revolut configuration update
+    pub proxy_url: Option<String>,      // Optional proxy URL update
     pub ordiscan: Option<OrdiscanConfig>, // Optional Ordiscan configuration update
-    pub unisat: Option<UnisatConfig>,     // Optional Unisat configuration update
+    pub unisat: Option<UnisatConfig>,   // Optional Unisat configuration update
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -51,7 +56,7 @@ pub struct SerializableHeap {
 }
 
 impl Storable for SerializableHeap {
-    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
         Cow::Owned(Encode!(self).unwrap())
     }
 
@@ -179,6 +184,10 @@ fn update_state(update_arg: UpdateArg, state: &mut State) {
             client_secret: paypal_config.client_secret,
             api_url: paypal_config.api_url,
         };
+    }
+
+    if let Some(stripe_config) = update_arg.stripe {
+        state.stripe = stripe_state_from_config(stripe_config);
     }
 
     if let Some(revolut_config) = update_arg.revolut {

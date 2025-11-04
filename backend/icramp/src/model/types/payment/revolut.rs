@@ -46,3 +46,26 @@ pub fn set_revolut_token(token: String, expiration: u64) {
         s.revolut.token_expiration = Some(expiration);
     });
 }
+
+#[derive(CandidType, Deserialize, Clone)]
+pub struct RevolutConfig {
+    pub client_id: String,
+    pub api_url: String,
+    pub proxy_url: String,
+    pub private_key_der: Vec<u8>,
+    pub kid: String,
+    pub tan: String,
+}
+
+impl fmt::Debug for RevolutConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RevolutConfig")
+            .field("client_id", &self.client_id)
+            .field("api_url", &self.api_url)
+            .field("proxy_url", &self.proxy_url)
+            .field("private_key_der", &"[REDACTED]")
+            .field("kid", &self.kid)
+            .field("tan", &self.tan)
+            .finish()
+    }
+}
