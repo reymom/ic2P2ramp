@@ -230,8 +230,6 @@ dfx deploy icramp_backend --argument "(
             api_url = \"api.stripe.com\";
             publishable_key = \"${STRIPE_PK}\";
             secret_key = \"${STRIPE_SK}\";
-            success_url = \"https://example.com\";
-            cancel_url = \"https://example.com\"
           };
         };
       };
