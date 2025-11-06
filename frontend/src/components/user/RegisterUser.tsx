@@ -29,7 +29,6 @@ const RegisterUser: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingStripe, setLoadingStripe] = useState(false);
 
-
     const { setUser: setGlobalUser, user, loginMethod, setLoginMethod, password, backendActor } = useUser();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();

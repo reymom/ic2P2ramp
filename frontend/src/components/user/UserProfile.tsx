@@ -35,7 +35,6 @@ const UserProfile: React.FC = () => {
     const [revolutName, setRevolutName] = useState('');
     const [stripeCountry, setStripeCountry] = useState('ES');
     const [loadingStripe, setLoadingStripe] = useState(false);
-    const [finalizingStripe, setFinalizingStripe] = useState(false);
 
     const [message, setMessage] = useState('');
     const [loadingUnisat, setLoadingUnisat] = useState(false);
