@@ -18,12 +18,20 @@ pub async fn create_checkout_session_for_order(
     amount_minor: u64,
     currency: &str, // e.g. "EUR"
     platform_label: Option<String>,
+    success_url: String,
+    cancel_url: String,
+    payer_email: String,
 ) -> Result<(String, String)> {
     let p = pick_platform(platform_label)?;
     let proxy_url = read_state(|s| s.proxy_url.clone());
 
     // NOTE: currency must be lowercase for Stripe API
     let cur = currency.to_lowercase();
+    let email_q = format!(
+        "&customer_email={ce}&payment_intent_data[receipt_email]={re}",
+        ce = pct_encode(&payer_email),
+        re = pct_encode(&payer_email),
+    );
 
     let body = format!(
         "mode=payment\
@@ -33,13 +41,15 @@ pub async fn create_checkout_session_for_order(
             &line_items[0][price_data][currency]={cur}\
             &line_items[0][price_data][unit_amount]={amt}\
             &line_items[0][price_data][product_data][name]=Order%20{oid}\
-            &payment_intent_data[transfer_data][destination]={dest}",
-        success = pct_encode(&p.success_url),
-        cancel = pct_encode(&p.cancel_url),
+            &payment_intent_data[transfer_data][destination]={dest}\
+            {email_q}",
+        success = pct_encode(&success_url),
+        cancel = pct_encode(&cancel_url),
         cur = cur,
         amt = amount_minor,
         oid = order_id,
-        dest = offramper_acct
+        dest = offramper_acct,
+        email_q = email_q
     );
 
     let req = CanisterHttpRequestArgument {

@@ -40,6 +40,7 @@ use model::types::{
         BitcoinOrderInput, DepositInput, EvmOrderInput, OrderFilter, OrderState, SolanaOrderInput,
     },
     session::Session,
+    stripe::StripeAccountInfo,
     user::{User, UserType},
 };
 use model::{
@@ -53,11 +54,10 @@ use model::{
         stable::{self, orders, spent_transactions},
     },
 };
-use outcalls::{pricing::rates, revolut::token as revolut_token};
-
-use crate::model::types::stripe::StripeAccountInfo;
-use crate::outcalls::stripe::account::{
-    create_account_link, create_express_account, get_account_info,
+use outcalls::{
+    pricing::rates,
+    revolut::token as revolut_token,
+    stripe::account::{create_account_link, create_express_account, get_account_info},
 };
 
 #[ic_cdk::pre_upgrade]
@@ -878,6 +878,8 @@ async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
+    stripe_success_url: Option<String>,
+    stripe_cancel_url: Option<String>,
 ) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
@@ -887,6 +889,8 @@ async fn lock_order(
         onramper_user_id,
         onramper_provider,
         onramper_address,
+        stripe_success_url,
+        stripe_cancel_url,
     )
     .await
     {
@@ -1004,12 +1008,54 @@ async fn process_transaction(
             .await?
         }
 
-        PaymentProvider::Stripe {
-            account_id,
-            platform,
-        } => todo!("onramper cannot have stripe"),
+        PaymentProvider::Stripe { .. } => return Err(OrderError::InvalidOnramperProvider.into()),
 
-        PaymentProvider::Email { email } => todo!("imple"),
+        PaymentProvider::Email { email } => {
+            ic_cdk::println!("[verify_transaction] Handling Stripe checkout verification");
+
+            // 1. Stored Checkout Session id from lock()
+            let session_id = order
+                .payment_id
+                .clone()
+                .ok_or(OrderError::PaymentVerificationFailed)?;
+
+            // 2. Stripe platform (offramper's Connect platform)
+            let platform = order
+                .base
+                .offramper_providers
+                .iter()
+                .find_map(|p| {
+                    if let PaymentProvider::Stripe { platform, .. } = p.1 {
+                        Some(platform.clone())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(OrderError::PaymentVerificationFailed)?;
+
+            let expected_minor = (order.price + order.offramper_fee) as i64;
+            let stripe_account_id = order
+                .base
+                .offramper_providers
+                .get(&PaymentProviderType::Stripe)
+                .and_then(|provider| {
+                    if let PaymentProvider::Stripe { account_id, .. } = provider {
+                        Some(account_id)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| OrderError::InvalidOfframperProvider)?;
+            payment_management::stripe::verify_session_paid_destination(
+                &session_id,
+                expected_minor,
+                &order.base.currency,
+                &stripe_account_id,
+                Some(platform),
+                email,
+            )
+            .await?;
+        }
     }
 
     payment_management::handle_payment_completion(&order).await

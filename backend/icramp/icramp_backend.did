@@ -159,6 +159,7 @@ type LockedOrder = record {
   base : Order;
   uncommited : bool;
   onramper : Onramper;
+  payment_url : opt text;
   price : nat64;
   payment_id : opt text;
   revolut_consent : opt RevolutConsent;
@@ -345,11 +346,9 @@ type StripeConfig = record {
 };
 type StripePlatformConfig = record {
   api_url : text;
-  success_url : text;
   label : text;
   secret_key : text;
   publishable_key : text;
-  cancel_url : text;
 };
 type SystemError = variant {
   HttpRequestError : record { nat64; text };
@@ -523,9 +522,15 @@ service : (InstallArg) -> {
     ) query;
   get_pending_txs : () -> (vec EvmTransactionLog) query;
   get_user : (nat64) -> (Result_1) query;
-  lock_order : (nat64, text, nat64, PaymentProvider, TransactionAddress) -> (
-      Result,
-    );
+  lock_order : (
+      nat64,
+      text,
+      nat64,
+      PaymentProvider,
+      TransactionAddress,
+      opt text,
+      opt text,
+    ) -> (Result);
   print_constants : () -> (text) query;
   refetch_user : (nat64, text) -> (Result_1) query;
   register_evm_tokens : (nat64, vec record { text; nat8; text }) -> (Result);
@@ -542,10 +547,18 @@ service : (InstallArg) -> {
   stripe_create_express_account : (text, text, opt text) -> (Result_6);
   stripe_get_account_info : (text, opt text) -> (Result_13);
   stripe_test_create_login_link : (text, opt text) -> (Result_6);
-  stripe_test_create_session : (nat64, text, text, opt text) -> (Result_14);
+  stripe_test_create_session : (
+      nat64,
+      text,
+      text,
+      opt text,
+      text,
+      text,
+      text,
+    ) -> (Result_14);
   stripe_test_get_raw_account : (text, opt text) -> (Result_6);
   stripe_test_retrieve_session : (text, bool, opt text) -> (Result_6);
-  stripe_test_verify_session : (text, int64, text, text, opt text) -> (
+  stripe_test_verify_session : (text, int64, text, text, opt text, text) -> (
       Result_15,
     );
   test_estimate_gas_commit : (nat64, text, opt text, nat) -> (Result_5);
