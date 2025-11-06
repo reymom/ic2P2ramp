@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import {
@@ -12,7 +12,11 @@ import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { backend } from '@/model/backendProxy';
-import { PaymentProviderTypes, TokenOption } from '@/model/types';
+import {
+  PaymentProviderTypes,
+  providerTypes,
+  TokenOption,
+} from '@/model/types';
 import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
 import {
   blockchainAssetToBlockchainType,
@@ -50,6 +54,10 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
 
   const { user, sessionToken, fetchBalances, refetchUser } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const processedStripeReturnRef = useRef<string | null>(null);
 
   const [orderState, setOrderState] = useState(order);
   const [lockRefetched, setLockedRefetched] = useState(0);
@@ -301,15 +309,93 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     }
   }, [orderState]);
 
+  useEffect(() => {
+    if (!('Locked' in orderState) || !sessionToken || !user) return;
+
+    const orderId = orderState.Locked.base.id;
+    const paymentId =
+      orderState.Locked?.payment_id?.[0] ??
+      orderState.Locked?.payment_id ??
+      'stripe-return';
+
+    const flagStripe = (searchParams.get('stripe') || '').toLowerCase();
+    const flagSuccess = (searchParams.get('success') || '').toLowerCase();
+    const redirectStatus = (
+      searchParams.get('redirect_status') || ''
+    ).toLowerCase();
+    const spOrder = searchParams.get('order_id');
+
+    const successHit =
+      flagStripe === 'success' ||
+      flagSuccess === 'true' ||
+      redirectStatus === 'succeeded';
+
+    const isThisOrder =
+      !!spOrder && !!orderId && BigInt(spOrder) === BigInt(orderId);
+
+    if (!(successHit && isThisOrder)) return;
+
+    const seenKey = `stripe_verified_${spOrder}`;
+    if (sessionStorage.getItem(seenKey) === '1') return;
+    sessionStorage.setItem(seenKey, '1');
+
+    if (processedStripeReturnRef.current === String(paymentId)) return;
+    processedStripeReturnRef.current = String(paymentId);
+
+    (async () => {
+      try {
+        setIsLoading(true);
+        setLoadingMessage('Payment received. Verifying');
+        const resp = await backend.verify_transaction(
+          orderId,
+          [sessionToken],
+          'stripe',
+        );
+        if ('Ok' in resp) {
+          if ('EVM' in orderBlockchainAsset!) {
+            setTxHash(resp.Ok);
+            await pollTransactionLog(orderId, user.id);
+          } else if ('Bitcoin' in orderBlockchainAsset!) {
+            setTxHash(resp.Ok);
+            setLoadingMessage(
+              'Bitcoin transaction is being processed. This may take some time to confirm (15-60+ minutes).',
+            );
+          } else {
+            setLoadingMessage('Funds released');
+            setTimeout(() => {
+              fetchOrder(orderId);
+              refetchUser();
+              setIsLoading(false);
+              fetchBalances();
+              navigate('/view?status=Completed');
+            }, 2500);
+          }
+        } else {
+          setIsLoading(false);
+          setMessage(rampErrorToString(resp.Err));
+        }
+      } catch (e) {
+        setIsLoading(false);
+        setMessage('Error verifying Stripe payment.');
+        console.error(e);
+      } finally {
+        navigate(location.pathname, { replace: true });
+      }
+    })();
+  }, [orderState, sessionToken, searchParams, orderId]);
+
   const handleProviderSelection = (
     selectedProviderType: PaymentProviderTypes,
   ) => {
     if (!user) return;
 
     const onramperProvider = user.payment_providers.find((userProvider) => {
+      const p = paymentProviderTypeToString(
+        providerToProviderType(userProvider),
+      );
       return (
-        paymentProviderTypeToString(providerToProviderType(userProvider)) ===
-        selectedProviderType
+        p === selectedProviderType ||
+        (p === 'Email' && selectedProviderType === 'Stripe')
       );
     });
     if (!onramperProvider) return;
@@ -560,7 +646,12 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
       return;
     }
 
-    setLoadingMessage('Locking Order');
+    const onIsEmail = 'Email' in provider;
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const successUrl = `${base}?stripe=success&order_id=${orderId}`;
+    const cancelUrl = `${base}?stripe=cancel&order_id=${orderId}`;
+
+    if (provider) setLoadingMessage('Locking Order');
     try {
       const result = await backend.lock_order(
         orderId,
@@ -568,6 +659,8 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         user.id,
         provider,
         onramperAddress,
+        onIsEmail ? [successUrl] : [],
+        onIsEmail ? [cancelUrl] : [],
       );
       if ('Ok' in result) {
         if ('EVM' in orderBlockchainAsset) {
@@ -709,6 +802,21 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     } else {
       console.error('Consent URL is not available.');
     }
+  };
+
+  const handleStripePay = () => {
+    if (!('Locked' in orderState)) return;
+    const payUrl =
+      orderState.Locked?.payment_url?.[0] ?? orderState.Locked?.payment_url;
+
+    if (!payUrl) {
+      setMessage('Stripe payment link not available');
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingMessage('Redirecting to Stripe Checkout…');
+    window.location.href = payUrl as string; // same-tab redirect
   };
 
   const getNetwork = (): NetworkProps | undefined => {
@@ -861,6 +969,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     removeOrder,
     handlePayPalSuccess,
     handleRevolutRedirect,
+    handleStripePay,
     fetchOrder,
   };
 };

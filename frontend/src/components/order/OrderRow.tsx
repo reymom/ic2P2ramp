@@ -91,7 +91,7 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {
                             className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
                             title="View on Block Explorer"
                         >
-                            {truncate(baseOrder.offramper_address.address, 8, 8)}
+                            {truncate(baseOrder.offramper_address.address, 6, 6)}
                         </a>
                     ) : "-"}
                 </td>

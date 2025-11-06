@@ -41,6 +41,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         removeOrder,
         handlePayPalSuccess,
         handleRevolutRedirect,
+        handleStripePay,
     } = useOrderLogic(order, refetchOrders);
 
     const { backgroundColor, borderColor, textColor } = getStatusColors();
@@ -89,7 +90,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         className="text-blue-800 dark:text-white hover:text-blue-700 dark:hover:text-gray-400 transition-colors duration-200"
                         title="View on Explorer"
                     >
-                        {truncate(baseOrder.offramper_address.address, 8, 8)}
+                        {truncate(baseOrder.offramper_address.address, 4, 4)}
                     </a>
                 </span>
             </div>
@@ -154,13 +155,14 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 let providerType = paymentProviderTypeToString(provider[0]);
 
                                 if (userType === 'Onramper') {
+                                    const commitedProv = committedProvider ? paymentProviderTypeToString(committedProvider[0]) : null;
                                     return (
                                         <div key={index} className="my-2">
                                             <input
                                                 type="checkbox"
                                                 id={`provider-${index}`}
                                                 onChange={() => handleProviderSelection(providerType)}
-                                                checked={committedProvider && paymentProviderTypeToString(committedProvider[0]) === providerType}
+                                                checked={commitedProv === providerType || (commitedProv === "Email" && providerType === "Stripe")}
                                                 className="form-checkbox h-5 w-5 text-center"
                                             />
                                             <label htmlFor={`provider-${index}`} className="ml-3 text-lg">{providerType}</label>
@@ -249,12 +251,33 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 ) : orderState.Locked.onramper.provider.hasOwnProperty('Revolut') ? (
                                     <div>
                                         <button
-                                            className={`px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
+                                            className={`mt-4 px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700 ${isPayable ? "cursor-not-allowed" : ""}`}
                                             onClick={handleRevolutRedirect}
                                             disabled={!isPayable || isLoading}
                                         >
                                             Confirm Revolut Consent
                                         </button>
+                                    </div>
+                                ) : orderState.Locked.onramper.provider.hasOwnProperty('Email') ? (
+                                    <div>
+                                        {(() => {
+                                            // Candid Option<string> => [] | [string]
+                                            const stripeUrl =
+                                                (orderState as any).Locked?.payment_url?.[0] ??
+                                                (orderState as any).Locked?.payment_url;
+
+                                            const disabled = !isPayable || isLoading || !stripeUrl;
+                                            return (
+                                                <button
+                                                    className={`w-full mt-4 px-4 py-2 bg-purple-700 rounded-md hover:bg-purple-800 ${disabled ? "cursor-not-allowed opacity-70" : ""}`}
+                                                    onClick={handleStripePay}
+                                                    disabled={disabled}
+                                                    title={!stripeUrl ? "Payment link not available yet" : "Pay securely by card"}
+                                                >
+                                                    Pay by Card (Stripe)
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
                                 ) : null}
                             </div>
@@ -298,7 +321,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
                                 title="View on Block Explorer"
                             >
-                                {truncate(orderState.Completed.onramper.address, 8, 8)}
+                                {truncate(orderState.Completed.onramper.address, 4, 4)}
                             </a>
 
                         </span>
@@ -313,7 +336,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 className="text-black dark:text-white hover:text-gray-400 transition-colors duration-200"
                                 title="View on Block Explorer"
                             >
-                                {truncate(orderState.Completed.offramper.address, 8, 8)}
+                                {truncate(orderState.Completed.offramper.address, 4, 4)}
                             </a>
                         </span>
                     </div>

@@ -27,6 +27,8 @@ export const paymentProviderTypeToString = (
 ): PaymentProviderTypes => {
   if ('PayPal' in providerType) return 'PayPal';
   if ('Revolut' in providerType) return 'Revolut';
+  if ('Stripe' in providerType) return 'Stripe';
+  if ('Email' in providerType) return 'Email';
   throw new Error('Unknown payment provider');
 };
 
@@ -35,6 +37,8 @@ export const providerToProviderType = (
 ): PaymentProviderType => {
   if ('PayPal' in provider) return { PayPal: null };
   if ('Revolut' in provider) return { Revolut: null };
+  if ('Stripe' in provider) return { Stripe: null };
+  if ('Email' in provider) return { Email: null };
   throw new Error('Unkown provider type');
 };
 
