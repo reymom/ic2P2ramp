@@ -9,12 +9,6 @@ use icramp_types::{
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
-use crate::evm::{
-    event::{self, LogEvent},
-    fees::{eth_get_latest_block, get_fee_estimates},
-    transaction,
-    vault::Ic2P2ramp,
-};
 use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::inter_canister::bitcoin::{
     bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata, bitcoin_backend_lock_funds,
@@ -31,6 +25,15 @@ use crate::management::user as user_management;
 use crate::{
     errors::{BlockchainError, OrderError, Result, SystemError, UserError},
     inter_canister::solana::solana_backend_solana_account,
+};
+use crate::{
+    evm::{
+        event::{self, LogEvent},
+        fees::{eth_get_latest_block, get_fee_estimates},
+        transaction,
+        vault::Ic2P2ramp,
+    },
+    outcalls::stripe::session::create_checkout_session_for_order,
 };
 
 use crate::model::{
@@ -633,6 +636,8 @@ pub async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
+    stripe_success_url: Option<String>,
+    stripe_cancel_url: Option<String>,
 ) -> Result<()> {
     let user = memory::stable::users::get_user(&onramper_user_id)?;
     user.validate_session(&session_token)?;
@@ -641,19 +646,78 @@ pub async fn lock_order(
 
     let order = memory::stable::orders::get_order(&order_id)?.created()?;
 
-    if !types::contains_provider_type(&onramper_provider, &order.offramper_providers) {
+    let off_supports_stripe = order
+        .offramper_providers
+        .iter()
+        .any(|p| matches!(p.0, PaymentProviderType::Stripe));
+    let on_is_email = onramper_provider.provider_type() == PaymentProviderType::Email;
+
+    let provider_ok = if on_is_email {
+        if !off_supports_stripe {
+            false
+        } else {
+            user.payment_providers.contains(&onramper_provider)
+        }
+    } else {
+        types::contains_provider_type(&onramper_provider, &order.offramper_providers)
+    };
+
+    if !provider_ok {
         return Err(OrderError::InvalidOnramperProvider)?;
     }
 
     let (price, offramper_fee) = calculate_price_and_fee(&order.currency, &order.crypto).await?;
 
     let revolut_consent = payment::revolut::get_revolut_consent(
-        order.offramper_providers,
+        order.offramper_providers.clone(),
         &(price as f64 / 100.).to_string(),
         &order.currency,
         &onramper_provider,
     )
     .await?;
+
+    let stripe_session: Option<(String, String)> = if on_is_email {
+        let (acct, platform) = order
+            .offramper_providers
+            .iter()
+            .find_map(|p| {
+                if let PaymentProvider::Stripe {
+                    account_id,
+                    platform,
+                } = p.1
+                {
+                    Some((account_id.clone(), platform.clone()))
+                } else {
+                    None
+                }
+            })
+            .ok_or(OrderError::InvalidOnramperProvider)?;
+        let amount_minor = price + offramper_fee;
+        let payer_email = if let PaymentProvider::Email { email } = onramper_provider.clone() {
+            email
+        } else {
+            // This shouldn't happen if provider_ok was true, but handle gracefully
+            return Err(OrderError::InvalidOnramperProvider)?;
+        };
+        let (sid, url) = create_checkout_session_for_order(
+            order_id,
+            &acct,
+            amount_minor,
+            &order.currency,
+            Some(platform),
+            stripe_success_url.ok_or_else(|| {
+                OrderError::InvalidInput("Stripe success_url should be present".to_string())
+            })?,
+            stripe_cancel_url.ok_or_else(|| {
+                OrderError::InvalidInput("Stripe cancel_url should be present".to_string())
+            })?,
+            payer_email,
+        )
+        .await?;
+        Some((sid, url))
+    } else {
+        None
+    };
 
     match order.crypto.asset {
         BlockchainAsset::EVM {
@@ -676,6 +740,7 @@ pub async fn lock_order(
                     onramper_provider,
                     onramper_address,
                     revolut_consent,
+                    stripe_session,
                 },
             )
             .await?;
@@ -690,6 +755,7 @@ pub async fn lock_order(
                 onramper_provider,
                 onramper_address,
                 revolut_consent,
+                stripe_session,
             )?;
             Ok(())
         }
@@ -702,6 +768,7 @@ pub async fn lock_order(
                 onramper_provider,
                 onramper_address.clone(),
                 revolut_consent,
+                stripe_session,
             )?;
 
             bitcoin_backend_lock_funds(
@@ -722,6 +789,7 @@ pub async fn lock_order(
                 onramper_provider,
                 onramper_address.clone(),
                 revolut_consent,
+                stripe_session,
             )?;
 
             solana_backend_lock_funds(
@@ -1005,11 +1073,21 @@ pub fn verify_order_is_payable(
     if order.uncommited {
         Err(OrderError::OrderUncommitted)?;
     }
-    order
+
+    let off_supports_stripe = order
         .base
         .offramper_providers
-        .get(&order.onramper.provider.provider_type())
-        .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
+        .iter()
+        .any(|p| matches!(p.0, PaymentProviderType::Stripe));
+    let on_is_email = matches!(order.onramper.provider, PaymentProvider::Email { .. });
+
+    if !(off_supports_stripe && on_is_email) {
+        order
+            .base
+            .offramper_providers
+            .get(&order.onramper.provider.provider_type())
+            .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
+    }
 
     let user = memory::stable::users::get_user(&order.onramper.user_id)?;
     if let Some(session_token) = session_token {

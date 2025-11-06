@@ -74,6 +74,7 @@ pub fn spawn_commit_listener(
                 lock_input.onramper_provider.clone(),
                 lock_input.onramper_address.clone(),
                 lock_input.revolut_consent.clone(),
+                lock_input.stripe_session.clone(),
             ) {
                 Ok(()) => ic_cdk::println!("[commit] order {} is locked.", order_id),
                 Err(err) => {
