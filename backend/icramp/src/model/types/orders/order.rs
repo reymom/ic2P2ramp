@@ -125,6 +125,7 @@ impl Order {
         onramper_provider: PaymentProvider,
         onramper_address: TransactionAddress,
         revolut_consent: Option<RevolutConsent>,
+        stripe_session: Option<(String, String)>,
     ) -> Result<LockedOrder> {
         // Check if the address type matches the blockchain type
         match (self.crypto.asset.clone(), &onramper_address.address_type) {
@@ -151,7 +152,8 @@ impl Order {
             onramper: Onramper::new(onramper_user_id, onramper_provider, onramper_address),
             revolut_consent,
             payment_done: false,
-            payment_id: None,
+            payment_id: stripe_session.as_ref().map(|(id, _)| id.clone()),
+            payment_url: stripe_session.as_ref().map(|(_, url)| url.clone()),
             uncommited: false,
         })
     }

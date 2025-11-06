@@ -67,6 +67,7 @@ pub fn lock_order(
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
     revolut_consent: Option<RevolutConsent>,
+    stripe_session: Option<(String, String)>,
 ) -> Result<()> {
     mutate_order(&order_id, |order_state| -> Result<()> {
         match order_state {
@@ -78,6 +79,7 @@ pub fn lock_order(
                     onramper_provider,
                     onramper_address,
                     revolut_consent,
+                    stripe_session,
                 )?);
                 Ok(())
             }

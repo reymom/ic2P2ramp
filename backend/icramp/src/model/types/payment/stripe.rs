@@ -12,8 +12,6 @@ pub struct StripePlatformState {
     pub api_url: String,
     pub publishable_key: String,
     pub secret_key: String, // used to sign "Authorization: Bearer ..."
-    pub success_url: String,
-    pub cancel_url: String,
 }
 
 impl core::fmt::Debug for StripePlatformState {
@@ -23,8 +21,6 @@ impl core::fmt::Debug for StripePlatformState {
             .field("api_url", &self.api_url)
             .field("publishable_key", &self.publishable_key)
             .field("secret_key", &"<redacted>")
-            .field("success_url", &self.success_url)
-            .field("cancel_url", &self.cancel_url)
             .finish()
     }
 }
@@ -51,8 +47,6 @@ pub struct StripePlatformConfig {
     pub api_url: String,         // "https://api.stripe.com"
     pub publishable_key: String, // pk_test_...
     pub secret_key: String,      // sk_test_...  (stored in canister, used in Authorization)
-    pub success_url: String,     // e.g. FE success route with {CHECKOUT_SESSION_ID}
-    pub cancel_url: String,      // e.g. FE cancel route
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -69,8 +63,6 @@ pub fn stripe_state_from_config(cfg: StripeConfig) -> StripeState {
             api_url: p.api_url,
             publishable_key: p.publishable_key,
             secret_key: p.secret_key,
-            success_url: p.success_url,
-            cancel_url: p.cancel_url,
         };
         map.insert(p.label, s);
     }
@@ -90,9 +82,16 @@ pub fn pick_platform(label: Option<String>) -> Result<StripePlatformState> {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct CustomerDetails {
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CheckoutSession {
     pub id: String,
     pub url: Option<String>,
     pub payment_status: Option<String>,
     pub payment_intent: Option<serde_json::Value>, // expanded when requested
+    pub customer_details: Option<CustomerDetails>,
+    pub customer_email: Option<String>,
 }

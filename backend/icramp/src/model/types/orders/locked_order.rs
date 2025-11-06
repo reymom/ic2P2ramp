@@ -14,6 +14,7 @@ pub struct LockInput {
     pub onramper_provider: PaymentProvider,
     pub onramper_address: TransactionAddress,
     pub revolut_consent: Option<RevolutConsent>,
+    pub stripe_session: Option<(String, String)>, // (session_id, url)
 }
 
 #[derive(CandidType, Deserialize, Clone)]
@@ -54,6 +55,7 @@ pub struct LockedOrder {
     pub onramper: Onramper,
     pub revolut_consent: Option<RevolutConsent>,
     pub payment_id: Option<String>,
+    pub payment_url: Option<String>, // for Stripe
     pub payment_done: bool,
     pub uncommited: bool,
 }

@@ -128,6 +128,9 @@ async fn stripe_test_create_session(
     currency_upper: String,   // "EUR"
     destination_acct: String, // acct_...
     platform_label: Option<String>,
+    success_url: String,
+    cancel_url: String,
+    payer_email: String,
 ) -> Result<(String, String)> {
     stripe::session::create_checkout_session_for_order(
         0, // not used in test; only in the product name string
@@ -135,6 +138,9 @@ async fn stripe_test_create_session(
         amount_minor,
         &currency_upper,
         platform_label,
+        success_url,
+        cancel_url,
+        payer_email,
     )
     .await
 }
@@ -158,6 +164,7 @@ async fn stripe_test_verify_session(
     expected_currency_upper: String,
     expected_destination: String,
     platform_label: Option<String>,
+    payer_email: String,
 ) -> Result<bool> {
     stripe_mgmt::verify_session_paid_destination(
         &session_id,
@@ -165,6 +172,7 @@ async fn stripe_test_verify_session(
         &expected_currency_upper,
         &expected_destination,
         platform_label,
+        &payer_email,
     )
     .await
 }
