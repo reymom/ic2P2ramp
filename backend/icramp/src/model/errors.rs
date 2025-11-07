@@ -85,9 +85,6 @@ pub enum OrderError {
     #[error("Order is already being processed")]
     OrderProcessing,
 
-    #[error("Order is not ready to be processed")]
-    OrderNotProcessing,
-
     #[error("Order Timer Not Found")]
     OrderTimerNotFound,
 

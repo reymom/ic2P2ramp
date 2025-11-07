@@ -93,13 +93,6 @@ impl Order {
         Ok(order)
     }
 
-    pub fn is_processing(&self) -> Result<()> {
-        if !self.processing {
-            return Err(OrderError::OrderNotProcessing.into());
-        }
-        Ok(())
-    }
-
     fn processable(&self) -> Result<()> {
         if self.processing {
             return Err(OrderError::OrderProcessing.into());

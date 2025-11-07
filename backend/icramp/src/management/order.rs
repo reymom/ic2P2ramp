@@ -518,21 +518,22 @@ pub async fn topup_order(
     estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<()> {
+    let new_total = order.crypto.amount + amount;
     let crypto_fee = order_crypto_fee(
         order.crypto.asset.clone(),
-        order.crypto.amount,
+        new_total,
         estimated_gas_lock,
         estimated_gas_withdraw,
     )
     .await?;
 
-    if 2 * crypto_fee >= order.crypto.amount + amount {
+    if 2 * crypto_fee >= new_total {
         return Err(BlockchainError::FundsTooLow)?;
     };
 
     memory::stable::orders::mutate_order(&order.id, |order| {
         let order = order.created_mut()?;
-        order.crypto.amount += amount;
+        order.crypto.amount = new_total;
         order.crypto.fee = crypto_fee;
         Ok(())
     })?

@@ -818,10 +818,16 @@ async fn freeze_order(order_id: u64, user_id: u64, session_token: String) -> Res
     let order = orders::get_order(&order_id)?.created()?;
     let user = memory::stable::users::get_user(&user_id)?;
     user.validate_session(&session_token)?;
-    if !order.offramper_user_id == user_id {
+    if order.offramper_user_id != user_id {
         return Err(UserError::Unauthorized.into());
     }
     orders::set_processing_order(&order_id)
+}
+
+#[ic_cdk::update]
+async fn unfreeze_order(order_id: u64) -> Result<()> {
+    guards::only_controller()?;
+    orders::unset_processing_order(&order_id)
 }
 
 #[ic_cdk::update]
@@ -832,13 +838,14 @@ async fn top_up_order(
     amount: u128,
     deposit_input: Option<DepositInput>,
 ) -> Result<()> {
-    let order = orders::get_order(&order_id)?.created()?;
-    order.is_processing()?;
     let user = memory::stable::users::get_user(&user_id)?;
     user.validate_session(&session_token)?;
+
+    let order = orders::get_order(&order_id)?.created()?;
     if order.offramper_user_id != user_id {
         return Err(UserError::Unauthorized.into());
     }
+    orders::set_processing_order(&order_id)?;
 
     let tx_hash = order_management::validate_deposit_tx(
         &order.crypto.asset,
@@ -856,18 +863,16 @@ async fn top_up_order(
         _ => (None, None),
     };
 
-    order_management::topup_order(&order, amount, gas_lock, gas_withdraw).await?;
+    order_management::topup_order(&order, amount, gas_lock, gas_withdraw)
+        .await
+        .inspect_err(|_e| {
+            let _ = orders::unset_processing_order(&order_id);
+        })?;
 
     if let Some(tx_hash) = tx_hash {
         spent_transactions::mark_tx_hash_as_processed(tx_hash);
     };
 
-    orders::unset_processing_order(&order_id)
-}
-
-#[ic_cdk::update]
-async fn unprocess_order(order_id: u64) -> Result<()> {
-    guards::only_controller()?;
     orders::unset_processing_order(&order_id)
 }
 
