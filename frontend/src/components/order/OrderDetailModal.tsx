@@ -7,7 +7,7 @@ import OrderCard from './OrderCard';
 
 interface OrderDetailModalProps {
     order: OrderState;
-    refetchOrders: () => void;
+    refetchOrders: () => Promise<void>;
     onClose: () => void;
 }
 

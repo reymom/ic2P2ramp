@@ -13,6 +13,7 @@ import { useUser } from './UserContext';
 import { truncate } from '@/utils/formatters';
 import { startStripeKyc } from '@/hooks/useStripeKyc';
 import { mapCountryToPlatform } from '@/utils/stripe';
+import { ProviderIcon } from '../ui/ProviderIcon';
 
 const RegisterUser: React.FC = () => {
     const [userType, setUserType] = useState<UserTypes>("Onramper");
@@ -387,14 +388,20 @@ const RegisterUser: React.FC = () => {
                         if ('PayPal' in provider) {
                             return (
                                 <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
-                                    <div className="text-sm text-gray-600 dark:text-gray-300">PayPal</div>
+                                    <div className="flex items-center gap-2">
+                                        <ProviderIcon type="PayPal" />
+                                        <span className="text-sm text-gray-600 dark:text-gray-300">PayPal</span>
+                                    </div>
                                     <div className="mt-1 font-mono text-sm break-all">{provider.PayPal.id}</div>
                                 </div>
                             );
                         } else if ('Revolut' in provider) {
                             return (
                                 <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
-                                    <div className="text-sm text-gray-600 dark:text-gray-300">Revolut</div>
+                                    <div className="flex items-center gap-2">
+                                        <ProviderIcon type="Revolut" />
+                                        <span className="text-sm text-gray-600 dark:text-gray-300">Revolut</span>
+                                    </div>
                                     <div className="mt-1 font-mono text-sm break-all">{provider.Revolut.id}</div>
                                     <div className="text-xs text-gray-500">Scheme: {provider.Revolut.scheme}</div>
                                     {provider.Revolut.name?.[0] && (
@@ -405,14 +412,20 @@ const RegisterUser: React.FC = () => {
                         } else if ('Stripe' in provider) {
                             return (
                                 <div key={index} className="rounded-lg border border-purple-500/50 bg-purple-500/10 p-3">
-                                    <div className="text-sm text-purple-300">Stripe</div>
+                                    <div className="flex items-center gap-2">
+                                        <ProviderIcon type="Stripe" />
+                                        <span className="text-sm text-gray-600 dark:text-gray-300">Stripe</span>
+                                    </div>
                                     <div className="mt-1 font-mono text-sm break-all">{provider.Stripe.account_id}</div>
                                 </div>
                             );
                         } else if ('Email' in provider) {
                             return (
                                 <div key={index} className="rounded-lg border border-gray-500/40 bg-gray-300/40 dark:bg-gray-800/60 p-3">
-                                    <div className="text-sm text-gray-600 dark:text-gray-300">Email</div>
+                                    <div className="flex items-center gap-2">
+                                        <ProviderIcon type="Email" />
+                                        <span className="text-sm text-gray-600 dark:text-gray-300">Email</span>
+                                    </div>
                                     <div className="mt-1 font-mono text-sm break-all">{provider.Email.email}</div>
                                 </div>
                             );

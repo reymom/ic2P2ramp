@@ -10,7 +10,7 @@ import OrderDetailModal from './OrderDetailModal';
 
 interface OrderRowProps {
     order: OrderState;
-    refetchOrders: () => void;
+    refetchOrders: () => Promise<void>;
 }
 
 const OrderRow: React.FC<OrderRowProps> = ({ order, refetchOrders }) => {

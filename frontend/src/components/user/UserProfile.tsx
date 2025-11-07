@@ -25,6 +25,7 @@ import ethereumLogo from "@/assets/blockchains/ethereum-logo.png";
 import bitcoinLogo from "@/assets/blockchains/bitcoin-logo.svg";
 import solanaLogo from "@/assets/blockchains/solana-logo.png"
 import { mapCountryToPlatform } from '@/utils/stripe';
+import { ProviderIcon } from '../ui/ProviderIcon';
 
 const UserProfile: React.FC = () => {
     const [providerType, setProviderType] = useState<PaymentProviderTypes>();
@@ -685,7 +686,10 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <div key={index} className={baseCard}>
                                                         <div className="flex items-start justify-between gap-3">
-                                                            <span className={`${badgeBase} ${badgeGray}`}>PayPal</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <ProviderIcon type="PayPal" />
+                                                                <span className={`${badgeBase} ${badgeGray}`}>PayPal</span>
+                                                            </div>
                                                             <button
                                                                 className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"
@@ -711,7 +715,10 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <div key={index} className={baseCard}>
                                                         <div className="flex items-start justify-between gap-3">
-                                                            <span className={`${badgeBase} ${badgeBlue}`}>Revolut</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <ProviderIcon type="Revolut" />
+                                                                <span className={`${badgeBase} ${badgeBlue}`}>Revolut</span>
+                                                            </div>
                                                             <button
                                                                 className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"
@@ -745,7 +752,10 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <div key={index} className={stripeCard}>
                                                         <div className="flex items-start justify-between gap-3">
-                                                            <span className={`${badgeBase} ${badgePurple}`}>Stripe</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <ProviderIcon type="Stripe" />
+                                                                <span className={`${badgeBase} ${badgePurple}`}>Stripe</span>
+                                                            </div>
                                                             <button
                                                                 className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/20 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"
@@ -776,7 +786,10 @@ const UserProfile: React.FC = () => {
                                                 return (
                                                     <div key={index} className={baseCard}>
                                                         <div className="flex items-start justify-between gap-3">
-                                                            <span className={`${badgeBase} ${badgeBlue}`}>Email</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <ProviderIcon type="Email" />
+                                                                <span className={`${badgeBase} ${badgeBlue}`}>Email</span>
+                                                            </div>
                                                             <button
                                                                 className="text-red-600/80 dark:text-red-400 text-sm w-7 h-7 rounded-full border border-white/30 flex items-center justify-center hover:bg-red-500/10 transition"
                                                                 title="remove"

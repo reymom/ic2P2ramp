@@ -14,7 +14,7 @@ import { NetworkIds } from '@/constants/networks';
 import { backend } from '@/model/backendProxy';
 import { rampErrorToString } from '@/model/helpers/error';
 import { BlockchainTypes, TokenOption } from '@/model/types';
-import { blockchainAssetToBlockchainType, providerToProviderType } from '@/model/helpers/types';
+import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/helpers/types';
 import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
 import { isSessionExpired } from '@/model/session';
 import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
@@ -37,6 +37,7 @@ import {
 } from '@/components/order/hooks';
 import { estimateGasAndGasPrice } from '@/model/blockchain/evm';
 import { getFeeQuote } from '@/model/blockchain/fees';
+import { ProviderIcon } from '../ui/ProviderIcon';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -564,9 +565,11 @@ const CreateOrder: React.FC = () => {
                         type="number"
                         value={cryptoAmount}
                         onChange={(e) => setCryptoAmount(selectedToken ? Number(Number(e.target.value).toFixed(selectedToken.decimals)) : Number(e.target.value))}
-                        className={`flex-grow py-2 px-3 border ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-300 dark:border-gray-600"
-                            } bg-gray-100 dark:bg-gray-700 outline-none rounded-md focus:ring ${cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900"
-                            } text-gray-700 dark:text-gray-300`}
+                        className={clsx(
+                            "flex-grow py-2 px-3 border bg-gray-100 dark:bg-gray-700 outline-none rounded-md focus:ring text-gray-700 dark:text-gray-300",
+                            cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'border-red-500' : "border-gray-300 dark:border-gray-600",
+                            cryptoAmountUnits && getAvailableBalance() && cryptoAmountUnits > getAvailableBalance()!.raw ? 'focus:ring-red-500' : "focus:border-blue-900",
+                        )}
                         required
                         style={{
                             appearance: 'textfield',
@@ -664,7 +667,10 @@ const CreateOrder: React.FC = () => {
                                                 "hover:border-indigo-400/60 hover:bg-indigo-400/10",
                                                 "peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10")}>
                                             <div className="flex items-center justify-between">
-                                                <div className="font-semibold">{title}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <ProviderIcon type={paymentProviderTypeToString(providerToProviderType(provider))} />
+                                                    <div className="font-semibold">{title}</div>
+                                                </div>
                                                 {checked && (
                                                     <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-600/20 text-indigo-300">
                                                         selected
