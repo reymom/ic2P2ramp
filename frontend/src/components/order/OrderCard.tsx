@@ -3,16 +3,18 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 import { OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
-import { paymentProviderTypeToString } from '@/model/helpers/types';
+import { blockchainAssetToBlockchainType, paymentProviderTypeToString } from '@/model/helpers/types';
 import { formatPrice, formatTimeLeft, truncate } from '@/utils/formatters';
-import { useUser } from '@/components/user/UserContext';
+import { Balance, useUser } from '@/components/user/UserContext';
 import PayPalButton from '@/components/ui/PaypalButton';
 import DynamicDots from '@/components/ui/DynamicDots';
 import { useOrderLogic } from './hooks/useOrderLogic';
+import clsx from 'clsx';
+import { ProviderIcon } from '../ui/ProviderIcon';
 
 interface OrderProps {
     order: OrderState;
-    refetchOrders: () => void;
+    refetchOrders: () => Promise<void>;
 }
 
 const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
@@ -32,6 +34,9 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         loadingPayable,
         loadingPrice,
         committedProvider,
+        topUpAmount,
+        topUpLoading,
+        topUpTxHash,
         getStatusColors,
         getNetworkLogo,
         getNetworkName,
@@ -39,13 +44,35 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         handleProviderSelection,
         commitToOrder,
         removeOrder,
+        topUp,
+        setTopUpAmount,
         handlePayPalSuccess,
         handleRevolutRedirect,
         handleStripePay,
     } = useOrderLogic(order, refetchOrders);
 
     const { backgroundColor, borderColor, textColor } = getStatusColors();
-    const { user, userType } = useUser();
+    const { user, userType, evmBalances, bitcoinBalance, solanaBalance, icpBalances } = useUser();
+
+    const getAvailableBalance = (): Balance | null => {
+        const blockchainType = blockchainAssetToBlockchainType(orderBlockchainAsset!);
+        if (blockchainType === 'ICP' && token && icpBalances) {
+            return icpBalances[token.name] ?? null;
+        } else if (blockchainType === 'EVM' && token && evmBalances) {
+            if (token.isNative) return evmBalances[token.name] ?? null;
+            return evmBalances[token.address] ?? null;
+        } else if (blockchainType === 'Bitcoin') {
+            if (token?.runeMetadata && bitcoinBalance)
+                return bitcoinBalance.runes[token.runeMetadata.id] ?? null;
+            return bitcoinBalance?.balance ?? null;
+        } else if (blockchainType === 'Solana') {
+            if (token?.isNative) return solanaBalance?.balance ?? null;
+            return token?.address
+                ? (solanaBalance?.splTokens[token.address] ?? null)
+                : null;
+        }
+        return null
+    };
 
     const commonOrderDiv = baseOrder && orderBlockchainAsset && (
         <div className="space-y-3">
@@ -165,12 +192,18 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                                 checked={commitedProv === providerType || (commitedProv === "Email" && providerType === "Stripe")}
                                                 className="form-checkbox h-5 w-5 text-center"
                                             />
-                                            <label htmlFor={`provider-${index}`} className="ml-3 text-lg">{providerType}</label>
+                                            <label htmlFor={`provider-${index}`} className="ml-1 text-lg inline-flex items-center gap-2">
+                                                <ProviderIcon type={providerType} />
+                                                <span>{providerType}</span>
+                                            </label>
                                         </div>
                                     );
                                 } else {
                                     return (
-                                        <div key={index} className="text-lg my-2">{providerType}</div>
+                                        <div key={index} className="text-lg my-2 inline-flex items-center gap-2">
+                                            <ProviderIcon type={providerType} />
+                                            <span>{providerType}</span>
+                                        </div>
                                     );
                                 }
                             })}
@@ -204,6 +237,64 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             </button>
                         );
                     })()}
+
+                    {/* Top up (only Offramper & owner) */}
+                    {user && userType === 'Offramper' && orderState.Created.offramper_user_id === user.id && (
+                        <div className="mt-4">
+                            <div className="relative">
+                                <div className="flex-grow justify-between items-center mb-4 relative">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={topUpAmount}
+                                        onChange={(e) => setTopUpAmount(Number(e.target.value))}
+                                        placeholder="0.00"
+                                        className={clsx(
+                                            "w-full h-11 rounded-2xl bg-white/5 border pl-4 pr-28",
+                                            "text-base placeholder-white/40 outline-none",
+                                            "focus:ring-2 focus:ring-indigo-500/70 focus:border-transparent transition",
+                                            topUpAmount && getAvailableBalance() && topUpAmount > Number(getAvailableBalance()!.formatted) ? "border-red-500" : "border-white/10",
+                                            topUpAmount && getAvailableBalance() && topUpAmount > Number(getAvailableBalance()!.formatted) ? 'focus:ring-red-500' : "focus:border-blue-200",
+                                        )}
+                                        disabled={topUpLoading}
+                                    />
+                                    <span className="absolute right-32 top-1/2 -translate-y-1/2 text-gray-400 text-xs z-10">
+                                        max: {getAvailableBalance() ? getAvailableBalance()!.formatted : "0.00"} {token?.name}
+                                    </span>
+                                </div>
+
+                                <button
+                                    onClick={topUp}
+                                    disabled={topUpLoading || topUpAmount <= 0}
+                                    className={clsx("absolute right-1 top-1 bottom-1 px-4 rounded-xl font-semibold",
+                                        "bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-600",
+                                        "disabled:bg-slate-600 disabled:cursor-not-allowed",
+                                        "shadow-lg shadow-indigo-900/30 transition")}
+                                >
+                                    {topUpLoading ? (
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="w-4 h-4 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
+                                            Processing
+                                        </span>
+                                    ) : (
+                                        'Top up'
+                                    )}
+                                </button>
+                            </div>
+
+                            {topUpTxHash && (
+                                <a
+                                    href={`${getExplorerLinks('', topUpTxHash)?.transaction}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-2 inline-block text-xs text-indigo-300 hover:text-indigo-200 underline decoration-dotted"
+                                >
+                                    View transaction {truncate(topUpTxHash, 5, 5)}
+                                </a>
+                            )}
+                        </div>
+                    )}
 
                     {/* Remove Button for Offramper */}
                     {user && userType === 'Offramper' && orderState.Created.offramper_user_id === user.id && (

@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import {
+  DepositInput,
   OrderState,
   PaymentProvider,
   PaymentProviderType,
@@ -31,13 +32,20 @@ import { fetchOrderPrice } from '@/utils/rates';
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
 import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
+import { useOrderEvm } from './useOrderEvm';
+import { useOrderSolana } from './useOrderSolana';
+import { useOrderBitcoin } from './useOrderBitcoin';
+import { useOrderIcp } from './useOrderIcp';
 
 const defaultLoadingMessage = 'Processing Transaction';
 const PRICE_DIFFERENCE_THRESHOLD = 0.025;
 const CACHE_EXPIRY_MS = 1800000; // 30 min, but backend is caching it to 10 minutes
 const LOCK_TIME_SECONDS = 1800;
 
-export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
+export const useOrderLogic = (
+  order: OrderState,
+  refetchOrders: () => Promise<void>,
+) => {
   const [committedProvider, setCommittedProvider] =
     useState<[PaymentProviderType, PaymentProvider]>();
   const [tokens, setTokens] = useState<TokenOption[]>([]);
@@ -47,12 +55,22 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
   const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
   const [loadingPrice, setLoadingPrice] = useState<boolean>(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [topUpAmount, setTopUpAmount] = useState<number>(0);
+  const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpTxHash, setTopUpTxHash] = useState<string | null>(null);
+
   const [message, setMessage] = useState<string | null>(null);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const [isPayable, setIsPayable] = useState<boolean>(false);
   const [loadingPayable, setLoadingPayable] = useState<boolean>(true);
 
-  const { user, sessionToken, fetchBalances, refetchUser } = useUser();
+  const { makeEvmDeposit } = useOrderEvm();
+  const { makeSolanaDeposit, waitForSolanaConfirmation } = useOrderSolana();
+  const { makeBitcoinDeposit } = useOrderBitcoin();
+  const { makeIcpDeposit } = useOrderIcp();
+
+  const { user, sessionToken, icpAgent, fetchBalances, refetchUser } =
+    useUser();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -177,7 +195,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         return res.Ok;
       } else {
         console.error('Error fetching order: ', res.Err);
-        refetchOrders();
+        await refetchOrders();
       }
     } catch (err) {
       console.error('Error fetching order: ', err);
@@ -256,7 +274,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
         const updatedOrder = await fetchOrder(BigInt(orderId));
         if (!updatedOrder) {
           clearInterval(intervalId!);
-          refetchOrders();
+          await refetchOrders();
           setIsLoading(false);
           return;
         }
@@ -270,7 +288,7 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
 
         clearInterval(intervalId!);
         setIsLoading(false);
-        refetchOrders();
+        await refetchOrders();
       }, 5000);
     }
 
@@ -734,6 +752,73 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     }
   };
 
+  const toUnits = (n: number, dec: number) =>
+    BigInt(Math.floor(n * Math.pow(10, dec)));
+
+  const topUp = async () => {
+    if (!baseOrder || !token || !user || !sessionToken || !orderBlockchainAsset)
+      return;
+    if (topUpAmount <= 0) return;
+
+    setMessage(null);
+    setTopUpTxHash(null);
+    setTopUpLoading(true);
+
+    try {
+      const amountUnits = toUnits(topUpAmount, token.decimals);
+      let depositInput: [] | [DepositInput] = [];
+
+      // deposit on-chain / ledger first (same pattern as CreateOrder)
+      if ('EVM' in orderBlockchainAsset) {
+        const { depositInput: evmDep, txHash } = await makeEvmDeposit(
+          Number(orderBlockchainAsset.EVM.chain_id),
+          token,
+          amountUnits,
+        );
+        setTopUpTxHash(txHash);
+        depositInput = evmDep;
+      } else if ('ICP' in orderBlockchainAsset) {
+        if (!icpAgent) {
+          throw new Error('ICP Agent not initialized');
+        }
+        await makeIcpDeposit(icpAgent, token, amountUnits);
+      } else if ('Bitcoin' in orderBlockchainAsset) {
+        const { depositInput: btcDep, txid } = await makeBitcoinDeposit(
+          amountUnits,
+          token,
+        );
+        setTopUpTxHash(txid);
+        depositInput = btcDep;
+      } else if ('Solana' in orderBlockchainAsset) {
+        const { depositInput: solDep, txSig } = await makeSolanaDeposit(
+          amountUnits,
+          token,
+        );
+        setTopUpTxHash(txSig);
+        await waitForSolanaConfirmation(txSig, { timeoutMs: 90_000 });
+        depositInput = solDep;
+      }
+
+      // backend: top up (candid Option => [] | [value])
+      const r = await backend.top_up_order(
+        BigInt(baseOrder.id),
+        BigInt(user.id),
+        sessionToken,
+        amountUnits,
+        depositInput,
+      );
+
+      if ('Err' in r) throw new Error(rampErrorToString(r.Err));
+
+      setTopUpAmount(0);
+      await refetchOrders();
+    } catch (e: any) {
+      setMessage(e?.message ?? String(e));
+    } finally {
+      setTopUpLoading(false);
+    }
+  };
+
   const handlePayPalSuccess = async (transactionId: string) => {
     if (!sessionToken)
       throw new Error('Please authenticate to get a token session');
@@ -953,11 +1038,15 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     loadingMessage,
     message,
     txHash,
-    remainingTime,
-    isPayable,
+    loadingTokens,
     loadingPayable,
     loadingPrice,
+    remainingTime,
+    isPayable,
     committedProvider,
+    topUpAmount,
+    topUpLoading,
+    topUpTxHash,
     getStatusColors,
     getStatus,
     getNetwork,
@@ -967,6 +1056,8 @@ export const useOrderLogic = (order: OrderState, refetchOrders: () => void) => {
     handleProviderSelection,
     commitToOrder,
     removeOrder,
+    setTopUpAmount,
+    topUp,
     handlePayPalSuccess,
     handleRevolutRedirect,
     handleStripePay,
