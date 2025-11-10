@@ -3,7 +3,10 @@ use num_traits::ToPrimitive;
 
 use crate::{
     evm::transaction,
-    model::memory,
+    model::memory::{
+        self,
+        stable::orders::{finalize_pending_fill, set_order_completed},
+    },
     types::{
         evm::{
             gas,
@@ -68,6 +71,7 @@ pub fn spawn_commit_listener(
             // Lock the order in the storage once the transaction succeeds
             match memory::stable::orders::lock_order(
                 order_id,
+                lock_input.lock_amount,
                 lock_input.price,
                 lock_input.offramper_fee,
                 lock_input.onramper_user_id,
@@ -170,8 +174,9 @@ pub fn spawn_release_listener(
             );
 
             // Update order state to completed
-            match super::order::set_order_completed(order_id) {
-                Ok(()) => ic_cdk::println!("[release_funds] order {} is completed.", order_id),
+            let _ = finalize_pending_fill(order_id, Some(receipt.transactionHash.to_string()));
+            match set_order_completed(order_id) {
+                Ok(()) => ic_cdk::println!("[release_funds] order lock {} filled", order_id),
                 Err(e) => ic_cdk::println!(
                     "[relese_funds] could not complete order: {}, error: {:?}",
                     order_id,
