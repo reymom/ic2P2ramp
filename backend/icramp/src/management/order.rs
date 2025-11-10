@@ -9,7 +9,6 @@ use icramp_types::{
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
-use crate::icp::vault::Ic2P2ramp as ICPRamp;
 use crate::inter_canister::bitcoin::{
     bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata, bitcoin_backend_lock_funds,
     bitcoin_backend_transfer, bitcoin_backend_unlock_funds, bitcoin_backend_validate_rune,
@@ -35,6 +34,7 @@ use crate::{
     },
     outcalls::stripe::session::create_checkout_session_for_order,
 };
+use crate::{icp::vault::Ic2P2ramp as ICPRamp, model::memory::heap::clear_order_timer};
 
 use crate::model::{
     guards, helpers,
@@ -42,7 +42,7 @@ use crate::model::{
 };
 use crate::outcalls::pricing::rates::get_exchange_rate;
 use crate::types::{
-    self, BlockchainAsset, Crypto, PaymentProvider, PaymentProviderType, TransactionAddress,
+    self, BlockchainAsset, PaymentProvider, PaymentProviderType, TransactionAddress,
     evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
     exchange_rate::RateAsset,
     icp::{get_icp_token, is_icp_token_supported},
@@ -54,17 +54,21 @@ use crate::types::{
 
 use super::payment;
 
-pub async fn calculate_price_and_fee(currency: &str, crypto: &Crypto) -> Result<(u64, u64)> {
-    let (symbol, decimals) = crypto.asset.get_symbol_and_decimals().await?;
+const MIN_REMAINING_MINOR: u64 = 500; // avoid dust (<$5) in partial fills
 
-    let base_asset = crypto.asset.to_rate_asset(&symbol);
+pub async fn calculate_price_and_fee(
+    currency: &str,
+    asset: &BlockchainAsset,
+    amount: u128,
+) -> Result<(u64, u64)> {
+    let (symbol, decimals) = asset.get_symbol_and_decimals().await?;
+    let base_asset = asset.to_rate_asset(&symbol);
     let quote_asset = RateAsset::Fiat {
         symbol: currency.to_string(),
     };
 
     let exchange_rate = get_exchange_rate(base_asset, quote_asset).await?;
-
-    let crypto_units = (crypto.amount as f64) / (10u128.pow(decimals as u32) as f64);
+    let crypto_units = (amount as f64) / (10u128.pow(decimals as u32) as f64);
     let fiat_amount = (crypto_units * exchange_rate * 100.) as u64;
 
     Ok((fiat_amount, get_fiat_fee(fiat_amount)))
@@ -493,7 +497,7 @@ pub async fn create_order(
         crypto_fee
     );
 
-    if crypto_fee >= crypto_amount {
+    if 2 * crypto_fee >= crypto_amount {
         return Err(BlockchainError::FundsTooLow)?;
     }
 
@@ -637,6 +641,7 @@ pub async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
+    lock_amount: u128,
     stripe_success_url: Option<String>,
     stripe_cancel_url: Option<String>,
 ) -> Result<()> {
@@ -647,6 +652,23 @@ pub async fn lock_order(
 
     let order = memory::stable::orders::get_order(&order_id)?.created()?;
 
+    // filling amount checks
+    if lock_amount == 0 || lock_amount > order.crypto.amount {
+        return Err(OrderError::InvalidInput("invalid partial amount".into()).into());
+    }
+    let remaining = order.crypto.amount - lock_amount;
+    if remaining > 0 {
+        let (rem_minor, _) =
+            calculate_price_and_fee(&order.currency, &order.crypto.asset, remaining).await?;
+        if rem_minor < MIN_REMAINING_MINOR {
+            return Err(OrderError::InvalidInput(
+                "remaining below minimum; lock full amount".into(),
+            )
+            .into());
+        }
+    }
+
+    // provider checks
     let off_supports_stripe = order
         .offramper_providers
         .iter()
@@ -654,20 +676,22 @@ pub async fn lock_order(
     let on_is_email = onramper_provider.provider_type() == PaymentProviderType::Email;
 
     let provider_ok = if on_is_email {
-        if !off_supports_stripe {
-            false
-        } else {
-            user.payment_providers.contains(&onramper_provider)
-        }
+        off_supports_stripe && user.payment_providers.contains(&onramper_provider)
     } else {
         types::contains_provider_type(&onramper_provider, &order.offramper_providers)
     };
-
     if !provider_ok {
-        return Err(OrderError::InvalidOnramperProvider)?;
+        return Err(OrderError::InvalidOnramperProvider.into());
     }
 
-    let (price, offramper_fee) = calculate_price_and_fee(&order.currency, &order.crypto).await?;
+    // price/fee for filling amount
+    let (price, offramper_fee) =
+        calculate_price_and_fee(&order.currency, &order.crypto.asset, lock_amount).await?;
+
+    // (fee must be < 50% of fiat price):
+    if offramper_fee.saturating_mul(2) >= price {
+        return Err(BlockchainError::FundsTooLow.into());
+    }
 
     let revolut_consent = payment::revolut::get_revolut_consent(
         order.offramper_providers.clone(),
@@ -693,17 +717,15 @@ pub async fn lock_order(
                 }
             })
             .ok_or(OrderError::InvalidOnramperProvider)?;
-        let amount_minor = price + offramper_fee;
         let payer_email = if let PaymentProvider::Email { email } = onramper_provider.clone() {
             email
         } else {
-            // This shouldn't happen if provider_ok was true, but handle gracefully
-            return Err(OrderError::InvalidOnramperProvider)?;
+            return Err(OrderError::InvalidOnramperProvider.into());
         };
         let (sid, url) = create_checkout_session_for_order(
             order_id,
             &acct,
-            amount_minor,
+            price + offramper_fee,
             &order.currency,
             Some(platform),
             stripe_success_url.ok_or_else(|| {
@@ -732,9 +754,10 @@ pub async fn lock_order(
                 order_id,
                 order.offramper_address.address,
                 token_address,
-                order.crypto.amount,
+                lock_amount,
                 Some(estimated_gas),
                 LockInput {
+                    lock_amount,
                     price,
                     offramper_fee,
                     onramper_user_id,
@@ -750,6 +773,7 @@ pub async fn lock_order(
         BlockchainAsset::ICP { .. } => {
             memory::stable::orders::lock_order(
                 order_id,
+                lock_amount,
                 price,
                 offramper_fee,
                 onramper_user_id,
@@ -763,6 +787,7 @@ pub async fn lock_order(
         BlockchainAsset::Bitcoin { rune_id } => {
             memory::stable::orders::lock_order(
                 order_id,
+                lock_amount,
                 price,
                 offramper_fee,
                 onramper_user_id,
@@ -771,11 +796,10 @@ pub async fn lock_order(
                 revolut_consent,
                 stripe_session,
             )?;
-
             bitcoin_backend_lock_funds(
                 order.offramper_address.address,
                 onramper_address.address,
-                order.crypto.amount as u64,
+                lock_amount as u64,
                 rune_id,
             )
             .await?;
@@ -784,6 +808,7 @@ pub async fn lock_order(
         BlockchainAsset::Solana { spl_token } => {
             memory::stable::orders::lock_order(
                 order_id,
+                lock_amount,
                 price,
                 offramper_fee,
                 onramper_user_id,
@@ -792,15 +817,13 @@ pub async fn lock_order(
                 revolut_consent,
                 stripe_session,
             )?;
-
             solana_backend_lock_funds(
                 order.offramper_address.address,
                 onramper_address.address,
-                order.crypto.amount as u64,
+                lock_amount as u64,
                 spl_token,
             )
             .await?;
-
             Ok(())
         }
     }
@@ -1037,27 +1060,7 @@ pub fn mark_order_as_paid(order_id: u64) -> Result<()> {
         }
     })??;
 
-    memory::heap::clear_order_timer(order_id)
-}
-
-pub fn set_payment_id(order_id: u64, payment_id: String) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Locked(order) => {
-            order.payment_id = Some(payment_id);
-            Ok(())
-        }
-        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
-    })?
-}
-
-pub fn set_order_completed(order_id: u64) -> Result<()> {
-    memory::stable::orders::mutate_order(&order_id, |order_state| match order_state {
-        OrderState::Locked(order) => {
-            *order_state = OrderState::Completed(order.clone().complete());
-            Ok(())
-        }
-        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
-    })?
+    clear_order_timer(order_id)
 }
 
 pub fn verify_order_is_payable(
