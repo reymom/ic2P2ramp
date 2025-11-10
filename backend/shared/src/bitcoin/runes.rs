@@ -84,7 +84,7 @@ impl RuneID {
 }
 
 impl Storable for RuneID {
-    fn to_bytes(&self) -> Cow<[u8]> {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Owned(self.0.as_bytes().to_vec())
     }
 

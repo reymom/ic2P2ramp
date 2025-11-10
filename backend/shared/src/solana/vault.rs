@@ -14,7 +14,7 @@ pub struct VaultEntry {
 const MAX_VAULT_ENTRY_SIZE: u32 = 2048;
 
 impl Storable for VaultEntry {
-    fn to_bytes(&self) -> std::borrow::Cow<[u8]> {
+    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
         std::borrow::Cow::Owned(Encode!(self).unwrap())
     }
 
