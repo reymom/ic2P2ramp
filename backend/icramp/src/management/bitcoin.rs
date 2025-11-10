@@ -18,11 +18,18 @@ use crate::{
         bitcoin_backend_cancel_deposit, bitcoin_backend_complete_order,
         bitcoin_backend_deposit_funds,
     },
+    management::order::topup_order,
     model::{
         errors::{BlockchainError, Result, SystemError, UserError},
-        memory::stable::{
-            orders::{cancel_order, unset_processing_order},
-            spent_transactions::mark_tx_hash_as_processed,
+        memory::{
+            self,
+            stable::{
+                orders::{
+                    cancel_order, finalize_pending_fill, set_order_completed,
+                    unset_processing_order,
+                },
+                spent_transactions::mark_tx_hash_as_processed,
+            },
         },
         types::{
             AddressType as CommonAddressType, BlockchainAsset, PaymentProvider,
@@ -49,6 +56,11 @@ pub enum BitcoinTransactionAction {
         currency: String,
         amount: u128,
     },
+    TopUpFunds {
+        order_id: u64,
+        offramper_address: String,
+        amount: u128,
+    },
     CompleteOrder {
         order_id: u64,
         amount: u64,
@@ -71,6 +83,9 @@ impl BitcoinTransactionAction {
 
         match self {
             BitcoinTransactionAction::DepositFunds { amount, .. } => {
+                total_rune_amount == *amount as u64
+            }
+            BitcoinTransactionAction::TopUpFunds { amount, .. } => {
                 total_rune_amount == *amount as u64
             }
             BitcoinTransactionAction::CompleteOrder { amount, .. } => total_rune_amount == *amount,
@@ -196,11 +211,89 @@ pub fn spawn_bitcoin_tx_listener(
                                 ),
                             }
                         }
+                        BitcoinTransactionAction::TopUpFunds {
+                            order_id,
+                            offramper_address,
+                            amount,
+                        } => {
+                            let runes = if rune_id.is_some() {
+                                match fetch_utxos_for_order(&txid_clone, &dst_address).await {
+                                    Ok(r) if !r.is_empty() => {
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] Rune UTXOs = {:?}",
+                                            r
+                                        );
+                                        r
+                                    }
+                                    _ => {
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] No rune UTXOs found for tx {}",
+                                            txid_clone
+                                        );
+                                        return;
+                                    }
+                                }
+                            } else {
+                                Vec::new()
+                            };
+                            if !action.validate_rune_amount(runes.clone()) {
+                                ic_cdk::println!(
+                                    "[spawn_bitcoin_tx_listener] Error: Rune amount mismatch for tx {}",
+                                    txid_clone
+                                );
+                                return;
+                            }
+                            match bitcoin_backend_deposit_funds(
+                                offramper_address,
+                                amount as u64,
+                                rune_id.clone(),
+                            )
+                            .await
+                            {
+                                Ok(()) => match memory::stable::orders::get_order(&order_id) {
+                                    Ok(ord) => {
+                                        match topup_order(
+                                            &ord.created().unwrap(),
+                                            amount,
+                                            None,
+                                            None,
+                                        )
+                                        .await
+                                        {
+                                            Ok(()) => {
+                                                mark_tx_hash_as_processed(txid.clone());
+                                                ic_cdk::println!(
+                                                    "[spawn_bitcoin_tx_listener] bitcoin order topped up, order id = {}",
+                                                    order_id
+                                                );
+                                            }
+                                            Err(e) => {
+                                                ic_cdk::println!(
+                                                    "[spawn_bitcoin_tx_listener] Error top-upping order {}: {:?}",
+                                                    order_id,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(e) => ic_cdk::println!(
+                                        "[spawn_bitcoin_tx_listener] Could not fetch order {}: {:?}",
+                                        order_id,
+                                        e
+                                    ),
+                                },
+                                Err(e) => ic_cdk::println!(
+                                    "[spawn_bitcoin_tx_listener] Error depositing BTC to backend (top-up): {:?}",
+                                    e
+                                ),
+                            }
+                        }
                         BitcoinTransactionAction::CompleteOrder {
                             onramper_address,
                             amount,
                             order_id,
                         } => {
+                            let _ = finalize_pending_fill(order_id, Some(txid.clone()));
                             match bitcoin_backend_complete_order(
                                 onramper_address,
                                 amount,
@@ -208,18 +301,17 @@ pub fn spawn_bitcoin_tx_listener(
                             )
                             .await
                             {
-                                Ok(()) => match super::order::set_order_completed(order_id) {
+                                Ok(()) => match set_order_completed(order_id) {
                                     Ok(()) => {
-                                        let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                            "[spawn_bitcoin_tx_listener] bitcoin order completed, order id = {}",
+                                            "[spawn_bitcoin_tx_listener] bitcoin order dilled, order id = {}",
                                             order_id
                                         )
                                     }
                                     Err(e) => {
                                         let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                            "[spawn_bitcoin_tx_listener] Error setting order as completed: {:?}",
+                                            "[spawn_bitcoin_tx_listener] Error setting order as filled: {:?}",
                                             e
                                         )
                                     }
@@ -227,7 +319,7 @@ pub fn spawn_bitcoin_tx_listener(
                                 Err(e) => {
                                     let _ = unset_processing_order(&order_id);
                                     ic_cdk::println!(
-                                        "[spawn_bitcoin_tx_listener] Error completing order: {:?}",
+                                        "[spawn_bitcoin_tx_listener] Error filling order: {:?}",
                                         e
                                     )
                                 }
