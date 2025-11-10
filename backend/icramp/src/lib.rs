@@ -24,7 +24,7 @@ use management::{
 };
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
 use model::types::{
-    self, AddressType, AuthenticationData, BlockchainAsset, Crypto, LoginAddress, PaymentProvider,
+    self, AddressType, AuthenticationData, BlockchainAsset, LoginAddress, PaymentProvider,
     PaymentProviderType, TransactionAddress,
     evm::{
         gas::{self, ChainGasTracking},
@@ -671,8 +671,12 @@ async fn calculate_order_fees(
 }
 
 #[ic_cdk::update]
-async fn calculate_order_price(currency: String, crypto: Crypto) -> Result<(u64, u64)> {
-    order_management::calculate_price_and_fee(&currency, &crypto).await
+async fn calculate_order_price(
+    currency: String,
+    asset: BlockchainAsset,
+    amount: u128,
+) -> Result<(u64, u64)> {
+    order_management::calculate_price_and_fee(&currency, &asset, amount).await
 }
 
 #[ic_cdk::query]
@@ -858,22 +862,76 @@ async fn top_up_order(
         let _ = orders::unset_processing_order(&order_id);
     })?;
 
-    let (gas_lock, gas_withdraw) = match deposit_input {
-        Some(DepositInput::Evm(v)) => (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw)),
-        _ => (None, None),
-    };
+    match order.crypto.asset.clone() {
+        BlockchainAsset::Bitcoin { rune_id } => {
+            let canister_address = match deposit_input {
+                Some(DepositInput::Bitcoin(v)) => Ok(v.canister_address),
+                _ => Err(OrderError::InvalidInput(
+                    "Missing bitcoin topup input".into(),
+                )),
+            }?;
 
-    order_management::topup_order(&order, amount, gas_lock, gas_withdraw)
-        .await
-        .inspect_err(|_e| {
-            let _ = orders::unset_processing_order(&order_id);
-        })?;
+            bitcoin_management::spawn_bitcoin_tx_listener(
+                tx_hash.clone().ok_or(OrderError::InvalidInput(
+                    "Missing bitcoin tx id".to_string(),
+                ))?,
+                BitcoinTransactionAction::TopUpFunds {
+                    order_id,
+                    offramper_address: order.offramper_address.address.clone(),
+                    amount,
+                },
+                canister_address,
+                rune_id,
+                0,
+            );
 
-    if let Some(tx_hash) = tx_hash {
-        spent_transactions::mark_tx_hash_as_processed(tx_hash);
-    };
+            return orders::unset_processing_order(&order_id);
+        }
 
-    orders::unset_processing_order(&order_id)
+        BlockchainAsset::Solana { spl_token } => {
+            // 1) Reflect escrow-accounting deposit first (like create_order)
+            solana_backend_deposit_funds(
+                order.offramper_address.address.clone(),
+                amount as u64,
+                spl_token,
+            )
+            .await?;
+
+            if let Some(sig) = tx_hash {
+                spent_transactions::mark_tx_hash_as_processed(sig);
+            }
+
+            // 2) Bump order amount + fee (no L1 wait needed here)
+            order_management::topup_order(&order, amount, None, None)
+                .await
+                .inspect_err(|_| {
+                    let _ = orders::unset_processing_order(&order_id);
+                })?;
+
+            return orders::unset_processing_order(&order_id);
+        }
+
+        // EVM / ICP
+        _ => {
+            if let Some(tx) = tx_hash {
+                spent_transactions::mark_tx_hash_as_processed(tx);
+            }
+
+            let (gas_lock, gas_withdraw) = match deposit_input {
+                Some(DepositInput::Evm(v)) => {
+                    (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw))
+                }
+                _ => (None, None),
+            };
+            order_management::topup_order(&order, amount, gas_lock, gas_withdraw)
+                .await
+                .inspect_err(|_| {
+                    let _ = orders::unset_processing_order(&order_id);
+                })?;
+
+            return orders::unset_processing_order(&order_id);
+        }
+    }
 }
 
 #[ic_cdk::update]
@@ -883,17 +941,20 @@ async fn lock_order(
     onramper_user_id: u64,
     onramper_provider: PaymentProvider,
     onramper_address: TransactionAddress,
+    lock_amount: u128,
     stripe_success_url: Option<String>,
     stripe_cancel_url: Option<String>,
 ) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
+    ic_cdk::println!("[lock_order]");
     if let Err(e) = order_management::lock_order(
         order_id,
         session_token,
         onramper_user_id,
         onramper_provider,
         onramper_address,
+        lock_amount,
         stripe_success_url,
         stripe_cancel_url,
     )
@@ -1018,48 +1079,7 @@ async fn process_transaction(
         PaymentProvider::Email { email } => {
             ic_cdk::println!("[verify_transaction] Handling Stripe checkout verification");
 
-            // 1. Stored Checkout Session id from lock()
-            let session_id = order
-                .payment_id
-                .clone()
-                .ok_or(OrderError::PaymentVerificationFailed)?;
-
-            // 2. Stripe platform (offramper's Connect platform)
-            let platform = order
-                .base
-                .offramper_providers
-                .iter()
-                .find_map(|p| {
-                    if let PaymentProvider::Stripe { platform, .. } = p.1 {
-                        Some(platform.clone())
-                    } else {
-                        None
-                    }
-                })
-                .ok_or(OrderError::PaymentVerificationFailed)?;
-
-            let expected_minor = (order.price + order.offramper_fee) as i64;
-            let stripe_account_id = order
-                .base
-                .offramper_providers
-                .get(&PaymentProviderType::Stripe)
-                .and_then(|provider| {
-                    if let PaymentProvider::Stripe { account_id, .. } = provider {
-                        Some(account_id)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| OrderError::InvalidOfframperProvider)?;
-            payment_management::stripe::verify_session_paid_destination(
-                &session_id,
-                expected_minor,
-                &order.base.currency,
-                &stripe_account_id,
-                Some(platform),
-                email,
-            )
-            .await?;
+            payment_management::stripe::verify_stripe_payment(&order, email).await?;
         }
     }
 

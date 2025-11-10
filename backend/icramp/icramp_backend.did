@@ -60,12 +60,16 @@ type ChainGasTracking = record {
   commit_gas : GasUsage;
 };
 type CompletedOrder = record {
+  fills : vec FillRecord;
+  total_crypto_fee : nat;
   asset : BlockchainAsset;
-  offramper_fee : nat64;
-  onramper : TransactionAddress;
+  total_offramper_fee : nat64;
+  total_fiat : nat64;
   offramper : TransactionAddress;
+  currency : text;
   price : nat64;
   completed_at : nat64;
+  total_crypto : nat;
 };
 type Crypto = record {
   fee : nat;
@@ -129,6 +133,18 @@ type FeeQuote = record {
   admin_fee : nat;
   blockchain_fee : nat;
 };
+type FillRecord = record {
+  crypto_fee : nat;
+  tx_id : opt text;
+  provider : PaymentProvider;
+  offramper_fee : nat64;
+  fiat : nat64;
+  created_at : nat64;
+  payer : TransactionAddress;
+  payer_user_id : nat64;
+  payment_id : text;
+  crypto_amount : nat;
+};
 type GasRecord = record { gas : nat64; block_number : nat; gas_price : nat };
 type GasUsage = record { records : vec GasRecord };
 type HttpHeader = record { value : text; name : text };
@@ -155,10 +171,12 @@ type L2MainnetService = variant { Alchemy; Llama; BlockPi; PublicNode; Ankr };
 type LockedOrder = record {
   locked_at : nat64;
   payment_done : bool;
+  pending_fill : opt FillRecord;
   offramper_fee : nat64;
   base : Order;
   uncommited : bool;
   onramper : Onramper;
+  lock_amount : nat;
   payment_url : opt text;
   price : nat64;
   payment_id : opt text;
@@ -189,6 +207,7 @@ type Onramper = record {
 };
 type Order = record {
   id : nat64;
+  fills : vec FillRecord;
   created_at : nat64;
   offramper_user_id : nat64;
   crypto : Crypto;
@@ -204,7 +223,6 @@ type OrderError = variant {
   InvalidInput : text;
   InvalidOnramperProvider;
   OrderTimerNotFound;
-  OrderNotProcessing;
   MissingDebtorAccount;
   OrderNotFound;
   InvalidOfframperProvider;
@@ -464,7 +482,7 @@ service : (InstallArg) -> {
   calculate_order_fees : (BlockchainAsset, nat, opt nat64, opt nat64) -> (
       Result_2,
     );
-  calculate_order_price : (text, Crypto) -> (Result_3);
+  calculate_order_price : (text, BlockchainAsset, nat) -> (Result_3);
   cancel_order : (nat64, text) -> (Result);
   clean_old_spent_txs : () -> ();
   create_bitcoin_order_with_tx : (
@@ -528,6 +546,7 @@ service : (InstallArg) -> {
       nat64,
       PaymentProvider,
       TransactionAddress,
+      nat,
       opt text,
       opt text,
     ) -> (Result);
@@ -578,7 +597,7 @@ service : (InstallArg) -> {
   transfer_evm_funds : (nat64, text, nat, opt text, opt nat64) -> (Result);
   transform_revolut_consent_response : (TransformArgs) -> (HttpResponse) query;
   transform_revolut_payment_response : (TransformArgs) -> (HttpResponse) query;
-  unprocess_order : (nat64) -> (Result);
+  unfreeze_order : (nat64) -> (Result);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
   verify_transaction : (nat64, opt text, text) -> (Result);
