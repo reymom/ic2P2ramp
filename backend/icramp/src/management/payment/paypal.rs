@@ -1,7 +1,11 @@
 use crate::{
     model::{
         errors::{OrderError, Result},
-        types::{PaymentProvider, PaymentProviderType, orders::LockedOrder},
+        memory::stable::orders::append_fill_if_new,
+        types::{
+            PaymentProvider, PaymentProviderType,
+            orders::{FillRecord, LockedOrder},
+        },
     },
     outcalls::paypal,
 };
@@ -47,11 +51,28 @@ pub async fn verify_paypal_payment(
         && onramper_matches
     {
         ic_cdk::println!("[verify_transaction] Verification succeded.");
-        crate::management::order::set_payment_id(order.base.id, transaction_id.to_string())?;
+        crate::memory::stable::orders::set_payment_id(order.base.id, transaction_id.to_string())?;
         crate::management::order::mark_order_as_paid(order.base.id)?;
     } else {
         return Err(OrderError::PaymentVerificationFailed)?;
     }
 
-    Ok(())
+    let total = order.base.crypto.amount.max(1);
+    let locked = order.lock_amount;
+    let fee_part: u128 = (order.base.crypto.fee.saturating_mul(locked)) / total;
+    append_fill_if_new(
+        order.base.id,
+        FillRecord {
+            payer_user_id: order.onramper.user_id,
+            payer: order.onramper.address.clone(),
+            provider: order.onramper.provider.clone(),
+            fiat: order.price,
+            offramper_fee: order.offramper_fee,
+            crypto_amount: locked,
+            crypto_fee: fee_part,
+            payment_id: transaction_id.to_string(),
+            tx_id: None,
+            created_at: ic_cdk::api::time(),
+        },
+    )
 }

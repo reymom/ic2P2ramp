@@ -1,8 +1,86 @@
 use crate::{
     errors::{Result, SystemError},
-    model::errors::OrderError,
+    model::{
+        errors::OrderError,
+        memory::stable::orders::append_fill_if_new,
+        types::{
+            PaymentProvider, PaymentProviderType,
+            orders::{FillRecord, LockedOrder},
+        },
+    },
     outcalls::stripe::session::retrieve_session,
 };
+
+pub async fn verify_stripe_payment(order: &LockedOrder, email: &str) -> Result<()> {
+    // 1. Stored Checkout Session id from lock()
+    let session_id = order
+        .payment_id
+        .clone()
+        .ok_or(OrderError::PaymentVerificationFailed)?;
+
+    // 2. Stripe platform (offramper's Connect platform)
+    let platform = order
+        .base
+        .offramper_providers
+        .iter()
+        .find_map(|p| {
+            if let PaymentProvider::Stripe { platform, .. } = p.1 {
+                Some(platform.clone())
+            } else {
+                None
+            }
+        })
+        .ok_or(OrderError::PaymentVerificationFailed)?;
+
+    let expected_minor = (order.price + order.offramper_fee) as i64;
+    let stripe_account_id = order
+        .base
+        .offramper_providers
+        .get(&PaymentProviderType::Stripe)
+        .and_then(|provider| {
+            if let PaymentProvider::Stripe { account_id, .. } = provider {
+                Some(account_id)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| OrderError::InvalidOfframperProvider)?;
+    let correct = verify_session_paid_destination(
+        &session_id,
+        expected_minor,
+        &order.base.currency,
+        &stripe_account_id,
+        Some(platform),
+        email,
+    )
+    .await?;
+
+    if correct {
+        ic_cdk::println!("[verify_transaction] Verification succeded.");
+        crate::management::order::mark_order_as_paid(order.base.id)?;
+    } else {
+        return Err(OrderError::PaymentVerificationFailed)?;
+    }
+
+    let total = order.base.crypto.amount.max(1);
+    let locked = order.lock_amount;
+    let fee_part: u128 = (order.base.crypto.fee.saturating_mul(locked)) / total;
+    append_fill_if_new(
+        order.base.id,
+        FillRecord {
+            payer_user_id: order.onramper.user_id,
+            payer: order.onramper.address.clone(),
+            provider: order.onramper.provider.clone(),
+            fiat: order.price,
+            offramper_fee: order.offramper_fee,
+            crypto_amount: locked,
+            crypto_fee: fee_part,
+            payment_id: order.payment_id.clone().unwrap_or("".to_string()),
+            tx_id: None,
+            created_at: ic_cdk::api::time(),
+        },
+    )
+}
 
 // Verify success against order + destination
 pub async fn verify_session_paid_destination(
