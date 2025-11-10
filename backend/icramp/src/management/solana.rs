@@ -5,8 +5,9 @@ use crate::{
     inter_canister::solana::{
         solana_backend_cancel_deposit, solana_backend_complete_order, solana_backend_get_tx,
     },
-    management::order::set_order_completed,
-    model::memory::stable::orders::{cancel_order, unset_processing_order},
+    model::memory::stable::orders::{
+        cancel_order, finalize_pending_fill, set_order_completed, unset_processing_order,
+    },
 };
 
 const MAX_ATTEMPTS: u32 = 100;
@@ -88,13 +89,12 @@ pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionActi
                                 amount,
                                 token,
                             } => {
+                                let _ =
+                                    finalize_pending_fill(order_id, Some(info.signature.clone()));
                                 match solana_backend_complete_order(onramper, amount, token).await {
                                     Ok(()) => match set_order_completed(order_id) {
                                         Ok(()) => {
-                                            let _ = unset_processing_order(&order_id);
-                                            ic_cdk::println!(
-                                                "[solana] order completed: {order_id}"
-                                            );
+                                            ic_cdk::println!("[solana] order filled: {order_id}");
                                         }
                                         Err(e) => {
                                             let _ = unset_processing_order(&order_id);
@@ -107,7 +107,7 @@ pub fn spawn_solana_tx_listener(signature: String, action: SolanaTransactionActi
                                     Err(e) => {
                                         let _ = unset_processing_order(&order_id);
                                         ic_cdk::println!(
-                                            "[solana] Error completing solana order: {:?}",
+                                            "[solana] Error filling solana order: {:?}",
                                             e
                                         );
                                     }
