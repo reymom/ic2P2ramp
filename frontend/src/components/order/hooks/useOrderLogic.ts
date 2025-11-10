@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 
 import {
   DepositInput,
+  Order,
   OrderState,
   PaymentProvider,
   PaymentProviderType,
@@ -13,11 +14,7 @@ import { NetworkIds, NetworkProps } from '@/constants/networks';
 import { getEvmTokens } from '@/constants/evm_tokens';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { backend } from '@/model/backendProxy';
-import {
-  PaymentProviderTypes,
-  providerTypes,
-  TokenOption,
-} from '@/model/types';
+import { PaymentProviderTypes, TokenOption } from '@/model/types';
 import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
 import {
   blockchainAssetToBlockchainType,
@@ -26,7 +23,11 @@ import {
 } from '@/model/helpers/types';
 import { rampErrorToString } from '@/model/helpers/error';
 import { getExplorerUrls } from '@/utils/explorers';
-import { formatCryptoUnits, formatPrice } from '@/utils/formatters';
+import {
+  formatCryptoUnits,
+  formatPrice,
+  unitsFromDecimalInput,
+} from '@/utils/formatters';
 import { fetchOrderPrice } from '@/utils/rates';
 
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
@@ -55,6 +56,7 @@ export const useOrderLogic = (
   const [currentPrice, setCurrentPrice] = useState<bigint | null>(null);
   const [loadingPrice, setLoadingPrice] = useState<boolean>(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [lockAmount, setLockAmount] = useState<string>('');
   const [topUpAmount, setTopUpAmount] = useState<number>(0);
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [topUpTxHash, setTopUpTxHash] = useState<string | null>(null);
@@ -138,7 +140,7 @@ export const useOrderLogic = (
   const cancelledMessage = `Cancelled Order #${orderId}, refetching data`;
 
   const getToken = (): TokenOption | null => {
-    if (!baseOrder || !orderBlockchainAsset) return null;
+    if (!orderBlockchainAsset) return null;
 
     if ('Bitcoin' in orderBlockchainAsset) {
       const runeId = orderBlockchainAsset.Bitcoin.rune_id;
@@ -184,7 +186,7 @@ export const useOrderLogic = (
 
   const token = useMemo(() => {
     return getToken();
-  }, [baseOrder, orderBlockchainAsset, tokens]);
+  }, [orderBlockchainAsset, tokens]);
 
   const fetchOrder = async (orderId: bigint) => {
     try {
@@ -199,6 +201,62 @@ export const useOrderLogic = (
       }
     } catch (err) {
       console.error('Error fetching order: ', err);
+    }
+  };
+
+  const isProcessingState = (st: OrderState) =>
+    ('Created' in st && st.Created.processing) ||
+    ('Locked' in st && st.Locked.base.processing);
+  const routeByOrderState = (st: OrderState) => {
+    if ('Completed' in st) {
+      navigate('/view?status=Completed');
+    } else if ('Created' in st) {
+      navigate('/view'); // default list; remainder still open
+    } else {
+      // Locked or anything else: stay; UX shows spinner / status
+    }
+  };
+
+  const waitForProcessingAndRoute = async (id: bigint, timeoutMs = 90_000) => {
+    const t0 = Date.now();
+    setIsLoading(true);
+    setLoadingMessage('Confirming on-chain release...');
+    while (Date.now() - t0 < timeoutMs) {
+      const fresh = await fetchOrder(id);
+      if (fresh && !isProcessingState(fresh)) {
+        localStorage.removeItem(`order_${id}_price`);
+        setIsLoading(false);
+        routeByOrderState(fresh);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    // timeout: stop spinner but don't force-redirect; user can refresh or check /view
+    setIsLoading(false);
+  };
+
+  const fetchCreatedOrderPrice = async (baseOrder: Order) => {
+    const priceData = await fetchOrderPrice(
+      baseOrder.currency,
+      baseOrder.crypto.asset,
+      baseOrder.crypto.amount,
+    );
+
+    if (priceData) {
+      const [price, offramperFee] = priceData;
+      const total = price + offramperFee;
+      if (orderId != null) {
+        localStorage.setItem(
+          `order_${orderId}_price`,
+          JSON.stringify({
+            price: Number(total),
+            timestamp: Date.now(),
+          }),
+        );
+      }
+      setCurrentPrice(total);
+    } else {
+      setCurrentPrice(null);
     }
   };
 
@@ -226,32 +284,10 @@ export const useOrderLogic = (
         }
       }
 
-      if (!baseOrder || !token) return;
-
+      if (!baseOrder) return;
       try {
         if (alive) setLoadingPrice(true);
-
-        const priceData = await fetchOrderPrice(
-          baseOrder.currency,
-          baseOrder.crypto,
-        );
-
-        if (priceData) {
-          const [price, offramperFee] = priceData;
-          const total = price + offramperFee;
-          if (orderId != null) {
-            localStorage.setItem(
-              `order_${orderId}_price`,
-              JSON.stringify({
-                price: Number(total),
-                timestamp: Date.now(),
-              }),
-            );
-          }
-          setCurrentPrice(total);
-        } else {
-          setCurrentPrice(null);
-        }
+        await fetchCreatedOrderPrice(baseOrder);
       } catch (e) {
         console.error('fetchOrderPrice failed:', e);
         if (alive) setCurrentPrice(null);
@@ -261,7 +297,7 @@ export const useOrderLogic = (
     };
 
     getCurrentPrice();
-  }, [orderId, orderState, baseOrder, token]);
+  }, [orderId, orderState, baseOrder]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -353,9 +389,9 @@ export const useOrderLogic = (
 
     if (!(successHit && isThisOrder)) return;
 
-    const seenKey = `stripe_verified_${spOrder}`;
-    if (sessionStorage.getItem(seenKey) === '1') return;
-    sessionStorage.setItem(seenKey, '1');
+    // const seenKey = `stripe_verified_${spOrder}`;
+    // if (sessionStorage.getItem(seenKey) === '1') return;
+    // sessionStorage.setItem(seenKey, '1');
 
     if (processedStripeReturnRef.current === String(paymentId)) return;
     processedStripeReturnRef.current = String(paymentId);
@@ -378,15 +414,14 @@ export const useOrderLogic = (
             setLoadingMessage(
               'Bitcoin transaction is being processed. This may take some time to confirm (15-60+ minutes).',
             );
+            await waitForProcessingAndRoute(orderId);
+          } else if ('Solana' in orderBlockchainAsset!) {
+            setTxHash(resp.Ok);
+            setLoadingMessage(`Confirming Solana Transaction`);
+            await waitForProcessingAndRoute(orderId);
           } else {
             setLoadingMessage('Funds released');
-            setTimeout(() => {
-              fetchOrder(orderId);
-              refetchUser();
-              setIsLoading(false);
-              fetchBalances();
-              navigate('/view?status=Completed');
-            }, 2500);
+            await waitForProcessingAndRoute(orderId);
           }
         } else {
           setIsLoading(false);
@@ -486,8 +521,8 @@ export const useOrderLogic = (
 
             setLoadingMessage(successMessage);
             setTxHash(receipt.transactionHash);
-            setTimeout(() => {
-              fetchOrder(orderId);
+            setTimeout(async () => {
+              const fresh = await fetchOrder(orderId);
               refetchUser();
               fetchBalances();
               setIsLoading(false);
@@ -500,6 +535,12 @@ export const useOrderLogic = (
                   ? '/view?status=Cancelled'
                   : '',
               );
+              if (fresh) {
+                if ('Completed' in fresh) navigate('/view?status=Completed');
+                else if ('Created' in fresh) navigate('/view');
+                else if ('Cancelled' in fresh)
+                  navigate('/view?status=Cancelled');
+              }
             }, 3500);
             return;
           } else if ('Failed' in transactionLog.status) {
@@ -625,58 +666,61 @@ export const useOrderLogic = (
     setMessage(null);
     setLoadingMessage('Fetching order price');
 
-    const priceData = await fetchOrderPrice(
-      baseOrder!.currency,
-      baseOrder!.crypto,
-    );
-    if (!priceData) {
-      setMessage('Could not set order price');
-      setIsLoading(false);
-      return;
-    }
-
-    const [orderPrice, offramperFee] = priceData;
-    const currentPriceNumber = Number(currentPrice);
-    const totalOrderPrice = Number(orderPrice) + Number(offramperFee);
-    const priceDifference = Math.abs(
-      (totalOrderPrice - currentPriceNumber) / currentPriceNumber,
-    );
-    if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
-      const confirm = window.confirm(
-        `The real price differs significantly from the previously estimated price. 
-                    Real price: $${formatPrice(
-                      totalOrderPrice,
-                    )}, estimated price: $${formatPrice(currentPriceNumber)}. 
-                    Do you want to proceed?`,
-      );
-      if (!confirm) {
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    const onramperAddress = user.addresses.find(
-      (addr) => Object.keys(orderBlockchainAsset)[0] in addr.address_type,
-    );
-    if (!onramperAddress) {
-      setIsLoading(false);
-      setMessage('No address matches for user');
-      return;
-    }
-
-    const onIsEmail = 'Email' in provider;
-    const base = `${window.location.origin}${window.location.pathname}`;
-    const successUrl = `${base}?stripe=success&order_id=${orderId}`;
-    const cancelUrl = `${base}?stripe=cancel&order_id=${orderId}`;
-
-    if (provider) setLoadingMessage('Locking Order');
     try {
+      const dec = token?.decimals ?? 8;
+      const lockUnits = unitsFromDecimalInput(lockAmount, dec);
+      if (lockUnits <= 0n) throw new Error('Introduce a valid lock amount');
+
+      const maxUnits = BigInt(orderState.Created.crypto.amount);
+      if (lockUnits > maxUnits) throw new Error('Amount exceeds available');
+
+      const priceData = await fetchOrderPrice(
+        baseOrder!.currency,
+        baseOrder!.crypto.asset,
+        lockUnits,
+      );
+      if (!priceData) throw new Error('Could not fetch order price');
+      const [orderPrice, offramperFee] = priceData;
+
+      const currentPriceFill = currentPrice
+        ? Number((currentPrice * lockUnits) / maxUnits)
+        : Number(orderPrice) + Number(offramperFee);
+      const totalOrderPrice = Number(orderPrice) + Number(offramperFee);
+      const priceDifference = Math.abs(
+        (totalOrderPrice - currentPriceFill) / currentPriceFill || 0,
+      );
+      if (priceDifference > PRICE_DIFFERENCE_THRESHOLD) {
+        const confirm = window.confirm(
+          `The real price differs significantly from the previously estimated price. 
+                Real price: $${formatPrice(totalOrderPrice)}, 
+                estimated price: $${formatPrice(currentPriceFill)}. 
+          Do you want to proceed?`,
+        );
+        if (!confirm) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      const onramperAddress = user.addresses.find(
+        (addr) => Object.keys(orderBlockchainAsset)[0] in addr.address_type,
+      );
+      if (!onramperAddress) throw new Error('No address matches for user');
+
+      const onIsEmail = 'Email' in provider;
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const successUrl = `${base}?stripe=success&order_id=${orderId}`;
+      const cancelUrl = `${base}?stripe=cancel&order_id=${orderId}`;
+
+      if (provider) setLoadingMessage('Locking Order');
+
       const result = await backend.lock_order(
         orderId,
         sessionToken,
         user.id,
         provider,
         onramperAddress,
+        lockUnits,
         onIsEmail ? [successUrl] : [],
         onIsEmail ? [cancelUrl] : [],
       );
@@ -697,8 +741,8 @@ export const useOrderLogic = (
         setMessage(rampErrorToString(result.Err));
         setIsLoading(false);
       }
-    } catch (err) {
-      setMessage(`Error while committing to order ${orderId}.`);
+    } catch (err: any) {
+      setMessage(err?.message ?? 'Unexpected error while locking order');
       setIsLoading(false);
       console.error(err);
     }
@@ -811,6 +855,7 @@ export const useOrderLogic = (
       if ('Err' in r) throw new Error(rampErrorToString(r.Err));
 
       setTopUpAmount(0);
+      localStorage.removeItem(`order_${orderId}_price`);
       await refetchOrders();
     } catch (e: any) {
       setMessage(e?.message ?? String(e));
@@ -848,15 +893,13 @@ export const useOrderLogic = (
           setLoadingMessage(
             'Bitcoin transaction is being processed. This may take some time to confirm (15-60+ minutes). You can check the status using the link below.',
           );
+          await waitForProcessingAndRoute(orderId);
+        } else if ('Solana' in orderBlockchainAsset!) {
+          setTxHash(response.Ok);
+          setLoadingMessage(`Confirming Solana Transaction`);
+          await waitForProcessingAndRoute(orderId);
         } else {
-          setLoadingMessage(releasedMessage);
-          setTimeout(() => {
-            fetchOrder(orderId);
-            refetchUser();
-            setIsLoading(false);
-            fetchBalances();
-            navigate('/view?status=Completed');
-          }, 2500);
+          await waitForProcessingAndRoute(orderId);
         }
       } else {
         setIsLoading(false);
@@ -1044,6 +1087,7 @@ export const useOrderLogic = (
     remainingTime,
     isPayable,
     committedProvider,
+    lockAmount,
     topUpAmount,
     topUpLoading,
     topUpTxHash,
@@ -1056,6 +1100,7 @@ export const useOrderLogic = (
     handleProviderSelection,
     commitToOrder,
     removeOrder,
+    setLockAmount,
     setTopUpAmount,
     topUp,
     handlePayPalSuccess,

@@ -1,16 +1,17 @@
 import { backend } from '@/model/backendProxy';
 import { rampErrorToString } from '@/model/helpers/error';
 import {
-  Crypto,
+  BlockchainAsset,
   RateAsset,
 } from '@/declarations/icramp_backend/icramp_backend.did';
 
 export const fetchOrderPrice = async (
   currency: string,
-  crypto: Crypto,
+  asset: BlockchainAsset,
+  amount: bigint,
 ): Promise<[bigint, bigint] | null> => {
   try {
-    const result = await backend.calculate_order_price(currency, crypto);
+    const result = await backend.calculate_order_price(currency, asset, amount);
     if ('Ok' in result) {
       console.log('[fetchOrderPrice] price, fee = ', result.Ok);
       return result.Ok;

@@ -9,6 +9,20 @@ export const truncate = (
   return str.slice(0, frontChars) + '...' + str.slice(-backChars);
 };
 
+export const unitsFromDecimalInput = (
+  input: string,
+  decimals: number,
+): bigint => {
+  const s = (input ?? '').trim();
+  if (!/^\d*\.?\d*$/.test(s) || s === '' || s === '.')
+    throw new Error('Invalid amount format');
+  const [intPart, fracRaw = ''] = s.split('.');
+  const frac = (fracRaw + '0'.repeat(decimals)).slice(0, decimals); // floor extra decimals
+  const whole = intPart === '' ? '0' : intPart;
+  const combined = (whole + frac).replace(/^0+/, '') || '0';
+  return BigInt(combined);
+};
+
 export const validatePassword = (password: string): string | null => {
   const minLength = 8;
   const hasNumber = /\d/;
