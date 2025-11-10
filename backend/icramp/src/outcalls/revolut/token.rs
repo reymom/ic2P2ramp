@@ -7,7 +7,6 @@ use ic_cdk::api::management_canister::http_request::{
 
 use crate::{
     errors::{BlockchainError, OrderError, Result, SystemError},
-    management::order,
     model::{
         helpers,
         memory::{heap::read_state, stable},
@@ -130,7 +129,7 @@ pub async fn wait_for_revolut_access_token(
                 )
                 .await?;
 
-                order::set_payment_id(order_id, payment_id.clone())?;
+                stable::orders::set_payment_id(order_id, payment_id.clone())?;
 
                 // Automatically verify the transaction after setting the payment ID
                 ic_cdk::println!("[wait_for_access_token] Verifying transaction...");

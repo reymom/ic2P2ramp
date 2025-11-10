@@ -22,7 +22,22 @@ pub struct Order {
     pub offramper_address: TransactionAddress,
     pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
     pub crypto: Crypto,
+    pub fills: Vec<FillRecord>,
     pub processing: bool,
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct FillRecord {
+    pub payer_user_id: u64,
+    pub payer: TransactionAddress,
+    pub provider: PaymentProvider,
+    pub fiat: u64, // price
+    pub offramper_fee: u64,
+    pub crypto_amount: u128,
+    pub crypto_fee: u128,
+    pub payment_id: String, // PayPal capture id / Stripe session id
+    pub tx_id: Option<String>,
+    pub created_at: u64,
 }
 
 #[derive(CandidType, Deserialize, Clone)]
@@ -86,6 +101,7 @@ impl Order {
             offramper_address,
             offramper_providers,
             crypto: Crypto::new(asset, crypto_amount, crypto_fee, rune_utxos)?,
+            fills: vec![],
             processing: false,
         };
         ic_cdk::println!("[new order] order = {:?}", order);
@@ -112,6 +128,7 @@ impl Order {
 
     pub fn lock(
         self,
+        lock_amount: u128,
         price: u64,
         offramper_fee: u64,
         onramper_user_id: u64,
@@ -139,6 +156,7 @@ impl Order {
 
         Ok(LockedOrder {
             base: base_order,
+            lock_amount,
             locked_at: ic_cdk::api::time(),
             price,
             offramper_fee,
@@ -148,6 +166,7 @@ impl Order {
             payment_id: stripe_session.as_ref().map(|(id, _)| id.clone()),
             payment_url: stripe_session.as_ref().map(|(_, url)| url.clone()),
             uncommited: false,
+            pending_fill: None,
         })
     }
 }

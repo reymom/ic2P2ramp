@@ -2,7 +2,7 @@ use crate::errors::{OrderError, Result};
 use crate::model::memory::heap::{clear_order_timer, set_order_timer};
 use crate::types::{
     PaymentProvider, TransactionAddress,
-    orders::{Order, OrderState, RevolutConsent},
+    orders::{FillRecord, Order, OrderState, RevolutConsent},
 };
 
 use super::storage::ORDERS;
@@ -61,6 +61,7 @@ where
 
 pub fn lock_order(
     order_id: u64,
+    lock_amount: u128,
     price: u64,
     offramper_fee: u64,
     onramper_user_id: u64,
@@ -73,6 +74,7 @@ pub fn lock_order(
         match order_state {
             OrderState::Created(order) => {
                 *order_state = OrderState::Locked(order.clone().lock(
+                    lock_amount,
                     price,
                     offramper_fee,
                     onramper_user_id,
@@ -122,6 +124,143 @@ pub fn unlock_order(order_id: u64) -> Result<()> {
     })??;
 
     clear_order_timer(order_id)
+}
+
+pub fn set_payment_id(order_id: u64, payment_id: String) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            order.payment_id = Some(payment_id);
+            Ok(())
+        }
+        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
+    })?
+}
+
+pub fn append_fill_if_new(order_id: u64, fill: FillRecord) -> Result<()> {
+    mutate_order(&order_id, |state| -> Result<()> {
+        let OrderState::Locked(lo) = state else {
+            return Err(OrderError::InvalidOrderState(state.to_string()).into());
+        };
+        // idempotent: avoid double append
+        if !lo
+            .base
+            .fills
+            .iter()
+            .any(|f| f.payment_id == fill.payment_id)
+        {
+            let mut base = lo.base.clone();
+            base.fills.push(fill);
+            // write back into locked
+            let mut locked = lo.clone();
+            locked.base = base;
+            *state = OrderState::Locked(locked);
+        }
+        Ok(())
+    })?
+}
+
+pub fn set_order_completed(order_id: u64) -> Result<()> {
+    mutate_order(&order_id, |order_state| match order_state {
+        OrderState::Locked(order) => {
+            let total = order.base.crypto.amount;
+            let filled = order.lock_amount;
+
+            if filled > total {
+                return Err(OrderError::InvalidInput("locked > available".into()));
+            }
+            order.base.unset_processing();
+            if filled == total {
+                *order_state = OrderState::Completed(order.clone().complete());
+            } else {
+                let remaining = total - filled;
+                let mut base = order.base.clone();
+                base.crypto.amount = remaining;
+                *order_state = OrderState::Created(base);
+            }
+
+            Ok(())
+        }
+        _ => Err(OrderError::InvalidOrderState(order_state.to_string()))?,
+    })??;
+
+    clear_order_timer(order_id)
+}
+
+pub fn set_pending_fill(order_id: u64, fill: FillRecord) -> Result<()> {
+    mutate_order(&order_id, |s| -> Result<()> {
+        if let OrderState::Locked(mut lo) = s.clone() {
+            lo.pending_fill = Some(fill);
+            *s = OrderState::Locked(lo);
+            Ok(())
+        } else {
+            Err(OrderError::InvalidOrderState(s.to_string()).into())
+        }
+    })?
+}
+
+pub fn finalize_pending_fill(order_id: u64, tx_id: Option<String>) -> Result<()> {
+    mutate_order(&order_id, |s| -> Result<()> {
+        let OrderState::Locked(mut lo) = s.clone() else {
+            return Err(OrderError::InvalidOrderState(s.to_string()).into());
+        };
+
+        // Helper to try updating an in-place fill already in base.fills (tx_id == None)
+        let mut updated_existing = false;
+        if let Some(ref tid) = tx_id {
+            if let Some(idx) = lo
+                .base
+                .fills
+                .iter()
+                .rposition(|f| f.tx_id.is_none() &&
+                               // strongest keys first; fall back to amount-only if needed
+                               ( !f.payment_id.is_empty() && f.payment_id == lo.pending_fill.as_ref().map(|pf| pf.payment_id.clone()).unwrap_or_default()
+                                 || f.crypto_amount == lo.pending_fill.as_ref().map(|pf| pf.crypto_amount).unwrap_or(0)
+                               )
+                )
+            {
+                let f = &mut lo.base.fills[idx];
+                // If already finalized by another path, don't overwrite
+                if f.tx_id.is_none() {
+                    f.tx_id = Some(tid.clone());
+                    updated_existing = true;
+                }
+            }
+        }
+
+        if updated_existing {
+            *s = OrderState::Locked(lo);
+            return Ok(());
+        }
+
+        // Otherwise, consume pending_fill if any, attach tx_id, and push (without duplication)
+        if let Some(mut fill) = lo.pending_fill.take() {
+            if let Some(tid) = tx_id {
+                fill.tx_id = Some(tid);
+            }
+
+            // Avoid duplicates: if an equivalent fill (same payer + amount + payment_id) exists, just set tx_id there
+            if let Some(idx) = lo.base.fills.iter().rposition(|f| {
+                f.payer_user_id == fill.payer_user_id
+                    && f.crypto_amount == fill.crypto_amount
+                    && (f.payment_id == fill.payment_id
+                        || f.payment_id.is_empty()
+                        || fill.payment_id.is_empty())
+            }) {
+                if lo.base.fills[idx].tx_id.is_none() {
+                    lo.base.fills[idx].tx_id = fill.tx_id.clone();
+                }
+            } else {
+                lo.base.fills.push(fill);
+            }
+
+            *s = OrderState::Locked(lo);
+            return Ok(());
+        }
+
+        // Nothing to finalize: safe no-op (idempotent)
+        *s = OrderState::Locked(lo);
+        Ok(())
+    })?
 }
 
 pub fn cancel_order(order_id: u64) -> Result<()> {
