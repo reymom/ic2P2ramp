@@ -1,34 +1,24 @@
-use std::collections::HashMap;
-
 use candid::Principal;
-use evm_rpc_canister_types::BlockTag;
-use icramp_types::{
-    bitcoin::{runes::RuneUTXOEntry, transfer::TransactionType},
-    solana::errors::{SolanaError, TransactionError},
-};
+use icramp_types::bitcoin::{runes::RuneUTXOEntry, transfer::TransactionType};
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
 
+use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
 use crate::inter_canister::bitcoin::{
     bitcoin_backend_estimate_fee, bitcoin_backend_get_rune_metadata, bitcoin_backend_lock_funds,
-    bitcoin_backend_transfer, bitcoin_backend_unlock_funds, bitcoin_backend_validate_rune,
+    bitcoin_backend_transfer, bitcoin_backend_unlock_funds,
 };
 use crate::inter_canister::solana::{
-    solana_backend_estimate_fees, solana_backend_get_token_info, solana_backend_get_tx_metadata,
-    solana_backend_lock_funds, solana_backend_send_sol, solana_backend_send_spl_token,
-    solana_backend_unlock_funds,
+    solana_backend_estimate_fees, solana_backend_get_token_info, solana_backend_lock_funds,
+    solana_backend_send_sol, solana_backend_send_spl_token, solana_backend_unlock_funds,
 };
 use crate::management::bitcoin as bitcoin_management;
 use crate::management::solana::{SolanaTransactionAction, spawn_solana_tx_listener};
 use crate::management::user as user_management;
 use crate::{
-    errors::{BlockchainError, OrderError, Result, SystemError, UserError},
-    inter_canister::solana::solana_backend_solana_account,
-};
-use crate::{
     evm::{
         event::{self, LogEvent},
-        fees::{eth_get_latest_block, get_fee_estimates},
+        fees::get_fee_estimates,
         transaction,
         vault::Ic2P2ramp,
     },
@@ -43,11 +33,12 @@ use crate::model::{
 use crate::outcalls::pricing::rates::get_exchange_rate;
 use crate::types::{
     self, BlockchainAsset, PaymentProvider, PaymentProviderType, TransactionAddress,
-    evm::{chains, logs::TransactionStatus, token, transaction::TransactionAction},
+    evm::{logs::TransactionStatus, token, transaction::TransactionAction},
     exchange_rate::RateAsset,
-    icp::{get_icp_token, is_icp_token_supported},
+    find_provider_of_type,
+    icp::get_icp_token,
     orders::{
-        DepositInput, LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+        LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
         fees::{get_crypto_fee, get_fiat_fee},
     },
 };
@@ -229,254 +220,11 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
     }
 }
 
-pub async fn validate_deposit_tx(
-    asset: &BlockchainAsset,
-    deposit_input: Option<DepositInput>,
-    order_offramper: String,
-    order_amount: u128,
-) -> Result<Option<String>> {
-    match asset {
-        BlockchainAsset::EVM {
-            chain_id,
-            token_address,
-        } => {
-            chains::chain_is_supported(*chain_id)?;
-            if let Some(token) = token_address.clone() {
-                token::evm_token_is_approved(*chain_id, &token)?;
-            };
-
-            let evm_input = match deposit_input {
-                Some(DepositInput::Evm(v)) => Ok(v),
-                _ => Err(OrderError::InvalidInput(
-                    "Missing evm order input".to_string(),
-                )),
-            }?;
-
-            let log_event = get_valid_log_event(chain_id, &evm_input.tx_hash).await?;
-            ic_cdk::println!("[validate_deposit_tx] log_event = {:?}", log_event);
-            match log_event {
-                LogEvent::Deposit(deposit_event) => {
-                    if deposit_event.user.to_lowercase() != order_offramper.to_lowercase() {
-                        return Err(BlockchainError::EvmLogError(
-                            "Invalid Offramper Address".to_string(),
-                        )
-                        .into());
-                    };
-                    if deposit_event.amount != order_amount {
-                        return Err(BlockchainError::EvmLogError(
-                            "Invalid Crypto Amount".to_string(),
-                        )
-                        .into());
-                    }
-                    if deposit_event.token.clone().map(|t| t.to_lowercase())
-                        != token_address.clone().map(|t| t.to_lowercase())
-                    {
-                        return Err(
-                            BlockchainError::EvmLogError("Invalid Crypto".to_string()).into()
-                        );
-                    }
-
-                    let last_block = eth_get_latest_block(*chain_id, BlockTag::Latest)
-                        .await
-                        .map(|block| block.number)?;
-                    deposit_event.expired(last_block)?;
-                }
-            };
-
-            Ok(Some(evm_input.tx_hash))
-        }
-        BlockchainAsset::ICP { ledger_principal } => {
-            is_icp_token_supported(ledger_principal)?;
-            Ok(None)
-        }
-        BlockchainAsset::Bitcoin { rune_id } => {
-            if let Some(rune_id) = rune_id.clone() {
-                bitcoin_backend_validate_rune(rune_id).await?;
-            };
-
-            let bitcoin_input = match deposit_input {
-                Some(DepositInput::Bitcoin(v)) => Ok(v),
-                _ => Err(OrderError::InvalidInput(
-                    "Missing bitcoin order input".to_string(),
-                )),
-            }?;
-
-            let bitcoin_txid = bitcoin_input.tx_id;
-            if spent_transactions::is_tx_hash_processed(&bitcoin_txid) {
-                return Err(BlockchainError::BitcoinBackendError(
-                    "Transaction already processed".to_string(),
-                )
-                .into());
-            };
-
-            Ok(Some(bitcoin_txid))
-        }
-        BlockchainAsset::Solana {
-            spl_token: expected_mint,
-        } => {
-            let sol_input = match deposit_input {
-                Some(DepositInput::Solana(v)) => Ok(v),
-                _ => Err(OrderError::InvalidInput(
-                    "Missing solana order input".to_string(),
-                )),
-            }?;
-            let vault_addr = solana_backend_solana_account().await?;
-
-            if spent_transactions::is_tx_hash_processed(&sol_input.signature) {
-                return Err(BlockchainError::TransactionAlreadyProcessed.into());
-            }
-
-            // Optional local input sanity vs asset
-            match (&expected_mint, &sol_input.mint) {
-                (Some(exp), Some(got)) if exp != got => {
-                    return Err(OrderError::InvalidInput("SPL mint mismatch".to_string()).into());
-                }
-                (None, Some(_)) => {
-                    return Err(OrderError::InvalidInput(
-                        "Unexpected SPL mint for SOL deposit".to_string(),
-                    )
-                    .into());
-                }
-                _ => {}
-            }
-
-            let txm = solana_backend_get_tx_metadata(sol_input.signature.clone()).await?;
-            ic_cdk::println!("[validate_deposit_tx] TxMetadata: {:?}", txm);
-            if !txm.meta.status.is_ok() {
-                return Err(SolanaError::from(TransactionError::MetaError(
-                    "tx meta status != Ok".into(),
-                ))
-                .into());
-            }
-
-            let keys = &txm.account_keys;
-            let pre = &txm.meta.pre_balances;
-            let post = &txm.meta.post_balances;
-            if pre.len() != post.len() || pre.len() != keys.len() {
-                return Err(SolanaError::from(TransactionError::MetaError(
-                    "invalid lamport vectors / keys".into(),
-                ))
-                .into());
-            }
-
-            if let Some(exp_mint) = expected_mint {
-                // -------- SPL TOKEN VALIDATION (owner must be offramper) --------
-                let mut pre: HashMap<u8, u128> = HashMap::new();
-                if let Some(pre_tbs) = txm.meta.pre_token_balances.as_ref() {
-                    for tb in pre_tbs {
-                        if tb.mint == *exp_mint {
-                            if let (i, Some(a)) = (
-                                tb.account_index,
-                                tb.ui_token_amount.amount.parse::<u128>().ok(),
-                            ) {
-                                pre.insert(i, a);
-                            }
-                        }
-                    }
-                }
-
-                let mut hits = 0usize;
-                if let Some(post_tbs) = txm.meta.post_token_balances.as_ref() {
-                    for tb in post_tbs {
-                        if tb.mint == *exp_mint {
-                            if let (i, Some(post_amt)) = (
-                                tb.account_index,
-                                tb.ui_token_amount.amount.parse::<u128>().ok(),
-                            ) {
-                                let pre_amt = *pre.get(&i).unwrap_or(&0);
-                                let delta = post_amt.saturating_sub(pre_amt);
-                                ic_cdk::println!("[validate_deposit_tx] solana delta: {}", delta);
-                                if delta > 0 {
-                                    // owner: Option<Pubkey> -> String, compare EXACT (base58 is case-sensitive)
-                                    let owner_ok = tb
-                                        .owner
-                                        .as_ref()
-                                        .map(|o| o.to_string() == vault_addr)
-                                        .unwrap_or(false);
-                                    if !owner_ok {
-                                        return Err(SolanaError::from(
-                                            TransactionError::MetaError(
-                                                "SPL credit not to offramper".into(),
-                                            ),
-                                        )
-                                        .into());
-                                    }
-                                    if delta == order_amount {
-                                        hits += 1;
-                                    } else {
-                                        return Err(SolanaError::from(
-                                            TransactionError::MetaError(
-                                                "ambiguous SPL credits in tx".into(),
-                                            ),
-                                        )
-                                        .into());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if hits != 1 {
-                    return Err(SolanaError::from(TransactionError::MetaError(
-                        "SPL deposit not found / ambiguous".into(),
-                    ))
-                    .into());
-                }
-            } else {
-                // -------- SOL (lamports) VALIDATION with address binding --------
-                let keys = &txm.account_keys;
-                let pre = &txm.meta.pre_balances;
-                let post = &txm.meta.post_balances;
-
-                if pre.len() != post.len() || pre.len() != keys.len() {
-                    return Err(SolanaError::from(TransactionError::MetaError(
-                        "invalid lamport vectors / keys".into(),
-                    ))
-                    .into());
-                }
-
-                let mut hits = 0usize;
-                for ((a, b), addr) in pre.iter().zip(post.iter()).zip(keys.iter()) {
-                    let delta = b.saturating_sub(*a) as u128;
-                    if delta > 0 {
-                        if addr != &vault_addr {
-                            return Err(SolanaError::from(TransactionError::MetaError(
-                                "lamports credit not to solana canister vault".into(),
-                            ))
-                            .into());
-                        }
-                        if delta == order_amount {
-                            hits += 1;
-                        } else {
-                            return Err(SolanaError::from(TransactionError::MetaError(
-                                "ambiguous SOL credits in tx".into(),
-                            ))
-                            .into());
-                        }
-                    }
-                }
-                if hits != 1 {
-                    return Err(SolanaError::from(TransactionError::MetaError(
-                        "SOL deposit not found / ambiguous".into(),
-                    ))
-                    .into());
-                }
-            }
-
-            if order_amount > u64::MAX as u128 {
-                return Err(OrderError::InvalidInput("order amount too large".into()).into());
-            }
-
-            Ok(Some(sol_input.signature))
-        }
-    }
-}
-
 pub async fn create_order(
     currency: &str,
     offramper_user_id: u64,
     offramper_address: TransactionAddress,
-    offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+    offramper_providers: Vec<PaymentProvider>,
     asset: BlockchainAsset,
     crypto_amount: u128,
     estimated_gas_lock: Option<u64>,
@@ -672,7 +420,7 @@ pub async fn lock_order(
     let off_supports_stripe = order
         .offramper_providers
         .iter()
-        .any(|p| matches!(p.0, PaymentProviderType::Stripe));
+        .any(|p| matches!(p.provider_type(), PaymentProviderType::Stripe));
     let on_is_email = onramper_provider.provider_type() == PaymentProviderType::Email;
 
     let provider_ok = if on_is_email {
@@ -709,7 +457,7 @@ pub async fn lock_order(
                 if let PaymentProvider::Stripe {
                     account_id,
                     platform,
-                } = p.1
+                } = p
                 {
                     Some((account_id.clone(), platform.clone()))
                 } else {
@@ -1082,15 +830,15 @@ pub fn verify_order_is_payable(
         .base
         .offramper_providers
         .iter()
-        .any(|p| matches!(p.0, PaymentProviderType::Stripe));
+        .any(|p| matches!(p.provider_type(), PaymentProviderType::Stripe));
     let on_is_email = matches!(order.onramper.provider, PaymentProvider::Email { .. });
 
     if !(off_supports_stripe && on_is_email) {
-        order
-            .base
-            .offramper_providers
-            .get(&order.onramper.provider.provider_type())
-            .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
+        find_provider_of_type(
+            &order.base.offramper_providers,
+            order.onramper.provider.provider_type(),
+        )
+        .ok_or_else(|| UserError::ProviderNotInUser(order.onramper.provider.provider_type()))?;
     }
 
     let user = memory::stable::users::get_user(&order.onramper.user_id)?;
