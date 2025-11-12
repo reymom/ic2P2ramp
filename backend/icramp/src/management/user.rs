@@ -15,7 +15,7 @@ use crate::{
 
 pub async fn register_user(
     user_type: UserType,
-    payment_providers: HashSet<PaymentProvider>,
+    payment_providers: Vec<PaymentProvider>,
     login_address: LoginAddress,
     password: Option<String>,
 ) -> Result<User> {
@@ -41,23 +41,17 @@ pub async fn register_user(
             "Provider list is empty.".to_string(),
         ))?;
     }
-    // Enforce: Stripe for Offramper
-    if matches!(user_type, UserType::Onramper)
-        && payment_providers
-            .iter()
-            .any(|p| matches!(p, PaymentProvider::Stripe { .. }))
-    {
-        return Err(SystemError::InvalidInput(
-            "Stripe is only allowed for Offramper users.".into(),
-        ))?;
-    }
+
+    assert_no_exact_duplicates(&payment_providers)?;
+    assert_role_allows_list(&user_type, &payment_providers)?;
 
     for p in &payment_providers {
         p.validate().await?;
     }
 
     let mut user = User::new(user_type, login_address, hashed_password?)?;
-    user.payment_providers = payment_providers;
+    user.payment_providers = payment_providers.clone();
+    assert_crypto_addresses_belong(&payment_providers, &user.addresses)?;
 
     users::insert_user(&user);
     Ok(user)
@@ -110,16 +104,9 @@ pub async fn add_payment_provider(
     users::mutate_user(user_id, |user| {
         user.validate_session(token)?;
 
-        if matches!(user.user_type, UserType::Onramper)
-            && matches!(payment_provider, PaymentProvider::Stripe { .. })
-        {
-            return Err(SystemError::InvalidInput(
-                "Stripe is only allowed for Offramper users.".into(),
-            )
-            .into());
-        }
+        assert_can_add_provider(user, &payment_provider)?;
 
-        user.payment_providers.insert(payment_provider);
+        user.payment_providers.push(payment_provider);
         Ok(())
     })?
 }
@@ -132,7 +119,7 @@ pub fn remove_payment_provider(
     users::mutate_user(user_id, |user| {
         user.validate_session(token)?;
 
-        user.payment_providers.remove(payment_provider);
+        user.payment_providers.pop_if(|p| p == payment_provider);
         Ok(())
     })?
 }
@@ -161,4 +148,96 @@ pub fn update_offramper_payment(user_id: u64, fiat_amount: u64, currency: &str) 
     users::mutate_user(user_id, |user| {
         user.update_fiat_amount(fiat_amount, currency)
     })
+}
+
+// -------
+// HELPERS
+// -------
+
+/// Purpose: returns Err if the vector contains exact duplicate providers.
+fn assert_no_exact_duplicates(list: &[PaymentProvider]) -> Result<()> {
+    use std::collections::HashSet;
+    let mut set: HashSet<&PaymentProvider> = HashSet::new();
+    for p in list {
+        if !set.insert(p) {
+            return Err(SystemError::InvalidInput("Duplicate payment provider".into()).into());
+        }
+    }
+    Ok(())
+}
+
+/// Purpose: role constraints (Stripe only Offramper, Email only Onramper).
+fn assert_role_allows_list(user_type: &UserType, list: &[PaymentProvider]) -> Result<()> {
+    if matches!(user_type, UserType::Onramper)
+        && list
+            .iter()
+            .any(|p| matches!(p, PaymentProvider::Stripe { .. }))
+    {
+        return Err(SystemError::InvalidInput(
+            "Stripe is only allowed for Offramper users.".into(),
+        )
+        .into());
+    }
+    if matches!(user_type, UserType::Offramper)
+        && list
+            .iter()
+            .any(|p| matches!(p, PaymentProvider::Email { .. }))
+    {
+        return Err(
+            SystemError::InvalidInput("Email is only allowed for Onramper users.".into()).into(),
+        );
+    }
+    Ok(())
+}
+
+/// Purpose: ensure all Crypto provider addresses belong to the given address book.
+fn assert_crypto_addresses_belong(
+    list: &[PaymentProvider],
+    addresses: &HashSet<TransactionAddress>,
+) -> Result<()> {
+    for p in list {
+        if let PaymentProvider::Crypto { address, .. } = p {
+            if !addresses.contains(address) {
+                return Err(SystemError::InvalidInput(
+                    "Crypto provider address not present in user's addresses".into(),
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Purpose: single-candidate version for add_payment_provider().
+fn assert_can_add_provider(user: &User, candidate: &PaymentProvider) -> Result<()> {
+    // role rules
+    if matches!(user.user_type, UserType::Onramper)
+        && matches!(candidate, PaymentProvider::Stripe { .. })
+    {
+        return Err(SystemError::InvalidInput(
+            "Stripe is only allowed for Offramper users.".into(),
+        )
+        .into());
+    }
+    if matches!(user.user_type, UserType::Offramper)
+        && matches!(candidate, PaymentProvider::Email { .. })
+    {
+        return Err(
+            SystemError::InvalidInput("Email is only allowed for Onramper users.".into()).into(),
+        );
+    }
+    // duplicate guard (exact)
+    if user.payment_providers.iter().any(|p| p == candidate) {
+        return Err(SystemError::InvalidInput("Duplicate payment provider".into()).into());
+    }
+    // crypto address ownership
+    if let PaymentProvider::Crypto { address, .. } = candidate {
+        if !user.addresses.contains(address) {
+            return Err(SystemError::InvalidInput(
+                "Crypto provider address not present in user's addresses".into(),
+            )
+            .into());
+        }
+    }
+    Ok(())
 }
