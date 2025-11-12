@@ -5,6 +5,7 @@ pub mod random;
 pub mod solana;
 pub mod user;
 pub mod vault;
+pub mod verifiers;
 
 pub fn on_fail_callback(order_id: u64) -> impl Fn() + 'static {
     move || match crate::memory::stable::orders::unset_processing_order(&order_id) {

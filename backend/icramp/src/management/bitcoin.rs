@@ -1,6 +1,11 @@
+use std::{str::FromStr, time::Duration};
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use secp256k1::{
+    Message, PublicKey, Secp256k1,
+    ecdsa::{RecoverableSignature, RecoveryId, Signature},
+};
 
 use bitcoin::{
     self, AddressType,
@@ -8,17 +13,13 @@ use bitcoin::{
     hashes::{Hash, sha256, sha256d},
     secp256k1::Scalar,
 };
-use secp256k1::{
-    Message, PublicKey, Secp256k1,
-    ecdsa::{RecoverableSignature, RecoveryId, Signature},
-};
 
 use crate::{
     inter_canister::bitcoin::{
         bitcoin_backend_cancel_deposit, bitcoin_backend_complete_order,
         bitcoin_backend_deposit_funds,
     },
-    management::order::topup_order,
+    management::{order::topup_order, payment::crypto as crypto_payments},
     model::{
         errors::{BlockchainError, Result, SystemError, UserError},
         memory::{
@@ -32,8 +33,8 @@ use crate::{
             },
         },
         types::{
-            AddressType as CommonAddressType, BlockchainAsset, PaymentProvider,
-            PaymentProviderType, TransactionAddress, unisat::UnisatTxOut,
+            AddressType as CommonAddressType, BlockchainAsset, PaymentProvider, TransactionAddress,
+            unisat::UnisatTxOut,
         },
     },
     outcalls::unisat::{
@@ -49,7 +50,7 @@ const MAX_INTERVAL_SECS: u64 = 600; // Max retry interval (10 min)
 #[derive(Clone)]
 pub enum BitcoinTransactionAction {
     DepositFunds {
-        offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+        offramper_providers: Vec<PaymentProvider>,
         offramper_address: TransactionAddress,
         offramper_id: u64,
         asset: BlockchainAsset,
@@ -71,6 +72,16 @@ pub enum BitcoinTransactionAction {
         amount: u64,
         offramper_address: String,
     },
+    /// Pay-with-crypto: confirms the *incoming* BTC payment from the onramper
+    /// before triggering vault release on the order's base asset.
+    PaymentDeposit {
+        order_id: u64,
+        /// expected payment amount in smallest units (for runes we use rune units)
+        amount: u128,
+        /// address that should receive the payment (onramper’s BTC address or offramper’s,
+        /// depending on your bridge layout)
+        dst_address: String,
+    },
 }
 
 impl BitcoinTransactionAction {
@@ -90,6 +101,9 @@ impl BitcoinTransactionAction {
             }
             BitcoinTransactionAction::CompleteOrder { amount, .. } => total_rune_amount == *amount,
             BitcoinTransactionAction::CancelOrder { amount, .. } => total_rune_amount == *amount,
+            BitcoinTransactionAction::PaymentDeposit { amount, .. } => {
+                total_rune_amount == *amount as u64
+            }
         }
     }
 }
@@ -360,6 +374,54 @@ pub fn spawn_bitcoin_tx_listener(
                                         e
                                     )
                                 }
+                            }
+                        }
+                        BitcoinTransactionAction::PaymentDeposit {
+                            order_id,
+                            dst_address,
+                            ..
+                        } => {
+                            let runes = if rune_id.is_some() {
+                                match fetch_utxos_for_order(&txid_clone, &dst_address).await {
+                                    Ok(r) if !r.is_empty() => {
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] Payment rune UTXOs = {:?}",
+                                            r
+                                        );
+                                        r
+                                    }
+                                    _ => {
+                                        ic_cdk::println!(
+                                            "[spawn_bitcoin_tx_listener] No rune UTXOs found for payment tx {}",
+                                            txid_clone
+                                        );
+                                        return;
+                                    }
+                                }
+                            } else {
+                                Vec::new()
+                            };
+
+                            if !action.validate_rune_amount(runes.clone()) {
+                                ic_cdk::println!(
+                                    "[spawn_bitcoin_tx_listener] Error: Rune amount mismatch for payment tx {}",
+                                    txid_clone
+                                );
+                                return;
+                            }
+
+                            // Hand off to payment layer to mark payment and trigger vault release.
+                            if let Err(e) = crypto_payments::on_bitcoin_payment_confirmed(
+                                order_id,
+                                txid_clone.clone(),
+                            )
+                            .await
+                            {
+                                ic_cdk::println!(
+                                    "[spawn_bitcoin_tx_listener] Error handling confirmed bitcoin payment for order {}: {:?}",
+                                    order_id,
+                                    e
+                                );
                             }
                         }
                     }
