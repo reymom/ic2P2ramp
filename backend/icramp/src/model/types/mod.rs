@@ -13,7 +13,9 @@ pub mod user;
 
 pub use blockchain::{BlockchainAsset, Crypto};
 pub use common::{AddressType, AuthenticationData, LoginAddress, TransactionAddress};
-pub use payment::providers::{PaymentProvider, PaymentProviderType, contains_provider_type};
+pub use payment::providers::{
+    PaymentProvider, PaymentProviderType, contains_provider_type, find_provider_of_type,
+};
 
 #[cfg(test)]
 mod tests {
@@ -54,7 +56,7 @@ mod tests {
         let mut updated_user = retrieved_user.clone();
         updated_user
             .payment_providers
-            .insert(PaymentProvider::Revolut {
+            .push(PaymentProvider::Revolut {
                 id: "revolut_id".to_string(),
                 scheme: "scheme".to_string(),
                 name: Some("name".to_string()),

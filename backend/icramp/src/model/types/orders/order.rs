@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-
 use candid::{CandidType, Deserialize};
 use icramp_types::bitcoin::runes::RuneUTXOEntry;
 
 use super::locked_order::{LockedOrder, Onramper, RevolutConsent};
 use crate::{
     errors::{OrderError, Result, SystemError},
-    model::{
-        memory::heap,
-        types::{Crypto, PaymentProviderType, common::AddressType},
+    model::memory::heap,
+    types::{
+        BlockchainAsset, Crypto, PaymentProvider, TransactionAddress, common::AddressType,
+        orders::validators::validate_offramper_providers_for_order,
     },
-    types::{BlockchainAsset, PaymentProvider, TransactionAddress},
 };
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -20,7 +18,7 @@ pub struct Order {
     pub currency: String,
     pub offramper_user_id: u64,
     pub offramper_address: TransactionAddress,
-    pub offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+    pub offramper_providers: Vec<PaymentProvider>,
     pub crypto: Crypto,
     pub fills: Vec<FillRecord>,
     pub processing: bool,
@@ -71,13 +69,14 @@ impl Order {
         currency: String,
         offramper_user_id: u64,
         offramper_address: TransactionAddress,
-        offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+        offramper_providers: Vec<PaymentProvider>,
         asset: BlockchainAsset,
         crypto_amount: u128,
         crypto_fee: u128,
         rune_utxos: Option<Vec<RuneUTXOEntry>>,
     ) -> Result<Self> {
         offramper_address.validate()?;
+        validate_offramper_providers_for_order(&offramper_providers)?;
 
         match (asset.clone(), &offramper_address.address_type) {
             (BlockchainAsset::EVM { .. }, AddressType::EVM)

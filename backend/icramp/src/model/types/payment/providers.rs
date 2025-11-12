@@ -1,13 +1,13 @@
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use candid::{CandidType, Deserialize};
 
 use crate::{
     errors::{Result, SystemError},
-    model::{helpers::validate_email, types::payment::stripe::pick_platform},
+    model::{
+        helpers::validate_email,
+        types::{BlockchainAsset, TransactionAddress, payment::stripe::pick_platform},
+    },
     outcalls::stripe::account::get_account_info,
 };
 
@@ -17,6 +17,7 @@ pub enum PaymentProviderType {
     Revolut,
     Stripe,
     Email,
+    Crypto,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug, Eq)]
@@ -35,6 +36,10 @@ pub enum PaymentProvider {
     },
     Email {
         email: String,
+    },
+    Crypto {
+        asset: BlockchainAsset,
+        address: TransactionAddress,
     },
 }
 
@@ -57,6 +62,7 @@ impl PaymentProvider {
             PaymentProvider::Revolut { .. } => PaymentProviderType::Revolut,
             PaymentProvider::Stripe { .. } => PaymentProviderType::Stripe,
             PaymentProvider::Email { .. } => PaymentProviderType::Email,
+            PaymentProvider::Crypto { .. } => PaymentProviderType::Crypto,
         }
     }
 
@@ -87,16 +93,25 @@ impl PaymentProvider {
                 verify_stripe_acct(account_id, platform).await?;
             }
             PaymentProvider::Email { email } => validate_email(email)?,
+            PaymentProvider::Crypto { asset, address } => {
+                address.validate()?;
+                asset.validate().await?;
+            }
         }
         Ok(())
     }
 }
 
-pub fn contains_provider_type(
-    provider: &PaymentProvider,
-    providers: &HashMap<PaymentProviderType, PaymentProvider>,
-) -> bool {
-    providers.get(&provider.provider_type()).is_some()
+pub fn contains_provider_type(provider: &PaymentProvider, providers: &[PaymentProvider]) -> bool {
+    let t = provider.provider_type();
+    providers.iter().any(|p| p.provider_type() == t)
+}
+
+pub fn find_provider_of_type<'a>(
+    providers: &'a [PaymentProvider],
+    t: PaymentProviderType,
+) -> Option<&'a PaymentProvider> {
+    providers.iter().find(|p| p.provider_type() == t)
 }
 
 async fn verify_stripe_acct(account_id: &str, platform: &str) -> Result<()> {

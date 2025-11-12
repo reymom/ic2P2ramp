@@ -14,7 +14,10 @@ use crate::{
     errors::{BlockchainError, Result, SystemError, UserError},
     evm::signer,
     management::{bitcoin, random},
-    model::{memory, types::AddressType},
+    model::{
+        memory,
+        types::{AddressType, PaymentProviderType},
+    },
 };
 
 const MAX_USER_SIZE: u32 = 1000;
@@ -29,7 +32,7 @@ pub enum UserType {
 pub struct User {
     pub id: u64,
     pub user_type: UserType,
-    pub payment_providers: HashSet<PaymentProvider>,
+    pub payment_providers: Vec<PaymentProvider>,
     pub addresses: HashSet<TransactionAddress>,
     pub fiat_amounts: HashMap<String, u64>, // offramped or onramped funds
     pub score: i32,
@@ -56,7 +59,7 @@ impl User {
         Ok(Self {
             id: memory::heap::generate_user_id(),
             user_type,
-            payment_providers: HashSet::new(),
+            payment_providers: Vec::new(),
             fiat_amounts: HashMap::new(),
             score: 1,
             login: login_address,
@@ -212,4 +215,19 @@ impl Storable for User {
         max_size: MAX_USER_SIZE,
         is_fixed_size: false,
     };
+}
+
+fn contains_provider_exact(needle: &PaymentProvider, haystack: &[PaymentProvider]) -> bool {
+    haystack.iter().any(|p| p == needle)
+}
+
+/// Purpose: ensure `subset` ⊆ `superset` (exact entries); returns first missing provider type if any.
+pub fn first_missing_provider<'a>(
+    subset: &'a [PaymentProvider],
+    superset: &'a [PaymentProvider],
+) -> Option<PaymentProviderType> {
+    subset
+        .iter()
+        .find(|p| !contains_provider_exact(p, superset))
+        .map(|p| p.provider_type())
 }

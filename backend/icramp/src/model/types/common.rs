@@ -4,6 +4,7 @@ use candid::{CandidType, Deserialize};
 
 use crate::errors::{Result, SystemError};
 use crate::helpers;
+use crate::model::types::blockchain::BlockchainType;
 
 // ---------
 // Addresses
@@ -135,6 +136,15 @@ impl TransactionAddress {
         }?;
 
         Ok(())
+    }
+
+    pub fn to_blockchain_type(&self) -> BlockchainType {
+        match self.address_type {
+            AddressType::EVM => BlockchainType::EVM,
+            AddressType::ICP => BlockchainType::ICP,
+            AddressType::Bitcoin => BlockchainType::Bitcoin,
+            AddressType::Solana => BlockchainType::Solana,
+        }
     }
 }
 

@@ -3,8 +3,11 @@ use icramp_types::bitcoin::runes::{RuneID, RuneUTXOEntry};
 
 use crate::{
     errors::{Result, SystemError},
-    inter_canister::{bitcoin, solana},
-    model::types::exchange_rate::RateAsset,
+    inter_canister::{
+        bitcoin::{self, bitcoin_backend_validate_rune},
+        solana::{self, solana_backend_get_token_info},
+    },
+    model::types::{exchange_rate::RateAsset, icp::is_icp_token_supported},
 };
 
 use super::{
@@ -16,7 +19,7 @@ use super::{
 pub enum BlockchainType {
     EVM,
     ICP,
-    Bitcion,
+    Bitcoin,
     Solana,
 }
 
@@ -81,7 +84,7 @@ impl BlockchainAsset {
     pub fn blockchain_type(&self) -> BlockchainType {
         match &self {
             Self::EVM { .. } => BlockchainType::EVM,
-            Self::Bitcoin { .. } => BlockchainType::Bitcion,
+            Self::Bitcoin { .. } => BlockchainType::Bitcoin,
             Self::ICP { .. } => BlockchainType::ICP,
             Self::Solana { .. } => BlockchainType::Solana,
         }
@@ -134,5 +137,31 @@ impl BlockchainAsset {
                 symbol: symbol.to_string(),
             },
         }
+    }
+
+    pub async fn validate(&self) -> Result<()> {
+        match self {
+            BlockchainAsset::EVM {
+                chain_id,
+                token_address,
+            } => {
+                chains::chain_is_supported(*chain_id)?;
+                if let Some(token) = token_address.clone() {
+                    token::evm_token_is_approved(*chain_id, &token)?;
+                };
+            }
+            BlockchainAsset::ICP { ledger_principal } => is_icp_token_supported(ledger_principal)?,
+            BlockchainAsset::Bitcoin { rune_id } => {
+                if let Some(rune_id) = rune_id.clone() {
+                    bitcoin_backend_validate_rune(rune_id).await?;
+                };
+            }
+            BlockchainAsset::Solana { spl_token } => {
+                if let Some(mint) = spl_token {
+                    let _ = solana_backend_get_token_info(mint.clone()).await?;
+                };
+            }
+        };
+        Ok(())
     }
 }
