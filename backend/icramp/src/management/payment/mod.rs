@@ -18,6 +18,7 @@ use crate::{
     types::{BlockchainAsset, icp::get_icp_token, orders::LockedOrder},
 };
 
+pub mod crypto;
 pub mod paypal;
 pub mod revolut;
 pub mod stripe;
