@@ -3,7 +3,7 @@ use crate::{
         errors::{OrderError, Result},
         memory::stable::orders::append_fill_if_new,
         types::{
-            PaymentProvider, PaymentProviderType,
+            PaymentProvider, PaymentProviderType, find_provider_of_type,
             orders::{FillRecord, LockedOrder},
         },
     },
@@ -30,14 +30,10 @@ pub async fn verify_paypal_payment(
     let currency_matches =
         capture_details.purchase_units[0].amount.currency_code == order.base.currency;
 
-    let offramper_provider = order
-        .base
-        .offramper_providers
-        .iter()
-        .find(|(provider_type, _)| *provider_type == &PaymentProviderType::PayPal)
-        .ok_or(OrderError::InvalidOfframperProvider)?;
-
-    let PaymentProvider::PayPal { id: offramper_id } = offramper_provider.1 else {
+    let off_provider =
+        find_provider_of_type(&order.base.offramper_providers, PaymentProviderType::PayPal)
+            .ok_or(OrderError::InvalidOfframperProvider)?;
+    let PaymentProvider::PayPal { id: offramper_id } = off_provider else {
         return Err(OrderError::InvalidOfframperProvider)?;
     };
 

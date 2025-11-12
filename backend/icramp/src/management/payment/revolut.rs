@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use crate::{
     model::{
         errors::{OrderError, Result, UserError},
         memory::stable::orders::append_fill_if_new,
         types::{
-            PaymentProvider, PaymentProviderType,
+            PaymentProvider, PaymentProviderType, find_provider_of_type,
             orders::{FillRecord, LockedOrder, RevolutConsent},
         },
     },
@@ -36,18 +34,17 @@ pub async fn verify_revolut_payment(
 
     let offramper_account = payment_details.data.initiation.creditor_account;
 
-    let offramper_provider = order
-        .base
-        .offramper_providers
-        .iter()
-        .find(|(provider_type, _)| *provider_type == &PaymentProviderType::Revolut)
-        .ok_or(OrderError::InvalidOfframperProvider)?;
+    let off_provider = find_provider_of_type(
+        &order.base.offramper_providers,
+        PaymentProviderType::Revolut,
+    )
+    .ok_or(UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
 
     let PaymentProvider::Revolut {
         scheme: offramper_scheme,
         id: offramper_id,
         name: offramper_name,
-    } = offramper_provider.1
+    } = off_provider
     else {
         return Err(OrderError::InvalidOfframperProvider)?;
     };
@@ -89,7 +86,7 @@ pub async fn verify_revolut_payment(
 }
 
 pub async fn get_revolut_consent(
-    offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+    offramper_providers: Vec<PaymentProvider>,
     fiat_amount: &str,
     currency_symbol: &str,
     onramper_provider: &PaymentProvider,
@@ -100,15 +97,15 @@ pub async fn get_revolut_consent(
             id: onramper_id,
             ..
         } => {
-            let offramper_provider = offramper_providers
-                .get(&PaymentProviderType::Revolut)
-                .ok_or(UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
+            let off_provider =
+                find_provider_of_type(&offramper_providers, PaymentProviderType::Revolut)
+                    .ok_or(UserError::ProviderNotInUser(PaymentProviderType::Revolut))?;
 
             if let PaymentProvider::Revolut {
                 scheme: offramper_scheme,
                 id: offramper_id,
                 name: offramper_name,
-            } = offramper_provider
+            } = off_provider
             {
                 let consent_id = revolut::consent::create_account_access_consent(
                     fiat_amount,

@@ -4,7 +4,7 @@ use crate::{
         errors::OrderError,
         memory::stable::orders::append_fill_if_new,
         types::{
-            PaymentProvider, PaymentProviderType,
+            PaymentProvider, PaymentProviderType, find_provider_of_type,
             orders::{FillRecord, LockedOrder},
         },
     },
@@ -18,39 +18,25 @@ pub async fn verify_stripe_payment(order: &LockedOrder, email: &str) -> Result<(
         .clone()
         .ok_or(OrderError::PaymentVerificationFailed)?;
 
-    // 2. Stripe platform (offramper's Connect platform)
-    let platform = order
-        .base
-        .offramper_providers
-        .iter()
-        .find_map(|p| {
-            if let PaymentProvider::Stripe { platform, .. } = p.1 {
-                Some(platform.clone())
-            } else {
-                None
-            }
-        })
-        .ok_or(OrderError::PaymentVerificationFailed)?;
+    // 2. Stripe platform (offramper's Connect platform) and account_id
+    let off_provider =
+        find_provider_of_type(&order.base.offramper_providers, PaymentProviderType::Stripe)
+            .ok_or(OrderError::InvalidOfframperProvider)?;
+    let PaymentProvider::Stripe {
+        platform,
+        account_id,
+    } = off_provider
+    else {
+        return Err(OrderError::InvalidOfframperProvider)?;
+    };
 
     let expected_minor = (order.price + order.offramper_fee) as i64;
-    let stripe_account_id = order
-        .base
-        .offramper_providers
-        .get(&PaymentProviderType::Stripe)
-        .and_then(|provider| {
-            if let PaymentProvider::Stripe { account_id, .. } = provider {
-                Some(account_id)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| OrderError::InvalidOfframperProvider)?;
     let correct = verify_session_paid_destination(
         &session_id,
         expected_minor,
         &order.base.currency,
-        &stripe_account_id,
-        Some(platform),
+        &account_id,
+        Some(platform.into()),
         email,
     )
     .await?;
