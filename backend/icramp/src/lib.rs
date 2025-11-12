@@ -6,7 +6,7 @@ mod management;
 mod model;
 mod outcalls;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use candid::Principal;
 use evm_rpc_canister_types::BlockTag;
@@ -25,7 +25,7 @@ use management::{
 use model::errors::{self, BlockchainError, OrderError, Result, SystemError, UserError};
 use model::types::{
     self, AddressType, AuthenticationData, BlockchainAsset, LoginAddress, PaymentProvider,
-    PaymentProviderType, TransactionAddress,
+    TransactionAddress,
     evm::{
         gas::{self, ChainGasTracking},
         logs::{EvmTransactionLog, TransactionStatus},
@@ -37,11 +37,12 @@ use model::types::{
     icp::{IcpToken, get_icp_token},
     orders::fees::{FeeQuote, get_admin_fee},
     orders::{
-        BitcoinOrderInput, DepositInput, EvmOrderInput, OrderFilter, OrderState, SolanaOrderInput,
+        BitcoinOrderInput, DepositInput, EvmOrderInput, FillRecord, OrderFilter, OrderState,
+        SolanaOrderInput,
     },
     session::Session,
     stripe::StripeAccountInfo,
-    user::{User, UserType},
+    user::{User, UserType, first_missing_provider},
 };
 use model::{
     guards, helpers,
@@ -51,7 +52,7 @@ use model::{
             self, InstallArg, STATE, State, get_state, initialize_state, logs, read_state,
             setup_timers, upgrade,
         },
-        stable::{self, orders, spent_transactions},
+        stable::{self, orders, orders::append_fill_if_new, spent_transactions},
     },
 };
 use outcalls::{
@@ -133,7 +134,7 @@ pub async fn create_evm_order_with_tx(
     tx_hash: String,
     user: u64,
     offramper: String,
-    providers: HashMap<PaymentProviderType, PaymentProvider>,
+    providers: Vec<PaymentProvider>,
     currency: String,
     amount: u128,
     token_address: Option<String>,
@@ -162,10 +163,11 @@ pub async fn create_evm_order_with_tx(
         chain_id,
         token_address,
     };
-    order_management::validate_deposit_tx(
+
+    let _ = payment_management::crypto::verify_crypto_transaction(
         &asset,
         Some(DepositInput::Evm(evm_input)),
-        offramper.clone(),
+        &offramper,
         amount,
     )
     .await?;
@@ -243,7 +245,7 @@ pub async fn create_bitcoin_order_with_tx(
     canister_address: String,
     user: u64,
     offramper: String,
-    providers: HashMap<PaymentProviderType, PaymentProvider>,
+    providers: Vec<PaymentProvider>,
     currency: String,
     amount: u128,
     rune_id: Option<RuneID>,
@@ -258,13 +260,16 @@ pub async fn create_bitcoin_order_with_tx(
     let asset = BlockchainAsset::Bitcoin {
         rune_id: rune_id.clone(),
     };
-    let tx_id = order_management::validate_deposit_tx(
+    let tx_id = payment_management::crypto::verify_crypto_transaction(
         &asset,
         Some(DepositInput::Bitcoin(bitcoin_input.clone())),
-        offramper.clone(),
+        &offramper,
         amount,
     )
     .await?;
+    tx_id.clone().ok_or_else(|| {
+        OrderError::InvalidInput("Expected bitcoin tx id from verification".to_string())
+    })?;
 
     bitcoin_management::spawn_bitcoin_tx_listener(
         tx_id.unwrap(),
@@ -295,7 +300,7 @@ pub async fn create_solana_order_with_tx(
     signature: String,
     user: u64,
     offramper: String,
-    providers: HashMap<PaymentProviderType, PaymentProvider>,
+    providers: Vec<PaymentProvider>,
     currency: String,
     amount: u128,
     spl_token: Option<String>,
@@ -305,13 +310,14 @@ pub async fn create_solana_order_with_tx(
     let asset = BlockchainAsset::Solana {
         spl_token: spl_token.clone(),
     };
-    order_management::validate_deposit_tx(
+
+    let _ = payment_management::crypto::verify_crypto_transaction(
         &asset,
         Some(DepositInput::Solana(SolanaOrderInput {
             signature: signature.clone(),
             mint: spl_token.clone(),
         })),
-        offramper.clone(),
+        &offramper,
         amount,
     )
     .await?;
@@ -490,7 +496,7 @@ async fn transfer_evm_funds(
 #[ic_cdk::update]
 async fn register_user(
     user_type: UserType,
-    payment_providers: HashSet<PaymentProvider>,
+    payment_providers: Vec<PaymentProvider>,
     login_address: LoginAddress,
     password: Option<String>,
 ) -> Result<User> {
@@ -706,7 +712,7 @@ fn get_order(order_id: u64) -> Result<OrderState> {
 async fn create_order(
     session_token: String,
     currency: String,
-    offramper_providers: HashMap<PaymentProviderType, PaymentProvider>,
+    offramper_providers: Vec<PaymentProvider>,
     asset: BlockchainAsset,
     crypto_amount: u128,
     offramper_address: TransactionAddress,
@@ -718,16 +724,15 @@ async fn create_order(
     user.is_banned()?;
     user.is_offramper()?;
 
-    for (provider_type, provider) in &offramper_providers {
-        if !user.payment_providers.contains(provider) {
-            return Err(UserError::ProviderNotInUser(provider_type.clone()))?;
-        }
+    if let Some(missing_ty) = first_missing_provider(&offramper_providers, &user.payment_providers)
+    {
+        return Err(UserError::ProviderNotInUser(missing_ty))?;
     }
 
-    let tx_hash = order_management::validate_deposit_tx(
+    let tx_hash = payment_management::crypto::verify_crypto_transaction(
         &asset,
         deposit_input.clone(),
-        offramper_address.clone().address,
+        &offramper_address.address,
         crypto_amount,
     )
     .await?;
@@ -851,10 +856,10 @@ async fn top_up_order(
     }
     orders::set_processing_order(&order_id)?;
 
-    let tx_hash = order_management::validate_deposit_tx(
+    let tx_hash = payment_management::crypto::verify_crypto_transaction(
         &order.crypto.asset,
         deposit_input.clone(),
-        order.offramper_address.clone().address,
+        &order.offramper_address.address,
         amount,
     )
     .await
@@ -1026,6 +1031,7 @@ async fn verify_transaction(
     order_id: u64,
     session_token: Option<String>,
     transaction_id: String,
+    payment_input: Option<DepositInput>,
 ) -> Result<()> {
     ic_cdk::println!(
         "[verify_transaction] Starting verification for order ID: {} and transaction ID: {}",
@@ -1035,7 +1041,9 @@ async fn verify_transaction(
 
     orders::set_processing_order(&order_id)?;
 
-    if let Err(e) = process_transaction(order_id, session_token, transaction_id).await {
+    if let Err(e) =
+        process_transaction(order_id, session_token, transaction_id, payment_input).await
+    {
         orders::unset_processing_order(&order_id)?;
         return Err(e);
     }
@@ -1047,9 +1055,13 @@ async fn process_transaction(
     order_id: u64,
     session_token: Option<String>,
     transaction_id: String,
+    payment_input: Option<DepositInput>,
 ) -> Result<()> {
     let order = order_management::verify_order_is_payable(order_id, session_token)?;
 
+    // In most cases we call handle_payment_completion at the end.
+    // For Bitcoin crypto payments we defer that to a listener.
+    let mut defer_completion_to_bitcoin_listener = false;
     match &order.clone().onramper.provider {
         PaymentProvider::PayPal { id: onramper_id } => {
             ic_cdk::println!("[verify_transaction] Handling Paypal payment verification");
@@ -1081,9 +1093,120 @@ async fn process_transaction(
 
             payment_management::stripe::verify_stripe_payment(&order, email).await?;
         }
+
+        PaymentProvider::Crypto { asset, address } => {
+            if payment_input.is_none() {
+                return Err(OrderError::InvalidInput(
+                    "deposit input is empty".to_string(),
+                ))?;
+            }
+            // Bridge rule: different chains than order asset
+            if asset.blockchain_type() == order.base.crypto.asset.blockchain_type() {
+                return Err(OrderError::SameChainPaymentForbidden.into());
+            }
+            if address.to_blockchain_type() != asset.blockchain_type() {
+                return Err(OrderError::InvalidInput(
+                    "crytpo address does not correspond to asset type".into(),
+                )
+                .into());
+            }
+            match asset {
+                // ---------- Bitcoin pay-with-crypto: use listener ----------
+                BlockchainAsset::Bitcoin { rune_id } => {
+                    let bitcoin_input = match payment_input.clone() {
+                        Some(DepositInput::Bitcoin(v)) => v,
+                        _ => {
+                            return Err(OrderError::InvalidInput(
+                                "Missing bitcoin payment input".to_string(),
+                            )
+                            .into());
+                        }
+                    };
+
+                    // Run basic checks (rune validity, not already processed, etc.).
+                    payment_management::crypto::verify_crypto_transaction(
+                        asset,
+                        Some(DepositInput::Bitcoin(bitcoin_input.clone())),
+                        &address.address,
+                        order.lock_amount,
+                    )
+                    .await?;
+
+                    // Defer handle_payment_completion to the bitcoin listener.
+                    defer_completion_to_bitcoin_listener = true;
+
+                    // Spawn async listener that will:
+                    //  - wait for confirmation
+                    //  - set payment_id = txid
+                    //  - mark order as paid
+                    //  - mark_tx_hash_as_processed
+                    //  - call handle_payment_completion(&order)
+                    bitcoin_management::spawn_bitcoin_tx_listener(
+                        bitcoin_input.tx_id.clone(),
+                        BitcoinTransactionAction::PaymentDeposit {
+                            order_id: order.base.id,
+                            amount: order.lock_amount,
+                            dst_address: address.address.clone(),
+                        },
+                        address.address.clone(),
+                        rune_id.clone(),
+                        0,
+                    );
+                }
+
+                // ---------- Non-Bitcoin crypto: finalize synchronously ----------
+                _ => {
+                    let tx_opt = payment_management::crypto::verify_crypto_transaction(
+                        asset,
+                        payment_input.clone(),
+                        &address.address,
+                        order.lock_amount,
+                    )
+                    .await?;
+
+                    if let Some(tx_hash) = tx_opt.clone() {
+                        orders::set_payment_id(order.base.id, tx_hash.clone())?;
+                        management::order::mark_order_as_paid(order.base.id)?;
+
+                        // 2) append fill with payment_id = tx_hash
+                        let total = order.base.crypto.amount.max(1);
+                        let locked = order.lock_amount;
+                        let fee_part: u128 = (order.base.crypto.fee.saturating_mul(locked)) / total;
+
+                        append_fill_if_new(
+                            order.base.id,
+                            FillRecord {
+                                payer_user_id: order.onramper.user_id,
+                                payer: order.onramper.address.clone(),
+                                provider: order.onramper.provider.clone(),
+                                fiat: order.price,
+                                offramper_fee: order.offramper_fee,
+                                crypto_amount: locked,
+                                crypto_fee: fee_part,
+                                payment_id: tx_hash.clone(),
+                                tx_id: None,
+                                created_at: ic_cdk::api::time(),
+                            },
+                        )?;
+
+                        // 3) prevent re-use of this tx as payment for other orders
+                        spent_transactions::mark_tx_hash_as_processed(tx_hash);
+                    } else {
+                        // Should not happen for EVM/Solana, but keep the branch explicit.
+                        return Err(OrderError::PaymentVerificationFailed.into());
+                    }
+                }
+            }
+        }
     }
 
-    payment_management::handle_payment_completion(&order).await
+    // For BTC crypto payments, completion is done inside the listener once the
+    // payment tx is confirmed. For all other methods, we complete now.
+    if defer_completion_to_bitcoin_listener {
+        Ok(())
+    } else {
+        payment_management::handle_payment_completion(&order).await
+    }
 }
 
 ic_cdk::export_candid!();

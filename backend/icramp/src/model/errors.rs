@@ -115,6 +115,9 @@ pub enum OrderError {
     #[error("Payment Verification Failed")]
     PaymentVerificationFailed,
 
+    #[error("Same chain not allowed for crypto payments")]
+    SameChainPaymentForbidden,
+
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
 }

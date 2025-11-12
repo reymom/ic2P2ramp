@@ -40,7 +40,6 @@ type BlockchainError = variant {
   InconsistentStatus;
   RpcProviderNotFound;
 };
-type BlockchainType = variant { EVM; ICP; Solana; Bitcion };
 type CanisterIdsConfig = record {
   solana_backend_id : text;
   bitcoin_backend_id : text;
@@ -212,7 +211,7 @@ type Order = record {
   offramper_user_id : nat64;
   crypto : Crypto;
   currency : text;
-  offramper_providers : vec record { PaymentProviderType; PaymentProvider };
+  offramper_providers : vec PaymentProvider;
   offramper_address : TransactionAddress;
   processing : bool;
 };
@@ -230,12 +229,13 @@ type OrderError = variant {
   OrderUncommitted;
   PaymentDone;
   InvalidOrderState : text;
+  SameChainPaymentForbidden;
 };
 type OrderFilter = variant {
   ByOfframperId : nat64;
   ByOfframperAddress : TransactionAddress;
   ByState : OrderStateFilter;
-  ByBlockchain : BlockchainType;
+  ByBlockchain : AddressType;
   ByOnramperId : nat64;
   ByBlockchainAsset : BlockchainAsset;
   LockedByOnramper : TransactionAddress;
@@ -251,9 +251,10 @@ type PaymentProvider = variant {
   Email : record { email : text };
   PayPal : record { id : text };
   Stripe : record { account_id : text; platform : text };
+  Crypto : record { asset : BlockchainAsset; address : TransactionAddress };
   Revolut : record { id : text; scheme : text; name : opt text };
 };
-type PaymentProviderType = variant { Email; PayPal; Stripe; Revolut };
+type PaymentProviderType = variant { Email; PayPal; Stripe; Crypto; Revolut };
 type PaypalConfig = record {
   api_url : text;
   client_id : text;
@@ -490,7 +491,7 @@ service : (InstallArg) -> {
       text,
       nat64,
       text,
-      vec record { PaymentProviderType; PaymentProvider },
+      vec PaymentProvider,
       text,
       nat,
       opt text,
@@ -500,7 +501,7 @@ service : (InstallArg) -> {
       text,
       nat64,
       text,
-      vec record { PaymentProviderType; PaymentProvider },
+      vec PaymentProvider,
       text,
       nat,
       opt text,
@@ -508,7 +509,7 @@ service : (InstallArg) -> {
   create_order : (
       text,
       text,
-      vec record { PaymentProviderType; PaymentProvider },
+      vec PaymentProvider,
       BlockchainAsset,
       nat,
       TransactionAddress,
@@ -519,7 +520,7 @@ service : (InstallArg) -> {
       text,
       nat64,
       text,
-      vec record { PaymentProviderType; PaymentProvider },
+      vec PaymentProvider,
       text,
       nat,
       opt text,
@@ -600,7 +601,7 @@ service : (InstallArg) -> {
   unfreeze_order : (nat64) -> (Result);
   update_password : (LoginAddress, opt text) -> (Result);
   verify_order_is_payable : (nat64, text) -> (Result) query;
-  verify_transaction : (nat64, opt text, text) -> (Result);
+  verify_transaction : (nat64, opt text, text, opt DepositInput) -> (Result);
   view_canister_balances : () -> (Result_19) query;
   withdraw_evm_fees : (nat64, nat, opt text) -> (Result);
 }
