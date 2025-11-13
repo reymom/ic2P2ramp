@@ -1,12 +1,12 @@
 import clsx from 'clsx';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { Principal } from '@dfinity/principal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import { PaymentProvider, PaymentProviderType, BlockchainAsset, DepositInput, RateAsset, FeeQuote } from '@/declarations/icramp_backend/icramp_backend.did';
+import { PaymentProvider, BlockchainAsset, DepositInput, RateAsset, FeeQuote } from '@/declarations/icramp_backend/icramp_backend.did';
 import { defaultCommitEvmGas, defaultReleaseEvmGas, getEvmTokens } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
@@ -16,8 +16,10 @@ import { rampErrorToString } from '@/model/helpers/error';
 import { BlockchainTypes, TokenOption } from '@/model/types';
 import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/helpers/types';
 import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
-import { isSessionExpired } from '@/model/session';
 import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
+import { estimateGasAndGasPrice } from '@/model/blockchain/evm';
+import { getFeeQuote } from '@/model/blockchain/fees';
+import { isSessionExpired } from '@/model/session';
 import { getExchangeRate } from '@/utils/rates';
 import { formatPrice, truncate } from '@/utils/formatters';
 import { getExplorerUrls } from '@/utils/explorers';
@@ -26,6 +28,7 @@ import DynamicDots from '@/components/ui/DynamicDots';
 import CurrencySelect from '@/components/ui/CurrencySelect';
 import TokenSelect from '@/components/ui/TokenSelect';
 import BlockchainSelect from '@/components/ui/BlockchainSelect';
+import { ProviderIcon } from '@/components/ui/ProviderIcon';
 import { Balance, useUser } from '@/components/user/UserContext';
 import {
     useOrderEvm,
@@ -35,9 +38,7 @@ import {
     useParsedAmount,
     useAutoClearMessage,
 } from '@/components/order/hooks';
-import { estimateGasAndGasPrice } from '@/model/blockchain/evm';
-import { getFeeQuote } from '@/model/blockchain/fees';
-import { ProviderIcon } from '../ui/ProviderIcon';
+import { groupEvmProviders } from '@/utils/cryptoProviders';
 
 const CreateOrder: React.FC = () => {
     const [cryptoAmount, setCryptoAmount] = useState(0);
@@ -100,8 +101,108 @@ const CreateOrder: React.FC = () => {
         return;
     }
 
+    const [solOptions, setSolOptions] = useState<TokenOption[]>();
+    useEffect(() => {
+        fetchSolanaTokenOptions().then(setSolOptions);
+    }, []);
+
     useAutoClearMessage(message, () => { setMessage(null); setTxHash(null); });
     useParsedAmount(cryptoAmount, selectedToken, selectedBlockchainAsset, setCryptoAmountUnits);
+
+    const cryptoProviders = useMemo<PaymentProvider[]>(() => {
+        if (!blockchainType || !currency) return [];
+
+        const fiatLower = currency.toLowerCase();
+        const matchesCurrency = (symbol?: string) =>
+            !!symbol && symbol.toLowerCase().includes(fiatLower);
+
+        const out: PaymentProvider[] = [];
+        for (const p of user.payment_providers) {
+            if (!('Crypto' in p)) continue;
+            const asset = p.Crypto.asset;
+
+            let assetChain: BlockchainTypes | null = null;
+            if ('EVM' in asset) assetChain = 'EVM';
+            else if ('Solana' in asset) assetChain = 'Solana';
+            else if ('ICP' in asset) assetChain = 'ICP';
+
+            if (!assetChain || assetChain === blockchainType) continue;
+
+            if ('EVM' in asset) {
+                const cid = Number(asset.EVM.chain_id);
+                const tokenAddr = asset.EVM.token_address?.[0];
+                if (!tokenAddr) continue;
+
+                let symbol: string | undefined;
+                try {
+                    const token = getEvmTokens(cid).find(
+                        (t) => t.address.toLowerCase() === tokenAddr.toLowerCase(),
+                    );
+                    symbol = token?.name;
+                } catch {
+                    continue;
+                }
+
+                if (!matchesCurrency(symbol)) continue;
+                out.push(p);
+                continue;
+            } else if ('Solana' in asset) {
+                const mint = asset.Solana.spl_token?.[0];
+                if (!mint || !solOptions) continue;
+                const token = solOptions.find((t) => t.address === mint);
+                const symbol = token?.name ?? token?.name;
+                if (!matchesCurrency(symbol)) continue;
+
+                out.push(p);
+                continue;
+            } else if (blockchainType === 'ICP' && 'ICP' in asset) {
+                const principalStr =
+                    (asset.ICP.ledger_principal).toText?.() ??
+                    String(asset.ICP.ledger_principal);
+                const token = ICP_TOKENS.find((t) => t.address === principalStr);
+                const symbol = token?.name;
+                if (!matchesCurrency(symbol)) continue;
+
+                out.push(p);
+                continue;
+            }
+        }
+
+        return out;
+    }, [user.payment_providers, blockchainType, selectedBlockchainAsset, tokenOptions, currency]);
+
+    const nonEvmCryptoProviders = useMemo(
+        () =>
+            cryptoProviders.filter(
+                (p) => 'Crypto' in p && !('EVM' in p.Crypto.asset),
+            ),
+        [cryptoProviders],
+    );
+
+    const evmCryptoGroups = useMemo(
+        () =>
+            groupEvmProviders(
+                cryptoProviders.filter(
+                    (p) => 'Crypto' in p && 'EVM' in p.Crypto.asset,
+                ),
+            ),
+        [cryptoProviders],
+    );
+
+    const nonCryptoProviders = useMemo(
+        () => (user?.payment_providers ?? []).filter((p) => !('Crypto' in p)),
+        [user?.payment_providers],
+    );
+
+    useEffect(() => {
+        // Drop any crypto providers that are no longer valid for the current
+        // chain / currency, but keep PayPal/Revolut/Stripe/Email intact.
+        setSelectedProviders((prev) =>
+            prev.filter(
+                (p) => !('Crypto' in p) || cryptoProviders.includes(p),
+            ),
+        );
+    }, [cryptoProviders]);
 
     useEffect(() => {
         if (blockchainType && blockchainType === 'EVM') {
@@ -286,10 +387,6 @@ const CreateOrder: React.FC = () => {
     }, [exchangeRate, cryptoAmount]);
 
     const handleProviderSelection = (provider: PaymentProvider) => {
-        if (selectedProviders.length === 0) {
-            setSelectedProviders([provider]);
-            return
-        }
         if ('Revolut' in provider) {
             setMessage("We are waiting for revolut certificates to operate in production.")
             return
@@ -297,9 +394,8 @@ const CreateOrder: React.FC = () => {
         setSelectedProviders((prevSelected) => {
             if (prevSelected.includes(provider)) {
                 return prevSelected.filter((p) => p !== provider);
-            } else {
-                return [...prevSelected, provider];
             }
+            return [...prevSelected, provider];
         });
     };
 
@@ -322,11 +418,6 @@ const CreateOrder: React.FC = () => {
         if (!cryptoAmountUnits) throw new Error('Could not parse crypto amount in native units');
         if (!feeQuote) throw new Error('Could not compute fees');
         if (cryptoAmountUnits - feeQuote?.total_fee < 0) throw new Error('Fees will probably be higher than crypto amount');
-
-        const providerTuples: [PaymentProviderType, PaymentProvider][] = selectedProviders.map((provider) => {
-            const providerType: PaymentProviderType = providerToProviderType(provider);
-            return [providerType, provider];
-        });
 
         try {
             setIsLoading(true);
@@ -405,7 +496,7 @@ const CreateOrder: React.FC = () => {
             const result = await backend.create_order(
                 sessionToken,
                 currency,
-                providerTuples,
+                selectedProviders,
                 selectedBlockchainAsset,
                 cryptoAmountUnits,
                 selectedAddress,
@@ -493,6 +584,59 @@ const CreateOrder: React.FC = () => {
                 ? cryptoAmountUnits <= balRaw
                 : Number(cryptoAmountUnits) <= Number(balRaw);
         })();
+
+    const describeCryptoProvider = (provider: PaymentProvider): {
+        chain: 'EVM' | 'Solana' | 'ICP' | undefined; desc: string; icon: string;
+    } => {
+        if (!('Crypto' in provider)) return { chain: 'EVM', desc: '', icon: '' };
+
+        const { asset, address } = provider.Crypto;
+
+        let chainLabel: 'EVM' | 'Solana' | 'ICP' | undefined;
+        let symbol = '';
+        let icon = '';
+
+        if ('EVM' in asset) {
+            chainLabel = 'EVM';
+            const cid = Number(asset.EVM.chain_id);
+            const tokenAddr = asset.EVM.token_address?.[0];
+            if (tokenAddr) {
+                try {
+                    const token = getEvmTokens(cid).find(
+                        (t) => t.address.toLowerCase() === tokenAddr.toLowerCase(),
+                    );
+                    symbol = token?.name ?? 'token';
+                    icon = token?.logo ?? '';
+                } catch {
+                    symbol = 'token';
+                }
+            }
+        } else if ('Solana' in asset) {
+            chainLabel = 'Solana';
+            const mint = asset.Solana.spl_token?.[0];
+            if (mint && solOptions) {
+                const token = solOptions.find((t) => t.address === mint);
+                symbol = token?.name ?? token?.rateSymbol ?? truncate(mint, 3, 3);
+                icon = token?.logo ?? '';
+            } else {
+                symbol = 'SOL';
+            }
+        } else if ('ICP' in asset) {
+            chainLabel = 'ICP';
+            const principalStr =
+                asset.ICP.ledger_principal.toText?.() ??
+                String(asset.ICP.ledger_principal);
+            const token = ICP_TOKENS.find((t) => t.address === principalStr);
+            symbol = token?.name ?? 'ckUSD';
+            icon = token?.logo ?? '';
+        }
+
+        return {
+            chain: chainLabel,
+            desc: `${symbol} → ${truncate(address.address, 10, 6)}`,
+            icon,
+        };
+    };
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-auto p-6">
@@ -635,22 +779,37 @@ const CreateOrder: React.FC = () => {
 
                 <div className="my-4 mx-auto">
                     <label className="block text-gray-700 dark:text-gray-300 mb-2">Payment Providers:</label>
-                    {user?.payment_providers?.length ? (
+                    {user.payment_providers.length ? (
                         <div className="grid grid-cols-1 gap-3">
-                            {user.payment_providers.map((provider, index) => {
+                            {nonCryptoProviders.map((provider, index) => {
                                 const checked = selectedProviders!.includes(provider);
                                 const inputId = `provider-${index}`;
 
-                                const title =
-                                    'PayPal' in provider ? 'PayPal' :
-                                        'Revolut' in provider ? 'Revolut' : 'Stripe' in provider ? 'Stripe' : '';
+                                // hide Crypto providers that are not relevant
+                                const isCrypto = 'Crypto' in provider;
+                                if (isCrypto && !cryptoProviders.includes(provider)) {
+                                    provider.Crypto.asset
+                                    return null;
+                                }
 
-                                const desc =
-                                    'PayPal' in provider
-                                        ? truncate(provider.PayPal.id, 18, 6)
-                                        : 'Revolut' in provider
-                                            ? `${truncate(provider.Revolut.id, 18, 6)} • ${provider.Revolut.scheme}`
-                                            : 'Stripe' in provider ? truncate(provider.Stripe.account_id, 16, 10) : '';
+                                let title: string;
+                                let desc: string;
+                                if ('PayPal' in provider) {
+                                    title = 'PayPal';
+                                    desc = truncate(provider.PayPal.id, 18, 6);
+                                } else if ('Revolut' in provider) {
+                                    title = 'Revolut';
+                                    desc = `${truncate(provider.Revolut.id, 18, 6)} • ${provider.Revolut.scheme}`;
+                                } else if ('Stripe' in provider) {
+                                    title = 'Stripe';
+                                    desc = truncate(provider.Stripe.account_id, 16, 10);
+                                } else if ('Email' in provider) {
+                                    title = 'Email';
+                                    desc = provider.Email.email;
+                                } else {
+                                    title = '';
+                                    desc = '';
+                                }
 
                                 return (
                                     <label key={index} htmlFor={inputId} className="block">
@@ -697,6 +856,139 @@ const CreateOrder: React.FC = () => {
                                     </label>
                                 );
                             })}
+
+                            {evmCryptoGroups.map((group, gIndex) => {
+                                const firstProvider = group.providers[0];
+                                const meta = describeCryptoProvider(firstProvider);
+                                const groupSelected = group.providers.some((p) =>
+                                    selectedProviders.includes(p),
+                                );
+
+                                return (
+                                    <div
+                                        key={`evm-crypto-${gIndex}`}
+                                        className={clsx(
+                                            'rounded-lg border p-3 transition',
+                                            'bg-gray-300/40 dark:bg-gray-800/60 border-gray-500/40',
+                                            'hover:border-indigo-400/60 hover:bg-indigo-400/10',
+                                            groupSelected && 'border-indigo-500 bg-indigo-500/10',
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <ProviderIcon
+                                                    type={paymentProviderTypeToString(
+                                                        providerToProviderType(firstProvider),
+                                                    )}
+                                                    crypto={meta.chain}
+                                                />
+                                                <div className="font-semibold">Crypto</div>
+                                                {group.logo && (
+                                                    <img
+                                                        src={group.logo}
+                                                        alt={group.symbol}
+                                                        className="h-5 w-auto rounded-md"
+                                                    />
+                                                )}
+                                            </div>
+
+                                            {/* chain boxes on top-right */}
+                                            <div className="flex flex-wrap gap-2">
+                                                {group.chains.map((cid) => {
+                                                    const providerForChain = group.providers.find(
+                                                        (p) =>
+                                                            'Crypto' in p &&
+                                                            'EVM' in p.Crypto.asset &&
+                                                            Number(p.Crypto.asset.EVM.chain_id) === cid,
+                                                    );
+                                                    if (!providerForChain) return null;
+
+                                                    const isSelected = selectedProviders.includes(
+                                                        providerForChain,
+                                                    );
+
+                                                    return (
+                                                        <button
+                                                            key={cid}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleProviderSelection(providerForChain)
+                                                            }
+                                                            className={clsx(
+                                                                'px-2 py-0.5 rounded-full text-xs border transition',
+                                                                isSelected
+                                                                    ? 'bg-indigo-600/20 border-indigo-400 text-indigo-200'
+                                                                    : 'bg-gray-700/40 border-gray-500/60 text-gray-300 hover:bg-indigo-500/10 hover:border-indigo-400/60',
+                                                            )}
+                                                        >
+                                                            {Object.values(NetworkIds).find(n => n.id === cid)?.name ?? cid}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-1 text-xs font-mono break-all text-gray-700 dark:text-gray-300">
+                                            {meta.desc}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {nonEvmCryptoProviders.map((provider, index) => {
+                                const checked = selectedProviders.includes(provider);
+                                const inputId = `crypto-${index}`;
+                                const meta = describeCryptoProvider(provider);
+
+                                return (
+                                    <label key={inputId} htmlFor={inputId} className="block">
+                                        <input
+                                            id={inputId}
+                                            type="checkbox"
+                                            className="peer sr-only"
+                                            checked={checked}
+                                            onChange={() => handleProviderSelection(provider)}
+                                        />
+                                        <div
+                                            className={clsx(
+                                                'rounded-lg border p-3 transition',
+                                                'bg-gray-300/40 dark:bg-gray-800/60 border-gray-500/40',
+                                                'hover:border-indigo-400/60 hover:bg-indigo-400/10',
+                                                'peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10',
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <ProviderIcon
+                                                        type={paymentProviderTypeToString(
+                                                            providerToProviderType(provider),
+                                                        )}
+                                                        crypto={meta.chain}
+                                                    />
+                                                    <div className="font-semibold">Crypto</div>
+                                                    {meta.icon && (
+                                                        <img
+                                                            src={meta.icon}
+                                                            alt={meta.icon}
+                                                            className="h-5 w-auto rounded-md"
+                                                        />
+                                                    )}
+                                                </div>
+                                                {checked && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-600/20 text-indigo-300">
+                                                        selected
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-1 text-xs font-mono break-all text-gray-700 dark:text-gray-300">
+                                                {meta.desc}
+                                            </div>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+
                         </div>
                     ) : (
                         <div className="text-sm text-gray-500">No payment providers linked yet.</div>
