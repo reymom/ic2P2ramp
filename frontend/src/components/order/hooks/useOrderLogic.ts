@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import {
+  BlockchainAsset,
   DepositInput,
   Order,
   OrderState,
@@ -18,10 +19,12 @@ import { PaymentProviderTypes, TokenOption } from '@/model/types';
 import { fetchBitcoinTokenOptions } from '@/model/blockchain/bitcoin';
 import {
   blockchainAssetToBlockchainType,
+  blockchainAssetToChain,
   paymentProviderTypeToString,
   providerToProviderType,
 } from '@/model/helpers/types';
 import { rampErrorToString } from '@/model/helpers/error';
+import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
 import { getExplorerUrls } from '@/utils/explorers';
 import {
   formatCryptoUnits,
@@ -29,10 +32,11 @@ import {
   unitsFromDecimalInput,
 } from '@/utils/formatters';
 import { fetchOrderPrice } from '@/utils/rates';
+import { sameCryptoAsset } from '@/utils/cryptoProviders';
 
 import icpLogo from '@/assets/blockchains/icp-logo.svg';
 import bitcoinLogo from '@/assets/blockchains/bitcoin-logo.svg';
-import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
+import solanaLogo from '@/assets/blockchains/solana-logo.png';
 import { useOrderEvm } from './useOrderEvm';
 import { useOrderSolana } from './useOrderSolana';
 import { useOrderBitcoin } from './useOrderBitcoin';
@@ -66,10 +70,14 @@ export const useOrderLogic = (
   const [isPayable, setIsPayable] = useState<boolean>(false);
   const [loadingPayable, setLoadingPayable] = useState<boolean>(true);
 
-  const { makeEvmDeposit } = useOrderEvm();
-  const { makeSolanaDeposit, waitForSolanaConfirmation } = useOrderSolana();
+  const { makeEvmDeposit, makeEvmCryptoPayment } = useOrderEvm();
+  const {
+    makeSolanaDeposit,
+    makeSolanaCryptoPayment,
+    waitForSolanaConfirmation,
+  } = useOrderSolana();
+  const { makeIcpDeposit, makeIcpPayment } = useOrderIcp();
   const { makeBitcoinDeposit } = useOrderBitcoin();
-  const { makeIcpDeposit } = useOrderIcp();
 
   const { user, sessionToken, icpAgent, fetchBalances, refetchUser } =
     useUser();
@@ -107,6 +115,11 @@ export const useOrderLogic = (
       ? orderState.Completed.asset
       : null;
   }, [orderState]);
+
+  const [solOptions, setSolOptions] = useState<TokenOption[]>();
+  useEffect(() => {
+    fetchSolanaTokenOptions().then(setSolOptions);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -404,6 +417,7 @@ export const useOrderLogic = (
           orderId,
           [sessionToken],
           'stripe',
+          [],
         );
         if ('Ok' in resp) {
           if ('EVM' in orderBlockchainAsset!) {
@@ -439,31 +453,53 @@ export const useOrderLogic = (
 
   const handleProviderSelection = (
     selectedProviderType: PaymentProviderTypes,
+    offramperProvider: PaymentProvider,
   ) => {
     if (!user) return;
 
-    const onramperProvider = user.payment_providers.find((userProvider) => {
-      const p = paymentProviderTypeToString(
-        providerToProviderType(userProvider),
-      );
-      return (
-        p === selectedProviderType ||
-        (p === 'Email' && selectedProviderType === 'Stripe')
-      );
-    });
-    if (!onramperProvider) return;
+    let onramperProvider: PaymentProvider | undefined;
+    setMessage('');
 
-    if (
-      committedProvider &&
-      paymentProviderTypeToString(committedProvider[0]) === selectedProviderType
-    ) {
+    // crypto-variant: find onramper's by matching asset
+    if (selectedProviderType === 'Crypto' && 'Crypto' in offramperProvider) {
+      const offAsset = offramperProvider.Crypto.asset;
+      onramperProvider = user.payment_providers.find((userProvider) => {
+        if (!('Crypto' in userProvider)) return false;
+        return sameCryptoAsset(offAsset, userProvider.Crypto.asset);
+      });
+
+      if (!onramperProvider) {
+        setMessage(
+          `No matching crypto provider for ${blockchainAssetToChain(offAsset)}`,
+        );
+        return;
+      }
+    } else {
+      // non-crypto: just find by provider type
+      onramperProvider = user.payment_providers.find((userProvider) => {
+        const p = paymentProviderTypeToString(
+          providerToProviderType(userProvider),
+        );
+        return (
+          p === selectedProviderType ||
+          (p === 'Email' && selectedProviderType === 'Stripe')
+        );
+      });
+      if (!onramperProvider) {
+        setMessage(`no matching provider for type: ${selectedProviderType}`);
+        return;
+      }
+    }
+
+    const already =
+      committedProvider && committedProvider[1] === onramperProvider;
+    if (already) {
       setCommittedProvider(undefined);
     } else {
-      const provider: [PaymentProviderType, PaymentProvider] = [
+      setCommittedProvider([
         providerToProviderType(onramperProvider),
         onramperProvider,
-      ];
-      setCommittedProvider(provider);
+      ] as [PaymentProviderType, PaymentProvider]);
     }
   };
 
@@ -864,6 +900,139 @@ export const useOrderLogic = (
     }
   };
 
+  const handleCryptoPay = async () => {
+    if (!sessionToken)
+      throw new Error('Please authenticate to get a token session');
+    if (!('Locked' in orderState) || !orderId) return;
+    if (!user || !('Onramper' in user.user_type)) return;
+
+    const locked = orderState.Locked;
+    if (!('Crypto' in locked.onramper.provider)) return;
+    const amount = locked.price + locked.offramper_fee;
+
+    // find the OFFRAMPER crypto provider with the same asset (and chain_id for EVM)
+    const onAsset = locked.onramper.provider.Crypto.asset;
+    const offramperCryptoProvider = locked.base.offramper_providers.find(
+      (p) => {
+        if (!('Crypto' in p)) return false;
+        return sameCryptoAsset(onAsset, p.Crypto.asset);
+      },
+    );
+    if (!offramperCryptoProvider || !('Crypto' in offramperCryptoProvider)) {
+      throw new Error(
+        'Offramper has no matching crypto provider for this asset/chain',
+      );
+    }
+    const dstAddress = offramperCryptoProvider.Crypto.address.address;
+
+    setIsLoading(true);
+    setTxHash(null); // this is *release* tx hash; payment tx is local to this function
+    setMessage(null);
+    setLoadingMessage('Submitting crypto payment from your wallet');
+
+    try {
+      let depositInput: [] | [DepositInput] = [];
+      let paymentTxId = '';
+
+      if ('EVM' in onAsset) {
+        const chainId = onAsset.EVM.chain_id;
+        if (!chainId) throw new Error('Chain id is not available');
+        const tokenAddr = onAsset.EVM.token_address?.[0];
+        if (!tokenAddr) throw new Error('Could not find dst token');
+        const provToken = getEvmTokens(Number(chainId)).find(
+          (t) => t.address.toLowerCase() === tokenAddr.toLowerCase(),
+        );
+        if (!provToken) throw new Error('Could not resolve provider token');
+
+        const amountUnits = (amount * 10n ** BigInt(provToken.decimals)) / 100n;
+        const { depositInput: evmDep, txHash } = await makeEvmCryptoPayment(
+          Number(chainId),
+          provToken,
+          amountUnits,
+          dstAddress,
+        );
+
+        depositInput = evmDep;
+        paymentTxId = txHash;
+      } else if ('Solana' in onAsset) {
+        const mint = onAsset.Solana.spl_token?.[0];
+        const providerToken: TokenOption = {
+          name: '',
+          address: mint ?? '',
+          decimals: 0,
+          isNative: !mint,
+          rateSymbol: '',
+          logo: '',
+        };
+
+        const { depositInput: solDep, txSig } = await makeSolanaCryptoPayment(
+          amount,
+          providerToken,
+          dstAddress,
+        );
+
+        await waitForSolanaConfirmation(txSig, { timeoutMs: 90_000 });
+
+        depositInput = solDep;
+        paymentTxId = txSig;
+      } else if ('ICP' in onAsset) {
+        if (!icpAgent) throw new Error('ICP Agent not found');
+
+        const ledgerPrincipalStr =
+          (onAsset.ICP.ledger_principal as any).toText?.() ??
+          String(onAsset.ICP.ledger_principal);
+        const providerToken: TokenOption = {
+          name: '',
+          address: ledgerPrincipalStr ?? '',
+          decimals: 0,
+          isNative: !ledgerPrincipalStr,
+          rateSymbol: '',
+          logo: '',
+        };
+
+        await makeIcpPayment(icpAgent, providerToken, amount, dstAddress);
+        depositInput = [];
+        paymentTxId = '';
+      } else {
+        throw new Error('Unsupported blockchain for crypto payment');
+      }
+
+      const response = await backend.verify_transaction(
+        orderId,
+        [sessionToken],
+        paymentTxId,
+        depositInput,
+      );
+
+      if ('Ok' in response) {
+        // same routing logic as in handlePayPalSuccess
+        if ('EVM' in onAsset) {
+          setTxHash(response.Ok);
+          await pollTransactionLog(orderId, user.id);
+        } else if ('Bitcoin' in onAsset) {
+          setTxHash(response.Ok);
+          setLoadingMessage(
+            'Bitcoin transaction is being processed. This may take some time to confirm (15-60+ minutes).',
+          );
+          await waitForProcessingAndRoute(orderId);
+        } else if ('Solana' in onAsset) {
+          setTxHash(response.Ok);
+          setLoadingMessage('Confirming Solana transaction');
+          await waitForProcessingAndRoute(orderId);
+        } else {
+          await waitForProcessingAndRoute(orderId);
+        }
+      } else {
+        const errorMessage = rampErrorToString(response.Err);
+        setMessage(errorMessage);
+      }
+    } catch (err: any) {
+      setMessage(err?.message ?? String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePayPalSuccess = async (transactionId: string) => {
     if (!sessionToken)
       throw new Error('Please authenticate to get a token session');
@@ -883,6 +1052,7 @@ export const useOrderLogic = (
         orderId,
         [sessionToken],
         transactionId,
+        [],
       );
       if ('Ok' in response) {
         if ('EVM' in orderBlockchainAsset!) {
@@ -978,6 +1148,8 @@ export const useOrderLogic = (
       return icpLogo;
     } else if ('Bitcoin' in orderBlockchainAsset) {
       return bitcoinLogo;
+    } else if ('Solana' in orderBlockchainAsset) {
+      return solanaLogo;
     }
   };
 
@@ -989,6 +1161,8 @@ export const useOrderLogic = (
       return 'ICP';
     } else if ('Bitcoin' in orderBlockchainAsset) {
       return 'Bitcoin';
+    } else if ('Solana' in orderBlockchainAsset) {
+      return 'Solana';
     }
   };
 
@@ -1106,6 +1280,7 @@ export const useOrderLogic = (
     handlePayPalSuccess,
     handleRevolutRedirect,
     handleStripePay,
+    handleCryptoPay,
     fetchOrder,
   };
 };

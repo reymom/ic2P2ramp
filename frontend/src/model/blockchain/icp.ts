@@ -37,13 +37,13 @@ export const transferICPTokensToCanister = async (
   canisterId: Principal,
   amount: bigint,
   fee: bigint,
+  recipient: string,
 ) => {
   const ledger = IcrcLedgerCanister.create({ agent, canisterId });
   try {
-    const backendId = getBackendCanisterId();
     const result = await ledger.transfer({
       to: {
-        owner: Principal.fromText(backendId),
+        owner: Principal.fromText(recipient),
         subaccount: [],
       },
       amount: amount + fee,

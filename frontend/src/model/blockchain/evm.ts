@@ -14,7 +14,7 @@ export const depositInVault = async (
   if (!window.ethereum)
     throw new Error('No crypto wallet found. Please install it.');
 
-  const provider = new ethers.BrowserProvider(window.ethereum);
+  const provider = new ethers.BrowserProvider(window.ethereum, chainId);
   await provider.send('eth_requestAccounts', []);
   const signer = await provider.getSigner();
 
@@ -63,6 +63,66 @@ export const depositInVault = async (
         {
           gasLimit: gasEstimate,
         },
+      );
+    } else {
+      throw new Error('No token selected');
+    }
+
+    const receipt = await transactionResponse.wait();
+    if (receipt.status !== 1) {
+      throw new Error('Transaction failed on-chain.');
+    }
+    return receipt;
+  } catch (error: any) {
+    throw new Error(handleWeb3Error(error));
+  }
+};
+
+export const sendEvmPayment = async (
+  chainId: number,
+  selectedToken: TokenOption,
+  cryptoAmount: bigint,
+  toAddress: string,
+) => {
+  if (!window.ethereum)
+    throw new Error('No crypto wallet found. Please install it.');
+
+  const provider = new ethers.BrowserProvider(window.ethereum, chainId);
+  await provider.send('eth_requestAccounts', []);
+  const signer = await provider.getSigner();
+
+  try {
+    let transactionResponse;
+
+    if (selectedToken.isNative) {
+      const gasEstimate = await signer.estimateGas({
+        to: toAddress,
+        value: cryptoAmount,
+      });
+
+      transactionResponse = await signer.sendTransaction({
+        to: toAddress,
+        value: cryptoAmount,
+        gasLimit: gasEstimate,
+      });
+    } else if (selectedToken.address !== '') {
+      const tokenContract = new ethers.Contract(
+        selectedToken.address,
+        [
+          'function transfer(address to, uint256 amount) external returns (bool)',
+        ],
+        signer,
+      );
+
+      const gasEstimate = await tokenContract.transfer.estimateGas(
+        toAddress,
+        cryptoAmount,
+      );
+
+      transactionResponse = await tokenContract.transfer(
+        toAddress,
+        cryptoAmount,
+        { gasLimit: gasEstimate },
       );
     } else {
       throw new Error('No token selected');

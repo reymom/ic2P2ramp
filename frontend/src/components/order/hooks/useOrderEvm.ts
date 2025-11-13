@@ -3,7 +3,11 @@ import type {
   EvmOrderInput,
 } from '@/declarations/icramp_backend/icramp_backend.did';
 import type { TokenOption } from '@/model/types';
-import { estimateGasAndGasPrice, depositInVault } from '@/model/blockchain/evm';
+import {
+  estimateGasAndGasPrice,
+  depositInVault,
+  sendEvmPayment,
+} from '@/model/blockchain/evm';
 import {
   defaultCommitEvmGas,
   defaultReleaseEvmGas,
@@ -42,5 +46,27 @@ export const useOrderEvm = () => {
     return { depositInput, txHash: receipt.hash };
   };
 
-  return { makeEvmDeposit };
+  const makeEvmCryptoPayment = async (
+    chainId: number,
+    token: TokenOption,
+    amount: bigint,
+    toAddress: string,
+  ) => {
+    const receipt = await sendEvmPayment(chainId, token, amount, toAddress);
+
+    const depositInput: [DepositInput] = [
+      {
+        Evm: {
+          // we don't care here; backend can ignore these
+          estimated_gas_lock: 0n,
+          estimated_gas_withdraw: 0n,
+          tx_hash: receipt.hash,
+        },
+      },
+    ];
+
+    return { depositInput, txHash: receipt.hash };
+  };
+
+  return { makeEvmDeposit, makeEvmCryptoPayment };
 };

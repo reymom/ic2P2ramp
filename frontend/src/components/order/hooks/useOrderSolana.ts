@@ -127,6 +127,107 @@ export const useOrderSolana = () => {
     return { depositInput, txSig: sig };
   };
 
+  const makeSolanaCryptoPayment = async (
+    amountUnits: bigint,
+    token: TokenOption,
+    destinationAddress: string,
+  ) => {
+    if (!publicKey) throw new Error('Please connect your Solana wallet');
+
+    const dstPk = new PublicKey(destinationAddress);
+
+    const tx = new Transaction();
+    let mintOpt: [] | [string] = [];
+
+    if (token.isNative) {
+      const lamports = Number(amountUnits);
+      if (!Number.isSafeInteger(lamports)) throw new Error('Amount too large');
+
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: dstPk,
+          lamports,
+        }),
+      );
+    } else {
+      const mintStr = token.address;
+      mintOpt = [mintStr];
+
+      const programId = await getMintProgramId(mintStr);
+      const mint = new PublicKey(mintStr);
+
+      const fromAta = await getAssociatedTokenAddress(
+        mint,
+        publicKey,
+        false,
+        programId,
+      );
+      const toAta = await getAssociatedTokenAddress(
+        mint,
+        dstPk,
+        true,
+        programId,
+      );
+
+      const ataInfo = await connection.getAccountInfo(toAta, {
+        commitment: 'confirmed',
+      });
+      if (!ataInfo) {
+        tx.add(
+          createAssociatedTokenAccountInstruction(
+            publicKey,
+            toAta,
+            dstPk,
+            mint,
+            programId,
+          ),
+        );
+      }
+
+      tx.add(
+        createTransferCheckedInstruction(
+          fromAta,
+          mint,
+          toAta,
+          publicKey,
+          amountUnits,
+          token.decimals,
+          [],
+          programId,
+        ),
+      );
+    }
+
+    const { blockhash } = await connection.getLatestBlockhash('processed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = publicKey;
+
+    let sig: string;
+    try {
+      sig = await sendTransaction(tx, connection, {
+        skipPreflight: false,
+        maxRetries: 0,
+      });
+      setSolflareMismatch(false);
+    } catch (e: any) {
+      if (/network mismatch/i.test(String(e?.message ?? e)))
+        setSolflareMismatch(true);
+      throw e;
+    }
+
+    const depositInput: [DepositInput] = [
+      {
+        Solana: {
+          signature: sig,
+          mint: mintOpt,
+        },
+      },
+    ];
+
+    return { depositInput, txSig: sig };
+  };
+
   const waitForSolanaConfirmation = async (
     sig: string,
     { timeoutMs = 60_000 },
@@ -161,6 +262,7 @@ export const useOrderSolana = () => {
 
   return {
     makeSolanaDeposit,
+    makeSolanaCryptoPayment,
     waitForSolanaConfirmation,
     solanaNetworkLabel,
     isSolflare,
