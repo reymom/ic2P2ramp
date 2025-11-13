@@ -1,3 +1,4 @@
+import { NetworkIds } from '@/constants/networks';
 import {
   BlockchainAsset,
   PaymentProvider,
@@ -21,6 +22,18 @@ export const blockchainAssetToBlockchainType = (
   throw new Error('Unknown blockchain');
 };
 
+export const blockchainAssetToChain = (asset: BlockchainAsset) => {
+  if ('EVM' in asset)
+    return (
+      Object.values(NetworkIds).find((n) => n.id === Number(asset.EVM.chain_id))
+        ?.name ?? 'EVM'
+    );
+  if ('ICP' in asset) return 'ICP';
+  if ('Solana' in asset) return 'Solana';
+  if ('Bitcoin' in asset) return 'Bitcoin';
+  throw new Error('Unknown blockchain');
+};
+
 // Payment Providers
 export const paymentProviderTypeToString = (
   providerType: PaymentProviderType,
@@ -29,6 +42,7 @@ export const paymentProviderTypeToString = (
   if ('Revolut' in providerType) return 'Revolut';
   if ('Stripe' in providerType) return 'Stripe';
   if ('Email' in providerType) return 'Email';
+  if ('Crypto' in providerType) return 'Crypto';
   throw new Error('Unknown payment provider');
 };
 
@@ -39,6 +53,7 @@ export const providerToProviderType = (
   if ('Revolut' in provider) return { Revolut: null };
   if ('Stripe' in provider) return { Stripe: null };
   if ('Email' in provider) return { Email: null };
+  if ('Crypto' in provider) return { Crypto: null };
   throw new Error('Unkown provider type');
 };
 

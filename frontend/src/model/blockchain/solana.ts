@@ -15,7 +15,7 @@ export const SOLANA_RPC_URL =
     ? RPC_API_BASE + process.env.FRONTEND_SOLANA_API_TOKEN
     : 'https://api.devnet.solana.com';
 
-type Registry = Record<string, TokenInfo>;
+export type Registry = Record<string, TokenInfo>;
 const REGISTRY_CACHE_KEY = `sol-registry:${
   process.env.FRONTEND_SOL_ENV || 'devnet'
 }`;
