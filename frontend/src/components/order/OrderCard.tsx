@@ -2,15 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import clsx from 'clsx';
 
-import { OrderState } from '@/declarations/icramp_backend/icramp_backend.did';
+import { OrderState, PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
-import { blockchainAssetToBlockchainType, paymentProviderTypeToString } from '@/model/helpers/types';
+import { blockchainAssetToBlockchainType, paymentProviderTypeToString, providerToProviderType } from '@/model/helpers/types';
 import { formatCryptoUnits, formatPrice, formatTimeLeft, truncate } from '@/utils/formatters';
 import { Balance, useUser } from '@/components/user/UserContext';
 import PayPalButton from '@/components/ui/PaypalButton';
 import DynamicDots from '@/components/ui/DynamicDots';
 import { useOrderLogic } from './hooks/useOrderLogic';
 import { ProviderIcon } from '../ui/ProviderIcon';
+import { sameCryptoAsset } from '@/utils/cryptoProviders';
+import { NetworkIds, NetworkProps } from '@/constants/networks';
+import { getEvmTokens } from '@/constants/evm_tokens';
+import { fetchSolanaTokenOptions } from '@/model/blockchain/solana';
+import { TokenOption } from '@/model/types';
+import { ICP_TOKENS } from '@/constants/icp_tokens';
 
 interface OrderProps {
     order: OrderState;
@@ -54,6 +60,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
         handlePayPalSuccess,
         handleRevolutRedirect,
         handleStripePay,
+        handleCryptoPay,
     } = useOrderLogic(order, refetchOrders);
 
     const { backgroundColor, borderColor, textColor } = getStatusColors();
@@ -61,12 +68,25 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
     useEffect(() => { setFillIndex(0); }, [orderState]);
 
+    const [solOptions, setSolOptions] = useState<TokenOption[]>();
+    useEffect(() => {
+        fetchSolanaTokenOptions().then(setSolOptions);
+    }, []);
+
     const tokenUnit = token && (
         <img
             src={token.logo}
             alt={token.name}
             title={token.name}
             className="h-5 w-5 inline-block border border-white bg-gray-100 rounded-full"
+        />
+    );
+    const tokenOverlay = token && (
+        <img
+            src={token.logo}
+            alt={token.name}
+            title={token.name}
+            className="h-4 w-4 rounded-full border border-white bg-gray-100 absolute -bottom-1 -right-1"
         />
     );
 
@@ -88,6 +108,45 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                 : null;
         }
         return null
+    };
+
+    const describeCryptoProvider = (provider: PaymentProvider): {
+        chain: 'EVM' | 'Solana' | 'ICP' | undefined;
+        evmNetwork: NetworkProps | undefined;
+        token: TokenOption | undefined;
+    } => {
+        if (!('Crypto' in provider)) return { chain: undefined, evmNetwork: undefined, token: undefined };
+        const asset = provider.Crypto.asset;
+
+        let chain: 'EVM' | 'Solana' | 'ICP' | undefined;
+        let evmNetwork: NetworkProps | undefined;
+        let token: TokenOption | undefined;
+        if ('EVM' in asset) {
+            chain = 'EVM';
+            const cid = Number(asset.EVM.chain_id);
+            evmNetwork = Object.values(NetworkIds).find(n => n.id === cid);
+            const tokenAddr = asset.EVM.token_address?.[0];
+            if (tokenAddr) {
+                token = getEvmTokens(cid).find(
+                    (t) => t.address.toLowerCase() === tokenAddr.toLowerCase(),
+                );
+
+            }
+        } else if ('Solana' in asset) {
+            chain = 'Solana';
+            const mint = asset.Solana.spl_token?.[0];
+            if (mint && solOptions) {
+                token = solOptions.find((t) => t.address === mint);
+            }
+        } else if ('ICP' in asset) {
+            chain = 'ICP';
+            const principalStr =
+                asset.ICP.ledger_principal.toText?.() ??
+                String(asset.ICP.ledger_principal);
+            token = ICP_TOKENS.find((t) => t.address === principalStr);
+        }
+
+        return { chain, evmNetwork, token };
     };
 
     const commonOrderDiv = baseOrder && orderBlockchainAsset && (
@@ -130,17 +189,6 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                     </a>
                 </span>
             </div>
-
-            {'EVM' in baseOrder!.crypto.asset && (
-                <div className="text-lg flex justify-between">
-                    <span className="opacity-80">Network:</span>
-                    <img
-                        src={getNetworkLogo()}
-                        alt={getNetworkName()}
-                        title={getNetworkName()}
-                        className="h-5 w-5" />
-                </div>
-            )}
         </div>
     );
 
@@ -166,7 +214,7 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                             title={getNetworkName()}
                             className="h-8 w-8"
                         />
-                        {tokenUnit}
+                        {tokenOverlay}
                     </div>
                 </div>
             )}
@@ -204,38 +252,96 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
 
                     <hr className="border-t border-gray-500 w-full my-3" />
 
-                    {/* Providers */}
                     <div className="text-lg">
                         <span className="opacity-90">Payment Methods:</span>
-                        <div className="font-medium">
+                        <div className="mt-2 flex flex-wrap gap-2">
                             {orderState.Created.offramper_providers.map((provider, index) => {
-                                let providerType = paymentProviderTypeToString(provider[0]);
+                                const providerType = paymentProviderTypeToString(
+                                    providerToProviderType(provider),
+                                );
+
+                                // chain for Crypto → icon
+                                let chain: 'EVM' | 'Solana' | 'ICP' | undefined;
+                                let evmNetwork: NetworkProps | undefined;
+                                let token: TokenOption | undefined;
+                                if ('Crypto' in provider) {
+                                    const desc = describeCryptoProvider(provider);
+                                    chain = desc.chain; evmNetwork = desc.evmNetwork; token = desc.token;
+                                }
 
                                 if (userType === 'Onramper') {
-                                    const commitedProv = committedProvider ? paymentProviderTypeToString(committedProvider[0]) : null;
+                                    let checked = false;
+                                    if (committedProvider) {
+                                        const commitedProv = committedProvider[1];
+                                        const committedProvType = paymentProviderTypeToString(committedProvider[0]);
+                                        if (
+                                            providerType === "Crypto" &&
+                                            "Crypto" in provider &&
+                                            "Crypto" in commitedProv
+                                        ) {
+                                            checked = sameCryptoAsset(
+                                                provider.Crypto.asset,
+                                                commitedProv.Crypto.asset,
+                                            );
+                                        } else {
+                                            checked =
+                                                providerType === committedProvType ||
+                                                (providerType === "Stripe" &&
+                                                    committedProvType === "Email");
+                                        }
+                                    }
+
                                     return (
-                                        <div key={index} className="my-2">
-                                            <input
-                                                type="checkbox"
-                                                id={`provider-${index}`}
-                                                onChange={() => handleProviderSelection(providerType)}
-                                                checked={commitedProv === providerType || (commitedProv === "Email" && providerType === "Stripe")}
-                                                className="form-checkbox h-5 w-5 text-center"
+                                        <button
+                                            key={index}
+                                            type="button"
+                                            onClick={() => handleProviderSelection(providerType, provider)}
+                                            className={clsx(
+                                                'inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm transition',
+                                                checked
+                                                    ? 'bg-indigo-600/25 border-indigo-400 text-indigo-50'
+                                                    : 'bg-gray-700/40 border-gray-500/60 text-gray-200 hover:bg-indigo-500/10 hover:border-indigo-400/60',
+                                            )}
+                                        >
+                                            <ProviderIcon
+                                                type={providerType}
+                                                className="h-4 w-auto rounded-md"
+                                                crypto={chain ?? undefined}
+                                                evmChain={evmNetwork?.id ?? undefined}
                                             />
-                                            <label htmlFor={`provider-${index}`} className="ml-1 text-lg inline-flex items-center gap-2">
-                                                <ProviderIcon type={providerType} />
-                                                <span>{providerType}</span>
-                                            </label>
-                                        </div>
-                                    );
-                                } else {
-                                    return (
-                                        <div key={index} className="text-lg my-2 inline-flex items-center gap-2">
-                                            <ProviderIcon type={providerType} />
                                             <span>{providerType}</span>
-                                        </div>
+                                            {token?.logo && (
+                                                <img
+                                                    src={token.logo}
+                                                    alt={token.logo}
+                                                    className="h-5 w-auto rounded-md"
+                                                />
+                                            )}
+                                        </button>
                                     );
                                 }
+
+                                return (
+                                    <span
+                                        key={index}
+                                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-sm bg-gray-700/40 border-gray-500/60 text-gray-200 cursor-default"
+                                    >
+                                        <ProviderIcon
+                                            type={providerType}
+                                            className="h-4 w-auto rounded-md"
+                                            crypto={chain ?? undefined}
+                                            evmChain={evmNetwork?.id ?? undefined}
+                                        />
+                                        <span>{providerType}</span>
+                                        {token?.logo && (
+                                            <img
+                                                src={token.logo}
+                                                alt={token.logo}
+                                                className="h-5 w-auto rounded-md"
+                                            />
+                                        )}
+                                    </span>
+                                );
                             })}
                         </div>
                     </div>
@@ -525,10 +631,10 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                         currency={orderState.Locked.base.currency}
                                         paypalId={(() => {
                                             const provider = orderState.Locked.base.offramper_providers.find(
-                                                provider => 'PayPal' in provider[1]
+                                                provider => 'PayPal' in provider
                                             );
-                                            if (provider && 'PayPal' in provider[1]) {
-                                                return provider[1].PayPal.id;
+                                            if (provider && 'PayPal' in provider) {
+                                                return provider.PayPal.id;
                                             }
                                             return '';
                                         })()}
@@ -548,10 +654,9 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                 ) : orderState.Locked.onramper.provider.hasOwnProperty('Email') ? (
                                     <div>
                                         {(() => {
-                                            // Candid Option<string> => [] | [string]
                                             const stripeUrl =
-                                                (orderState as any).Locked?.payment_url?.[0] ??
-                                                (orderState as any).Locked?.payment_url;
+                                                orderState.Locked?.payment_url?.[0] ??
+                                                orderState.Locked?.payment_url;
 
                                             const disabled = !isPayable || isLoading || !stripeUrl;
                                             return (
@@ -566,6 +671,78 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                                             );
                                         })()}
                                     </div>
+                                ) : 'Crypto' in orderState.Locked.onramper.provider ? (
+                                    (() => {
+                                        const provider = orderState.Locked.onramper.provider;
+
+                                        const providerType = paymentProviderTypeToString(
+                                            providerToProviderType(provider),
+                                        );
+
+                                        const { chain, evmNetwork, token } = describeCryptoProvider(provider);
+
+                                        const chainLabel =
+                                            chain === 'EVM'
+                                                ? evmNetwork?.name ?? 'EVM'
+                                                : chain ?? undefined;
+
+                                        return (
+                                            <div>
+                                                <button
+                                                    className={`w-full mt-4 px-4 py-2 bg-emerald-600 rounded-md hover:bg-emerald-700 ${!isPayable || isLoading || orderState.Locked.payment_done
+                                                        ? 'cursor-not-allowed opacity-70'
+                                                        : ''
+                                                        }`}
+                                                    onClick={handleCryptoPay}
+                                                    disabled={!isPayable || isLoading || orderState.Locked.payment_done}
+                                                    title="Pay with your wallet using the matching crypto provider"
+                                                >
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <ProviderIcon
+                                                                type={providerType}
+                                                                className="h-4 w-auto rounded-md"
+                                                                crypto={chain ?? undefined}
+                                                                evmChain={evmNetwork?.id ?? undefined}
+                                                            />
+                                                            <span>
+                                                                Pay with Crypto
+                                                                {chain === 'EVM' && evmNetwork
+                                                                    ? ` (${evmNetwork.name})`
+                                                                    : ''}
+                                                            </span>
+                                                            <span>
+                                                                {token?.logo && (
+                                                                    <img
+                                                                        src={token.logo}
+                                                                        alt={token.logo}
+                                                                        className="h-5 w-auto rounded-md"
+                                                                    />
+                                                                )}
+                                                            </span>
+                                                        </span>
+                                                    </span>
+                                                </button>
+
+                                                {/* optional: show destination (offramper) address for visual verification */}
+                                                <p className="mt-1 text-xs opacity-80 break-words">
+                                                    Destination:{' '}
+                                                    {
+                                                        (
+                                                            orderState.Locked.base.offramper_providers.find(
+                                                                (p) =>
+                                                                    'Crypto' in p &&
+                                                                    sameCryptoAsset(
+                                                                        provider.Crypto.asset,
+                                                                        p.Crypto.asset,
+                                                                    ),
+                                                            ) as any
+                                                        )?.Crypto?.address?.address
+                                                    }
+                                                </p>
+                                            </div>
+                                        );
+                                    })()
                                 ) : null}
                             </div>
                             <div className="text-red-500 mt-2">
@@ -657,7 +834,8 @@ const OrderCard: React.FC<OrderProps> = ({ order, refetchOrders }) => {
                         const provider =
                             'PayPal' in f.provider ? 'PayPal' :
                                 'Revolut' in f.provider ? 'Revolut' :
-                                    'Email' in f.provider ? 'Stripe' : 'Other';
+                                    'Email' in f.provider ? 'Stripe' :
+                                        'Crypto' in f.provider ? 'Crypto' : 'Other';
 
                         return (
                             <div className="mt-3">
