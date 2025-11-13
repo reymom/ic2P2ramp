@@ -6,7 +6,7 @@ dfx deploy icramp_backend --upgrade-unchanged --argument "(
   variant { 
     Upgrade = opt record {
       canister_ids = opt record {
-        solana_backend_id = \"u6s2n-gx777-77774-qaaba-cai\";
+        solana_backend_id = \"uzt4z-lp777-77774-qaabq-cai\";
         bitcoin_backend_id = \"ng6kh-iaaaa-aaaap-qp2fa-cai\";
       };
       ecdsa_key_id = null;

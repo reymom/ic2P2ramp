@@ -259,7 +259,9 @@ dfx canister call bitcoin_backend register_runes '(vec {
 })'
 dfx canister call solana_backend register_tokens '(vec {
   record { "FxoGGtuyjfVybdA3X5WgxzNhjvSN73R5zqPYg3on8hwE"; "KONG"; "KONG" };
-  record { "HbA6BgBmA3X6X8jtts5X2ZiJXXxZQKDbQR4s5XCD82pr"; "BONK"; "BONK"};
+  record { "HbA6BgBmA3X6X8jtts5X2ZiJXXxZQKDbQR4s5XCD82pr"; "BONK"; "BONK" };
+  record { "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr"; "EURC"; "EURC" };
+  record { "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"; "USDC"; "USDC" }
 })'
 
 dfx generate icramp_backend
