@@ -1,5 +1,7 @@
 use crate::{
-    management::verifiers::{verify_bitcoin_deposit, verify_evm_deposit, verify_solana_deposit},
+    management::verifiers::{
+        verify_bitcoin_deposit, verify_evm_transaction, verify_solana_deposit,
+    },
     model::{
         errors::Result,
         memory::stable::orders::{self, append_fill_if_new},
@@ -12,15 +14,17 @@ use crate::{
 };
 
 /// Verifies that a user-supplied transaction really corresponds to the
-/// expected on-chain deposit (amount, asset, addresses, freshness).
+/// expected on-chain deposit (amount, asset, addresses, freshness) or transaction (from, to, amount, asset).
 ///
 /// Returns the chain-specific tx id / signature if one exists for that asset.
-/// - `logical_sender` is the "offramper" address for deposits in `create_order` and "onramper" in verification of "pay-with-crypto" paths.
+/// - `sender` is the "offramper" address for deposits in `create_order` and "onramper" in verification of "pay-with-crypto" paths.
+/// - `receiver` is the "vault" smart contract address for deposits in `create_order` and "offramper" in verification of "pay-with-crypto" paths.
 /// - `amount` is in native units (lamports / wei / smallest token units).
 pub async fn verify_crypto_transaction(
     asset: &BlockchainAsset,
     deposit_input: Option<DepositInput>,
-    logical_sender: &str,
+    sender: &str,
+    // receiver: &str,
     amount: u128,
 ) -> Result<Option<String>> {
     match asset {
@@ -28,11 +32,12 @@ pub async fn verify_crypto_transaction(
             chain_id,
             token_address,
         } => {
-            verify_evm_deposit(
+            verify_evm_transaction(
                 *chain_id,
                 token_address.clone(),
                 deposit_input,
-                logical_sender,
+                sender,
+                // receiver,
                 amount,
             )
             .await

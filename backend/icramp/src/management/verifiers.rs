@@ -16,11 +16,12 @@ use crate::model::memory::stable::spent_transactions;
 use crate::model::types::evm::{chains, token};
 use crate::model::types::orders::DepositInput;
 
-pub async fn verify_evm_deposit(
+pub async fn verify_evm_transaction(
     chain_id: u64,
     token_address: Option<String>,
     deposit_input: Option<DepositInput>,
-    logical_sender: &str,
+    sender: &str,
+    // receiver: &str,
     amount: u128,
 ) -> Result<Option<String>> {
     chains::chain_is_supported(chain_id)?;
@@ -37,15 +38,15 @@ pub async fn verify_evm_deposit(
 
     let tx_hash = evm_input.tx_hash.clone();
 
-    let log_event = get_valid_log_event(&chain_id, &tx_hash).await?;
-    println!(
+    let (log_event, log_entry) = get_valid_log_event(&chain_id, &tx_hash).await?;
+    ic_cdk::println!(
         "[verify_crypto_transaction][evm] log_event = {:?}",
         log_event
     );
 
     match log_event {
         LogEvent::Deposit(deposit_event) => {
-            if deposit_event.user.to_lowercase() != logical_sender.to_lowercase() {
+            if deposit_event.user.to_lowercase() != sender.to_lowercase() {
                 return Err(
                     BlockchainError::EvmLogError("Invalid Offramper Address".to_string()).into(),
                 );
@@ -61,10 +62,43 @@ pub async fn verify_evm_deposit(
                 return Err(BlockchainError::EvmLogError("Invalid Crypto".to_string()).into());
             }
 
+            // log_entry.address is token contract emitting the Deposit, which is in turn the receiver
+            // if log_entry.address != receiver {
+            //     return Err(BlockchainError::EvmLogError("Invalid Receiver".to_string()).into());
+            // }
+
             let last_block = eth_get_latest_block(chain_id, BlockTag::Latest)
                 .await
                 .map(|block| block.number)?;
             deposit_event.expired(last_block)?;
+        }
+
+        LogEvent::Transfer(ev) => {
+            // The pay-with-crypto case.
+            // Here sender = **onramper provider address**
+            // Destination = offramper provider address which you passed into verify
+
+            if ev.from.to_lowercase() != sender.to_lowercase() {
+                return Err(BlockchainError::EvmLogError("Invalid sender".into()).into());
+            }
+            // if ev.to.to_lowercase() != receiver.to_lowercase() {
+            //     return Err(BlockchainError::EvmLogError("Invalid receiver".into()).into());
+            // }
+
+            // For token case, ev.value is guaranteed correct
+            if ev.value != amount {
+                return Err(BlockchainError::EvmLogError("Invalid amount".into()).into());
+            }
+
+            // Token must match asset token
+            if let Some(token) = token_address.clone() {
+                // log_entry.address is token contract emitting the Transfer
+                if log_entry.address.to_lowercase() != token.to_lowercase() {
+                    return Err(
+                        BlockchainError::EvmLogError("Invalid token contract".into()).into(),
+                    );
+                }
+            }
         }
     };
 

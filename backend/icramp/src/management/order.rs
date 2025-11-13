@@ -1,4 +1,5 @@
 use candid::Principal;
+use evm_rpc_canister_types::LogEntry;
 use icramp_types::bitcoin::{runes::RuneUTXOEntry, transfer::TransactionType};
 use icrc_ledger_types::icrc1::account::Account;
 use icrc_ledger_types::icrc1::transfer::NumTokens;
@@ -201,7 +202,7 @@ pub async fn order_crypto_fee(
     }
 }
 
-pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<LogEvent> {
+pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<(LogEvent, LogEntry)> {
     if spent_transactions::is_tx_hash_processed(tx_hash) {
         return Err(
             BlockchainError::EvmLogError("Transaction already processed".to_string()).into(),
@@ -214,7 +215,7 @@ pub async fn get_valid_log_event(chain_id: &u64, tx_hash: &String) -> Result<Log
                 .logs
                 .first()
                 .ok_or_else(|| BlockchainError::EvmLogError("Empty Log Entries".to_string()))?;
-            event::parse_deposit_event(log_entry)
+            Ok((event::parse_log_event(log_entry)?, log_entry.clone()))
         }
         _ => Err(BlockchainError::EmptyTransactionHash.into()),
     }
