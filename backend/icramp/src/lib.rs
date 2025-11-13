@@ -61,6 +61,8 @@ use outcalls::{
     stripe::account::{create_account_link, create_express_account, get_account_info},
 };
 
+use crate::model::types::orders::has_same_chain_provider;
+
 #[ic_cdk::pre_upgrade]
 fn pre_upgrade() {
     upgrade::pre_upgrade()
@@ -163,6 +165,15 @@ pub async fn create_evm_order_with_tx(
         chain_id,
         token_address,
     };
+
+    let user_check = stable::users::get_user(&user)?;
+    user_check.is_offramper()?;
+    if let Some(missing_ty) = first_missing_provider(&providers, &user_check.payment_providers) {
+        return Err(UserError::ProviderNotInUser(missing_ty))?;
+    }
+    if has_same_chain_provider(&providers, &asset) {
+        return Err(OrderError::SameChainPaymentForbidden.into());
+    }
 
     let _ = payment_management::crypto::verify_crypto_transaction(
         &asset,
@@ -321,6 +332,15 @@ pub async fn create_solana_order_with_tx(
         amount,
     )
     .await?;
+
+    let user_check = stable::users::get_user(&user)?;
+    user_check.is_offramper()?;
+    if let Some(missing_ty) = first_missing_provider(&providers, &user_check.payment_providers) {
+        return Err(UserError::ProviderNotInUser(missing_ty))?;
+    }
+    if has_same_chain_provider(&providers, &asset) {
+        return Err(OrderError::SameChainPaymentForbidden.into());
+    }
 
     let order_id = order_management::create_order(
         &currency,
@@ -728,6 +748,9 @@ async fn create_order(
     {
         return Err(UserError::ProviderNotInUser(missing_ty))?;
     }
+    if has_same_chain_provider(&offramper_providers, &asset) {
+        return Err(OrderError::SameChainPaymentForbidden.into());
+    }
 
     let tx_hash = payment_management::crypto::verify_crypto_transaction(
         &asset,
@@ -952,7 +975,6 @@ async fn lock_order(
 ) -> Result<()> {
     orders::set_processing_order(&order_id)?;
 
-    ic_cdk::println!("[lock_order]");
     if let Err(e) = order_management::lock_order(
         order_id,
         session_token,
@@ -1156,11 +1178,17 @@ async fn process_transaction(
 
                 // ---------- Non-Bitcoin crypto: finalize synchronously ----------
                 _ => {
+                    let (_, decimals) = asset.get_symbol_and_decimals().await?;
+                    let factor = 10u128.pow(decimals as u32);
+
+                    let amount_cents = (order.price + order.offramper_fee) as u128;
+                    let amount_units = amount_cents.saturating_mul(factor) / 100u128;
+
                     let tx_opt = payment_management::crypto::verify_crypto_transaction(
                         asset,
                         payment_input.clone(),
                         &address.address,
-                        order.lock_amount,
+                        amount_units,
                     )
                     .await?;
 
