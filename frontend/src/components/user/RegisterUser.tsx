@@ -2,17 +2,17 @@ import clsx from 'clsx';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { LoginAddress, PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
 import { backend } from '@/model/backendProxy';
 import { PaymentProviderTypes, revolutSchemeTypes, revolutSchemes, UserTypes } from '@/model/types';
 import { clearTempUserData, generateConfirmationToken, getTempUserData, sendConfirmationEmail, storeTempUserData } from '@/model/emailConfirmation';
 import { stringToUserType } from '@/model/helpers/types';
 import { rampErrorToString } from '@/model/helpers/error';
-import { LoginAddress, PaymentProvider } from '@/declarations/icramp_backend/icramp_backend.did';
-import DynamicDots from '@/components/ui/DynamicDots';
-import { useUser } from './UserContext';
 import { truncate } from '@/utils/formatters';
-import { startStripeKyc } from '@/hooks/useStripeKyc';
 import { mapCountryToPlatform } from '@/utils/stripe';
+import { startStripeKyc } from '@/hooks/useStripeKyc';
+import { useUser } from './UserContext';
+import DynamicDots from '@/components/ui/DynamicDots';
 import { ProviderIcon } from '../ui/ProviderIcon';
 
 const RegisterUser: React.FC = () => {
