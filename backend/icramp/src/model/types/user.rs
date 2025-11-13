@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-const MAX_USER_SIZE: u32 = 1000;
+const MAX_USER_SIZE: u32 = 1500;
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub enum UserType {

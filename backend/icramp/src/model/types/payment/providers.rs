@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use candid::{CandidType, Deserialize};
 
 use crate::{
@@ -11,7 +9,7 @@ use crate::{
     outcalls::stripe::account::get_account_info,
 };
 
-#[derive(CandidType, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
 pub enum PaymentProviderType {
     PayPal,
     Revolut,
@@ -20,7 +18,7 @@ pub enum PaymentProviderType {
     Crypto,
 }
 
-#[derive(CandidType, Deserialize, Clone, Debug, Eq)]
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PaymentProvider {
     PayPal {
         id: String,
@@ -41,18 +39,6 @@ pub enum PaymentProvider {
         asset: BlockchainAsset,
         address: TransactionAddress,
     },
-}
-
-impl PartialEq for PaymentProvider {
-    fn eq(&self, other: &Self) -> bool {
-        self.provider_type() == other.provider_type()
-    }
-}
-
-impl Hash for PaymentProvider {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.provider_type().hash(state);
-    }
 }
 
 impl PaymentProvider {

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::errors::{OrderError, Result};
-use crate::model::types::{PaymentProvider, PaymentProviderType};
+use crate::model::types::{BlockchainAsset, PaymentProvider, PaymentProviderType};
 
 pub fn validate_offramper_providers_for_order(providers: &[PaymentProvider]) -> Result<()> {
     if providers.is_empty() {
@@ -59,4 +59,37 @@ pub fn validate_offramper_providers_for_order(providers: &[PaymentProvider]) -> 
         }
     }
     Ok(())
+}
+
+pub fn has_same_chain_provider(
+    offramper_providers: &[PaymentProvider],
+    order_asset: &BlockchainAsset,
+) -> bool {
+    for provider in offramper_providers {
+        if let PaymentProvider::Crypto {
+            asset: provider_asset,
+            ..
+        } = provider
+        {
+            match (order_asset, provider_asset) {
+                (
+                    BlockchainAsset::EVM {
+                        chain_id: order_chain,
+                        ..
+                    },
+                    BlockchainAsset::EVM {
+                        chain_id: provider_chain,
+                        ..
+                    },
+                ) if order_chain == provider_chain => return true,
+                (BlockchainAsset::ICP { .. }, BlockchainAsset::ICP { .. }) => return true,
+                (BlockchainAsset::Bitcoin { .. }, BlockchainAsset::Bitcoin { .. }) => return true,
+                (BlockchainAsset::Solana { .. }, BlockchainAsset::Solana { .. }) => return true,
+
+                // Different chains - OK, continue checking
+                _ => continue,
+            }
+        }
+    }
+    false
 }
