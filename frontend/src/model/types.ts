@@ -38,6 +38,7 @@ export const providerTypes: PaymentProviderTypes[] = [
   'Revolut',
   'Stripe',
   'Email',
+  'Crypto',
 ];
 
 export type revolutSchemeTypes =

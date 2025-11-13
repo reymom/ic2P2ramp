@@ -7,7 +7,7 @@ import {
     OrderFilter,
     BlockchainAsset,
     OrderStateFilter,
-    BlockchainType
+    AddressType
 } from '@/declarations/icramp_backend/icramp_backend.did';
 import { OrderFilterTypes } from '@/model/types';
 import { truncate } from '@/utils/formatters';
@@ -28,7 +28,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
     const [selectedState, setSelectedState] = useState<OrderStateFilter | null>(null);
     const [selectedAddress, setSelectedAddress] = useState<TransactionAddress | null>(null);
     const [selectedBlockchainAsset, setSelectedBlockchainAsset] = useState<BlockchainAsset | null>(null);
-    const [selectedBlockchainType, setSelectedBlockchainType] = useState<BlockchainType | null>(null);
+    const [selectedBlockchainType, setSelectedBlockchainType] = useState<AddressType | null>(null);
 
     const { user, userType } = useUser();
 
@@ -124,7 +124,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({ setFilter, currentFilter })
 
         if (value.startsWith("ByBlockchain:")) {
             const kind = value.split(":")[1] as 'EVM' | 'ICP' | 'Bitcoin' | 'Solana';
-            const chain = { [kind]: null } as BlockchainType;
+            const chain = { [kind]: null } as AddressType;
             setFilterType("ByBlockchain"); setSelectedBlockchainType(chain);
             setFilter({ ByBlockchain: chain });
             return;
