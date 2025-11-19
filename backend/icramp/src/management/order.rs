@@ -1,8 +1,7 @@
 use candid::Principal;
 use evm_rpc_canister_types::LogEntry;
 use icramp_types::bitcoin::{runes::RuneUTXOEntry, transfer::TransactionType};
-use icrc_ledger_types::icrc1::account::Account;
-use icrc_ledger_types::icrc1::transfer::NumTokens;
+use icrc_ledger_types::icrc1::{account::Account, transfer::NumTokens};
 
 use crate::errors::{BlockchainError, OrderError, Result, SystemError, UserError};
 use crate::inter_canister::bitcoin::{
@@ -34,12 +33,12 @@ use crate::model::{
 use crate::outcalls::pricing::rates::get_exchange_rate;
 use crate::types::{
     self, BlockchainAsset, PaymentProvider, PaymentProviderType, TransactionAddress,
-    evm::{logs::TransactionStatus, token, transaction::TransactionAction},
+    evm::{logs::TransactionStatus, token},
     exchange_rate::RateAsset,
     find_provider_of_type,
     icp::get_icp_token,
     orders::{
-        LockInput, LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
+        LockedOrder, Order, OrderFilter, OrderState, OrderStateFilter,
         fees::{get_crypto_fee, get_fiat_fee},
     },
 };
@@ -70,11 +69,9 @@ pub async fn calculate_order_evm_fees(
     chain_id: u64,
     crypto_amount: u128,
     token: Option<String>,
-    estimated_gas_lock: u64,
     estimated_gas_withdraw: u64,
 ) -> Result<u128> {
-    let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_lock)
-        + Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
+    let total_gas_estimation = Ic2P2ramp::get_final_gas(estimated_gas_withdraw);
     ic_cdk::println!(
         "[calculate_order_evm_fees] total_gas_estimation = {:?}",
         total_gas_estimation
@@ -112,7 +109,6 @@ pub async fn calculate_order_evm_fees(
 pub async fn order_crypto_fee(
     asset: BlockchainAsset,
     crypto_amount: u128,
-    estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<u128> {
     match asset.clone() {
@@ -120,11 +116,6 @@ pub async fn order_crypto_fee(
             chain_id,
             token_address,
         } => {
-            let estimated_gas_lock = estimated_gas_lock.ok_or_else(|| {
-                SystemError::InvalidInput(
-                    "Gas estimation for locking is required for EVM".to_string(),
-                )
-            })?;
             let estimated_gas_withdraw = estimated_gas_withdraw.ok_or_else(|| {
                 SystemError::InvalidInput(
                     "Gas estimation for withdrawing is required for EVM".to_string(),
@@ -135,7 +126,6 @@ pub async fn order_crypto_fee(
                 chain_id,
                 crypto_amount,
                 token_address.clone(),
-                estimated_gas_lock,
                 estimated_gas_withdraw,
             )
             .await
@@ -228,17 +218,10 @@ pub async fn create_order(
     offramper_providers: Vec<PaymentProvider>,
     asset: BlockchainAsset,
     crypto_amount: u128,
-    estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
     runes: Option<Vec<RuneUTXOEntry>>,
 ) -> Result<u64> {
-    let crypto_fee = order_crypto_fee(
-        asset.clone(),
-        crypto_amount,
-        estimated_gas_lock,
-        estimated_gas_withdraw,
-    )
-    .await?;
+    let crypto_fee = order_crypto_fee(asset.clone(), crypto_amount, estimated_gas_withdraw).await?;
 
     ic_cdk::println!(
         "[create_order] crypto_amount = {:?}, crypto_fee = {:?}",
@@ -268,14 +251,12 @@ pub async fn create_order(
 pub async fn topup_order(
     order: &Order,
     amount: u128,
-    estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<()> {
     let new_total = order.crypto.amount + amount;
     let crypto_fee = order_crypto_fee(
         order.crypto.asset.clone(),
         new_total,
-        estimated_gas_lock,
         estimated_gas_withdraw,
     )
     .await?;
@@ -492,34 +473,7 @@ pub async fn lock_order(
     };
 
     match order.crypto.asset {
-        BlockchainAsset::EVM {
-            chain_id,
-            token_address,
-        } => {
-            let estimated_gas =
-                Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Commit).await?;
-            Ic2P2ramp::commit_deposit(
-                chain_id,
-                order_id,
-                order.offramper_address.address,
-                token_address,
-                lock_amount,
-                Some(estimated_gas),
-                LockInput {
-                    lock_amount,
-                    price,
-                    offramper_fee,
-                    onramper_user_id,
-                    onramper_provider,
-                    onramper_address,
-                    revolut_consent,
-                    stripe_session,
-                },
-            )
-            .await?;
-            Ok(())
-        }
-        BlockchainAsset::ICP { .. } => {
+        BlockchainAsset::EVM { .. } | BlockchainAsset::ICP { .. } => {
             memory::stable::orders::lock_order(
                 order_id,
                 lock_amount,
@@ -531,6 +485,7 @@ pub async fn lock_order(
                 revolut_consent,
                 stripe_session,
             )?;
+
             Ok(())
         }
         BlockchainAsset::Bitcoin { rune_id } => {
@@ -586,13 +541,10 @@ pub async fn lock_order(
 ///
 /// # Behavior
 ///
-/// - **ICP Orders**: Unlocks the order directly.
+/// - **ICP and EVM Orders**: Unlocks the order directly.
 /// - **Bitcoin Orders**: Unlocks the order and calls the `bitcoin_backend` canister
 ///   to update the vault tracking state.
 /// - **Solana orders**: Unlocks the order both in here and mirrors it in `solana_backend`.
-/// - **EVM Orders**: First, uncommits the funds in the EVM vault. The function
-///   listens for the EVM transaction to complete successfully before proceeding
-///   to update the corresponding ICP order status.
 ///
 /// # Returns
 ///
@@ -603,7 +555,7 @@ pub async fn lock_order(
 /// # Errors
 ///
 /// - Returns an error if the order cannot be found, the session is invalid,
-///   or if the EVM transaction fails.
+///   or any transaction fails.
 ///
 /// # Example
 /// ```
@@ -629,24 +581,7 @@ pub async fn unlock_order(order_id: u64) -> Result<()> {
     user.validate_onramper()?;
 
     match order.base.crypto.asset {
-        BlockchainAsset::EVM {
-            chain_id,
-            token_address,
-        } => {
-            let estimated_gas =
-                Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Uncommit).await?;
-            Ic2P2ramp::uncommit_deposit(
-                chain_id,
-                order_id,
-                order.base.offramper_address.address,
-                token_address,
-                order.base.crypto.amount,
-                Some(estimated_gas),
-            )
-            .await?;
-            Ok(())
-        }
-        BlockchainAsset::ICP { .. } => {
+        BlockchainAsset::EVM { .. } | BlockchainAsset::ICP { .. } => {
             memory::stable::orders::unlock_order(order.base.id)?;
             Ok(())
         }

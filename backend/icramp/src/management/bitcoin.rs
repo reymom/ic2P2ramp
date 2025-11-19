@@ -200,7 +200,6 @@ pub fn spawn_bitcoin_tx_listener(
                                         asset,
                                         amount,
                                         None,
-                                        None,
                                         Some(runes),
                                     )
                                     .await
@@ -266,13 +265,8 @@ pub fn spawn_bitcoin_tx_listener(
                             {
                                 Ok(()) => match memory::stable::orders::get_order(&order_id) {
                                     Ok(ord) => {
-                                        match topup_order(
-                                            &ord.created().unwrap(),
-                                            amount,
-                                            None,
-                                            None,
-                                        )
-                                        .await
+                                        match topup_order(&ord.created().unwrap(), amount, None)
+                                            .await
                                         {
                                             Ok(()) => {
                                                 mark_tx_hash_as_processed(txid.clone());
