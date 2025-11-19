@@ -1,11 +1,10 @@
-use ethers_core::abi::Token;
-use ethers_core::types::{Address, U256};
+use ethers_core::{abi::Token, types::U256};
 use evm_rpc_canister_types::BlockTag;
 
 use super::fees::{self, eth_get_latest_block};
 use super::helper::{self, load_contract_data};
 use super::transaction::{broadcast_transaction, create_vault_sign_request};
-use super::{estimate_gas, EstimateGasParams};
+use super::{EstimateGasParams, estimate_gas};
 
 use crate::errors::{BlockchainError, Result};
 use crate::model::{
@@ -13,13 +12,12 @@ use crate::model::{
     memory::heap::{logs, read_state},
 };
 use crate::types::{
+    Crypto,
     evm::{
         gas::get_average_gas,
         request::SignRequest,
         transaction::{TransactionAction, TransactionVariant},
     },
-    orders::LockInput,
-    Crypto,
 };
 
 pub struct Ic2P2ramp;
@@ -61,94 +59,6 @@ impl Ic2P2ramp {
         );
 
         estimate_gas(chain_id, params).await
-    }
-
-    pub fn commit_inputs(
-        offramper: String,
-        token_address: Option<String>,
-        amount: u128,
-    ) -> Result<[Token; 3]> {
-        let token_address = token_address.unwrap_or_else(|| format!("{:#x}", Address::zero()));
-        Ok([
-            Token::Address(helpers::parse_address(offramper)?),
-            Token::Address(helpers::parse_address(token_address)?),
-            Token::Uint(U256::from(amount)),
-        ])
-    }
-
-    pub async fn commit_deposit(
-        chain_id: u64,
-        order_id: u64,
-        offramper: String,
-        token_address: Option<String>,
-        amount: u128,
-        estimated_gas: Option<u64>,
-        lock_input: LockInput,
-    ) -> Result<()> {
-        let commit_inputs = Self::commit_inputs(offramper, token_address, amount)?;
-
-        let transaction_type = TransactionAction::Commit;
-        let (smart_contract, data) =
-            helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
-
-        let sign_request = create_vault_sign_request(
-            chain_id,
-            &transaction_type,
-            smart_contract,
-            data,
-            estimated_gas,
-        )
-        .await?;
-
-        logs::new_transaction_log(order_id, transaction_type.clone());
-        broadcast_transaction(
-            order_id,
-            chain_id,
-            transaction_type,
-            sign_request,
-            Some(lock_input),
-            0,
-            false,
-        );
-
-        Ok(())
-    }
-
-    pub async fn uncommit_deposit(
-        chain_id: u64,
-        order_id: u64,
-        offramper: String,
-        token_address: Option<String>,
-        amount: u128,
-        estimated_gas: Option<u64>,
-    ) -> Result<()> {
-        let uncommit_inputs = Self::commit_inputs(offramper, token_address, amount)?;
-
-        let transaction_type = TransactionAction::Uncommit;
-        let (smart_contract, data) =
-            helper::get_vault_and_data(chain_id, &transaction_type, &uncommit_inputs)?;
-
-        let sign_request = create_vault_sign_request(
-            chain_id,
-            &transaction_type,
-            smart_contract,
-            data,
-            estimated_gas,
-        )
-        .await?;
-
-        logs::new_transaction_log(order_id, transaction_type.clone());
-        broadcast_transaction(
-            order_id,
-            chain_id,
-            transaction_type,
-            sign_request,
-            None,
-            0,
-            false,
-        );
-
-        Ok(())
     }
 
     pub fn release_inputs(
@@ -216,15 +126,7 @@ impl Ic2P2ramp {
         .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
-        broadcast_transaction(
-            order_id,
-            chain_id,
-            transaction_type,
-            sign_request,
-            None,
-            0,
-            false,
-        );
+        broadcast_transaction(order_id, chain_id, transaction_type, sign_request, 0, false);
 
         Ok(())
     }
@@ -279,15 +181,7 @@ impl Ic2P2ramp {
         .await?;
 
         logs::new_transaction_log(order_id, transaction_type.clone());
-        broadcast_transaction(
-            order_id,
-            chain_id,
-            transaction_type,
-            sign_request,
-            None,
-            0,
-            false,
-        );
+        broadcast_transaction(order_id, chain_id, transaction_type, sign_request, 0, false);
 
         Ok(())
     }
@@ -388,7 +282,7 @@ impl Ic2P2ramp {
 
         logs::new_transaction_log(0, transaction_type.clone());
 
-        broadcast_transaction(0, chain_id, transaction_type, request, None, 0, false);
+        broadcast_transaction(0, chain_id, transaction_type, request, 0, false);
         Ok(())
     }
 }

@@ -25,15 +25,12 @@ use crate::{
         heap::{logs, read_state},
         stable::orders::unset_processing_order,
     },
-    types::{
-        evm::{
-            chains::{self, get_rpc_providers},
-            logs::TransactionStatus,
-            nonce::{self, release_and_increment_nonce, release_nonce, NonceFeeEstimates},
-            request::SignRequest,
-            transaction::TransactionAction,
-        },
-        orders::LockInput,
+    types::evm::{
+        chains::{self, get_rpc_providers},
+        logs::TransactionStatus,
+        nonce::{self, NonceFeeEstimates, release_and_increment_nonce, release_nonce},
+        request::SignRequest,
+        transaction::TransactionAction,
     },
 };
 
@@ -46,7 +43,6 @@ pub fn broadcast_transaction(
     chain_id: u64,
     action: TransactionAction,
     sign_request: SignRequest,
-    lock_input: Option<LockInput>,
     attempt: u8,
     nonce_retry: bool,
 ) {
@@ -95,38 +91,6 @@ pub fn broadcast_transaction(
                         );
 
                         match action {
-                            TransactionAction::Commit => {
-                                let lock_input = match lock_input {
-                                    Some(input) => input,
-                                    None => {
-                                        release_nonce(chain_id);
-                                        let _ = unset_processing_order(&order_id);
-                                        logs::update_transaction_log(
-                                            order_id,
-                                            TransactionStatus::BroadcastError(
-                                                SystemError::InvalidInput(
-                                                    "Lock Input not found".to_string(),
-                                                )
-                                                .into(),
-                                            ),
-                                        );
-                                        return;
-                                    }
-                                };
-                                vault::spawn_commit_listener(
-                                    order_id,
-                                    chain_id,
-                                    &tx_hash,
-                                    sign_request,
-                                    lock_input,
-                                );
-                            }
-                            TransactionAction::Uncommit => vault::spawn_uncommit_listener(
-                                order_id,
-                                chain_id,
-                                &tx_hash,
-                                sign_request,
-                            ),
                             TransactionAction::Cancel(cancel_variant) => {
                                 if order_id != 0 {
                                     vault::spawn_cancel_listener(
@@ -175,7 +139,6 @@ pub fn broadcast_transaction(
                                     chain_id,
                                     action,
                                     sign_request,
-                                    lock_input,
                                     attempt + 1,
                                     true,
                                 );
@@ -204,7 +167,6 @@ pub fn broadcast_transaction(
                             chain_id,
                             action,
                             sign_request,
-                            lock_input,
                             attempt + 1,
                             true,
                         );
@@ -229,15 +191,7 @@ pub fn broadcast_transaction(
                     ),
                 )
             } else {
-                broadcast_transaction(
-                    order_id,
-                    chain_id,
-                    action,
-                    sign_request,
-                    lock_input,
-                    attempt + 1,
-                    false,
-                );
+                broadcast_transaction(order_id, chain_id, action, sign_request, attempt + 1, false);
             }
         })
     });
@@ -519,7 +473,9 @@ pub async fn retry_with_bumped_fees<F, G>(
         "[retry_with_bumped_fees] attempt number: {}. New sign request max fee {:?}, max priority: {:?}",
         retry_attempt,
         sign_request.max_fee_per_gas.map(|fee| fee.as_u128()),
-        sign_request.max_priority_fee_per_gas.map(|fee| fee.as_u128())
+        sign_request
+            .max_priority_fee_per_gas
+            .map(|fee| fee.as_u128())
     );
 
     // Resend the transaction with updated fees

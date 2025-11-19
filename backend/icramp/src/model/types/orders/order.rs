@@ -48,7 +48,6 @@ pub enum DepositInput {
 #[derive(CandidType, Deserialize, Clone)]
 pub struct EvmOrderInput {
     pub tx_hash: String,
-    pub estimated_gas_lock: u64,
     pub estimated_gas_withdraw: u64,
 }
 

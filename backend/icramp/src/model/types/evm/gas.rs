@@ -19,18 +19,16 @@ pub struct GasRecord {
     block_number: u128,
 }
 
-/// Maintains a list of gas usage records for a specific action type (e.g., Commit, Release).
+/// Maintains a list of gas usage records for a specific action type (e.g., Release).
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct GasUsage {
     records: Vec<GasRecord>,
 }
 
-/// Holds gas usage information for different transaction actions (commit, release native, release token)
+/// Holds gas usage information for different transaction actions (release native, release token)
 /// on a specific chain.
 #[derive(Clone, Debug, Default, CandidType, Deserialize)]
 pub struct ChainGasTracking {
-    pub commit_gas: GasUsage,
-    pub uncommit_gas: GasUsage,
     pub cancel_token_gas: GasUsage,
     pub cancel_native_gas: GasUsage,
     pub release_token_gas: GasUsage,
@@ -91,14 +89,14 @@ impl GasUsage {
     }
 }
 
-/// Registers the gas usage for a specific chain and transaction action (e.g., Commit, Release).
+/// Registers the gas usage for a specific chain and transaction action (e.g., Release).
 ///
 /// Parameters:
 /// - `chain_id`: The chain identifier.
 /// - `gas`: Gas consumed by the transaction.
 /// - `gas_price`: Gas price at the time of the transaction.
 /// - `block_number`: Block number in which the transaction was included.
-/// - `action_type`: The type of transaction action (e.g., Commit, Release).
+/// - `action_type`: The type of transaction action (e.g., Release).
 ///
 /// Returns:
 /// - `Result<()>`: Returns an error if the chain ID is not found.
@@ -116,14 +114,6 @@ pub fn register_gas_usage(
             .ok_or(BlockchainError::ChainIdNotFound(chain_id))?;
 
         match action_type {
-            TransactionAction::Commit => {
-                let gas_tracking = &mut chain_state.gas_tracking.commit_gas;
-                gas_tracking.record_gas_usage(gas, gas_price, block_number);
-            }
-            TransactionAction::Uncommit => {
-                let gas_tracking = &mut chain_state.gas_tracking.uncommit_gas;
-                gas_tracking.record_gas_usage(gas, gas_price, block_number);
-            }
             TransactionAction::Release(TransactionVariant::Token) => {
                 let gas_tracking = &mut chain_state.gas_tracking.release_token_gas;
                 gas_tracking.record_gas_usage(gas, gas_price, block_number);
@@ -168,8 +158,6 @@ pub fn get_average_gas(
             .ok_or(BlockchainError::ChainIdNotFound(chain_id))?;
 
         let gas_tracking = match action_type {
-            TransactionAction::Commit => Ok(&chain_state.gas_tracking.commit_gas),
-            TransactionAction::Uncommit => Ok(&chain_state.gas_tracking.uncommit_gas),
             TransactionAction::Cancel(TransactionVariant::Native) => {
                 Ok(&chain_state.gas_tracking.cancel_native_gas)
             }
