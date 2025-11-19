@@ -12,12 +12,11 @@ const safeStringify = (v: unknown) =>
 export async function getFeeQuote(
   asset: BlockchainAsset,
   cryptoAmountUnits: bigint,
-  opts?: { estimated_gas_lock?: bigint; estimated_gas_withdraw?: bigint },
+  opts?: { estimated_gas_withdraw?: bigint },
 ): Promise<FeeQuote> {
   const res = await backend.calculate_order_fees(
     asset,
     cryptoAmountUnits,
-    opts?.estimated_gas_lock ? [BigInt(opts.estimated_gas_lock)] : [],
     opts?.estimated_gas_withdraw ? [BigInt(opts.estimated_gas_withdraw)] : [],
   );
   console.log(`[getFeeQuote] res=${safeStringify(res)}`);

@@ -8,10 +8,7 @@ import {
   depositInVault,
   sendEvmPayment,
 } from '@/model/blockchain/evm';
-import {
-  defaultCommitEvmGas,
-  defaultReleaseEvmGas,
-} from '@/constants/evm_tokens';
+import { defaultReleaseEvmGas } from '@/constants/evm_tokens';
 
 export const useOrderEvm = () => {
   const makeEvmDeposit = async (
@@ -19,11 +16,6 @@ export const useOrderEvm = () => {
     token: TokenOption,
     amount: bigint,
   ) => {
-    const gasForCommit = await estimateGasAndGasPrice(
-      chainId,
-      { Commit: null },
-      defaultCommitEvmGas,
-    );
     const txVariant = token.isNative ? { Native: null } : { Token: null };
     const gasForRelease = await estimateGasAndGasPrice(
       chainId,
@@ -36,7 +28,6 @@ export const useOrderEvm = () => {
     const depositInput: [DepositInput] = [
       {
         Evm: {
-          estimated_gas_lock: gasForCommit[0],
           estimated_gas_withdraw: gasForRelease[0],
           tx_hash: receipt.hash,
         } as EvmOrderInput,
@@ -58,7 +49,6 @@ export const useOrderEvm = () => {
       {
         Evm: {
           // we don't care here; backend can ignore these
-          estimated_gas_lock: 0n,
           estimated_gas_withdraw: 0n,
           tx_hash: receipt.hash,
         },

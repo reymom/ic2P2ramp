@@ -9,7 +9,6 @@ import shibaLogo from '@/assets/blockchains/shiba-token.png';
 import opLogo from '@/assets/blockchains/optimism-logo.svg';
 import daiLogo from '@/assets/blockchains/dai-logo.png';
 
-export const defaultCommitEvmGas = BigInt(80000);
 export const defaultReleaseEvmGas = BigInt(100000);
 
 // ----------------------

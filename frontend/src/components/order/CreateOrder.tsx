@@ -7,7 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import { PaymentProvider, BlockchainAsset, DepositInput, RateAsset, FeeQuote } from '@/declarations/icramp_backend/icramp_backend.did';
-import { defaultCommitEvmGas, defaultReleaseEvmGas, getEvmTokens } from '@/constants/evm_tokens';
+import { defaultReleaseEvmGas, getEvmTokens } from '@/constants/evm_tokens';
 import { CURRENCY_ICON_MAP } from '@/constants/currencyIconsMap';
 import { ICP_TOKENS } from '@/constants/icp_tokens';
 import { NetworkIds } from '@/constants/networks';
@@ -343,12 +343,6 @@ const CreateOrder: React.FC = () => {
 
             try {
                 if ('EVM' in selectedBlockchainAsset) {
-                    const gasLock = (await estimateGasAndGasPrice(
-                        Number(selectedBlockchainAsset.EVM.chain_id),
-                        { Commit: null },
-                        defaultCommitEvmGas
-                    ))[0];
-
                     const txVariant = selectedToken.isNative ? { Native: null } : { Token: null };
                     const gasWithdraw = (await estimateGasAndGasPrice(
                         Number(selectedBlockchainAsset.EVM.chain_id),
@@ -359,7 +353,7 @@ const CreateOrder: React.FC = () => {
                     const q = await getFeeQuote(
                         selectedBlockchainAsset,
                         cryptoAmountUnits,
-                        { estimated_gas_lock: gasLock, estimated_gas_withdraw: gasWithdraw }
+                        { estimated_gas_withdraw: gasWithdraw }
                     );
                     if (alive && feeReqRef.current === myReq) setFeeQuote(q);
                 } else {
