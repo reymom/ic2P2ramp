@@ -18,29 +18,107 @@
 
 #
 
-**icRamp** is a decentralized P2P platform for fiat and cryptocurrency transactions across multiple blockchains, including Bitcoin, Ethereum, and Internet Computer (ICP). It eliminates reliance on centralized exchanges by enabling secure and seamless onramping and offramping solutions with built-in Bitcoin Runes and Ordinals support.
+**icRamp** is a fully trustless P2P on/off-ramp that works across **Bitcoin, Ethereum, Solana, and the Internet Computer**, allowing people worldwide to exchange **fiat ↔ crypto** securely and without custodians.
 
-Initiated in [ETH Prague 2024](https://devfolio.co/projects/icpramp-ca30), this project leverages multiple ICP canisters for enhanced functionality, including HTTPS outcalls, EVM RPC communication, and real-time exchange rate retrieval. For the associated EVM smart contracts used in the frontend and backend canisters, visit the [icRamp-contracts](https://github.com/reymom/icRamp-contracts) repository. The platform now also enables seamless Bitcoin and Runes transactions through its integrated Bitcoin canister, added for [Devcon’s ICP Hackerhouse](https://github.com/ICP-Hacker-House/Devcon_BKK).
+It leverages the Internet Computer’s unique capabilities:
 
-With this Bitcoin integration, users can now create Bitcoin-based orders alongside Ethereum and other EVM-based assets. The Bitcoin canister uses ICP’s threshold ECDSA signatures for secure transactions, allowing users to securely lock and unlock BTC funds without requiring an external wallet. To learn more about the EVM smart contracts that power these functionalities, visit the icRamp-contracts repository.
+- **HTTPS Outcalls** → verify PayPal + Stripe payments trustlessly
+- **ic-alloy EVM RPC** → query EVM smart contracts directly from canisters
+- **Deterministic Rust canisters** → orchestrate cross-chain vault logic
+- **Threshold ECDSA** → manage Bitcoin transactions
+- **Canister-based Solana RPC** → sign transactions and verify SPL transfers
 
-## Features
+Built through 3 ICP Grants (EVM, Bitcoin, Solana + Payment Layer Overhaul).
 
-- P2P Onramping & Offramping: Users can trade fiat for crypto and vice versa in a decentralized manner.
+## Key Features
 
-- Bitcoin Runes Integration: Seamlessly lock, unlock, and manage balances with Runes.
+### 🔗 **Multi-Chain Wallet → Wallet Settlement**
 
-- Multi-Chain NFT & Ordinals Marketplace: Trade Ethereum NFTs, Bitcoin Ordinals/Runes, and ICP NFTs.
+- BTC (UTXO)
+- ETH & EVM chains (ERC-20)
+- Solana (SPL tokens)
+- ICP (ICRC-1)
 
-- Decentralized Governance: Future DAO-based governance for decision-making.
+### 🧾 **Fiat Payments (Trustlessly Verified)**
 
-- Multi-Wallet Authentication: Supports Internet Identity, Metamask, and Bitcoin wallets like Unisat.
+- PayPal
+- Revolut
+- Stripe Connect (destination charges, per-order success/cancel URLs)
+- Email provider (credit card for stripe's counterparty)
 
-- Real-time Exchange Rates: Integrates with external APIs for accurate pricing.
+### 💧 **Liquid Orders (Milestone 2)**
 
-- Secure Bitcoin Canister Integration: Robust handling of transactions and storage.
+- **Partial Fills**: onramper locks only part of the order
+- **Top-Ups**: offramper adds more liquidity on demand
+- Aggregate fills tracked over time
+- Unified release logic across all chains
 
-## Screenshots
+<div align="center">
+  <img src="assets/screenshots/partial-lock-ui.png" width="650"/>
+  <p><em>Onramper committing a partial fill</em></p>
+
+  <img src="assets/screenshots/commited-partial-stripe.png" width="650"/>
+  <p><em>Stripe Checkout for a partial fill</em></p>
+</div>
+
+# 💰 **Pay-With-Crypto (Wallet↔Wallet Trustless Flow)**
+
+Users can settle orders using on-chain payment instead of Stripe/PayPal:
+
+- BTC → BTC
+- ETH → ERC20
+- SOL → SPL token
+- ICP → ICRC-1
+
+Backend listeners verify chain-specific transactions and release funds accordingly.
+
+<div align="center">
+  <img src="assets/screenshots/offramper-create-order-pay-in-solana.png" width="650"/>
+  <p><em>Offramper creating a Solana USDC order</em></p>
+</div>
+
+## 🧱 Architecture (High Level)
+
+┌─────────────────────┐
+│ Frontend (React) │
+└──────────┬──────────┘
+│
+▼
+┌───────────────────┐ ┌──────────────────┐
+│ icramp_backend │◀──▶│ HTTPS Outcalls │
+│ (Rust canister) │ │ (PayPal, Stripe) │
+├───────────────────┤ └──────────────────┘
+│ Orders / Fills │
+│ Payment Providers │
+│ Multi-Chain Vault │
+└──────────┬────────┘
+│
+▼
+┌───────────────────────────────────┐
+│ On-Chain Listeners │
+├───────────────────────────────────┤
+│ BTC → BTC RPC + T-ECDSA │
+│ EVM → ic-alloy + RPC EVM Canister │
+│ Solana → SPL transfer parser │
+│ ICP → ICRC-1 ledger queries │
+└───────────────────────────────────┘
+
+## 🪙 Stripe, Revolut, PayPal
+
+- Stripe Connect onboarding flow
+- Redirect-survival logic
+- Verified via HTTPS Outcalls
+- Stored per-user provider
+- Used for **partial fills** + **top-ups**
+
+## ⚡ EVM Vault (icRamp v2)
+
+- Minimal Solidity vault contract
+- Only `deposit / withdraw / release`
+- Business logic moved to ICP
+- `getDeposit` called via **ic-alloy**: ABI-free, typesafe, cheap
+
+## Old Screenshots
 
 ### Login Page
 

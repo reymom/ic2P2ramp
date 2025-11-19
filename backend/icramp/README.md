@@ -1,29 +1,25 @@
-## Generate the candid methods
+# icramp_backend — Core Business Logic Canister
 
-In the root of the project:
+This canister implements the full business logic of icRamp:
 
-```sh
-cargo build --release --target wasm32-unknown-unknown --package backend
-```
+- Orders & fills
+- Liquid Orders (partial fills + top-ups)
+- Payment providers (PayPal, Revolut, Stripe, Crypto)
+- Multi-chain vault orchestration (BTC/EVM/SOL/ICP)
+- Stripe & PayPal verification via HTTPS Outcalls
+- Pay-With-Crypto on-chain verification
 
-```sh
-candid-extractor target/wasm32-unknown-unknown/release/backend.wasm > backend/backend.did
-```
+### 🔗 Related Documentation
 
-Generate declarations in the frontend canister
+See full platform documentation in the root README:  
+`../README.md`
 
-```sh
-dfx generate
-```
+### 📁 Code Structure
 
-EVM Deployed in 0xBa84eF86624243b7AC5aee39beb259b1BDCc5F07
-
-0x3f8e7De527263D8A059F87CA27E6143B373d3C7c
-
-0x4316F5FC8fa58FbC6709E7A745f4FBb920Bf9C96
-
-## Run tests
-
-```sh
-cargo test
-```
+- `src/` — order management, vault logic, listeners
+- `model/` — payment providers, types, errors
+- `evm/` — calls to the EVM vault
+- `ipc/` — interaction with ICP
+- `management/` — vault, token registry, orders management
+- `inter_canister/` — interaction with bitcoin and solana canisters
+- `outcalls/` — all the interactions with external APIs
