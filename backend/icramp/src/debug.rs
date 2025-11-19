@@ -3,31 +3,23 @@ use std::collections::HashMap;
 use evm_rpc_canister_types::BlockTag;
 
 use crate::{
-    evm::vault::Ic2P2ramp,
+    evm::ic_alloy_icramp,
     management::payment::stripe as stripe_mgmt,
     model::{
         errors::{Result, SystemError},
-        types::{
-            evm::{gas::ChainGasTracking, transaction::TransactionAction},
-            exchange_rate::ExchangeRateCache,
-        },
+        types::{evm::gas::ChainGasTracking, exchange_rate::ExchangeRateCache},
     },
     outcalls::{paypal, revolut, stripe},
 };
 
-#[ic_cdk::update]
-async fn test_estimate_gas_commit(
+#[ic_cdk::query]
+async fn debug_get_evm_deposit(
     chain_id: u64,
+    icramp_address: String,
     offramper: String,
-    token_address: Option<String>,
-    amount: u128,
-) -> Result<Option<u64>> {
-    let commit_inputs = Ic2P2ramp::commit_inputs(offramper, token_address, amount)?;
-    let transaction_type = TransactionAction::Commit;
-    let (vault, data) =
-        crate::evm::helper::get_vault_and_data(chain_id, &transaction_type, &commit_inputs)?;
-
-    Ic2P2ramp::estimate_gas(chain_id, vault, data, None).await
+    token: String,
+) -> Result<u128> {
+    ic_alloy_icramp::get_deposit_via_ic_alloy(chain_id, &icramp_address, &offramper, &token).await
 }
 
 #[ic_cdk::update]

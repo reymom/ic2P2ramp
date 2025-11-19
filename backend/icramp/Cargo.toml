@@ -9,6 +9,7 @@ edition.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+alloy = { git = "https://github.com/ic-alloy/ic-alloy.git", tag = "v0.3.5-icp.0", default-features = false, features = ["icp", "sol-types", "contract"]}
 base64 = { workspace = true }
 bitcoin = { workspace = true }
 candid = { workspace = true }

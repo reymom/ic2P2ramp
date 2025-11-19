@@ -148,8 +148,6 @@ pub async fn create_evm_order_with_tx(
         None => TransactionVariant::Native,
     };
 
-    let estimated_gas_lock =
-        Ic2P2ramp::get_average_gas_price(chain_id, &TransactionAction::Commit).await?;
     let estimated_gas_withdraw = Ic2P2ramp::get_average_gas_price(
         chain_id,
         &TransactionAction::Release(transaction_variant),
@@ -157,7 +155,6 @@ pub async fn create_evm_order_with_tx(
     .await?;
     let evm_input = EvmOrderInput {
         tx_hash: tx_hash.clone(),
-        estimated_gas_lock,
         estimated_gas_withdraw,
     };
 
@@ -193,7 +190,6 @@ pub async fn create_evm_order_with_tx(
         providers,
         asset,
         amount,
-        Some(estimated_gas_lock),
         Some(estimated_gas_withdraw),
         None,
     )
@@ -352,7 +348,6 @@ pub async fn create_solana_order_with_tx(
         providers,
         asset,
         amount,
-        None,
         None,
         None,
     )
@@ -675,16 +670,11 @@ async fn get_average_gas_prices(
 async fn calculate_order_fees(
     asset: BlockchainAsset,
     crypto_amount: u128,
-    estimated_gas_lock: Option<u64>,
     estimated_gas_withdraw: Option<u64>,
 ) -> Result<FeeQuote> {
-    let total_fee = order_management::order_crypto_fee(
-        asset.clone(),
-        crypto_amount,
-        estimated_gas_lock,
-        estimated_gas_withdraw,
-    )
-    .await?;
+    let total_fee =
+        order_management::order_crypto_fee(asset.clone(), crypto_amount, estimated_gas_withdraw)
+            .await?;
 
     let admin_fee = get_admin_fee(crypto_amount);
     let blockchain_fee = total_fee.saturating_sub(admin_fee);
@@ -796,7 +786,6 @@ async fn create_order(
                 crypto_amount,
                 None,
                 None,
-                None,
             )
             .await?;
 
@@ -814,13 +803,11 @@ async fn create_order(
 
             Ok(Some(order_id))
         }
-        // shared ICP and EVM arm branches, though icp's gas lock and withdraw are None
+        // shared ICP and EVM arm branches, though icp's gas withdraw is None
         _ => {
-            let (gas_lock, gas_withdraw) = match deposit_input {
-                Some(DepositInput::Evm(v)) => {
-                    (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw))
-                }
-                _ => (None, None),
+            let gas_withdraw = match deposit_input {
+                Some(DepositInput::Evm(v)) => Some(v.estimated_gas_withdraw),
+                _ => None,
             };
 
             let order_id = order_management::create_order(
@@ -830,7 +817,6 @@ async fn create_order(
                 offramper_providers,
                 asset,
                 crypto_amount,
-                gas_lock,
                 gas_withdraw,
                 None,
             )
@@ -930,7 +916,7 @@ async fn top_up_order(
             }
 
             // 2) Bump order amount + fee (no L1 wait needed here)
-            order_management::topup_order(&order, amount, None, None)
+            order_management::topup_order(&order, amount, None)
                 .await
                 .inspect_err(|_| {
                     let _ = orders::unset_processing_order(&order_id);
@@ -945,13 +931,11 @@ async fn top_up_order(
                 spent_transactions::mark_tx_hash_as_processed(tx);
             }
 
-            let (gas_lock, gas_withdraw) = match deposit_input {
-                Some(DepositInput::Evm(v)) => {
-                    (Some(v.estimated_gas_lock), Some(v.estimated_gas_withdraw))
-                }
-                _ => (None, None),
+            let gas_withdraw = match deposit_input {
+                Some(DepositInput::Evm(v)) => Some(v.estimated_gas_withdraw),
+                _ => None,
             };
-            order_management::topup_order(&order, amount, gas_lock, gas_withdraw)
+            order_management::topup_order(&order, amount, gas_withdraw)
                 .await
                 .inspect_err(|_| {
                     let _ = orders::unset_processing_order(&order_id);
